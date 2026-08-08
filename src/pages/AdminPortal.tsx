@@ -542,31 +542,64 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
       {/* Main Administrative dashboard Stage */}
       <main className="flex-1 p-6 md:p-10 overflow-x-hidden min-h-[calc(100vh-60px)] md:min-h-screen bg-zinc-950 text-zinc-100 font-sans">
-        {siteSettings?.isMaintenanceMode && (
-          <div className="mb-8 bg-amber-950/60 border border-amber-500/50 p-4 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-amber-300 shadow-xl animate-fade-in">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-500/20 text-amber-400 rounded-md shrink-0">
-                <Wrench className="w-5 h-5 animate-spin-slow" />
-              </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-wider text-amber-200">
-                  {language === 'fr' ? 'MODE MAINTENANCE ACTIF' : 'MAINTENANCE MODE ACTIVE'}
-                </p>
-                <p className="text-xs text-amber-200/80 font-sans mt-0.5">
-                  {language === 'fr' 
-                    ? 'Le site public est actuellement masqué aux visiteurs. Vos modifications sont enregistrées en direct.'
-                    : 'The public site is currently hidden from visitors. Your edits are saved live.'}
-                </p>
-              </div>
+        {/* Always visible Maintenance Mode status bar at top of Admin Portal */}
+        <div className={`mb-8 p-4 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl transition-all ${
+          siteSettings?.isMaintenanceMode !== false 
+            ? 'bg-amber-950/70 border-amber-500/60 text-amber-200' 
+            : 'bg-zinc-900/90 border-zinc-800 text-zinc-300'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-md shrink-0 ${
+              siteSettings?.isMaintenanceMode !== false 
+                ? 'bg-amber-500/20 text-amber-400' 
+                : 'bg-emerald-500/20 text-emerald-400'
+            }`}>
+              <Wrench className={`w-5 h-5 ${siteSettings?.isMaintenanceMode !== false ? 'animate-spin-slow' : ''}`} />
             </div>
-            <button
-              onClick={() => updateSiteSettings({ isMaintenanceMode: false })}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold uppercase tracking-wider rounded shrink-0 shadow-md transition-all cursor-pointer"
-            >
-              {language === 'fr' ? 'Désactiver la Maintenance' : 'Disable Maintenance'}
-            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-black uppercase tracking-wider ${
+                  siteSettings?.isMaintenanceMode !== false ? 'text-amber-300' : 'text-emerald-400'
+                }`}>
+                  {siteSettings?.isMaintenanceMode !== false 
+                    ? (language === 'fr' ? 'MODE MAINTENANCE : ACTIF (SITE PRIVÉ)' : 'MAINTENANCE MODE: ACTIVE (SITE PRIVATE)')
+                    : (language === 'fr' ? 'STATUT DU SITE : EN LIGNE (PUBLIC)' : 'SITE STATUS: ONLINE (PUBLIC)')}
+                </span>
+                <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                  siteSettings?.isMaintenanceMode !== false 
+                    ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' 
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                }`}>
+                  {siteSettings?.isMaintenanceMode !== false ? 'PAUSE' : 'LIVE'}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 font-sans mt-0.5">
+                {siteSettings?.isMaintenanceMode !== false 
+                  ? (language === 'fr' 
+                      ? 'Le site senperspective.com affiche la page de maintenance aux visiteurs. Seul l\'Espace Admin est accessible.' 
+                      : 'The site displays the maintenance page to public visitors. Only Admin Portal is accessible.')
+                  : (language === 'fr' 
+                      ? 'Le site est ouvert et accessible à tous les visiteurs publics.' 
+                      : 'The website is currently open and accessible to all public visitors.')}
+              </p>
+            </div>
           </div>
-        )}
+
+          <button
+            onClick={() => updateSiteSettings({ isMaintenanceMode: siteSettings?.isMaintenanceMode === false ? true : false })}
+            className={`px-5 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded shrink-0 shadow-lg transition-all cursor-pointer flex items-center gap-2 ${
+              siteSettings?.isMaintenanceMode !== false 
+                ? 'bg-emerald-500 hover:bg-emerald-400 text-black' 
+                : 'bg-amber-500 hover:bg-amber-400 text-black'
+            }`}
+          >
+            <span>
+              {siteSettings?.isMaintenanceMode !== false 
+                ? (language === 'fr' ? 'RÉOUVRIR LE SITE (EN LIGNE)' : 'RE-OPEN SITE (GO LIVE)')
+                : (language === 'fr' ? 'PASSER EN MODE MAINTENANCE' : 'ENABLE MAINTENANCE MODE')}
+            </span>
+          </button>
+        </div>
 
         {activeTab === 'overview' && (
           <DashboardOverview 
@@ -1399,6 +1432,45 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             </div>
 
             <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 space-y-6">
+              {/* Maintenance Mode dedicated card inside Settings */}
+              <div className={`p-5 rounded-lg border space-y-3 ${
+                siteSettings?.isMaintenanceMode !== false 
+                  ? 'bg-amber-950/40 border-amber-600/50' 
+                  : 'bg-zinc-900/80 border-zinc-800'
+              }`}>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-md ${siteSettings?.isMaintenanceMode !== false ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                      <Wrench size={20} className={siteSettings?.isMaintenanceMode !== false ? 'animate-spin-slow' : ''} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-extrabold uppercase tracking-wider text-zinc-100">
+                        {language === 'fr' ? 'Mode Maintenance du Site' : 'Site Maintenance Mode'}
+                      </h3>
+                      <p className="text-xs text-zinc-400 font-sans">
+                        {language === 'fr' 
+                          ? 'Affiche une page de maintenance technique à tous les visiteurs de senperspective.com.' 
+                          : 'Displays a technical maintenance page to all public visitors of senperspective.com.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => updateSiteSettings({ isMaintenanceMode: siteSettings?.isMaintenanceMode === false ? true : false })}
+                    className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded transition-all shadow-md cursor-pointer ${
+                      siteSettings?.isMaintenanceMode !== false 
+                        ? 'bg-emerald-500 text-black hover:bg-emerald-400 font-extrabold' 
+                        : 'bg-amber-500 text-black hover:bg-amber-400 font-extrabold'
+                    }`}
+                  >
+                    {siteSettings?.isMaintenanceMode !== false 
+                      ? (language === 'fr' ? 'DÉSACTIVER (RÉOUVRIR LE SITE)' : 'DISABLE (RE-OPEN SITE)')
+                      : (language === 'fr' ? 'ACTIVER LA MAINTENANCE' : 'ENABLE MAINTENANCE')}
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Mode d'exécution Abdel AI</label>

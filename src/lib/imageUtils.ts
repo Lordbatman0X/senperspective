@@ -19,39 +19,53 @@ export function getSafeImageUrl(url?: string, fallback = DEFAULT_FALLBACK_IMAGE)
 
 export async function compressImageFile(
   file: File,
-  maxWidth = 600,
-  maxHeight = 600,
-  quality = 0.75
+  maxWidth = 1000,
+  maxHeight = 700,
+  quality = 0.72
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const src = e.target?.result as string;
-      if (!src) return reject(new Error("Empty file result"));
+      if (!src) return resolve(DEFAULT_FALLBACK_IMAGE);
       compressDataUrl(src, maxWidth, maxHeight, quality)
         .then(resolve)
-        .catch(() => resolve(src)); // Fallback to raw if compression fails
+        .catch(() => resolve(src));
     };
-    reader.onerror = reject;
+    reader.onerror = () => resolve(DEFAULT_FALLBACK_IMAGE);
     reader.readAsDataURL(file);
   });
 }
 
 export async function compressDataUrl(
   dataUrl: string,
-  maxWidth = 600,
-  maxHeight = 600,
-  quality = 0.75
+  maxWidth = 1000,
+  maxHeight = 700,
+  quality = 0.72
 ): Promise<string> {
-  // If not a data URL or already small enough (< 80KB), return as is
-  if (!dataUrl || !dataUrl.startsWith("data:image/") || dataUrl.length < 80000) {
+  if (!dataUrl || typeof dataUrl !== 'string') {
+    return DEFAULT_FALLBACK_IMAGE;
+  }
+
+  // If not a data URL or already small enough (< 60KB), return as is
+  if (!dataUrl.startsWith("data:image/") || dataUrl.length < 60000) {
     return dataUrl;
   }
 
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    // NEVER set crossOrigin for data: URIs as it causes load failures in modern browsers
+    if (dataUrl.startsWith("http://") || dataUrl.startsWith("https://")) {
+      img.crossOrigin = "anonymous";
+    }
+    
+    // Set a timeout to prevent hanging forever
+    const timer = setTimeout(() => {
+      resolve(dataUrl);
+    }, 3000);
+
     img.onload = () => {
+      clearTimeout(timer);
       let width = img.width;
       let height = img.height;
 
@@ -66,8 +80,8 @@ export async function compressDataUrl(
       }
 
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         return resolve(dataUrl);
@@ -78,9 +92,12 @@ export async function compressDataUrl(
       const compressed = canvas.toDataURL("image/jpeg", quality);
       resolve(compressed);
     };
+
     img.onerror = () => {
+      clearTimeout(timer);
       resolve(dataUrl);
     };
+
     img.src = dataUrl;
   });
 }
@@ -91,16 +108,17 @@ export async function compressDataUrl(
 export async function sanitizeFirestorePayload<T extends Record<string, any>>(
   payload: T
 ): Promise<T> {
-  const sanitized: Record<string, any> = { ...payload };
+  if (!payload || typeof payload !== 'object') return payload;
+  const sanitized: Record<string, any> = Array.isArray(payload) ? [...payload] : { ...payload };
 
   for (const [key, val] of Object.entries(sanitized)) {
     if (typeof val === "string" && val.startsWith("data:image/")) {
-      const isCover = key.toLowerCase().includes("cover");
-      sanitized[key] = await compressDataUrl(
-        val,
-        isCover ? 800 : 400,
-        isCover ? 500 : 400,
-        0.75
+      sanitized[key] = await compressDataUrl(val, 1000, 700, 0.72);
+    } else if (val && typeof val === "object" && !Array.isArray(val)) {
+      sanitized[key] = await sanitizeFirestorePayload(val);
+    } else if (Array.isArray(val)) {
+      sanitized[key] = await Promise.all(
+        val.map(item => (typeof item === "object" && item ? sanitizeFirestorePayload(item) : item))
       );
     }
   }

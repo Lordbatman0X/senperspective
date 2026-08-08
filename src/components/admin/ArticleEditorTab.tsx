@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Article, BilingualText, KeyActor, TimelineEvent, PerspectiveBrief, StructuralForces } from '../../types';
 import { useStore } from '../../store';
-import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X } from 'lucide-react';
+import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { ARTICLE_CATEGORIES } from '../../constants';
+import { compressImageFile } from '../../lib/imageUtils';
 
 interface ArticleEditorTabProps {
   article: Article | null;
@@ -752,20 +753,19 @@ export function ArticleEditorTab({
                     <input 
                       type="file" 
                       accept="image/*" 
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          if (file.size > 8 * 1024 * 1024) {
-                            alert(language === 'fr' ? 'Image trop lourde (Max 8Mo)' : 'Image too heavy (Max 8MB)');
+                          if (file.size > 15 * 1024 * 1024) {
+                            alert(language === 'fr' ? 'Image trop lourde (Max 15Mo)' : 'Image too heavy (Max 15MB)');
                             return;
                           }
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            if (typeof ev.target?.result === 'string') {
-                              setImageUrl(ev.target.result);
-                            }
-                          };
-                          reader.readAsDataURL(file);
+                          try {
+                            const compressed = await compressImageFile(file, 1200, 800, 0.72);
+                            setImageUrl(compressed);
+                          } catch (err) {
+                            console.error("Compression error:", err);
+                          }
                         }
                       }} 
                       className="hidden" 

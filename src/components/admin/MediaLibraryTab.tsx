@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { MediaItem } from '../../store';
 import { UploadCloud, Search, Trash2, Copy, FileText, Film, Image as ImageIcon, X, Check, Eye } from 'lucide-react';
+import { compressImageFile } from '../../lib/imageUtils';
 
 interface MediaLibraryTabProps {
   media: MediaItem[];
@@ -20,39 +21,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
 
   // Resize and compress helper
   const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
-        };
-        if (typeof e.target?.result === 'string') {
-          img.src = e.target.result;
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    return compressImageFile(file, maxWidth, maxHeight, 0.72);
   };
 
   const handleFiles = async (files: FileList) => {

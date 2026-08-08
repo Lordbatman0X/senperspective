@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <rect width="512" height="512" rx="128" fill="#09090b"/>
+  <rect width="512" height="512" rx="128" fill="none" stroke="#27272a" stroke-width="16"/>
+  <!-- Perspective "P" Logo -->
+  <path d="M140 120 H280 C340 120 380 150 380 210 C380 270 340 300 280 300 H210 V392 H140 V120 Z M210 180 V240 H270 C295 240 310 230 310 210 C310 190 295 180 270 180 H210 Z" fill="#E85D42"/>
+  <!-- Accent Lens / Diamond dot -->
+  <polygon points="380,350 405,375 380,400 355,375" fill="#F97316"/>
+</svg>
