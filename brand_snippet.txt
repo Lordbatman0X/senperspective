@@ -1,0 +1,86 @@
+      <form onSubmit={handleSave} className="space-y-8">
+        {/* Brand Identity Panel */}
+        <div className="square-card p-6 sm:p-8 bg-brand-white dark:bg-zinc-950 border border-brand-border rounded-none space-y-6">
+          <div className="flex items-center gap-3 border-b border-brand-border pb-3">
+            <Palette className="text-zinc-500" size={18} />
+            <h3 className="text-sm font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-100">{t.brandSection}</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">{t.siteNameLabel}</label>
+              <input
+                type="text"
+                value={siteName}
+                onChange={e => setSiteName(e.target.value)}
+                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-3 text-xs font-bold focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">{t.accentColorLabel}</label>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {presets.map(color => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => setAccentColor(color.value)}
+                    className="w-8 h-8 rounded-full border-2 cursor-pointer transition-all hover:scale-110 flex items-center justify-center"
+                    style={{ 
+                      backgroundColor: color.value, 
+                      borderColor: accentColor === color.value ? '#ffffff' : 'transparent',
+                      boxShadow: accentColor === color.value ? '0 0 0 2px #000000' : 'none'
+                    }}
+                    title={color.name}
+                  >
+                    {accentColor === color.value && <span className="text-[10px] font-bold text-white">✓</span>}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="color"
+                value={accentColor}
+                onChange={e => setAccentColor(e.target.value)}
+                className="w-full h-10 cursor-pointer bg-transparent border-0 p-0"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Design System & Typography</label>
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1 block">Font Pairing</span>
+                  <select
+                    value={fontPairing}
+                    onChange={e => setFontPairing(e.target.value)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-mono focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100"
+                  >
+                    <option value="Playfair / Lora">Playfair Display & Lora (Editorial)</option>
+                    <option value="Inter / Inter">Inter & Inter (Modern)</option>
+                    <option value="Space Grotesk / JetBrains">Space Grotesk & JetBrains Mono (Tech)</option>
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1 block">Card Glass Intensity</span>
+                  <select
+                    value={glassIntensity}
+                    onChange={e => setGlassIntensity(e.target.value)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-mono focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100"
+                  >
+                    <option value="Low">Low (Opaque)</option>
+                    <option value="Medium">Medium (Standard)</option>
+                    <option value="High">High (High Blur)</option>
+                  </select>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-400 mb-1 block">Homepage Sections (Comma Separated)</span>
+                  <input
+                    type="text"
+                    value={homeSections}
+                    onChange={e => setHomeSections(e.target.value)}
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-mono focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100"
+                    placeholder="hero, trending, categories, videos, ads"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>

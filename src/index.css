@@ -1,0 +1,403 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+@variant dark (&:where(.dark, .dark *));
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: "Playfair Display", "Georgia", ui-serif, serif;
+  --font-body: "Lora", "Georgia", ui-serif, serif;
+  --font-cambria: "Cambria", "Georgia", ui-serif, serif;
+  --color-brand-primary: var(--color-brand-primary);
+  --color-brand-primary-hover: var(--color-brand-primary-hover);
+  --color-brand-dark: var(--color-brand-dark);
+  --color-brand-muted: var(--color-brand-muted);
+  --color-brand-border: var(--color-brand-border);
+  --color-brand-soft: var(--color-brand-soft);
+  --color-brand-white: var(--color-brand-white);
+  --color-brand-black: var(--color-brand-black);
+}
+
+:root {
+  --color-brand-primary: #E85D42;
+  --color-brand-primary-hover: var(--color-brand-primary-hover);
+  --color-brand-primary-hover: #C94731;
+  --color-brand-secondary: #205C60;
+  --color-brand-detail: #C69B52;
+  --color-brand-dark: #172033;
+  --color-brand-muted: #334155;
+  --color-brand-border: rgba(23, 32, 51, 0.15);
+  --color-brand-soft: #F7F0E8;
+  --color-brand-white: #EDF2F4;
+  --color-brand-black: #172033;
+}
+
+:root.dark {
+  --color-brand-primary: #F06A50;
+  --color-brand-primary-hover: var(--color-brand-primary-hover);
+  --color-brand-primary-hover: #E85D42;
+  --color-brand-secondary: #4D9797;
+  --color-brand-detail: #C69B52;
+  --color-brand-dark: #F2F4F5;
+  --color-brand-muted: #AAB2BC;
+  --color-brand-border: rgba(255, 255, 255, 0.10);
+  --color-brand-soft: rgba(21, 29, 39, 0.78);
+  --color-brand-white: #0B1017;
+  --color-brand-black: #0B1017;
+}
+
+@layer base {
+  body {
+    @apply font-body text-brand-dark antialiased;
+    background: 
+      radial-gradient(circle at 10% 5%, rgba(232,93,66,0.12), transparent 30%),
+      radial-gradient(circle at 88% 18%, rgba(32,92,96,0.12), transparent 28%),
+      radial-gradient(circle at 45% 90%, rgba(198,155,82,0.08), transparent 30%),
+      linear-gradient(135deg, #EDF2F4 0%, #F7F0E8 52%, #EEF2F1 100%);
+    background-attachment: fixed;
+  }
+  .dark body {
+    background: 
+      radial-gradient(circle at 10% 5%, rgba(240,106,80,0.08), transparent 35%),
+      radial-gradient(circle at 85% 20%, rgba(77,151,151,0.08), transparent 30%),
+      radial-gradient(circle at 50% 90%, rgba(198,155,82,0.05), transparent 35%),
+      linear-gradient(135deg, #0B1017 0%, #111922 100%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+  .uppercase {
+    @apply font-sans;
+  }
+
+  /* Strictly defined container backgrounds and text colors for 'brief' and 'article' boxes */
+  .brief-box,
+  .article-box {
+    background-color: rgba(255, 255, 255, 0.8) !important;
+  }
+  
+  html:not(.dark) .brief-box span {
+    color: #000000 !important;
+  }
+
+  html.dark .brief-box,
+  html.dark .article-box {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+  }
+
+  html.dark .brief-box span {
+    color: #ffffff !important;
+  }
+
+  /* Sticky Header Translucent Container */
+}
+
+@layer components {
+  .square-card {
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.3s ease, background 0.4s ease;
+    @apply rounded-none overflow-hidden relative;
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(20px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.60) !important;
+    border-bottom-color: rgba(23, 32, 51, 0.12) !important;
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.4) !important;
+  }
+  
+  .dark .square-card {
+    background: rgba(17, 25, 34, 0.68) !important;
+    backdrop-filter: blur(20px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(135%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.28),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .square-card:hover {
+    transform: translateY(-6px) !important;
+    border-color: #E85D42 !important;
+    background: rgba(255, 255, 255, 0.75) !important;
+    box-shadow: 0 20px 40px -10px rgba(232, 93, 66, 0.20),
+                0 15px 30px -12px rgba(0, 0, 0, 0.12),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.5) !important;
+  }
+
+  .dark .square-card:hover {
+    background: rgba(25, 34, 46, 0.78) !important;
+    border-color: #F06A50 !important;
+    box-shadow: 0 20px 40px -10px rgba(240, 106, 80, 0.20),
+                0 15px 30px -12px rgba(0, 0, 0, 0.45),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.08) !important;
+  }
+
+  /* 1. Light glass - for navigation and secondary decorative elements */
+  .glass-light {
+    background: rgba(255, 255, 255, 0.45) !important;
+    backdrop-filter: blur(12px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(140%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.50) !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03) !important;
+  }
+  .dark .glass-light {
+    background: rgba(11, 16, 23, 0.48) !important;
+    backdrop-filter: blur(12px) saturate(120%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(120%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.20) !important;
+  }
+
+  /* 2. Medium glass - for article cards, drawers, and standard modules */
+  .glass, .glass-medium {
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(20px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.60) !important;
+    border-bottom-color: rgba(23, 32, 51, 0.12) !important;
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.4) !important;
+  }
+  .dark .glass, .dark .glass-medium {
+    background: rgba(17, 25, 34, 0.68) !important;
+    backdrop-filter: blur(20px) saturate(135%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(135%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.28),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.05) !important;
+  }
+
+  /* 3. Strong glass - for article reading panels, forms, data tables, and admin work areas */
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(28px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.85) !important;
+    border-bottom-color: rgba(23, 32, 51, 0.15) !important;
+    box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.07),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.5) !important;
+  }
+  .dark .glass-strong {
+    background: rgba(13, 19, 27, 0.88) !important;
+    backdrop-filter: blur(28px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(145%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.38),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.06) !important;
+  }
+
+  /* Solid premium glass-orange for header and visual cards */
+  .glass-orange {
+    background: linear-gradient(135deg, rgba(232,93,66,0.92), rgba(201,67,47,0.86)) !important;
+    backdrop-filter: blur(22px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(145%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 12px 30px -5px rgba(232, 93, 66, 0.3) !important;
+  }
+
+  .dark .glass-orange {
+    background: linear-gradient(135deg, rgba(240,106,80,0.88), rgba(210,75,55,0.82)) !important;
+    backdrop-filter: blur(22px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(22px) saturate(145%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 12px 30px -5px rgba(240, 106, 80, 0.2) !important;
+  }
+
+  /* Micro glassy accents for tags, badges, buttons and floating cards */
+  .glass-accent {
+    background: rgba(255, 255, 255, 0.45) !important;
+    backdrop-filter: blur(12px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    border-bottom-color: rgba(23, 32, 51, 0.08) !important;
+    box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.02),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .dark .glass-accent {
+    background: rgba(30, 41, 59, 0.45) !important;
+    backdrop-filter: blur(12px) saturate(130%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(130%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.2),
+                inset 1px 1px 0px 0px rgba(255, 255, 255, 0.05) !important;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center font-bold uppercase tracking-wider text-xs px-4 py-2 transition-all duration-300 border rounded-none;
+  }
+
+  .btn-primary {
+    @apply bg-brand-primary border-brand-primary text-white shadow-[2px_2px_0px_0px_rgba(23,32,51,0.8)];
+  }
+  .btn-primary:hover {
+    @apply bg-brand-primary-hover border-brand-primary-hover shadow-none translate-y-[2px] translate-x-[2px];
+  }
+
+  .btn-outline {
+    @apply bg-transparent border-brand-border text-brand-dark shadow-[2px_2px_0px_0px_rgba(23,32,51,0.1)];
+  }
+  .btn-outline:hover {
+    @apply border-brand-primary text-brand-primary shadow-[2px_2px_0px_0px_rgba(232,93,66,0.5)] translate-y-[0px] translate-x-[0px];
+  }
+
+  .admin-tab {
+    @apply block w-full text-left px-4 py-3 border-l-4 border-transparent text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-slate-200/60 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors rounded-none;
+  }
+  .admin-tab.active {
+    @apply border-[#E85D42] text-zinc-900 dark:text-zinc-100 bg-slate-200/90 dark:bg-zinc-800 font-bold;
+  }
+
+  .input-field {
+    @apply w-full border border-zinc-300 dark:border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-[#E85D42] bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 rounded-none shadow-sm placeholder-zinc-400 dark:placeholder-zinc-500 font-medium;
+  }
+
+  .label-text {
+    @apply block text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 mb-1;
+  }
+}
+
+/* Custom Scrollbar for mini-carousel */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Ensure hardcoded grey hex values scale beautifully for high-contrast dark mode */
+.dark .text-\[\#7D7D7D\] {
+  color: var(--color-brand-muted) !important;
+}
+
+.dark .text-\[\#666666\] {
+  color: var(--color-brand-muted) !important;
+}
+
+.dark .text-\[\#888888\] {
+  color: var(--color-brand-muted) !important;
+}
+
+/* Elegant, premium highly-readable dark charcoal for article paragraph, headings and list text */
+.prose p, .prose li, .prose {
+  color: #172033 !important; /* highly readable dark */
+  font-size: var(--article-font-size, 1.0625rem);
+  @apply font-sans leading-relaxed;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: var(--color-brand-dark) !important;
+}
+
+.dark .prose p, .dark .prose li, .dark .prose {
+  color: #E2E8F0 !important;
+}
+
+.dark .prose h1, .dark .prose h2, .dark .prose h3, .dark .prose h4, .dark .prose h5, .dark .prose h6 {
+  color: #F8FAFC !important;
+}
+
+/* Article Reader Readability Overrides */
+.prose-article-reader,
+.prose-article-reader p,
+.prose-article-reader li,
+.prose-article-reader ul,
+.prose-article-reader ol,
+.prose-article-reader blockquote,
+.prose-article-reader blockquote p,
+.prose-article-reader em,
+.prose-article-reader strong,
+.prose-article-reader span {
+  color: #000000 !important;
+}
+
+.dark .prose-article-reader,
+.dark .prose-article-reader p,
+.dark .prose-article-reader li,
+.dark .prose-article-reader ul,
+.dark .prose-article-reader ol,
+.dark .prose-article-reader blockquote,
+.dark .prose-article-reader blockquote p,
+.dark .prose-article-reader em,
+.dark .prose-article-reader strong,
+.dark .prose-article-reader span {
+  color: #ffffff !important;
+}
+
+.prose-article-reader h1,
+.prose-article-reader h2,
+.prose-article-reader h3,
+.prose-article-reader h4,
+.prose-article-reader h5,
+.prose-article-reader h6 {
+  color: #000000 !important;
+}
+
+.dark .prose-article-reader h1,
+.dark .prose-article-reader h2,
+.dark .prose-article-reader h3,
+.dark .prose-article-reader h4,
+.dark .prose-article-reader h5,
+.dark .prose-article-reader h6 {
+  color: #ffffff !important;
+}
+
+.prose-article-reader a {
+  color: var(--color-[#E85D42]) !important;
+  text-decoration: underline !important;
+}
+
+.prose-article-reader a:hover {
+  color: #ff8870 !important;
+}
+
+/* Floating physical bubble floating-bobbing animation */
+@keyframes floatBubble {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.03);
+  }
+}
+
+.animate-float-bubble {
+  animation: floatBubble 4s ease-in-out infinite;
+}
+
+/* 3D Flip Card Utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+:root[data-font-pairing="Inter / Inter"] {
+  --font-serif: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root[data-font-pairing="Space Grotesk / JetBrains"] {
+  --font-serif: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

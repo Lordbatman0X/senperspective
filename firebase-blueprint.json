@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Registered user profile and account security details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "role": { "type": "string" },
+        "authType": { "type": "string", "enum": ["password", "pin"] },
+        "pin": { "type": "string" },
+        "twoFactorEnabled": { "type": "boolean" },
+        "twoFactorMethod": { "type": "string", "enum": ["email", "pin", "totp"] },
+        "twoFactorSecret": { "type": "string" },
+        "emailVerified": { "type": "boolean" },
+        "coverPhotoUrl": { "type": "string" },
+        "streak": { "type": "number" },
+        "readingTime": { "type": "number" },
+        "hidePersonalInfo": { "type": "boolean" },
+        "bio": { "type": "string" },
+        "accolades": { "type": "array" },
+        "registeredAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["email", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userEmail}": {
+      "schema": "User",
+      "description": "Collection of all registered profiles and account related details"
+    }
+  }
+}
