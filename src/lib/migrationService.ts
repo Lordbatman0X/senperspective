@@ -1,6 +1,7 @@
 import { db } from './firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { useStore } from '../store';
+import { safeFetchJson } from './apiUtils';
 
 export interface DatabaseSnapshot {
   articles: any[];
@@ -33,23 +34,21 @@ export interface VercelStorageStatus {
  * Fetches status of Vercel Storage integration from server API
  */
 export async function getVercelStorageStatus(): Promise<VercelStorageStatus> {
-  try {
-    const res = await fetch('/api/vercel-db/status');
-    if (!res.ok) throw new Error('API returned ' + res.status);
-    return await res.json();
-  } catch (err: any) {
-    return {
-      success: false,
-      isVercel: false,
-      activeProvider: 'local',
-      storage: {
-        vercelKv: false,
-        vercelPostgres: false,
-        vercelBlob: false
-      },
-      message: 'Erreur d\'accès au statut de stockage Vercel: ' + (err?.message || err)
-    };
+  const result = await safeFetchJson<VercelStorageStatus>('/api/vercel-db/status');
+  if (result.ok && result.data) {
+    return result.data;
   }
+  return {
+    success: false,
+    isVercel: false,
+    activeProvider: 'local',
+    storage: {
+      vercelKv: false,
+      vercelPostgres: false,
+      vercelBlob: false
+    },
+    message: result.error || 'Statut Vercel Storage indisponible (Vérifiez le serveur API)'
+  };
 }
 
 /**
@@ -163,7 +162,7 @@ export async function importSnapshotToVercel(snapshot: DatabaseSnapshot): Promis
   error?: string;
 }> {
   try {
-    const res = await fetch('/api/vercel-db/import', {
+    const result = await safeFetchJson('/api/vercel-db/import', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -171,10 +170,11 @@ export async function importSnapshotToVercel(snapshot: DatabaseSnapshot): Promis
       body: JSON.stringify(snapshot)
     });
 
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Erreur lors de l\'importation vers Vercel');
+    if (!result.ok || !result.data?.success) {
+      throw new Error(result.error || result.data?.error || 'Erreur lors de l\'importation vers Vercel');
     }
+
+    const data = result.data;
 
     // Synchronize local Zustand state
     const store = useStore.getState();
