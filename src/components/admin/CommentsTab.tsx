@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CommentItem, useStore } from '../../store';
+import { getSafeText } from '../../lib/utils';
 import { MessageSquare, Check, X, Trash2, Search, Filter } from 'lucide-react';
 
 interface CommentsTabProps {
@@ -98,7 +99,7 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div>
           <h2 className="text-2xl font-black uppercase tracking-widest text-zinc-950 dark:text-zinc-50">{t.title}</h2>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 uppercase tracking-wider font-mono">{t.subTitle}</p>
+          <p className="text-xs text-zinc-600 dark:text-zinc-200 mt-1 uppercase tracking-wider font-mono">{t.subTitle}</p>
         </div>
       </div>
 
@@ -112,17 +113,17 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-4 text-center bg-zinc-950 text-white p-5 border border-zinc-900">
         <div>
-          <span className="text-[10px] text-zinc-400 font-mono block uppercase tracking-widest">{t.total}</span>
+          <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.total}</span>
           <span className="text-xl font-black font-mono mt-1 block">{comments.length}</span>
         </div>
         <div className="border-x border-zinc-900">
-          <span className="text-[10px] text-zinc-400 font-mono block uppercase tracking-widest">{t.activeCount}</span>
+          <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.activeCount}</span>
           <span className="text-xl font-black font-mono mt-1 block text-[#E85D42]">
             {Array.from(new Set(comments.map(c => c.email))).filter(Boolean).length}
           </span>
         </div>
         <div>
-          <span className="text-[10px] text-zinc-400 font-mono block uppercase tracking-widest">{t.warned}</span>
+          <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.warned}</span>
           <span className="text-xl font-black font-mono mt-1 block text-amber-500">
             {comments.filter(c => c.email === 'spam@example.com' || c.id === 'c_warned').length + 2}
           </span>
@@ -131,7 +132,7 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
 
       {/* Search Bar */}
       <div className="relative">
-        <Search size={16} className="absolute left-3.5 top-3.5 text-zinc-400" />
+        <Search size={16} className="absolute left-3.5 top-3.5 text-zinc-200" />
         <input
           type="text"
           placeholder={t.searchPlaceholder}
@@ -159,18 +160,18 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
                         {language === 'fr' ? 'GUEST' : 'GUEST'}
                       </span>
                     )}
-                    {c.email && <span className="text-[10px] text-zinc-400 font-mono">({c.email})</span>}
-                    <span className="text-[10px] text-zinc-400 font-mono">• {c.date}</span>
+                    {c.email && <span className="text-[10px] text-zinc-200 font-mono">({c.email})</span>}
+                    <span className="text-[10px] text-zinc-200 font-mono">• {c.date}</span>
                   </div>
                   
                   {/* Reference article */}
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                    {t.onArticle}<span className="text-[#E85D42] font-black">{c.articleTitle}</span>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-200">
+                    {t.onArticle}<span className="text-[#E85D42] font-black">{getSafeText(c.articleTitle, language)}</span>
                   </div>
 
                   {/* Comment Text */}
                   <p className="text-xs text-zinc-100 p-3.5 bg-zinc-950/80 border-l-2 border-[#E85D42] rounded-xs leading-relaxed border-y border-r border-zinc-800/60">
-                    "{c.text}"
+                    "{getSafeText(c.text, language)}"
                   </p>
                 </div>
 
@@ -226,7 +227,7 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
  
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <div className="space-y-1">
-                       <label className="text-[9px] font-black uppercase tracking-wider text-zinc-400 block">{t.warningPlaceholderFr}</label>
+                       <label className="text-[9px] font-black uppercase tracking-wider text-zinc-200 block">{t.warningPlaceholderFr}</label>
                        <textarea
                          value={warningTextFr}
                          onChange={(e) => setWarningTextFr(e.target.value)}
@@ -235,7 +236,7 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
                        />
                      </div>
                      <div className="space-y-1">
-                       <label className="text-[9px] font-black uppercase tracking-wider text-zinc-400 block">{t.warningPlaceholderEn}</label>
+                       <label className="text-[9px] font-black uppercase tracking-wider text-zinc-200 block">{t.warningPlaceholderEn}</label>
                        <textarea
                          value={warningTextEn}
                          onChange={(e) => setWarningTextEn(e.target.value)}

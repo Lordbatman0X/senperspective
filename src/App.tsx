@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
 import { CategoryPage } from './pages/CategoryPage';
@@ -9,8 +9,11 @@ import { AdminPortal } from './pages/AdminPortal';
 import { AboutPage, ContactPage } from './pages/StaticPages';
 import { ProfilePage } from './pages/ProfilePage';
 import { LArenePage } from './pages/LArenePage';
+import { DiscussionPage } from './pages/DiscussionPage';
+import { AuthPage } from './pages/AuthPage';
 import { Layout } from './components/Layout';
 import { AuthProvider } from './contexts/AuthContext';
+import { useStore } from './store';
 
 function App() {
   return (
@@ -24,9 +27,18 @@ function App() {
             <Route path="/saved" element={<SavedPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/larene" element={<LArenePage />} />
+            <Route path="/sports" element={<LArenePage />} />
+            <Route path="/sport" element={<LArenePage />} />
+            <Route path="/arene" element={<LArenePage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/profile/:email" element={<ProfilePage />} />
+            <Route path="/discussion" element={<DiscussionPage />} />
+            <Route path="/authpage" element={<AuthPage />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/login" element={<AuthPage />} />
+            <Route path="/register" element={<AuthPage />} />
+            <Route path="/newsletter" element={<AuthPage />} />
             <Route path="/admin" element={<AdminPortal />} />
             <Route path="/admin/*" element={<AdminPortal />} />
             <Route path="*" element={<Navigate to="/" replace />} />

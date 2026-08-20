@@ -8,13 +8,15 @@ import { LArenePage } from './LArenePage';
 
 export function CategoryPage() {
   const { categoryId } = useParams<{ categoryId: string }>();
-  const { articles, language } = useStore();
+  const { articles, language, siteSettings } = useStore();
   
-  if (categoryId === 'sports' || categoryId === 'sport' || categoryId === 'larene') {
+  const normalizedId = (categoryId || '').toLowerCase().trim();
+  if (normalizedId === 'sports' || normalizedId === 'sport' || normalizedId === 'larene' || normalizedId === 'arene') {
     return <LArenePage />;
   }
 
-  const targetCategory = ARTICLE_CATEGORIES.find(c => c.id === categoryId);
+  const categoriesList = (siteSettings?.categories && siteSettings.categories.length > 0) ? siteSettings.categories : ARTICLE_CATEGORIES;
+  const targetCategory = categoriesList.find(c => c.id === categoryId);
 
   const categoryArticles = articles.filter(
     a => {
@@ -29,7 +31,14 @@ export function CategoryPage() {
         );
       }
       if (targetCategory) {
-        return a.category === targetCategory.fr || a.category === targetCategory.en;
+        const catLower = (a.category || '').toLowerCase();
+        return (
+          catLower === targetCategory.id.toLowerCase() ||
+          catLower === targetCategory.fr.toLowerCase() ||
+          catLower === targetCategory.en.toLowerCase() ||
+          a.category === targetCategory.fr ||
+          a.category === targetCategory.en
+        );
       }
       return a.category?.toLowerCase() === categoryId?.toLowerCase();
     }
@@ -75,12 +84,12 @@ export function CategoryPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {categoryArticles.map(article => (
-            <div key={article.id} className="square-card group flex flex-col h-full overflow-hidden">
+          {categoryArticles.map((article, idx) => (
+            <div key={`${article.id}-${idx}`} className="square-card group flex flex-col h-full overflow-hidden">
               <Link to={`/article/${article.slug}`} className="block relative h-48 overflow-hidden">
                 <div 
                   className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                  style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+                  style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
                 />
               </Link>
               <div className="p-5 flex flex-col flex-grow">

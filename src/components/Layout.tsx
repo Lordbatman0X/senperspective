@@ -1,15 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from './Header';
 import { Footer } from './Footer';
-import { Abdel } from './Abdel';
+import { FloatingHub } from './FloatingHub';
+import { CookieConsentBanner } from './CookieConsentBanner';
+import { DraftPoliciesModal } from './DraftPoliciesModal';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { MaintenancePage } from '../pages/MaintenancePage';
+import { trackPageView } from '../lib/telemetry';
 
 export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
   const isArticle = location.pathname.startsWith('/article/');
+  
+  const [showDraftPoliciesModal, setShowDraftPoliciesModal] = useState(false);
+
+  useEffect(() => {
+    const handleOpenDraftPolicies = () => {
+      setShowDraftPoliciesModal(true);
+    };
+    window.addEventListener('open-draft-policies', handleOpenDraftPolicies);
+    return () => window.removeEventListener('open-draft-policies', handleOpenDraftPolicies);
+  }, []);
   
   const { articles, theme, ads, siteSettings } = useStore();
   let contextArticle = undefined;
@@ -35,8 +48,18 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
     }
   }, [theme, siteSettings?.fontPairing, siteSettings?.glassIntensity, siteSettings?.accentColor]);
 
-  // If maintenance mode is active (default true unless explicitly set to false) and user is not on admin routes, display Maintenance Page
-  if (siteSettings?.isMaintenanceMode !== false && !isAdmin) {
+  // Track real visitor pageview
+  React.useEffect(() => {
+    if (!isAdmin) {
+      const artTitle = typeof contextArticle?.title === 'string' 
+        ? contextArticle?.title 
+        : (contextArticle?.title?.fr || contextArticle?.title?.en || '');
+      trackPageView(location.pathname, contextArticle?.id, artTitle, contextArticle?.category);
+    }
+  }, [location.pathname, contextArticle?.id]);
+
+  // If maintenance mode is explicitly active and user is not on admin routes, display Maintenance Page
+  if (siteSettings?.isMaintenanceMode === true && !isAdmin) {
     return <MaintenancePage />;
   }
 
@@ -59,8 +82,10 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
         {children}
       </main>
 
-      {!isAdmin && <Abdel contextArticle={contextArticle} />}
+      {!isAdmin && <FloatingHub contextArticle={contextArticle} />}
       {!isAdmin && <Footer />}
+      {!isAdmin && <CookieConsentBanner />}
+      <DraftPoliciesModal isOpen={showDraftPoliciesModal} onClose={() => setShowDraftPoliciesModal(false)} />
     </div>
   );
 }

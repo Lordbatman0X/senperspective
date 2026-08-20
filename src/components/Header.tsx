@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useStore } from "../store";
 import { useAuth } from "../contexts/AuthContext";
 import { compressImageFile } from "../lib/imageUtils";
+import { getSafeText } from "../lib/utils";
 import {
   Search,
   Menu,
@@ -41,6 +42,7 @@ import {
   CloudLightning,
   Eye,
   EyeOff,
+  Sliders,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { AccountDrawer, renderNeutralAvatar } from "./AccountDrawer";
@@ -159,8 +161,8 @@ export function Header() {
     editorialPhone: "+221 33 824 55 55",
     supportEmail: "contact@perspective.sn",
     officeAddress: "Immeuble Tamaro, Rue Mohamed V, Dakar",
-    paywallThreshold: 3,
-    paywallEnabled: true,
+    paywallThreshold: 9999,
+    paywallEnabled: false,
     headerStyle: 'glass',
     aiModelMode: 'flash',
     seoTitleSuffix: '| Perspective Group Dakar',
@@ -539,7 +541,28 @@ export function Header() {
     }
   };
 
-  const categories = ARTICLE_CATEGORIES;
+  const defaultNavItems = [
+    { id: 'politique', labelFr: 'Politique', labelEn: 'Politics', url: '/category/politique', enabled: true },
+    { id: 'economie', labelFr: 'Économie', labelEn: 'Economy', url: '/category/economie', enabled: true },
+    { id: 'societe', labelFr: 'Société', labelEn: 'Society', url: '/category/societe', enabled: true },
+    { id: 'international', labelFr: 'International', labelEn: 'International', url: '/category/international', enabled: true },
+    { id: 'tech', labelFr: 'Tech', labelEn: 'Tech', url: '/category/tech', enabled: true },
+    { id: 'sante', labelFr: 'Santé', labelEn: 'Health', url: '/category/sante', enabled: true },
+    { id: 'sports', labelFr: "L'Arène", labelEn: 'The Arena', url: '/larene', enabled: true },
+    { id: 'gouvernance', labelFr: 'Gouvernance', labelEn: 'Governance', url: '/category/gouvernance', enabled: true },
+  ];
+
+  const activeNavItems = (siteSettings?.headerNavItems && siteSettings.headerNavItems.length > 0)
+    ? siteSettings.headerNavItems.filter(item => item.enabled !== false)
+    : (siteSettings?.categories && siteSettings.categories.length > 0)
+      ? siteSettings.categories.map(cat => ({
+          id: cat.id,
+          labelFr: cat.fr,
+          labelEn: cat.en,
+          url: cat.id === 'sports' ? '/larene' : `/category/${cat.id}`,
+          enabled: true
+        }))
+      : defaultNavItems;
 
   const t = {
     search: language === "fr" ? "RECHERCHER..." : "SEARCH...",
@@ -798,16 +821,34 @@ export function Header() {
           >
             <nav className="max-w-7xl mx-auto px-4">
               <ul className="flex items-center justify-center">
-                {categories.map((cat) => (
-                  <li key={cat.id}>
-                    <Link
-                      to={cat.id === "sports" ? "/larene" : `/category/${cat.id}`}
-                      className="block px-4 py-3 text-xs font-extrabold uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300"
-                    >
-                      {language === "fr" ? cat.fr : cat.en}
-                    </Link>
-                  </li>
-                ))}
+                {activeNavItems.map((item) => {
+                  const isExternal = item.url.startsWith('http');
+                  const label = language === "fr" ? item.labelFr : item.labelEn;
+                  if (isExternal) {
+                    return (
+                      <li key={item.id}>
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block px-4 py-3 text-xs font-extrabold uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300"
+                        >
+                          {label}
+                        </a>
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={item.id}>
+                      <Link
+                        to={item.url}
+                        className="block px-4 py-3 text-xs font-extrabold uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300"
+                      >
+                        {label}
+                      </Link>
+                    </li>
+                  );
+                })}
                 <li>
                   <Link
                     to="/saved"
@@ -887,13 +928,30 @@ export function Header() {
 
                 {/* Categories Navigation with translucent hover states & bold black text */}
                 <nav className="py-3 flex flex-col bg-transparent">
-                  {categories.map((cat) => {
-                    const targetPath = cat.id === "sports" ? "/larene" : `/category/${cat.id}`;
-                    const isActive = location.pathname === targetPath;
+                  {activeNavItems.map((item) => {
+                    const isExternal = item.url.startsWith('http');
+                    const label = language === "fr" ? item.labelFr : item.labelEn;
+                    const isActive = location.pathname === item.url;
+
+                    if (isExternal) {
+                      return (
+                        <a
+                          key={item.id}
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="px-5 py-3 text-xs uppercase tracking-widest transition-all flex items-center justify-between text-[#172033] dark:text-[#f2f4f5] hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 font-black"
+                        >
+                          <span>{label}</span>
+                        </a>
+                      );
+                    }
+
                     return (
                       <Link
-                        key={cat.id}
-                        to={targetPath}
+                        key={item.id}
+                        to={item.url}
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={`px-5 py-3 text-xs uppercase tracking-widest transition-all flex items-center justify-between ${
                           isActive
@@ -901,7 +959,7 @@ export function Header() {
                             : "text-[#172033] dark:text-[#f2f4f5] hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 pl-5 font-black"
                         }`}
                       >
-                        <span>{language === "fr" ? cat.fr : cat.en}</span>
+                        <span>{label}</span>
                         {isActive && <span className="w-1.5 h-1.5 rounded-full bg-[#E85D42]" />}
                       </Link>
                     );
@@ -1072,7 +1130,7 @@ export function Header() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowSignUpModal(false)}
-              className="absolute inset-0 bg-black/80"
+              className="absolute inset-0 bg-black/50 backdrop-blur-md"
             />
 
             {/* Pass Dialog */}
@@ -1082,10 +1140,10 @@ export function Header() {
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
               style={{ willChange: "transform" }}
-              className="relative w-full max-w-md bg-[#0d0d0f] border-2 border-[#E85D42] shadow-[0_20px_50px_rgba(0,0,0,0.85)] text-white p-6 md:p-8 max-h-[85vh] overflow-y-auto rounded-none z-10 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
+              className="relative w-full max-w-md bg-zinc-950/80 dark:bg-black/70 backdrop-blur-2xl backdrop-saturate-150 border border-white/20 dark:border-zinc-800/80 shadow-2xl text-white p-6 md:p-8 max-h-[85vh] overflow-y-auto rounded-2xl z-10 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent overflow-hidden"
             >
-              {/* YouTube Style Glowing Line */}
-              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-yellow-500 via-[#E85D42] to-rose-600" />
+              {/* Top Accent Line */}
+              <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-[#E85D42] to-transparent" />
 
               {/* Header */}
               <div className="flex justify-between items-start mb-4 font-sans">
@@ -1094,7 +1152,7 @@ export function Header() {
                     <User size={11} className="text-[#E85D42]" />
                     {language === "fr" ? "COMPTE MEMBRE" : "MEMBER ACCOUNT"}
                   </div>
-                  <h3 className="text-xl font-black uppercase tracking-widest text-white">
+                  <h3 className="text-xl font-serif font-black uppercase tracking-wider text-white">
                     {authTab === "login"
                       ? language === "fr"
                         ? "Se Connecter"
@@ -1115,25 +1173,25 @@ export function Header() {
                 </div>
                 <button
                   onClick={() => setShowSignUpModal(false)}
-                  className="p-1 rounded-none text-zinc-500 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer"
+                  className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
 
               {/* Seamless Auth Tab Switcher */}
-              <div className="flex bg-zinc-900 border border-zinc-800 p-1 mb-5 rounded-none font-sans">
+              <div className="flex bg-zinc-900/60 border border-zinc-800/80 p-1 mb-5 rounded-xl font-sans backdrop-blur-sm">
                 <button
                   type="button"
                   onClick={() => setAuthTab("login")}
-                  className={`flex-1 text-center py-1.5 text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer ${authTab === "login" ? "bg-[#E85D42] text-white shadow-sm font-extrabold" : "text-zinc-500 hover:text-zinc-300"}`}
+                  className={`flex-1 text-center py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer ${authTab === "login" ? "bg-[#E85D42] text-white shadow-sm font-extrabold" : "text-zinc-500 hover:text-zinc-300"}`}
                 >
                   {language === "fr" ? "Se Connecter" : "Log In"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setAuthTab("register")}
-                  className={`flex-1 text-center py-1.5 text-[9px] font-black uppercase tracking-widest transition-all cursor-pointer ${authTab === "register" ? "bg-[#E85D42] text-white shadow-sm font-extrabold" : "text-zinc-500 hover:text-zinc-300"}`}
+                  className={`flex-1 text-center py-1.5 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer ${authTab === "register" ? "bg-[#E85D42] text-white shadow-sm font-extrabold" : "text-zinc-500 hover:text-zinc-300"}`}
                 >
                   {language === "fr" ? "S'inscrire" : "Register"}
                 </button>
@@ -1661,10 +1719,9 @@ export function Header() {
                         </h4>
                         <span className="text-[8px] font-mono font-bold tracking-wider text-white px-1.5 py-0.5 rounded-none leading-none shrink-0" style={{ backgroundColor: currentSettings.accentColor }}>
                           {readerProfile.email === "kadersdiaz3@gmail.com" ||
-                          
                           readerProfile.role === "Admin"
                             ? "ADMIN"
-                            : isPremiumMock ? "PREMIUM" : "MEMBER"}
+                            : language === "fr" ? "MEMBRE" : "MEMBER"}
                         </span>
                       </div>
                       <p className="text-[9.5px] text-brand-muted font-mono truncate max-w-[170px] mt-1.5 leading-none">
@@ -1751,35 +1808,6 @@ export function Header() {
                   >
                     {activeSubMenu === "main" && (
                   <div className="space-y-6">
-                    {/* Premium Sahel Pass Promo Banner */}
-                    {!isPremiumMock && (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-none text-left"
-                      >
-                        <div className="flex items-start gap-3">
-                          <Crown className="text-amber-500 shrink-0 mt-0.5 animate-pulse" size={16} />
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-[10px] font-bold tracking-wider text-amber-500 uppercase font-mono">
-                              {language === "fr" ? "PASSE GÉOPOLITIQUE PRÉCIS" : "PREMIUM SAHEL PASS DISPATCH"}
-                            </h4>
-                            <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-1 leading-relaxed">
-                              {language === "fr"
-                                ? "Accédez aux rapports verrouillés et aux dispatches confidentielles du Sahel."
-                                : "Gain unlimited clearance to locked reports and Sahel's confidential intel."}
-                            </p>
-                            <button
-                              onClick={() => setActiveSubMenu("subscription")}
-                              className="mt-2.5 bg-amber-500 text-black font-bold text-[10px] tracking-wider uppercase px-3 py-1.5 hover:bg-amber-400 transition-all cursor-pointer rounded-none font-mono"
-                            >
-                              {language === "fr" ? "DÉVERROUILLER L'ACCÈS" : "RESTORE CLEARANCE"}
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-
                     {/* Admin Studio Section */}
                     {(readerProfile?.email === "kadersdiaz3@gmail.com" ||
                       readerProfile?.email === "contact@perspective.sn" ||
@@ -2036,9 +2064,9 @@ export function Header() {
                         {articles.filter((a) => savedArticles?.includes(a.id)).length > 0 ? (
                           articles
                             .filter((a) => savedArticles?.includes(a.id))
-                            .map((article) => (
+                            .map((article, idx) => (
                               <div
-                                key={article.id}
+                                key={`${article.id}-${idx}`}
                                 className="flex gap-2 items-center justify-between p-2.5 bg-zinc-900/60 border border-zinc-800 hover:bg-zinc-900 transition-all"
                               >
                                 <Link
@@ -2135,7 +2163,7 @@ export function Header() {
                                   <div className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 bg-[#E85D42]" style={{ backgroundColor: currentSettings.accentColor }} />
                                   <div className="flex-1">
                                     <p className="text-[10.5px] text-zinc-200 font-semibold leading-relaxed">
-                                      {notif.text?.[language] || notif.text?.fr}
+                                      {typeof notif.text === 'string' ? notif.text : (notif.text?.[language] || notif.text?.fr || notif.text?.en || '')}
                                     </p>
                                     <span className="text-[8px] font-mono text-zinc-500 mt-0.5 block">{notif.date}</span>
                                   </div>
@@ -2197,6 +2225,22 @@ export function Header() {
                           </p>
                         </div>
                       )}
+                    </div>
+
+                    <div className="pt-2 border-t border-zinc-800 flex justify-between items-center">
+                      <span className="text-[9px] font-mono text-zinc-400">
+                        {language === "fr" ? "4 canaux configurables" : "4 alert channels ready"}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setShowProfileModal(true);
+                        }}
+                        className="text-[9px] font-mono font-bold uppercase tracking-wider text-[#E85D42] hover:underline cursor-pointer flex items-center gap-1.5 bg-zinc-900 px-2.5 py-1 rounded border border-zinc-800"
+                        style={{ color: currentSettings.accentColor }}
+                      >
+                        <Sliders size={11} />
+                        <span>{language === "fr" ? "Configuration des Alertes" : "Setup Notification Channels"}</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2456,140 +2500,40 @@ export function Header() {
                   </div>
                 )}
 
-                {/* SUBMENU: SUBSCRIPTION (Perspective Sahel Pass Premium Pass) */}
-                {activeSubMenu === "subscription" && (
-                  <div className="p-4 space-y-4 text-left font-cambria text-xs">
-                    <span className="text-[9px] font-black uppercase text-amber-500 tracking-widest flex items-center gap-1.5 border-b border-zinc-800 pb-1">
-                      <Crown size={10} className="text-amber-500" />
-                      <span>{language === "fr" ? "Passe Géopolitique Sahel" : "Sahel Premium Clearance Pass"}</span>
-                    </span>
-
-                    {isPremiumMock ? (
-                      <div className="space-y-4 bg-zinc-950 border border-amber-900/40 p-4 animate-fadeIn">
-                        <div className="text-center space-y-1.5">
-                          <Crown className="text-amber-500 mx-auto animate-pulse" size={24} />
-                          <h4 className="font-black text-amber-500 text-xs uppercase tracking-widest">
-                            {language === "fr" ? "PASSE GÉOPOLITIQUE ACTIF" : "PREMIUM CLEARANCE ACTIVE"}
-                          </h4>
-                          <p className="text-[9px] text-zinc-400 leading-relaxed">
-                            {language === "fr"
-                              ? "Vous bénéficiez d'une accréditation illimitée à tous les rapports verrouillés du Sahel."
-                              : "You hold top-tier unlimited clearance to locked reports and Sahel confidential dispatches."}
-                          </p>
-                        </div>
-
-                        <div className="border-t border-zinc-900 pt-3 font-mono text-[8px] space-y-1.5 text-zinc-500 uppercase">
-                          <p>CLEARANCE_CODE: PERSPECTIVE-GOLD-PASS</p>
-                          <p>BILLING_CYCLE: MONTHLY DISPATCH</p>
-                          <p>NEXT_RENEWAL: 2026-07-28</p>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setIsPremiumMock(false);
-                            if (readerProfile) {
-                              setReaderProfile({ ...readerProfile, role: language === "fr" ? "Membre" : "Member" });
-                            }
-                          }}
-                          className="w-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 py-2 font-bold uppercase tracking-widest text-[9px] text-rose-500"
-                        >
-                          {language === "fr" ? "RÉSILIER L'ABONNEMENT" : "REVOKE CLEARANCE PASS"}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <p className="text-[10px] text-zinc-300 leading-relaxed">
-                          {language === "fr"
-                            ? "Déverrouillez les perspectives exclusives de notre bureau d'investigation d'Afrique de l'Ouest."
-                            : "Unlock West Africa's premium geopolitical intelligence deck and classified dispatch reports."}
-                        </p>
-
-                        {/* Tier selectors */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="border border-amber-500/30 bg-amber-500/5 p-2.5 text-center cursor-pointer hover:bg-amber-500/10 transition-colors">
-                            <span className="block text-[8px] font-black uppercase text-amber-500 tracking-wider">ANALYST</span>
-                            <span className="text-xs font-black block text-white mt-1">4.99 € <span className="text-[8px] font-normal text-zinc-500">/mo</span></span>
-                          </div>
-                          <div className="border border-zinc-800 bg-zinc-950 p-2.5 text-center cursor-pointer hover:border-amber-500/20 transition-colors">
-                            <span className="block text-[8px] font-black uppercase text-zinc-400 tracking-wider">DIPLOMAT</span>
-                            <span className="text-xs font-black block text-white mt-1">9.99 € <span className="text-[8px] font-normal text-zinc-500">/mo</span></span>
-                          </div>
-                        </div>
-
-                        {/* Mock Payment input */}
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            setSettingsSuccessMsg(language === "fr" ? "Traitement de l'accréditation..." : "Processing clearance activation...");
-                            setTimeout(() => {
-                              setSettingsSuccessMsg("");
-                              setIsPremiumMock(true);
-                              if (readerProfile) {
-                                setReaderProfile({ ...readerProfile, role: 'Premium' });
-                              }
-                              addInteraction(
-                                readerProfile.email,
-                                'upgrade_premium',
-                                {
-                                  fr: `👑 A activé le Passe Géopolitique Sahel Premium`,
-                                  en: `👑 Activated the Sahel Geopolitical Premium Clearance Pass`
-                                }
-                              );
-                            }, 1200);
-                          }}
-                          className="space-y-2.5 bg-zinc-950 p-3 border border-zinc-900"
-                        >
-                          <div className="space-y-1">
-                            <label className="text-[8px] uppercase text-zinc-500 font-bold block">{language === "fr" ? "Numéro de Carte Accréditée" : "Secure Payment Card"}</label>
-                            <input
-                              required
-                              type="text"
-                              pattern="\d{16}"
-                              maxLength={16}
-                              placeholder="4000 1234 5678 9010"
-                              className="w-full bg-zinc-900 border border-zinc-800 p-2 text-[10px] text-zinc-200 font-mono tracking-widest focus:outline-none"
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <label className="text-[8px] uppercase text-zinc-500 font-bold block">{language === "fr" ? "Expiration" : "Expiry"}</label>
-                              <input
-                                required
-                                type="text"
-                                maxLength={5}
-                                placeholder="MM/YY"
-                                className="w-full bg-zinc-900 border border-zinc-800 p-2 text-[10px] text-zinc-200 font-mono text-center focus:outline-none"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-[8px] uppercase text-zinc-500 font-bold block">CVV</label>
-                              <input
-                                required
-                                type="password"
-                                maxLength={3}
-                                placeholder="•••"
-                                className="w-full bg-zinc-900 border border-zinc-800 p-2 text-[10px] text-zinc-200 font-mono text-center focus:outline-none"
-                              />
-                            </div>
-                          </div>
-
-                          <button
-                            type="submit"
-                            className="w-full bg-amber-500 text-black font-black text-[9px] tracking-widest uppercase py-2.5 hover:bg-amber-400 transition-all font-mono"
-                          >
-                            {language === "fr" ? "ACTIVER MON CLEARANCE PASS" : "ACTIVATE CLEARANCE PASS"}
-                          </button>
-                        </form>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* SUBMENU: MESSAGES */}
                 {activeSubMenu === "messages" && (
                   <div className="flex flex-col h-full text-left font-cambria text-xs">
+                    {/* Navigation toolbar for Full Discussion Page & Floating Tab */}
+                    <div className="p-2.5 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between gap-2 shrink-0">
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
+                        {language === "fr" ? "Canal Direct" : "Direct Channel"}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('open-floating-chat', { detail: { email: selectedChatUser } }));
+                            setShowProfileModal(false);
+                          }}
+                          className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-[#E85D42] border border border-zinc-800 text-[9.5px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1"
+                          title={language === "fr" ? "Ouvrir en bulle flottante Messenger" : "Open in floating Facebook chat tab"}
+                        >
+                          💬 {language === "fr" ? "Bulle Flottante" : "Floating Tab"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            navigate('/discussion');
+                            setShowProfileModal(false);
+                          }}
+                          className="px-2 py-1 bg-[#E85D42] hover:bg-[#d04a30] text-white text-[9.5px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1 shadow-sm"
+                          title={language === "fr" ? "Ouvrir la page de discussion complète" : "Open full discussion page"}
+                        >
+                          ↗ {language === "fr" ? "Plein Écran" : "Full Page"}
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Contacts list selector */}
-                    <div className="p-3 border-b border-zinc-900 bg-zinc-950 flex gap-1.5 overflow-x-auto shrink-0">
+                    <div className="p-2.5 border-b border-zinc-900 bg-zinc-950/80 flex gap-1.5 overflow-x-auto shrink-0">
                       {[
                         { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin" },
                         { email: "member@perspective.sn", name: "Mariama Diallo" },
@@ -2603,7 +2547,7 @@ export function Header() {
                             setAttachedMaterialType("none");
                             setAttachedMaterialId("");
                           }}
-                          className={`px-3 py-1.5 border text-[10px] uppercase font-bold tracking-wider shrink-0 cursor-pointer transition-all ${selectedChatUser === contact.email ? "bg-zinc-800 border-[#E85D42] text-white" : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"}`}
+                          className={`px-2.5 py-1 border text-[9.5px] uppercase font-mono font-bold tracking-wider shrink-0 cursor-pointer transition-all rounded ${selectedChatUser === contact.email ? "bg-zinc-800 border-[#E85D42] text-white shadow-xs" : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"}`}
                         >
                           {contact.name}
                         </button>
@@ -2637,7 +2581,7 @@ export function Header() {
                                   className={`px-3.5 py-2 text-[11px] leading-relaxed font-sans transition-all ${isMe ? "text-white rounded-2xl rounded-br-xs shadow-xs" : "bg-zinc-800 text-zinc-100 rounded-2xl rounded-bl-xs shadow-xs"}`}
                                   style={isMe ? { backgroundColor: currentSettings?.accentColor || "#E85D42" } : {}}
                                 >
-                                  <p>{dm.text}</p>
+                                  <p>{getSafeText(dm.text, language)}</p>
 
                                   {/* Rendering attachment inside bubble */}
                                   {dm.attachment && (
@@ -2647,8 +2591,8 @@ export function Header() {
                                           <span className="text-[7.5px] font-black uppercase text-amber-500 tracking-wider block mb-1">
                                             📰 {language === "fr" ? "Article Partagé" : "Shared Article"}
                                           </span>
-                                          <p className="font-bold text-zinc-200 line-clamp-1">{dm.attachment.title}</p>
-                                          <p className="text-[9px] text-zinc-500 mt-0.5 line-clamp-1">{dm.attachment.subtitle}</p>
+                                          <p className="font-bold text-zinc-200 line-clamp-1">{typeof dm.attachment.title === 'object' ? ((dm.attachment.title as any)[language] || (dm.attachment.title as any).fr || (dm.attachment.title as any).en || '') : (dm.attachment.title || '')}</p>
+                                          <p className="text-[9px] text-zinc-500 mt-0.5 line-clamp-1">{typeof dm.attachment.subtitle === 'object' ? ((dm.attachment.subtitle as any)[language] || (dm.attachment.subtitle as any).fr || (dm.attachment.subtitle as any).en || '') : (dm.attachment.subtitle || '')}</p>
                                           <button
                                             onClick={() => {
                                               const slug = dm.attachment?.link.split("/article/")[1] || "";
@@ -2667,8 +2611,8 @@ export function Header() {
                                           <span className="text-[7.5px] font-black uppercase text-[#E85D42] tracking-wider block mb-1" style={{ color: currentSettings.accentColor }}>
                                             💬 {language === "fr" ? "Extrait Commentaire" : "Shared Comment"}
                                           </span>
-                                          <p className="font-bold text-zinc-300 italic">"{dm.attachment.title}"</p>
-                                          <p className="text-[8.5px] text-zinc-500 mt-1">Par: {dm.attachment.subtitle}</p>
+                                          <p className="font-bold text-zinc-300 italic">"{typeof dm.attachment.title === 'object' ? ((dm.attachment.title as any)[language] || (dm.attachment.title as any).fr || (dm.attachment.title as any).en || '') : (dm.attachment.title || '')}"</p>
+                                          <p className="text-[8.5px] text-zinc-500 mt-1">Par: {typeof dm.attachment.subtitle === 'object' ? ((dm.attachment.subtitle as any)[language] || (dm.attachment.subtitle as any).fr || (dm.attachment.subtitle as any).en || '') : (dm.attachment.subtitle || '')}</p>
                                         </div>
                                       ) : null}
                                     </div>
@@ -2728,7 +2672,7 @@ export function Header() {
                               onClick={() => setAttachedMaterialId(art.id)}
                               className={`w-full text-left p-1.5 text-[9px] border transition-all truncate block ${attachedMaterialId === art.id ? "border-amber-500 bg-amber-500/10 text-white" : "border-transparent text-zinc-400 hover:text-white"}`}
                             >
-                              [{art.category}] {art.title[language] || art.title.fr}
+                              [{getSafeText(art.category, language)}] {getSafeText(art.title, language)}
                             </button>
                           ))}
                         </div>
@@ -2744,7 +2688,7 @@ export function Header() {
                               className={`w-full text-left p-1.5 text-[9px] border transition-all truncate block ${attachedMaterialId === c.id ? "border-[#E85D42] bg-[#E85D42]/10 text-white" : "border-transparent text-zinc-400 hover:text-white"}`}
                               style={attachedMaterialId === c.id ? { borderColor: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '10' } : {}}
                             >
-                              "{c.text}" - {c.author}
+                              "{getSafeText(c.text, language)}" - {c.author}
                             </button>
                           ))}
                         </div>

@@ -4,6 +4,15 @@ import { Trophy, MessageSquare, ArrowRight, FileText, MapPin, Clock } from "luci
 import { useStore } from "../store";
 import { Match, Article } from "../types";
 
+const formatBilingual = (obj: any, lang: 'fr' | 'en'): string => {
+  if (!obj) return '';
+  if (typeof obj === 'string') return obj;
+  if (typeof obj === 'object') {
+    return obj[lang] || obj.fr || obj.en || '';
+  }
+  return String(obj);
+};
+
 export function SportsQuadrant() {
   const { language, matches = [], articles = [], siteSettings } = useStore();
 
@@ -84,8 +93,8 @@ export function SportsQuadrant() {
 
   const handleAskAbdelAboutMatch = (match: Match) => {
     const prompt = language === "fr"
-      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques et sportifs de la rencontre suivante : ${match.teamA.name} contre ${match.teamB.name} (${match.leagueLabel.fr}) ? Donne-moi un résumé clair et factuel.`
-      : `Hi Abdel, can you break down the political and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${match.leagueLabel.en})? Include key facts and background.`;
+      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques et sportifs de la rencontre suivante : ${match.teamA.name} contre ${match.teamB.name} (${formatBilingual(match.leagueLabel, 'fr')}) ? Donne-moi un résumé clair et factuel.`
+      : `Hi Abdel, can you break down the political and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${formatBilingual(match.leagueLabel, 'en')})? Include key facts and background.`;
 
     localStorage.setItem("abdel_prefilled_prompt", prompt);
     window.dispatchEvent(new CustomEvent("trigger_abdel_chat", { detail: { prompt } }));
@@ -172,7 +181,7 @@ export function SportsQuadrant() {
                       À LA UNE • ÉVÉNEMENT MAJEUR
                     </span>
                     <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                      {zone1.type === "match" ? (zone1.data as Match).leagueLabel[language] : (zone1.data as Article).category}
+                      {zone1.type === "match" ? formatBilingual((zone1.data as Match).leagueLabel, language) : (zone1.data as Article).category}
                     </span>
                   </div>
 
@@ -218,18 +227,18 @@ export function SportsQuadrant() {
                     </div>
 
                     <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 italic border-l-2 border-[#E85D42] pl-3">
-                      {language === "fr" ? (zone1.data as Match).contextInfo?.fr : (zone1.data as Match).contextInfo?.en}
+                      {formatBilingual((zone1.data as Match).contextInfo, language)}
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <h3 className="text-lg font-serif font-black text-zinc-900 dark:text-zinc-100 leading-snug hover:text-[#E85D42] transition-colors">
                       <Link to={`/article/${(zone1.data as Article).slug}`}>
-                        {(zone1.data as Article).title[language]}
+                        {formatBilingual((zone1.data as Article).title, language)}
                       </Link>
                     </h3>
                     <p className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 line-clamp-3">
-                      {(zone1.data as Article).excerpt[language]}
+                      {formatBilingual((zone1.data as Article).excerpt, language)}
                     </p>
                   </div>
                 )}
@@ -289,7 +298,7 @@ export function SportsQuadrant() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="text-[9px] font-bold uppercase text-zinc-400">
-                        {(zone2.data as Match).leagueLabel[language]}
+                        {formatBilingual((zone2.data as Match).leagueLabel, language)}
                       </div>
                       <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-900 dark:text-zinc-100">
                         <span className="truncate">{(zone2.data as Match).teamA.name}</span>
@@ -308,7 +317,7 @@ export function SportsQuadrant() {
                   <div>
                     <div className="text-[9px] font-bold uppercase text-zinc-400">{(zone2.data as Article).category}</div>
                     <Link to={`/article/${(zone2.data as Article).slug}`} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 hover:text-[#E85D42] transition-colors line-clamp-1">
-                      {(zone2.data as Article).title[language]}
+                      {formatBilingual((zone2.data as Article).title, language)}
                     </Link>
                   </div>
                 )}
@@ -333,7 +342,7 @@ export function SportsQuadrant() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0 space-y-1">
                       <div className="text-[9px] font-bold uppercase text-zinc-400">
-                        {(zone3.data as Match).leagueLabel[language]}
+                        {formatBilingual((zone3.data as Match).leagueLabel, language)}
                       </div>
                       <div className="flex items-center gap-2 text-xs font-bold text-zinc-900 dark:text-zinc-100">
                         <span className="truncate">{(zone3.data as Match).teamA.name}</span>
@@ -348,7 +357,7 @@ export function SportsQuadrant() {
                   <div>
                     <div className="text-[9px] font-bold uppercase text-zinc-400">{(zone3.data as Article).category}</div>
                     <Link to={`/article/${(zone3.data as Article).slug}`} className="text-xs font-bold text-zinc-900 dark:text-zinc-100 hover:text-[#E85D42] transition-colors line-clamp-1">
-                      {(zone3.data as Article).title[language]}
+                      {formatBilingual((zone3.data as Article).title, language)}
                     </Link>
                   </div>
                 )}
@@ -372,10 +381,10 @@ export function SportsQuadrant() {
                       to={`/article/${(zone4.data as Article).slug}`}
                       className="text-xs font-bold text-zinc-900 dark:text-zinc-100 hover:text-[#E85D42] transition-colors block leading-tight line-clamp-1"
                     >
-                      {(zone4.data as Article).title[language]}
+                      {formatBilingual((zone4.data as Article).title, language)}
                     </Link>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400 line-clamp-1">
-                      {(zone4.data as Article).excerpt[language]}
+                      {formatBilingual((zone4.data as Article).excerpt, language)}
                     </p>
                   </div>
                 ) : (

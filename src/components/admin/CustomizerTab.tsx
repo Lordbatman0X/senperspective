@@ -1,9 +1,70 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
-import { Palette, Phone, Mail, MapPin, ShieldCheck, HelpCircle, Save, Megaphone, TrendingUp, Sparkles, AlertCircle, Ship, Quote, Layers, Globe, Wrench } from 'lucide-react';
+import { Palette, Phone, Mail, MapPin, ShieldCheck, HelpCircle, Save, Megaphone, TrendingUp, Sparkles, AlertCircle, Ship, Quote, Layers, Globe, Wrench, Menu, ArrowUp, ArrowDown, Trash2, Plus, Eye, EyeOff, Navigation } from 'lucide-react';
 
 export function CustomizerTab() {
   const { language, siteSettings, updateSiteSettings } = useStore();
+
+  // Header Navigation Bar state
+  const defaultNavItems = [
+    { id: 'politique', labelFr: 'Politique', labelEn: 'Politics', url: '/category/politique', enabled: true },
+    { id: 'economie', labelFr: 'Économie', labelEn: 'Economy', url: '/category/economie', enabled: true },
+    { id: 'societe', labelFr: 'Société', labelEn: 'Society', url: '/category/societe', enabled: true },
+    { id: 'international', labelFr: 'International', labelEn: 'International', url: '/category/international', enabled: true },
+    { id: 'tech', labelFr: 'Tech', labelEn: 'Tech', url: '/category/tech', enabled: true },
+    { id: 'sante', labelFr: 'Santé', labelEn: 'Health', url: '/category/sante', enabled: true },
+    { id: 'sports', labelFr: "L'Arène", labelEn: 'The Arena', url: '/larene', enabled: true },
+    { id: 'gouvernance', labelFr: 'Gouvernance', labelEn: 'Governance', url: '/category/gouvernance', enabled: true },
+  ];
+
+  const [headerNavItems, setHeaderNavItems] = useState(
+    siteSettings?.headerNavItems && siteSettings.headerNavItems.length > 0
+      ? siteSettings.headerNavItems
+      : defaultNavItems
+  );
+  const [showHeaderTopBar, setShowHeaderTopBar] = useState(siteSettings?.showHeaderTopBar !== false);
+
+  const handleUpdateNavItem = (index: number, field: string, value: any) => {
+    const updated = [...headerNavItems];
+    updated[index] = { ...updated[index], [field]: value };
+    setHeaderNavItems(updated);
+  };
+
+  const handleToggleNavItem = (index: number) => {
+    const updated = [...headerNavItems];
+    updated[index] = { ...updated[index], enabled: !updated[index].enabled };
+    setHeaderNavItems(updated);
+  };
+
+  const handleMoveNavItemUp = (index: number) => {
+    if (index === 0) return;
+    const updated = [...headerNavItems];
+    const temp = updated[index - 1];
+    updated[index - 1] = updated[index];
+    updated[index] = temp;
+    setHeaderNavItems(updated);
+  };
+
+  const handleMoveNavItemDown = (index: number) => {
+    if (index === headerNavItems.length - 1) return;
+    const updated = [...headerNavItems];
+    const temp = updated[index + 1];
+    updated[index + 1] = updated[index];
+    updated[index] = temp;
+    setHeaderNavItems(updated);
+  };
+
+  const handleRemoveNavItem = (index: number) => {
+    setHeaderNavItems(headerNavItems.filter((_, i) => i !== index));
+  };
+
+  const handleAddNavItem = () => {
+    const newId = 'nav-' + Date.now();
+    setHeaderNavItems([
+      ...headerNavItems,
+      { id: newId, labelFr: 'Nouveau Lien', labelEn: 'New Link', url: '/category/politique', enabled: true }
+    ]);
+  };
 
   // Maintenance mode state
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(siteSettings?.isMaintenanceMode || false);
@@ -12,6 +73,7 @@ export function CustomizerTab() {
 
   // Local state for form submission values
   const [siteName, setSiteName] = useState(siteSettings?.siteName || 'Perspective');
+  const [boukariCorpLogo, setBoukariCorpLogo] = useState(siteSettings?.boukariCorpLogo || '');
   const [glassIntensity, setGlassIntensity] = useState(siteSettings?.glassIntensity || 'Medium');
   const [categories, setCategories] = useState(siteSettings?.categories || []);
   const handleAddCategory = () => setCategories([...categories, { id: "new", fr: "Nouveau", en: "New" }]);
@@ -27,8 +89,8 @@ export function CustomizerTab() {
   const [editorialPhone, setEditorialPhone] = useState(siteSettings?.editorialPhone || '+221 33 824 55 55');
   const [supportEmail, setSupportEmail] = useState(siteSettings?.supportEmail || 'contact@perspective.sn');
   const [officeAddress, setOfficeAddress] = useState(siteSettings?.officeAddress || 'Immeuble Tamaro, Rue Mohamed V, Dakar');
-  const [paywallThreshold, setPaywallThreshold] = useState(siteSettings?.paywallThreshold || 3);
-  const [paywallEnabled, setPaywallEnabled] = useState(siteSettings?.paywallEnabled !== false);
+  const [paywallThreshold, setPaywallThreshold] = useState(siteSettings?.paywallThreshold || 9999);
+  const [paywallEnabled, setPaywallEnabled] = useState(siteSettings?.paywallEnabled === true);
 
   // Local state for customizable sidebar dispatches (Flash Info)
   const [disp1Time, setDisp1Time] = useState(siteSettings?.analystDispatches?.[0]?.time || '14:22 DKR');
@@ -92,11 +154,14 @@ export function CustomizerTab() {
     e.preventDefault();
     updateSiteSettings({
       siteName,
+      boukariCorpLogo,
       isMaintenanceMode,
       maintenanceMessageFr,
       maintenanceMessageEn,
       glassIntensity,
       categories,
+      headerNavItems,
+      showHeaderTopBar,
       homeSections: homeSections.split(',').map(s => s.trim()),
       accentColor,
       editorialPhone,
@@ -287,6 +352,72 @@ export function CustomizerTab() {
                 required
               />
             </div>
+
+            {/* Boukari Corporation Logo Upload */}
+            <div className="md:col-span-2 p-4 bg-zinc-950 border border-zinc-800 rounded-md space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-200">
+                    {language === 'fr' ? 'Logo Boukari Corporation (BC Logo)' : 'Boukari Corporation Logo (BC Logo)'}
+                  </label>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    {language === 'fr' 
+                      ? 'Image carrée affichée au pied de page au niveau de la mention « Unité Opérationnelle de Boukari Corporation ».'
+                      : 'Square logo displayed in the footer next to the "Operational Unit of Boukari Corporation" precision.'}
+                  </p>
+                </div>
+                <div 
+                  className="h-16 max-w-[160px] bg-transparent flex items-center justify-center overflow-hidden shrink-0"
+                >
+                  {boukariCorpLogo ? (
+                    <img src={boukariCorpLogo} alt="BC Preview" className="h-16 w-auto max-w-full object-contain block" />
+                  ) : (
+                    <div className="h-12 px-3 bg-zinc-900 border border-zinc-800 rounded flex items-center justify-center">
+                      <span className="font-mono font-black text-sm text-zinc-100 tracking-wider">BC</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <input
+                  type="text"
+                  value={boukariCorpLogo}
+                  onChange={e => setBoukariCorpLogo(e.target.value)}
+                  placeholder={language === 'fr' ? "https://... ou téléchargez ci-contre" : "https://... or upload image"}
+                  className="flex-1 w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-mono focus:outline-none focus:border-[#E85D42] rounded-md"
+                />
+                <label className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs font-mono font-bold uppercase tracking-wider text-zinc-200 cursor-pointer rounded-md shrink-0 transition-colors border border-zinc-700">
+                  {language === 'fr' ? 'Importer Image...' : 'Upload Image...'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          if (evt.target?.result) {
+                            setBoukariCorpLogo(evt.target.result as string);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+                {boukariCorpLogo && (
+                  <button
+                    type="button"
+                    onClick={() => setBoukariCorpLogo('')}
+                    className="px-2.5 py-2 text-xs font-mono text-red-400 hover:text-red-300 hover:bg-red-950/30 border border-red-900/50 rounded-md transition-colors cursor-pointer"
+                  >
+                    {language === 'fr' ? 'Effacer' : 'Clear'}
+                  </button>
+                )}
+              </div>
+            </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">{t.accentColorLabel}</label>
               <div className="flex flex-wrap gap-2 mb-3">
@@ -318,7 +449,7 @@ export function CustomizerTab() {
               <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1.5">Design System & Typography</label>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <span className="text-[10px] uppercase font-mono font-bold text-zinc-400 mb-1 block">Combinaison de Polices / Font Pairing</span>
+                  <span className="text-[10px] uppercase font-mono font-bold text-zinc-200 mb-1 block">Combinaison de Polices / Font Pairing</span>
                   <select
                     value={fontPairing}
                     onChange={e => setFontPairing(e.target.value)}
@@ -330,7 +461,7 @@ export function CustomizerTab() {
                   </select>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-mono font-bold text-zinc-400 mb-1 block">Intensité de l'Effet Verre / Glass Effect</span>
+                  <span className="text-[10px] uppercase font-mono font-bold text-zinc-200 mb-1 block">Intensité de l'Effet Verre / Glass Effect</span>
                   <select
                     value={glassIntensity}
                     onChange={e => setGlassIntensity(e.target.value)}
@@ -346,6 +477,128 @@ export function CustomizerTab() {
           </div>
         </div>
 
+        {/* Header Navigation Bar Settings */}
+        <div className="p-6 sm:p-8 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-lg shadow-xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+            <div className="flex items-center gap-3">
+              <Navigation className="text-[#E85D42]" size={20} />
+              <div>
+                <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100">
+                  {language === 'fr' ? "Barre de Navigation d'En-Tête" : 'Header Navigation Bar'}
+                </h3>
+                <p className="text-xs text-zinc-400 font-mono mt-0.5">
+                  {language === 'fr' ? 'Gérez les rubriques, liens, ordre et visibilité du menu principal' : 'Manage categories, links, reorder and visibility in main menu'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddNavItem}
+              className="px-3 py-1.5 bg-[#E85D42] hover:bg-[#d44c33] text-white text-xs font-bold uppercase tracking-wider rounded-md flex items-center gap-1.5 transition-colors self-start sm:self-auto cursor-pointer"
+            >
+              <Plus size={14} />
+              {language === 'fr' ? 'Ajouter un Lien' : 'Add Link'}
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {headerNavItems.map((item, index) => (
+              <div 
+                key={item.id}
+                className={`p-3.5 rounded-md border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  item.enabled !== false ? 'bg-zinc-950 border-zinc-800' : 'bg-zinc-950/40 border-zinc-900 opacity-60'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-1">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => handleMoveNavItemUp(index)}
+                      className="p-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-20 disabled:hover:text-zinc-400 transition-colors cursor-pointer"
+                      title="Move Up"
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === headerNavItems.length - 1}
+                      onClick={() => handleMoveNavItemDown(index)}
+                      className="p-1 text-zinc-400 hover:text-zinc-100 disabled:opacity-20 disabled:hover:text-zinc-400 transition-colors cursor-pointer"
+                      title="Move Down"
+                    >
+                      <ArrowDown size={12} />
+                    </button>
+                  </div>
+                  <span className="text-[10px] font-mono text-zinc-400 w-5 text-center">{index + 1}.</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 flex-1">
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
+                      {language === 'fr' ? 'Libellé (FR)' : 'Label (FR)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={item.labelFr}
+                      onChange={(e) => handleUpdateNavItem(index, 'labelFr', e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
+                      {language === 'fr' ? 'Libellé (EN)' : 'Label (EN)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={item.labelEn}
+                      onChange={(e) => handleUpdateNavItem(index, 'labelEn', e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
+                      {language === 'fr' ? 'Lien / URL' : 'Link / Path'}
+                    </label>
+                    <input
+                      type="text"
+                      value={item.url}
+                      onChange={(e) => handleUpdateNavItem(index, 'url', e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-mono focus:outline-none focus:border-[#E85D42] rounded-md"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-end md:self-center">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleNavItem(index)}
+                    className={`px-2.5 py-1.5 text-xs font-mono font-bold rounded-md flex items-center gap-1 border transition-colors cursor-pointer ${
+                      item.enabled !== false
+                        ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-400 hover:bg-emerald-900/60'
+                        : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {item.enabled !== false ? <Eye size={12} /> : <EyeOff size={12} />}
+                    <span className="uppercase text-[9px] tracking-wider">
+                      {item.enabled !== false ? (language === 'fr' ? 'Actif' : 'Active') : (language === 'fr' ? 'Masqué' : 'Hidden')}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveNavItem(index)}
+                    className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-950/30 rounded-md transition-colors cursor-pointer"
+                    title="Delete item"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* 1. Analyst Dispatches Configuration */}
         <div className="p-6 sm:p-8 bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-lg shadow-xl space-y-6">
           <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
@@ -358,7 +611,7 @@ export function CustomizerTab() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42] mb-3">Dépêche #1</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Horaire</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Horaire</label>
                   <input
                     type="text"
                     value={disp1Time}
@@ -368,7 +621,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Texte (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Texte (FR)</label>
                   <input
                     type="text"
                     value={disp1Fr}
@@ -377,7 +630,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Texte (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Texte (EN)</label>
                   <input
                     type="text"
                     value={disp1En}
@@ -392,7 +645,7 @@ export function CustomizerTab() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42] mb-3">Dépêche #2</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Horaire</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Horaire</label>
                   <input
                     type="text"
                     value={disp2Time}
@@ -402,7 +655,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Texte (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Texte (FR)</label>
                   <input
                     type="text"
                     value={disp2Fr}
@@ -411,7 +664,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Texte (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Texte (EN)</label>
                   <input
                     type="text"
                     value={disp2En}
@@ -445,7 +698,7 @@ export function CustomizerTab() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42]">Dépêche Internationale #1</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Horaire</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Horaire</label>
                   <input
                     type="text"
                     value={lm1Time}
@@ -454,7 +707,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Tag (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Tag (FR)</label>
                   <input
                     type="text"
                     value={lm1TagFr}
@@ -463,7 +716,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Tag (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Tag (EN)</label>
                   <input
                     type="text"
                     value={lm1TagEn}
@@ -475,7 +728,7 @@ export function CustomizerTab() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Titre (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Titre (FR)</label>
                   <input
                     type="text"
                     value={lm1TitleFr}
@@ -484,7 +737,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Titre (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Titre (EN)</label>
                   <input
                     type="text"
                     value={lm1TitleEn}
@@ -496,7 +749,7 @@ export function CustomizerTab() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Résumé (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Résumé (FR)</label>
                   <input
                     type="text"
                     value={lm1ExcerptFr}
@@ -505,7 +758,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Résumé (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Résumé (EN)</label>
                   <input
                     type="text"
                     value={lm1ExcerptEn}
@@ -521,7 +774,7 @@ export function CustomizerTab() {
               <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42]">Dépêche Internationale #2</h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Horaire</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Horaire</label>
                   <input
                     type="text"
                     value={lm2Time}
@@ -530,7 +783,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Tag (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Tag (FR)</label>
                   <input
                     type="text"
                     value={lm2TagFr}
@@ -539,7 +792,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Tag (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Tag (EN)</label>
                   <input
                     type="text"
                     value={lm2TagEn}
@@ -551,7 +804,7 @@ export function CustomizerTab() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Titre (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Titre (FR)</label>
                   <input
                     type="text"
                     value={lm2TitleFr}
@@ -560,7 +813,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Titre (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Titre (EN)</label>
                   <input
                     type="text"
                     value={lm2TitleEn}
@@ -572,7 +825,7 @@ export function CustomizerTab() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Résumé (FR)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Résumé (FR)</label>
                   <input
                     type="text"
                     value={lm2ExcerptFr}
@@ -581,7 +834,7 @@ export function CustomizerTab() {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Résumé (EN)</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Résumé (EN)</label>
                   <input
                     type="text"
                     value={lm2ExcerptEn}

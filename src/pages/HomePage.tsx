@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Article } from '../types';
-import { calculateReadingTime, formatRelativeDate } from '../lib/utils';
+import { calculateReadingTime, formatRelativeDate, getSafeText, formatCategory } from '../lib/utils';
 import { motion } from 'motion/react';
-import { SlidersHorizontal, Filter, Bookmark, Waves, Ship, CloudSun, Wind, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle } from 'lucide-react';
+import { SlidersHorizontal, Filter, Bookmark, Waves, Ship, CloudSun, Wind, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle, Trophy } from 'lucide-react';
 import { SportsSlider } from '../components/SportsSlider';
 import { SportsQuadrant } from '../components/SportsQuadrant';
 import { useSEO } from '../hooks/useSEO';
-import { getSafeImageUrl } from '../lib/imageUtils';
+import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
+import { NewsletterSignup } from '../components/NewsletterSignup';
 
 function ArticleCard({ article, large = false, small = false, tall = false }: { article: Article, large?: boolean, small?: boolean, tall?: boolean }) {
+  const navigate = useNavigate();
   const language = useStore((s) => s.language);
   const { toggleSavedArticle, savedArticles } = useStore();
   const isSaved = savedArticles?.includes(article.id) || false;
@@ -23,21 +25,21 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         viewport={{ once: true, margin: "-40px" }}
         transition={{ duration: 0.5, ease: "easeOut" }}
         className="w-full flex-shrink-0 group relative overflow-hidden flex flex-col md:flex-row h-[26rem] md:h-[20rem] cursor-pointer square-card" 
-        onClick={() => { window.location.href = `/article/${article.slug}`; }}
+        onClick={() => { navigate(`/article/${article.slug || article.id}`); }}
       >
         <div className="relative w-full md:w-2/3 h-1/2 md:h-full overflow-hidden shrink-0 bg-brand-black">
            <div 
               className="w-full h-full bg-cover bg-center opacity-80 group-hover:scale-105 group-hover:opacity-100 transition-transform duration-700"
-              style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+              style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
            />
            <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black/20 via-transparent to-transparent opacity-80" />
            <div className="absolute top-4 left-4 bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 shadow-md">
-              {article.category}
+              {formatCategory(article.category, language)}
            </div>
         </div>
         <div className="w-full md:w-1/3 flex flex-col p-6 md:p-8 justify-center h-1/2 md:h-full z-10 relative">
            <h2 className="relative text-brand-dark font-black text-xl md:text-2xl leading-[1.1] mb-3 group-hover:text-brand-primary transition-colors line-clamp-3">
-             {article.title?.[language] || 'Untitled'}
+             {article.title?.[language] || article.title?.fr || 'Sans titre'}
            </h2>
            <p className="relative text-brand-muted font-medium text-xs md:text-sm line-clamp-3 mb-4 leading-relaxed">
              {article.excerpt?.[language] || ''}
@@ -60,10 +62,10 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="group flex flex-col h-full overflow-hidden square-card"
     >
-      <Link to={`/article/${article.slug}`} className="block relative overflow-hidden shrink-0">
+      <Link to={`/article/${article.slug || article.id}`} className="block relative overflow-hidden shrink-0">
         <div 
           className={`relative bg-cover bg-center transition-transform duration-700 group-hover:scale-105 ${large ? 'h-[12rem] md:h-[16rem]' : tall ? 'h-52 sm:h-60' : small ? 'aspect-[4/5]' : 'h-48'}`}
-          style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+          style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
         >
           {large && (
             <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/40 to-transparent pointer-events-none" />
@@ -71,16 +73,16 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         </div>
         {!tall && (
            <div className="absolute top-0 left-0 bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 m-3 shadow-md">
-             {article.category}
+             {formatCategory(article.category, language)}
            </div>
         )}
       </Link>
       
       <div className={`flex flex-col flex-grow ${small ? 'p-4' : tall ? 'p-6' : 'p-5'}`}>
         <div className="flex-grow">
-          <Link to={`/article/${article.slug}`}>
+          <Link to={`/article/${article.slug || article.id}`}>
             <h3 className={`font-black mb-3 leading-tight transition-colors ${large ? 'text-3xl lg:text-4xl text-brand-dark group-hover:text-brand-primary line-clamp-3' : small ? 'text-base text-brand-dark group-hover:text-brand-primary line-clamp-2' : tall ? 'text-[22px] text-[#E85D42] hover:text-[#D45037] line-clamp-3' : 'text-lg text-brand-dark group-hover:text-brand-primary line-clamp-3'}`}>
-              {article.title?.[language] || 'Untitled'}
+              {article.title?.[language] || article.title?.fr || 'Sans titre'}
             </h3>
             <p className={`mb-4 ${large ? 'text-brand-muted text-lg line-clamp-3' : small ? 'text-brand-muted text-xs line-clamp-2' : tall ? 'text-zinc-600 dark:text-zinc-300 text-[15px] leading-relaxed line-clamp-4 font-medium' : 'text-brand-muted text-sm line-clamp-3'}`}>
               {article.excerpt?.[language] || ''}
@@ -120,14 +122,14 @@ function MiniCard({ article }: { article: Article }) {
       viewport={{ once: true }}
       transition={{ duration: 0.4 }}
     >
-      <Link to={`/article/${article.slug}`} className="group min-w-[200px] w-[200px] flex-shrink-0 square-card block overflow-hidden">
+      <Link to={`/article/${article.slug || article.id}`} className="group min-w-[200px] w-[200px] flex-shrink-0 square-card block overflow-hidden">
         <div 
           className="w-full h-28 bg-cover bg-center border-b border-zinc-200 dark:border-zinc-800 transition-colors"
-          style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+          style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
         />
         <div className="p-3 bg-transparent">
           <div className="text-[9px] font-bold uppercase tracking-wider text-brand-primary mb-1">
-            {article.category}
+            {formatCategory(article.category, language)}
           </div>
           <h4 className="font-bold text-xs leading-snug text-brand-muted group-hover:text-[#E85D42] dark:group-hover:text-[#E85D42] transition-colors mb-2 line-clamp-2">
             {article.title?.[language] || 'Untitled'}
@@ -247,8 +249,8 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
              onScroll={handleScroll}
              className="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing"
           >
-             {articles.map(article => (
-                <div key={article.id} className="min-w-full flex-shrink-0" style={{ scrollSnapAlign: 'start' }}>
+             {articles.map((article, idx) => (
+                <div key={`${article.id}-${idx}`} className="min-w-full flex-shrink-0" style={{ scrollSnapAlign: 'start' }}>
                   <ArticleCard article={article} large />
                 </div>
              ))}
@@ -258,7 +260,7 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
 }
 
 export function HomePage() {
-  const articles = useStore((s) => s.articles).filter(a => a.isPublished);
+  const articles = useStore((s) => s.articles).filter(a => a.isPublished !== false && (a as any).status !== 'draft');
   const language = useStore((s) => s.language);
   const theme = useStore((s) => s.theme);
   const ads = useStore((s) => s.ads);
@@ -346,6 +348,11 @@ export function HomePage() {
   const [activeCoastTab, setActiveCoastTab] = useState<'tide' | 'goree' | 'meteo' | 'gale' | null>(null);
   
   const featuredArticles = articles.filter(a => a.isFeatured).slice(0, 4);
+  const flashArticles = articles.filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');
+  const arenaArticles = articles.filter(a => a.category === "L'Arène" || a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
+  const dossierArticles = articles.filter(a => a.category === 'Dossiers' || a.category === 'Dossier' || a.category?.toLowerCase().includes('dossier'));
+  const maritimeArticles = articles.filter(a => a.category === 'Météo & Maritime' || a.category === 'Chaloupe & Transports' || a.category?.toLowerCase().includes('météo') || a.category?.toLowerCase().includes('chaloupe'));
+
   const largeSet = [...articles, ...articles, ...articles]; // Mock more articles for layout
   const allMixedSet = [...largeSet].sort(() => Math.random() - 0.5);
 
@@ -416,6 +423,7 @@ export function HomePage() {
   ];
 
   const farLeftAd = ads?.find(a => a.active && a.position === 'far-left');
+  const farRightAd = ads?.find(a => a.active && a.position === 'far-right');
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 py-6">
@@ -501,7 +509,7 @@ export function HomePage() {
                 const elements = [];
                 // Render regular article card
                 elements.push(
-                  <ArticleCard key={article.id} article={article} />
+                  <ArticleCard key={`${article.id}-${idx}`} article={article} />
                 );
 
                 // Insert dynamic horizontally structured ad banner exactly in-between (after 4 items)
@@ -528,7 +536,9 @@ export function HomePage() {
                                 {activeBetweenAd.name}
                               </h4>
                               <p className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold leading-relaxed mt-0.5 line-clamp-2">
-                                {activeBetweenAd.description || activeBetweenAd.targetUrl}
+                                {typeof activeBetweenAd.description === 'object'
+                                  ? ((activeBetweenAd.description as any)[language] || (activeBetweenAd.description as any).fr || (activeBetweenAd.description as any).en || '')
+                                  : (activeBetweenAd.description || activeBetweenAd.targetUrl)}
                               </p>
                             </div>
                           </div>
@@ -567,19 +577,22 @@ export function HomePage() {
             <div className="space-y-3 font-sans">
               {articles.slice(1, (currentSettings.trendingCount || 4)).map((article, idx) => (
                 <Link 
-                  key={article.id} 
-                  to={`/article/${article.slug}`} 
+                  key={`${article.id}-${idx}`} 
+                  to={`/article/${article.slug || article.id}`} 
                   className="group flex gap-3 p-2 bg-zinc-50/80 dark:bg-zinc-950/20 hover:bg-white dark:hover:bg-zinc-950/60 transition-all border border-zinc-200/60 dark:border-zinc-800/40 rounded-none duration-300"
                 >
                   <img 
-                    src={getSafeImageUrl(article.featuredImage)} 
+                    src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
                     alt="" 
                     className="w-20 h-16 object-cover bg-zinc-100 dark:bg-zinc-900 shrink-0 border border-zinc-200/50 dark:border-zinc-800/50" 
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
+                    }}
                   />
                   <div className="flex flex-col justify-between min-w-0 flex-grow">
                     <div>
                       <span className="text-[9px] font-black uppercase tracking-widest text-[#E85D42]">
-                        {article.category}
+                        {formatCategory(article.category, language)}
                       </span>
                       <h4 
                         className="font-black text-[11px] leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2 mt-0.5"
@@ -610,10 +623,32 @@ export function HomePage() {
             </div>
 
             <div className="space-y-4 font-sans text-left">
+              {flashArticles.length > 0 && (
+                <div className="space-y-3 pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                  {flashArticles.slice(0, 3).map((art, idx) => (
+                    <Link
+                      key={`${art.id}-${idx}`}
+                      to={`/article/${art.slug || art.id}`}
+                      className="group block pb-2 border-b border-zinc-200/40 dark:border-zinc-800/20 last:border-0 last:pb-0 text-left"
+                    >
+                      <span className="text-[7px] font-mono font-black uppercase px-1.5 py-0.5 rounded inline-block mb-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                        FLASH INFO
+                      </span>
+                      <p className="font-extrabold text-xs leading-relaxed dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors text-left block">
+                        {art.title?.[language] || art.title?.fr}
+                      </p>
+                      <span className="text-[9px] font-mono font-bold text-[#E85D42] block mt-1 text-left" style={{ color: currentSettings.accentColor }}>
+                        {formatRelativeDate(art.date, language)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+
               {(currentSettings.analystDispatches && currentSettings.analystDispatches.length > 0) ? (
-                currentSettings.analystDispatches.map((dispatch: any) => (
+                currentSettings.analystDispatches.map((dispatch: any, idx: number) => (
                   <div 
-                    key={dispatch.id} 
+                    key={`${dispatch.id}-${idx}`} 
                     className="group pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0 text-left"
                   >
                     {dispatch.level && (
@@ -681,10 +716,10 @@ export function HomePage() {
                 .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                 .slice(0, 4)
                 .map((article, i) => (
-                  <Link key={article.id} to={`/article/${article.slug}`} className="group flex gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0">
+                  <Link key={`${article.id}-${i}`} to={`/article/${article.slug || article.id}`} className="group flex gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0">
                     <span className="text-xl font-black text-[#E85D42] group-hover:text-[#E85D42] transition-colors">0{i+1}</span>
                     <div className="flex-1 min-w-0">
-                      <span className="text-[8px] font-extrabold text-[#E85D42] uppercase tracking-widest">{article.category}</span>
+                      <span className="text-[8px] font-extrabold text-[#E85D42] uppercase tracking-widest">{formatCategory(article.category, language)}</span>
                       <h4 
                         className="font-black text-xs leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2 mt-0.5"
                         style={{ color: theme === 'dark' ? undefined : '#000000' }}
@@ -713,9 +748,9 @@ export function HomePage() {
             </p>
             <div className="space-y-4 font-sans">
               {(currentSettings.leMondeDispatches && currentSettings.leMondeDispatches.length > 0) ? (
-                currentSettings.leMondeDispatches.map((item: any) => (
+                currentSettings.leMondeDispatches.map((item: any, idx: number) => (
                   <div 
-                    key={item.id} 
+                    key={`${item.id}-${idx}`} 
                     className="block border-l-2 border-[#E85D42] pl-3 py-1 bg-zinc-50/50 dark:bg-zinc-950/30 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/20 transition-colors group"
                     style={{ borderLeftColor: currentSettings.accentColor }}
                   >
@@ -747,12 +782,12 @@ export function HomePage() {
                   </div>
                 ))
               ) : (
-                articles.filter(a => a.category === 'International').map((art, idx) => {
+                articles.filter(a => a.category === 'International' || a.category?.toLowerCase() === 'international').map((art, idx) => {
                   const times = ["14:22 GMT", "11:05 GMT", "08:45 GMT"];
                   const displayTime = times[idx % times.length];
                   return (
                     <Link 
-                      key={art.id} 
+                      key={`${art.id}-${idx}`} 
                       to={`/article/${art.slug}`} 
                       className="block border-l-2 border-[#E85D42] pl-3 py-1 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/20 transition-colors group"
                       style={{ borderLeftColor: currentSettings.accentColor }}
@@ -803,7 +838,7 @@ export function HomePage() {
                 }}
               >
                 <span className="absolute right-2 top-2 text-[7px] bg-amber-800/10 text-amber-800 dark:text-amber-300 font-black px-1 tracking-widest uppercase">
-                  {cafeAd.tag || 'SPONSORISÉ'}
+                  {getSafeText(cafeAd.tag, language) || 'SPONSORISÉ'}
                 </span>
                 <a href={cafeAd.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="flex gap-3 items-center">
                   {cafeAd.imageUrl ? (
@@ -813,13 +848,15 @@ export function HomePage() {
                   )}
                   <div>
                     <h4 className="font-extrabold text-xs text-[#E85D42] uppercase tracking-widest" style={{ color: currentSettings.accentColor }}>
-                      {cafeAd.name}
+                      {getSafeText(cafeAd.name, language)}
                     </h4>
                     <p 
                       className="text-[10px] dark:text-zinc-200 font-bold leading-relaxed mt-0.5"
                       style={{ color: theme === 'dark' ? undefined : '#000000' }}
                     >
-                      {cafeAd.description}
+                      {typeof cafeAd.description === 'object'
+                        ? ((cafeAd.description as any)[language] || (cafeAd.description as any).fr || (cafeAd.description as any).en || '')
+                        : (cafeAd.description || '')}
                     </p>
                   </div>
                 </a>
@@ -1055,7 +1092,7 @@ export function HomePage() {
                 }}
               >
                 <span className="absolute right-2 top-2 text-[7px] bg-blue-800/10 text-blue-700 dark:text-blue-300 font-black px-1 tracking-widest uppercase">
-                  {terAd.tag || 'SPONSORISÉ'}
+                  {getSafeText(terAd.tag, language) || 'SPONSORISÉ'}
                 </span>
                 <a href={terAd.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="flex gap-3 items-center">
                   {terAd.imageUrl ? (
@@ -1065,13 +1102,15 @@ export function HomePage() {
                   )}
                   <div>
                     <h4 className="font-extrabold text-xs text-[#E85D42] uppercase tracking-widest" style={{ color: currentSettings.accentColor }}>
-                      {terAd.name}
+                      {getSafeText(terAd.name, language)}
                     </h4>
                     <p 
                       className="text-[10px] dark:text-zinc-200 font-semibold leading-relaxed mt-0.5"
                       style={{ color: theme === 'dark' ? undefined : '#000000' }}
                     >
-                      {terAd.description}
+                      {typeof terAd.description === 'object'
+                        ? ((terAd.description as any)[language] || (terAd.description as any).fr || (terAd.description as any).en || '')
+                        : (terAd.description || '')}
                     </p>
                   </div>
                 </a>
@@ -1138,7 +1177,7 @@ export function HomePage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-0.5">
                       <span className="text-[8px] font-mono font-black uppercase tracking-widest text-[#E85D42]">
-                        {dossier.tag}
+                        {getSafeText(dossier.tag, language)}
                       </span>
                       <span className="text-[8px] font-mono text-zinc-500 font-bold">
                         {dossier.readTime}
@@ -1162,42 +1201,127 @@ export function HomePage() {
             </div>
           </div>
 
+          {/* L'Arène (Sports & Lamb) Sidebar Widget */}
+          <div className="glass p-5 bg-white/95 dark:bg-zinc-900/80 border-t-4 border-t-[#E85D42] text-left" style={{ borderTopColor: currentSettings.accentColor }}>
+            <div className="flex items-center justify-between mb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
+              <div className="flex items-center gap-1.5">
+                <Trophy size={14} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
+                <span className="text-xs font-serif font-black uppercase tracking-widest text-[#E85D42]">
+                  {language === 'fr' ? "L'ARÈNE - SPORTS & COMBATS" : "THE ARENA - SPORTS & FIGHTS"}
+                </span>
+              </div>
+              <Link to="/larene" className="text-[9px] font-mono font-black uppercase tracking-widest text-[#E85D42] hover:underline">
+                {language === 'fr' ? "ENTRER →" : "ENTER →"}
+              </Link>
+            </div>
+
+            <div className="space-y-3 font-sans">
+              {arenaArticles.length > 0 ? (
+                arenaArticles.slice(0, 3).map((art, idx) => (
+                  <Link
+                    key={`${art.id}-${idx}`}
+                    to={`/article/${art.slug || art.id}`}
+                    className="group flex gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0"
+                  >
+                    <span className="text-sm font-mono font-black text-[#E85D42] shrink-0" style={{ color: currentSettings.accentColor }}>
+                      0{idx + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[8px] font-mono font-black uppercase tracking-widest text-[#E85D42] block mb-0.5">
+                        L'ARÈNE
+                      </span>
+                      <h4 className="font-black text-xs leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2">
+                        {art.title?.[language] || art.title?.fr}
+                      </h4>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="space-y-2.5">
+                  <Link to="/larene" className="group block p-2.5 bg-zinc-50/80 dark:bg-zinc-950/40 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-[#E85D42] transition-all">
+                    <div className="flex justify-between items-center text-[8px] font-mono font-bold text-[#E85D42] uppercase tracking-wider mb-1">
+                      <span>ARÈNE NATIONALE • PIKINE</span>
+                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-black">DIRECT</span>
+                    </div>
+                    <h4 className="font-black text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors">
+                      {language === 'fr' ? 'Grand Combat de Lutte avec Frappe : Modou Lô vs Siteu' : 'Grand Lamb Championship Match: Modou Lô vs Siteu'}
+                    </h4>
+                  </Link>
+                  <Link to="/larene" className="group block p-2.5 bg-zinc-50/80 dark:bg-zinc-950/40 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-[#E85D42] transition-all">
+                    <div className="flex justify-between items-center text-[8px] font-mono font-bold text-zinc-500 uppercase tracking-wider mb-1">
+                      <span>LIGUE 1 SÉNÉGAL</span>
+                      <span>18:00 DKR</span>
+                    </div>
+                    <h4 className="font-black text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors">
+                      {language === 'fr' ? 'Jaraaf de Dakar vs Teungueth FC : Choc au Sommet' : 'Jaraaf Dakar vs Teungueth FC: Top Table Clash'}
+                    </h4>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
 
-        {/* Ad Space Right Offset (Far-right Ad Panel) */}
-        <div className="hidden lg:block lg:col-span-2 space-y-8 relative">
-           <div className="sticky top-20 flex flex-col gap-8">
-             {sidebarAds.length > 0 ? (
+        {/* Ad Space Right Offset (Far-right Ad Panel - Matching Far-Left Dimensions) */}
+        <div className="hidden lg:block lg:col-span-2 relative">
+           <div className="sticky top-20 flex flex-col gap-6 items-center">
+             {farRightAd ? (
+               <div 
+                 key={farRightAd.id} 
+                 className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm relative group overflow-hidden"
+                 style={{
+                   width: farRightAd.width ? `${farRightAd.width}px` : '100%',
+                   height: farRightAd.height ? `${farRightAd.height}px` : '1250px',
+                   maxWidth: '100%',
+                   maxHeight: '1800px'
+                 }}
+               >
+                  <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">
+                    {language === 'fr' ? 'SPONSOR DROITE' : 'RIGHT SPONSOR'}
+                  </span>
+                  {farRightAd.imageUrl && farRightAd.imageUrl.trim() !== '' ? (
+                    <a href={farRightAd.targetUrl || '#'} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-15px)]">
+                       <img src={farRightAd.imageUrl} alt="Advertisement" className="w-full h-full object-cover rounded-xs group-hover:opacity-90 transition-opacity" />
+                    </a>
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-brand-soft/30 dark:bg-zinc-800/40 border border-dashed border-zinc-300 dark:border-zinc-700">
+                       <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 text-center">{farRightAd.name || t.adSpace}</span>
+                    </div>
+                  )}
+               </div>
+             ) : sidebarAds.length > 0 ? (
                sidebarAds.map(ad => (
-                 <div key={ad.id} className="w-full bg-brand-soft/40 border border-brand-border/20 dark:border-zinc-800 flex flex-col items-center justify-center p-2 relative group">
-                    <span className="text-[8px] text-brand-muted uppercase font-bold tracking-widest absolute -top-4 right-0">{t.adLabel}</span>
-                    <a href={ad.targetUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
-                       <img src={ad.imageUrl} alt="Advertisement" className="w-full h-auto object-cover border border-brand-border/10 dark:border-zinc-800/40 group-hover:opacity-90 transition-opacity" />
+                 <div 
+                   key={ad.id} 
+                   className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm relative group"
+                   style={{ height: '300px' }}
+                 >
+                    <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">{t.adLabel}</span>
+                    <a href={ad.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="block w-full h-[calc(100%-15px)]">
+                       <img src={ad.imageUrl} alt="Advertisement" className="w-full h-full object-cover border border-brand-border/10 dark:border-zinc-800/40 group-hover:opacity-90 transition-opacity" />
                     </a>
                  </div>
                ))
              ) : (
-               <>
-                 <div className="w-full h-[600px] bg-brand-soft/40 border border-brand-border/20 dark:border-zinc-800 flex flex-col items-center justify-center p-4 relative">
-                    <span className="text-[10px] text-brand-muted uppercase font-bold tracking-widest absolute top-4">{t.adLabel}</span>
-                    <div className="bg-brand-white/50 w-full h-full mt-8 flex items-center justify-center border border-dashed border-brand-border/25 dark:border-zinc-800/50 shadow-none relative overflow-hidden group">
-                       <div className="absolute inset-0 bg-gradient-to-br from-[#E85D42]/5 to-transparent"></div>
-                       <span className="text-zinc-500 dark:text-gray-400 font-bold uppercase tracking-widest text-center text-sm group-hover:scale-105 transition-transform">{t.adSpace}</span>
-                    </div>
-                 </div>
-                 
-                 <div className="w-full h-[300px] bg-brand-soft/40 border border-brand-border/20 dark:border-zinc-800 flex flex-col items-center justify-center p-4 relative">
-                    <span className="text-[10px] text-brand-muted uppercase font-bold tracking-widest absolute top-4">{t.adLabel}</span>
-                    <div className="bg-brand-white/50 w-full h-full mt-8 flex items-center justify-center border border-dashed border-brand-border/25 dark:border-zinc-800/50 shadow-none relative overflow-hidden group">
-                       <span className="text-zinc-500 dark:text-gray-400 font-bold uppercase tracking-widest text-center text-sm group-hover:scale-105 transition-transform">{t.adSpace}</span>
-                    </div>
-                 </div>
-               </>
+               <div 
+                 className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm relative group"
+                 style={{ height: farLeftAd?.height ? `${farLeftAd.height}px` : '600px' }}
+               >
+                  <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">{t.adLabel}</span>
+                  <div className="bg-brand-white/50 w-full h-[calc(100%-20px)] flex items-center justify-center border border-dashed border-brand-border/25 dark:border-zinc-800/50 relative overflow-hidden group">
+                     <div className="absolute inset-0 bg-gradient-to-br from-[#E85D42]/5 to-transparent"></div>
+                     <span className="text-zinc-500 dark:text-gray-400 font-bold uppercase tracking-widest text-center text-xs group-hover:scale-105 transition-transform">{t.adSpace}</span>
+                  </div>
+               </div>
              )}
            </div>
         </div>
 
       </div>
+
+      {/* Full-width Google Sheets-integrated Newsletter Signup Component */}
+      <NewsletterSignup />
 
       {/* INTERACTIVE MODAL 1: Newsletter Registration Confirmation */}
       {showNewsletterModal && (
@@ -1275,7 +1399,7 @@ export function HomePage() {
             <div className="flex items-center gap-2">
               <FolderKanban size={18} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
               <span className="text-xs font-mono font-black uppercase tracking-widest text-[#E85D42]">
-                {selectedDossierModal.tag}
+                {getSafeText(selectedDossierModal.tag, language)}
               </span>
             </div>
 

@@ -41,6 +41,19 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Dedicated Real Analytics & Consents Collections in Firebase
+    match /analytics_events/{eventId} {
+      allow read, write: if true;
+    }
+
+    match /user_consents/{consentId} {
+      allow read, write: if true;
+    }
+
+    match /daily_analytics/{date} {
+      allow read, write: if true;
+    }
+
     // Fallback for all other documents
     match /{document=**} {
       allow read, write: if true;

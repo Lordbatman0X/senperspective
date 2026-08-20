@@ -28,7 +28,7 @@ export function HeaderAccountMenu() {
               n.email.toLowerCase() === readerProfile.email.toLowerCase() &&
               !n.isRead
           ).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full border border-[#111] animate-pulse" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full border border-[#111]" />
           )}
         </div>
         <span className="text-[9px] font-black text-white uppercase hidden sm:inline tracking-wider max-w-[90px] truncate">

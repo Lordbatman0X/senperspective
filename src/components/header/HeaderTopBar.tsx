@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Clock, Sun, Moon, CloudRain, CloudLightning, Cloud, Wind, MapPin } from "lucide-react";
+import { Clock, Sun, Moon, CloudRain, CloudLightning, Cloud, Wind } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../../store";
 import { HeaderAccountMenu } from "./HeaderAccountMenu";
 
 export function HeaderTopBar() {
-  const { language, setLanguage, theme, toggleTheme, siteSettings } = useStore();
+  const { language, setLanguage, theme, toggleTheme } = useStore();
   const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
   
@@ -105,17 +105,17 @@ export function HeaderTopBar() {
   };
 
   return (
-    <div className={`${location.pathname === "/" ? "hidden md:block" : ""} bg-zinc-900 text-white font-sans border-b border-zinc-800 shadow-inner`}>
-      <div className="max-w-7xl mx-auto px-4 py-1.5 flex flex-row justify-between items-center text-gray-300 text-[9px] md:text-[10px] gap-2">
-        <div className="flex items-center gap-3 md:gap-5">
-          <span className="font-semibold uppercase tracking-widest hidden sm:inline">
+    <div className={`${location.pathname === "/" ? "hidden md:block" : ""} bg-zinc-900 text-white font-sans border-b border-zinc-800 shadow-inner overflow-hidden`}>
+      <div className="max-w-7xl mx-auto px-4 py-1.5 flex flex-row justify-between items-center text-gray-300 text-[9px] md:text-[10px] gap-2 overflow-hidden">
+        <div className="flex items-center gap-3 md:gap-5 min-w-0">
+          <span className="font-semibold uppercase tracking-widest hidden sm:inline text-[#d0d4dc] shrink-0">
             {t.date}
           </span>
-          <span className="flex items-center gap-1.5 font-medium uppercase tracking-widest">
-            <Clock size={11} className="text-gray-400" /> {t.time}
+          <span className="flex items-center gap-1.5 font-medium uppercase tracking-widest shrink-0">
+            <Clock size={11} className="text-gray-400" /> {t.time} DKR
           </span>
-          <span className="flex items-center gap-1.5 font-medium">
-            <div className="relative w-4.5 h-4.5 flex items-center justify-center shrink-0">
+          <span className="flex items-center gap-1.5 font-medium shrink-0">
+            <div className="relative w-4 h-4 flex items-center justify-center shrink-0">
               {isDayTheme ? (
                 <Sun size={11} className="text-yellow-500 shrink-0" />
               ) : (
@@ -133,7 +133,7 @@ export function HeaderTopBar() {
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={toggleTheme}
             className="p-1 rounded-none hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
@@ -162,4 +162,5 @@ export function HeaderTopBar() {
     </div>
   );
 }
+
 

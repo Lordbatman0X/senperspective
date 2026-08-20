@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AdItem, useStore } from '../../store';
-import { Plus, Edit2, Trash2, ImageIcon, Activity, X, BarChart, Megaphone, RotateCcw, Sparkles } from 'lucide-react';
+import { Plus, Edit2, Trash2, ImageIcon, Activity, X, BarChart, Megaphone, RotateCcw, Sparkles, Upload } from 'lucide-react';
 
 interface AdManagerTabProps {
   ads: AdItem[];
@@ -210,6 +210,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                     <option value="sidebar-cafe">{language === 'fr' ? 'Sponsor Latéral #1 (ex: Café Sénégal Touba)' : 'Sidebar Sponsor #1 (e.g. Café Sénégal)'}</option>
                     <option value="sidebar-ter">{language === 'fr' ? 'Sponsor Latéral #2 (ex: TER Trans-Dakar)' : 'Sidebar Sponsor #2 (e.g. TER Trans-Dakar)'}</option>
                     <option value="far-left">{language === 'fr' ? 'Bannière Extrême Gauche' : 'Far Left Panel Ad'}</option>
+                    <option value="far-right">{language === 'fr' ? 'Bannière Extrême Droite' : 'Far Right Panel Ad'}</option>
                   </select>
                 </div>
                 <div>
@@ -303,7 +304,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
               <div>
                 <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1">{t.desc}</label>
                 <textarea 
-                  value={editingAd.description || ''} 
+                  value={typeof editingAd.description === 'object' ? ((editingAd.description as any)[language] || (editingAd.description as any).fr || '') : (editingAd.description || '')} 
                   onChange={e => setEditingAd({ ...editingAd, description: e.target.value })} 
                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2.5 text-xs leading-relaxed focus:outline-none focus:border-[#E85D42] focus:ring-1 focus:ring-[#E85D42] placeholder-zinc-500 rounded-md" 
                   rows={2}
@@ -318,13 +319,36 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                     <img src={editingAd.imageUrl} alt="Ad Preview" className="h-20 w-32 border border-zinc-800 object-cover bg-zinc-900 shadow-sm rounded-xs" />
                   )}
                   <div className="flex flex-col gap-2 flex-grow w-full">
-                    <button 
-                      type="button"
-                      onClick={selectAdImage} 
-                      className="border border-[#E85D42] text-[#E85D42] font-extrabold hover:bg-[#E85D42]/10 flex items-center justify-center gap-2 py-2 text-[10px] uppercase cursor-pointer rounded-xs"
-                    >
-                      <ImageIcon size={14} /> {t.mediaLib}
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button 
+                        type="button"
+                        onClick={selectAdImage} 
+                        className="flex-1 border border-[#E85D42] text-[#E85D42] font-extrabold hover:bg-[#E85D42]/10 flex items-center justify-center gap-2 py-2 text-[10px] uppercase cursor-pointer rounded-xs"
+                      >
+                        <ImageIcon size={14} /> {t.mediaLib}
+                      </button>
+                      <label className="flex-1 border border-emerald-500 text-emerald-400 font-extrabold hover:bg-emerald-500/10 flex items-center justify-center gap-2 py-2 text-[10px] uppercase cursor-pointer rounded-xs transition-colors">
+                        <Upload size={14} />
+                        <span>{language === 'fr' ? 'Upload Ordinateur' : 'Computer Upload'}</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (evt) => {
+                                if (evt.target?.result) {
+                                  setEditingAd({ ...editingAd, imageUrl: evt.target.result as string });
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
                     <input 
                       value={editingAd.imageUrl} 
                       onChange={e => setEditingAd({ ...editingAd, imageUrl: e.target.value })} 
@@ -382,7 +406,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                       <div>
                         {editingAd.tag && <span className="text-[7px] font-black uppercase text-[#E85D42] tracking-widest block">{editingAd.tag}</span>}
                         <h5 className="font-extrabold text-[11px] leading-tight text-zinc-900 dark:text-zinc-100 line-clamp-1">{editingAd.name}</h5>
-                        {editingAd.description && <p className="text-[9px] text-zinc-500 line-clamp-2 leading-snug">{editingAd.description}</p>}
+                        {editingAd.description && <p className="text-[9px] text-zinc-500 line-clamp-2 leading-snug">{typeof editingAd.description === 'object' ? ((editingAd.description as any)[language] || (editingAd.description as any).fr || (editingAd.description as any).en || '') : editingAd.description}</p>}
                       </div>
                       {editingAd.ctaText && (
                         <div className="w-full bg-[#E85D42] text-white py-1 text-center text-[7px] font-black uppercase tracking-widest leading-none">
@@ -404,7 +428,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                         <div>
                           <h4 className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 line-clamp-1">{editingAd.name || 'Sample Ad Name'}</h4>
                           {editingAd.description && (
-                            <p className="text-[10px] text-zinc-500 line-clamp-2 leading-tight mt-0.5">{editingAd.description}</p>
+                            <p className="text-[10px] text-zinc-500 line-clamp-2 leading-tight mt-0.5">{typeof editingAd.description === 'object' ? ((editingAd.description as any)[language] || (editingAd.description as any).fr || (editingAd.description as any).en || '') : editingAd.description}</p>
                           )}
                         </div>
                         <div className="flex justify-end mt-2">
@@ -436,7 +460,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                           {editingAd.name || 'PARTENAIRE SPONSOR'}
                         </h4>
                         <p className="text-[9px] opacity-80 line-clamp-2 leading-tight mt-0.5">
-                          {editingAd.description || 'Description de la campagne publicitaire'}
+                          {typeof editingAd.description === 'object' ? ((editingAd.description as any)[language] || (editingAd.description as any).fr || (editingAd.description as any).en || '') : (editingAd.description || 'Description de la campagne publicitaire')}
                         </p>
                       </div>
                       <span className="px-3 py-1 bg-[#E85D42] text-white text-[8px] font-extrabold uppercase tracking-widest shrink-0">

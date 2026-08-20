@@ -1,12 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
-import { Compass, X, Send, Bot, RefreshCw, Sun, Moon } from "lucide-react";
+import { Compass, X, Send, Bot, RefreshCw, Sun, Moon, Sparkles, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Article } from "../types";
 import { Markdown } from "../components/Markdown";
+import { getAbdelContextualPrompts } from "../lib/abdelPrompts";
+import { getSafeText } from "../lib/utils";
 
 export function Abdel({ contextArticle }: { contextArticle?: Article }) {
-  const { language, setLanguage, theme, toggleTheme } = useStore();
+  const location = useLocation();
+  const { language, setLanguage, theme, toggleTheme, abdelPrompts } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [dragConstraints, setDragConstraints] = useState({ left: -600, right: 20, top: -600, bottom: 20 });
@@ -14,6 +18,15 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const contextualData = getAbdelContextualPrompts(
+    location.pathname,
+    contextArticle,
+    abdelPrompts
+  );
+  const currentPrompts = contextualData.prompts[language] || contextualData.prompts.fr || [];
+  const currentSectionLabel = contextualData.sectionLabel[language] || contextualData.sectionLabel.fr;
+  const currentGreeting = contextualData.greeting[language] || contextualData.greeting.fr;
 
   const buttonRef = useRef<HTMLDivElement>(null);
   const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
@@ -159,20 +172,38 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
         body: JSON.stringify({
           message: text,
           language,
+          locationInfo: {
+            pathname: location.pathname,
+            section: currentSectionLabel,
+            isArticle: !!contextArticle,
+            articleTitle: contextArticle?.title?.[language] || contextArticle?.title?.fr || null,
+            category: contextArticle?.category || null
+          },
           context: contextArticle ? {
-            title: contextArticle.title?.[language] || 'Untitled',
+            title: contextArticle.title?.[language] || contextArticle.title?.fr || 'Untitled',
             category: contextArticle.category,
             tags: contextArticle.tags,
-            excerpt: contextArticle.excerpt?.[language] || '',
-            body: contextArticle.body?.[language] || ''
+            author: typeof contextArticle.author === "string" ? contextArticle.author : 'Perspective Group',
+            date: contextArticle.date || '',
+            excerpt: contextArticle.excerpt?.[language] || contextArticle.excerpt?.fr || '',
+            body: contextArticle.body?.[language] || contextArticle.body?.fr || ''
           } : null
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP Error ${response.status}`);
+      }
+
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: "abdel", text: data.response || "No response" }]);
+      setMessages((prev) => [...prev, { role: "abdel", text: data.response || (language === "fr" ? "Pas de réponse." : "No response.") }]);
     } catch (e) {
-      setMessages((prev) => [...prev, { role: "abdel", text: language === "fr" ? "Erreur de connexion..." : "Connection error..." }]);
+      setMessages((prev) => [...prev, {
+        role: "abdel",
+        text: language === "fr"
+          ? "Une difficulté de connexion est survenue. Veuillez réessayer dans quelques instants."
+          : "A connection issue occurred. Please try again in a few moments."
+      }]);
     } finally {
       setLoading(false);
     }
@@ -214,19 +245,8 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
               <div className="bg-zinc-900/90 dark:bg-zinc-950/80 backdrop-blur-md text-white p-3 px-4 flex justify-between items-center border-b border-zinc-800/40">
                 <div className="flex items-center gap-2.5">
                   {/* Custom designed brand logo */}
-                  <div className="relative w-7 h-7 shrink-0 flex items-center justify-center bg-zinc-950 border border-zinc-800 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-                    <svg viewBox="0 0 100 100" className="w-4 h-4 text-[#E85D42]" fill="none" stroke="currentColor">
-                      <circle cx="50" cy="50" r="45" stroke="#E85D42" strokeWidth="2.5" opacity="0.15" />
-                      <circle cx="50" cy="50" r="35" stroke="#E85D42" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.3" />
-                      <path d="M50 20 L24 75 L40 75 L50 45 L60 75 L76 75 Z" fill="url(#abdelMobileGrad)" stroke="#FDA085" strokeWidth="1" strokeLinejoin="round" />
-                      <circle cx="50" cy="45" r="4" fill="white" />
-                      <defs>
-                        <linearGradient id="abdelMobileGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor="#E85D42" />
-                          <stop offset="100%" stopColor="#FDA085" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
+                  <div className="w-7 h-7 rounded-full bg-[#E85D42] text-white font-mono font-black text-xs flex items-center justify-center shrink-0 shadow-md">
+                    A
                   </div>
                   <div className="flex flex-col text-left">
                     <h3 className="font-extrabold font-sans tracking-wide text-xs flex items-center gap-1.5 text-white">
@@ -273,28 +293,36 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {messages.length === 0 && (
-                  <div className="text-center text-sm text-brand-dark mt-8">
-                    <Compass size={40} className="mx-auto mb-2 text-brand-primary opacity-80 animate-[spin_60s_linear_infinite]" strokeWidth={1.5} />
-                    <p className="font-medium text-brand-muted">
-                      {language === "fr" 
-                        ? "Je suis Abdel. Comment puis-je vous aider à décrypter l'actualité aujourd'hui ?"
-                        : "I am Abdel. How can I help you understand the news today?"}
-                    </p>
+                  <div className="text-center py-4 px-3 space-y-2.5">
+                    <div className="w-10 h-10 mx-auto rounded-full bg-[#E85D42] text-white font-mono font-black text-sm flex items-center justify-center shadow-md">
+                      A
+                    </div>
+                    <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E85D42]/10 border border-[#E85D42]/20 text-[#E85D42] text-[10px] font-mono font-bold uppercase tracking-wider">
+                      <Sparkles size={10} />
+                      <span className="truncate max-w-[220px]">{currentSectionLabel}</span>
+                    </div>
+                    <div className="text-xs text-black leading-relaxed font-sans bg-white dark:bg-white p-3.5 rounded-xl border border-zinc-200 shadow-md text-left abdel-response-bubble">
+                      <div className="markdown-body abdel-text-content text-xs text-black">
+                        <Markdown invertInDark={false}>{currentGreeting}</Markdown>
+                      </div>
+                    </div>
                   </div>
                 )}
                 {messages.map((m, i) => (
                   <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
-                    <div className={`max-w-[85%] p-3 text-sm border shadow-sm relative group rounded-xl ${
+                    <div className={`max-w-[85%] p-3.5 text-sm border shadow-md relative group rounded-xl ${
                       m.role === "user" 
-                        ? "bg-[#E85D42] text-white border-[#E85D42] shadow-sm" 
-                        : "glass bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md text-zinc-900 dark:text-zinc-100 border-white/40 dark:border-zinc-800/50"
+                        ? "bg-[#E85D42] text-white border-[#E85D42] shadow-sm font-sans" 
+                        : "bg-white dark:bg-white text-black dark:text-black border border-zinc-200/90 font-medium abdel-response-bubble"
                     }`}>
                       {m.role === "abdel" ? (
                          <>
-                           <Markdown>{m.text}</Markdown>
+                           <div className="markdown-body abdel-text-content text-black font-sans">
+                             <Markdown invertInDark={false}>{typeof m.text === 'string' ? m.text : getSafeText(m.text, language)}</Markdown>
+                           </div>
                            <button 
-                             onClick={() => navigator.clipboard.writeText(m.text)}
-                             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-[#E85D42] bg-white/50 dark:bg-zinc-900/50 p-1 rounded-sm shadow-sm"
+                             onClick={() => navigator.clipboard.writeText(typeof m.text === 'string' ? m.text : getSafeText(m.text, language))}
+                             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-[#E85D42] bg-zinc-100 p-1 rounded-sm shadow-xs border border-zinc-200"
                              title="Copy"
                            >
                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -308,9 +336,9 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                 ))}
                 {loading && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] p-3 text-sm border glass bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md text-zinc-900 dark:text-zinc-100 border-white/40 dark:border-zinc-800/50 flex items-center gap-2 rounded-xl">
-                      <RefreshCw className="animate-spin text-brand-primary" size={14} />
-                      <span className="text-xs text-brand-muted uppercase tracking-widest">
+                    <div className="max-w-[85%] p-3 text-sm border bg-white dark:bg-white text-black dark:text-black border-zinc-200/90 shadow-md flex items-center gap-2 rounded-xl abdel-response-bubble">
+                      <RefreshCw className="animate-spin text-[#E85D42]" size={14} />
+                      <span className="text-xs font-semibold text-black uppercase tracking-wider">
                         {language === "fr" ? "Analyse..." : "Analyzing..."}
                       </span>
                     </div>
@@ -319,28 +347,45 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                 <div ref={messagesEndRef} />
               </div>
 
-              {contextArticle && messages.length === 0 && (
-                <div className="px-4 py-3 bg-white/10 dark:bg-black/25 border-t border-white/20 dark:border-zinc-800">
-                  <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-2 uppercase tracking-widest">Actions Rapides</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => handleSend(t.quickSum)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickSum}</button>
-                    <button onClick={() => handleSend(t.quickWhy)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickWhy}</button>
-                    <button onClick={() => handleSend(t.quickActors)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickActors}</button>
-                    <button onClick={() => handleSend(t.quickExplain)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickExplain}</button>
-                    <button onClick={() => handleSend(t.quickTimeline)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickTimeline}</button>
-                    <button onClick={() => handleSend(t.quickTranslate)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickTranslate}</button>
-                  </div>
+              {messages.length > 0 && currentPrompts.length > 0 && (
+                <div className="px-3 py-2 bg-zinc-950/80 border-t border-zinc-800/60 overflow-x-auto flex gap-1.5 no-scrollbar">
+                  {currentPrompts.map((promptText, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(promptText)}
+                      className="shrink-0 text-[10px] bg-zinc-900 border border-zinc-700/70 hover:border-[#E85D42] hover:bg-zinc-800 px-2.5 py-1 rounded-full text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 font-sans"
+                    >
+                      <Sparkles size={9} className="text-[#E85D42] shrink-0" />
+                      <span className="truncate max-w-[200px]">{promptText}</span>
+                    </button>
+                  ))}
                 </div>
               )}
 
-              {!contextArticle && messages.length === 0 && (
-                <div className="px-4 py-3 bg-white/10 dark:bg-black/25 border-t border-white/20 dark:border-zinc-800">
-                  <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-2 uppercase tracking-widest">Sujets Globaux</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={() => handleSend(language === 'fr' ? "Quelles sont les actualités majeures aujourd'hui ?" : "What are the major news today?")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Top News Focus</button>
-                    <button onClick={() => handleSend(language === 'fr' ? "Fait moi un résumé de la situation au Sénégal." : "Summarize the situation in Senegal.")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Geopolitics Analysis</button>
-                    <button onClick={() => handleSend(language === 'fr' ? "Aide moi à rechercher un sujet précis." : "Help me research a topic.")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Research Assistant</button>
-                    <button onClick={() => handleSend(language === 'fr' ? "Analyse les marchés financiers actuels." : "Analyze current financial markets.")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Market Watch</button>
+              {messages.length === 0 && (
+                <div className="px-4 py-3 bg-white/10 dark:bg-black/40 border-t border-white/20 dark:border-zinc-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 font-bold flex items-center gap-1.5">
+                      <Sparkles className="w-3 h-3 text-[#E85D42]" />
+                      <span>{currentSectionLabel}</span>
+                    </p>
+                    {contextArticle && (
+                      <span className="text-[9px] font-mono bg-[#E85D42]/20 text-[#E85D42] border border-[#E85D42]/30 px-1.5 py-0.5 rounded-full truncate max-w-[120px]">
+                        {contextArticle.category}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {currentPrompts.map((promptText, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSend(promptText)}
+                        className="text-left text-xs bg-zinc-900/80 border border-zinc-800 hover:border-[#E85D42] px-2.5 py-1.5 rounded-lg text-zinc-200 hover:text-white transition-colors cursor-pointer flex items-center justify-between group"
+                      >
+                        <span className="line-clamp-1">{promptText}</span>
+                        <span className="text-[10px] text-zinc-500 group-hover:text-[#E85D42]">&rarr;</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -436,19 +481,8 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
             <div className="bg-zinc-900/90 dark:bg-zinc-950/80 backdrop-blur-md text-white p-3 px-4 flex justify-between items-center border-b border-zinc-800/40">
               <div className="flex items-center gap-2.5">
                 {/* Custom designed brand logo */}
-                <div className="relative w-7 h-7 shrink-0 flex items-center justify-center bg-zinc-950 border border-zinc-800 rounded-full shadow-[0_2px_10px_rgba(0,0,0,0.5)]">
-                  <svg viewBox="0 0 100 100" className="w-4 h-4 text-[#E85D42]" fill="none" stroke="currentColor">
-                    <circle cx="50" cy="50" r="45" stroke="#E85D42" strokeWidth="2.5" opacity="0.15" />
-                    <circle cx="50" cy="50" r="35" stroke="#E85D42" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.3" />
-                    <path d="M50 20 L24 75 L40 75 L50 45 L60 75 L76 75 Z" fill="url(#abdelDeskGrad)" stroke="#FDA085" strokeWidth="1" strokeLinejoin="round" />
-                    <circle cx="50" cy="45" r="4" fill="white" />
-                    <defs>
-                      <linearGradient id="abdelDeskGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#E85D42" />
-                        <stop offset="100%" stopColor="#d97706" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
+                <div className="w-7 h-7 rounded-full bg-[#E85D42] text-white font-mono font-black text-xs flex items-center justify-center shrink-0 shadow-md">
+                  A
                 </div>
                 <div className="flex flex-col text-left">
                   <h3 className="font-extrabold font-sans tracking-wide text-xs flex items-center gap-1.5 text-white">
@@ -492,44 +526,52 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-transparent">
               {messages.length === 0 && (
-                <div className="text-center text-sm text-brand-dark mt-8">
-                  <Compass size={40} className="mx-auto mb-2 text-brand-primary opacity-80 animate-[spin_60s_linear_infinite]" strokeWidth={1.5} />
-                  <p className="font-medium text-brand-muted">
-                    {language === "fr" 
-                      ? "Je suis Abdel. Comment puis-je vous aider à décrypter l'actualité aujourd'hui ?"
-                      : "I am Abdel. How can I help you understand the news today?"}
-                  </p>
+                <div className="text-center py-4 px-3 space-y-2.5">
+                  <div className="w-10 h-10 mx-auto rounded-full bg-[#E85D42] text-white font-mono font-black text-sm flex items-center justify-center shadow-md">
+                    A
+                  </div>
+                  <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E85D42]/10 border border-[#E85D42]/20 text-[#E85D42] text-[10px] font-mono font-bold uppercase tracking-wider">
+                    <Sparkles size={10} />
+                    <span className="truncate max-w-[240px]">{currentSectionLabel}</span>
+                  </div>
+                  <div className="text-xs text-black leading-relaxed font-sans bg-white dark:bg-white p-3.5 rounded-xl border border-zinc-200 shadow-md text-left abdel-response-bubble">
+                    <div className="markdown-body abdel-text-content text-xs text-black">
+                      <Markdown invertInDark={false}>{currentGreeting}</Markdown>
+                    </div>
+                  </div>
                 </div>
               )}
               {messages.map((m, i) => (
                 <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
-                  <div className={`max-w-[85%] p-3 text-sm border shadow-sm relative group rounded-xl ${
+                  <div className={`max-w-[85%] p-3.5 text-sm border shadow-md relative group rounded-xl ${
                     m.role === "user" 
-                      ? "bg-[#E85D42] text-white border-[#E85D42]" 
-                      : "glass bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md text-zinc-900 dark:text-zinc-100 border-white/40 dark:border-zinc-800/50"
+                      ? "bg-[#E85D42] text-white border-[#E85D42] shadow-sm font-sans" 
+                      : "bg-white dark:bg-white text-black dark:text-black border border-zinc-200/90 font-medium abdel-response-bubble"
                   }`}>
                     {m.role === "abdel" ? (
                        <>
-                         <Markdown>{m.text}</Markdown>
+                         <div className="markdown-body abdel-text-content text-black font-sans">
+                           <Markdown invertInDark={false}>{typeof m.text === 'string' ? m.text : getSafeText(m.text, language)}</Markdown>
+                         </div>
                          <button 
-                           onClick={() => navigator.clipboard.writeText(m.text)}
-                           className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400 hover:text-[#E85D42] bg-white/50 dark:bg-zinc-900/50 p-1 rounded-sm shadow-sm"
+                           onClick={() => navigator.clipboard.writeText(typeof m.text === 'string' ? m.text : getSafeText(m.text, language))}
+                           className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-500 hover:text-[#E85D42] bg-zinc-100 p-1 rounded-sm shadow-xs border border-zinc-200"
                            title="Copy"
                          >
                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                          </button>
                        </>
                     ) : ( 
-                      m.text 
+                      getSafeText(m.text, language)
                     )}
                   </div>
                 </div>
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="max-w-[85%] p-3 text-sm border glass bg-white/70 dark:bg-zinc-900/40 backdrop-blur-md text-zinc-900 dark:text-zinc-100 border-white/40 dark:border-zinc-800/50 flex items-center gap-2 rounded-xl">
-                    <RefreshCw className="animate-spin text-brand-primary" size={14} />
-                    <span className="text-xs text-brand-muted uppercase tracking-widest">
+                  <div className="max-w-[85%] p-3 text-sm border bg-white dark:bg-white text-black dark:text-black border-zinc-200/90 shadow-md flex items-center gap-2 rounded-xl abdel-response-bubble">
+                    <RefreshCw className="animate-spin text-[#E85D42]" size={14} />
+                    <span className="text-xs font-semibold text-black uppercase tracking-wider">
                       {language === "fr" ? "Analyse..." : "Analyzing..."}
                     </span>
                   </div>
@@ -538,28 +580,45 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
               <div ref={messagesEndRef} />
             </div>
 
-            {contextArticle && messages.length === 0 && (
-              <div className="px-4 py-3 bg-white/10 dark:bg-black/25 border-t border-white/20 dark:border-zinc-800">
-                <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-2 uppercase tracking-widest">Actions Rapides</p>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => handleSend(t.quickSum)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickSum}</button>
-                  <button onClick={() => handleSend(t.quickWhy)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickWhy}</button>
-                  <button onClick={() => handleSend(t.quickActors)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickActors}</button>
-                  <button onClick={() => handleSend(t.quickExplain)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickExplain}</button>
-                  <button onClick={() => handleSend(t.quickTimeline)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickTimeline}</button>
-                  <button onClick={() => handleSend(t.quickTranslate)} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">{t.quickTranslate}</button>
-                </div>
+            {messages.length > 0 && currentPrompts.length > 0 && (
+              <div className="px-3 py-2 bg-zinc-950/80 border-t border-zinc-800/60 overflow-x-auto flex gap-1.5 no-scrollbar">
+                {currentPrompts.map((promptText, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSend(promptText)}
+                    className="shrink-0 text-[10px] bg-zinc-900 border border-zinc-700/70 hover:border-[#E85D42] hover:bg-zinc-800 px-2.5 py-1 rounded-full text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 font-sans"
+                  >
+                    <Sparkles size={9} className="text-[#E85D42] shrink-0" />
+                    <span className="truncate max-w-[200px]">{promptText}</span>
+                  </button>
+                ))}
               </div>
             )}
 
-            {!contextArticle && messages.length === 0 && (
-              <div className="px-4 py-3 bg-white/10 dark:bg-black/25 border-t border-white/20 dark:border-zinc-800">
-                <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 mb-2 uppercase tracking-widest">Sujets Globaux</p>
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={() => handleSend(language === 'fr' ? "Quelles sont les actualités majeures aujourd'hui ?" : "What are the major news today?")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Top News Focus</button>
-                  <button onClick={() => handleSend(language === 'fr' ? "Fait moi un résumé de la situation au Sénégal." : "Summarize the situation in Senegal.")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Geopolitics Analysis</button>
-                  <button onClick={() => handleSend(language === 'fr' ? "Aide moi à rechercher un sujet précis." : "Help me research a topic.")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Research Assistant</button>
-                  <button onClick={() => handleSend(language === 'fr' ? "Analyse les marchés financiers actuels." : "Analyze current financial markets.")} className="text-xs border border-zinc-200/50 dark:border-zinc-800/50 bg-white/60 dark:bg-zinc-900/60 hover:bg-[#E85D42] hover:text-white px-2 py-1 text-zinc-900 dark:text-zinc-100 transition-colors shadow-sm rounded-md">Market Watch</button>
+            {messages.length === 0 && (
+              <div className="px-4 py-3 bg-white/10 dark:bg-black/40 border-t border-white/20 dark:border-zinc-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-[#E85D42]" />
+                    <span>{currentSectionLabel}</span>
+                  </p>
+                  {contextArticle && (
+                    <span className="text-[9px] font-mono bg-[#E85D42]/20 text-[#E85D42] border border-[#E85D42]/30 px-1.5 py-0.5 rounded-full truncate max-w-[120px]">
+                      {contextArticle.category}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {currentPrompts.map((promptText, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(promptText)}
+                      className="text-left text-xs bg-zinc-900/80 border border-zinc-800 hover:border-[#E85D42] px-2.5 py-1.5 rounded-lg text-zinc-200 hover:text-white transition-colors cursor-pointer flex items-center justify-between group"
+                    >
+                      <span className="line-clamp-1">{promptText}</span>
+                      <span className="text-[10px] text-zinc-500 group-hover:text-[#E85D42]">&rarr;</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

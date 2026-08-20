@@ -6,7 +6,14 @@ export function getSafeImageUrl(url?: string, fallback = DEFAULT_FALLBACK_IMAGE)
   }
   const trimmed = url.trim();
   // Ensure valid URL or base64 data url or relative path
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/') || trimmed.startsWith('/')) {
+  if (
+    trimmed.startsWith('http://') || 
+    trimmed.startsWith('https://') || 
+    trimmed.startsWith('data:') || 
+    trimmed.startsWith('blob:') || 
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('./')
+  ) {
     return trimmed;
   }
   return fallback;
@@ -109,17 +116,35 @@ export async function sanitizeFirestorePayload<T extends Record<string, any>>(
   payload: T
 ): Promise<T> {
   if (!payload || typeof payload !== 'object') return payload;
-  const sanitized: Record<string, any> = Array.isArray(payload) ? [...payload] : { ...payload };
 
-  for (const [key, val] of Object.entries(sanitized)) {
-    if (typeof val === "string" && val.startsWith("data:image/")) {
+  if (Array.isArray(payload)) {
+    const cleanArray = await Promise.all(
+      payload.map(async (item) => {
+        if (item === undefined) return null;
+        if (item && typeof item === 'object') {
+          return await sanitizeFirestorePayload(item);
+        }
+        if (typeof item === 'string' && item.startsWith('data:image/')) {
+          return await compressDataUrl(item, 1000, 700, 0.72);
+        }
+        return item;
+      })
+    );
+    return cleanArray as unknown as T;
+  }
+
+  const sanitized: Record<string, any> = {};
+
+  for (const [key, val] of Object.entries(payload)) {
+    if (val === undefined) {
+      continue; // Skip undefined to prevent Firestore error
+    }
+    if (typeof val === 'string' && val.startsWith('data:image/')) {
       sanitized[key] = await compressDataUrl(val, 1000, 700, 0.72);
-    } else if (val && typeof val === "object" && !Array.isArray(val)) {
+    } else if (val && typeof val === 'object') {
       sanitized[key] = await sanitizeFirestorePayload(val);
-    } else if (Array.isArray(val)) {
-      sanitized[key] = await Promise.all(
-        val.map(item => (typeof item === "object" && item ? sanitizeFirestorePayload(item) : item))
-      );
+    } else {
+      sanitized[key] = val;
     }
   }
 

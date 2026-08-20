@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useStore } from "../store";
 import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
+import { SharedItemCard } from "./SharedItemCard";
+import { InternalShareModal } from "./InternalShareModal";
 import { db } from "../lib/firebase";
 import { doc, updateDoc, collection, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
@@ -31,7 +33,10 @@ import {
   ThumbsUp,
   ExternalLink,
   MessageCircle,
+  Bell,
+  Share2
 } from "lucide-react";
+import { NotificationSetupPanel } from "./NotificationSetupPanel";
 import { motion, AnimatePresence } from "motion/react";
 
 // Inline helper for neutral avatar rendering matching app design standards
@@ -197,10 +202,11 @@ export function AccountDrawer({
   notificationResponses,
 }: AccountDrawerProps) {
   const navigate = useNavigate();
-  const { updateUserSecurity, updateUserPassword, updateUserPin } = useStore();
+  const { updateUserSecurity, updateUserPassword, updateUserPin, friends } = useStore();
   const { logoutUser, allUsers } = useAuth();
   
   const [activeSubMenu, setActiveSubMenu] = useState<string>("main");
+  const [showInternalShareModal, setShowInternalShareModal] = useState<boolean>(false);
   const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
   const [chatSearchTerm, setChatSearchTerm] = useState("");
   
@@ -222,6 +228,17 @@ export function AccountDrawer({
   const [passwordChangeError, setPasswordChangeError] = useState("");
 
   const isAdmin = readerProfile?.role === "Admin";
+
+  const markDirectMessagesAsRead = useStore(s => s.markDirectMessagesAsRead);
+  const unreadMessagesCount = (directMessages || []).filter(
+    dm => dm.receiver?.toLowerCase().trim() === (readerProfile?.email || '').toLowerCase().trim() && !dm.read
+  ).length;
+
+  useEffect(() => {
+    if (showProfileModal && activeSubMenu === "messages" && readerProfile?.email) {
+      markDirectMessagesAsRead('', readerProfile.email);
+    }
+  }, [showProfileModal, activeSubMenu, readerProfile?.email, markDirectMessagesAsRead]);
 
   // Real-time Firestore listener for friends
   useEffect(() => {
@@ -283,6 +300,7 @@ export function AccountDrawer({
 
   const navItems = [
     { id: "main", icon: Activity, labelFr: "Briefing", labelEn: "Briefing" },
+    { id: "alerts", icon: Bell, labelFr: "Alertes", labelEn: "Alerts" },
     { id: "history", icon: Bookmark, labelFr: "Favoris", labelEn: "Saved" },
     { id: "messages", icon: MessageSquare, labelFr: "Messages", labelEn: "Messages" },
     { id: "connections", icon: Users, labelFr: "Réseau", labelEn: "Network" },
@@ -321,10 +339,11 @@ export function AccountDrawer({
               <div className="flex flex-col text-left">
                 <span className="text-[9px] font-mono font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-none" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }} />
-                  <span>{language === "fr" ? "Espace Membre" : "Account Clearance"}</span>
+                  <span>{language === "fr" ? "Espace Membre" : "Member Account"}</span>
                 </span>
                 <h3 className="text-sm font-serif font-black uppercase tracking-wider text-zinc-900 dark:text-white mt-0.5">
                   {activeSubMenu === "main" && (language === "fr" ? "Aperçu & Briefing" : "Briefing & Overview")}
+                  {activeSubMenu === "alerts" && (language === "fr" ? "Configuration des Notifications" : "Notification Setup & Alerts")}
                   {activeSubMenu === "history" && (language === "fr" ? "Dossiers Favoris" : "Saved Dossiers")}
                   {activeSubMenu === "messages" && (language === "fr" ? "Messagerie Sécurisée" : "Secure Dispatch Chat")}
                   {activeSubMenu === "connections" && (language === "fr" ? "Réseau d'Analystes" : "Analyst Network")}
@@ -404,6 +423,11 @@ export function AccountDrawer({
                     >
                       {language === "fr" ? item.labelFr : item.labelEn}
                     </span>
+                    {item.id === "messages" && unreadMessagesCount > 0 && !isSelected && (
+                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md">
+                        {unreadMessagesCount}
+                      </span>
+                    )}
                     {isSelected && (
                       <div
                         className="absolute -bottom-1 left-3 right-3 h-0.5 rounded-full"
@@ -454,7 +478,7 @@ export function AccountDrawer({
                                 className="text-[8px] font-mono font-bold tracking-wider text-white px-1.5 py-0.5 rounded-none leading-none shrink-0"
                                 style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
                               >
-                                {isAdmin ? "ADMIN" : isPremiumMock ? "PREMIUM" : "MEMBER"}
+                                {isAdmin ? "ADMIN" : (language === "fr" ? "MEMBRE" : "MEMBER")}
                               </span>
                             </div>
                             <p className="text-[9.5px] text-zinc-500 dark:text-zinc-400 font-mono truncate max-w-[200px] mt-1 leading-none">
@@ -475,35 +499,6 @@ export function AccountDrawer({
                           </div>
                         </div>
                       </div>
-
-                      {/* Premium Upgrade Promotion if Member */}
-                      {!isPremiumMock && (
-                        <div className="p-4 bg-amber-500/10 border border-amber-500/30 text-left">
-                          <div className="flex items-start gap-3">
-                            <Crown className="text-amber-500 shrink-0 mt-0.5" size={16} />
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-[10px] font-bold tracking-wider text-amber-600 dark:text-amber-400 uppercase font-mono">
-                                {language === "fr" ? "OBTENIR L'ACCRÉDITATION PREMIUM" : "UPGRADE TO PREMIUM CLEARANCE"}
-                              </h4>
-                              <p className="text-xs text-zinc-700 dark:text-zinc-300 mt-1 leading-relaxed">
-                                {language === "fr"
-                                  ? "Déverrouillez l'intégralité des rapports d'investigation, dossiers stratégiques et l'accès illimité au réseau du Sahel."
-                                  : "Access exclusive confidential reports, deep geopolitical dispatches, and secure analyst communications."}
-                              </p>
-                              <button
-                                onClick={() => {
-                                  setIsPremiumMock(true);
-                                  setSettingsSuccessMsg(language === "fr" ? "✓ Abonnement Premium activé !" : "✓ Premium clearance enabled!");
-                                  setTimeout(() => setSettingsSuccessMsg(""), 3000);
-                                }}
-                                className="mt-3 bg-amber-500 hover:bg-amber-400 text-black font-black text-[9px] tracking-wider uppercase px-4 py-2 transition-all cursor-pointer rounded-none font-mono"
-                              >
-                                {language === "fr" ? "S'ABONNER MAINTENANT" : "UPGRADE ACCESS NOW"}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Topic Breakdown & Strategic Reports */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -555,7 +550,7 @@ export function AccountDrawer({
                                     <span>{n.date || "TODAY"}</span>
                                     <span className="text-amber-600 font-bold">INFO</span>
                                   </div>
-                                  <p className="text-zinc-600 dark:text-zinc-300 truncate text-[9px] leading-snug">{n.text?.[language] || n.text?.fr || ""}</p>
+                                  <p className="text-zinc-600 dark:text-zinc-300 truncate text-[9px] leading-snug">{typeof n.text === 'string' ? n.text : (n.text?.[language] || n.text?.fr || n.text?.en || '')}</p>
                                 </div>
                               ))
                             ) : (
@@ -610,6 +605,13 @@ export function AccountDrawer({
                     </div>
                   )}
 
+                  {/* VIEW: ALERTS & NOTIFICATION SETUP */}
+                  {activeSubMenu === "alerts" && (
+                    <div className="space-y-4">
+                      <NotificationSetupPanel />
+                    </div>
+                  )}
+
                   {/* VIEW: HISTORY (SAVED ARTICLES & COMMENTS) */}
                   {activeSubMenu === "history" && (
                     <div className="space-y-6 text-left font-serif">
@@ -625,9 +627,9 @@ export function AccountDrawer({
                           {articles && articles.filter((a) => savedArticles?.includes(a.id)).length > 0 ? (
                             articles
                               .filter((a) => savedArticles?.includes(a.id))
-                              .map((article) => (
+                              .map((article, idx) => (
                                 <div
-                                  key={article.id}
+                                  key={`${article.id}-${idx}`}
                                   className="p-3.5 bg-zinc-900 dark:bg-zinc-900 border border-zinc-800 text-left rounded-none shadow-sm space-y-1.5"
                                 >
                                   <div className="flex items-center justify-between gap-2">
@@ -713,10 +715,28 @@ export function AccountDrawer({
                               {language === "fr" ? "Messenger" : "Messages"}
                             </span>
                           </div>
-                          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            {language === "fr" ? "En ligne" : "Active"}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                window.dispatchEvent(new CustomEvent('open-floating-chat', { detail: { email: selectedChatUser } }));
+                                setShowProfileModal(false);
+                              }}
+                              className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-[#E85D42] text-[9.5px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1"
+                              title={language === "fr" ? "Ouvrir la bulle flottante Messenger" : "Open floating Messenger tab"}
+                            >
+                              💬 {language === "fr" ? "Bulle" : "Floating"}
+                            </button>
+                            <button
+                              onClick={() => {
+                                navigate('/discussion');
+                                setShowProfileModal(false);
+                              }}
+                              className="px-2 py-1 bg-[#E85D42] hover:bg-[#d04a30] text-white text-[9.5px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                              title={language === "fr" ? "Ouvrir la page de discussion complète" : "Open full discussion page"}
+                            >
+                              ↗ {language === "fr" ? "Plein Écran" : "Full Page"}
+                            </button>
+                          </div>
                         </div>
 
                         <div className="relative">
@@ -744,33 +764,51 @@ export function AccountDrawer({
                       {/* Messenger Active Contacts Carousel / List */}
                       <div className="px-3 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex gap-3 overflow-x-auto shrink-0 select-none scrollbar-none items-center">
                         {(() => {
-                          if (friendsList.length === 0) {
-                            return (
-                              <div className="py-2 px-2 flex flex-col items-center justify-center text-center w-full gap-1.5">
-                                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  {language === "fr"
-                                    ? "Aucun ami dans votre réseau. Ajoutez des membres pour échanger !"
-                                    : "No contacts in network. Add members to start messaging!"}
-                                </p>
-                                <button
-                                  onClick={() => setActiveSubMenu("connections")}
-                                  className="px-3 py-1 text-white text-[10px] font-bold rounded-full cursor-pointer hover:opacity-90 transition-opacity border-none shadow-xs"
-                                  style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
-                                >
-                                  {language === "fr" ? "Trouver des amis" : "Find Friends"}
-                                </button>
-                              </div>
-                            );
-                          }
+                          const myEmail = readerProfile?.email?.toLowerCase().trim() || "";
+                          const contactMap = new Map<string, { email: string; name: string; avatarUrl?: string; role?: string }>();
 
-                          const rawContacts = allUsers.length > 0
-                            ? allUsers.filter(u => {
-                                if (!readerProfile) return false;
-                                const myEmail = readerProfile.email.toLowerCase().trim();
-                                const otherEmail = u.email.toLowerCase().trim();
-                                return otherEmail !== myEmail && friendsList.includes(otherEmail);
-                              })
-                            : [];
+                          // Add registered Firestore users
+                          (allUsers || []).forEach(u => {
+                            const emailLow = u.email.toLowerCase().trim();
+                            if (emailLow && emailLow !== myEmail) {
+                              contactMap.set(emailLow, {
+                                email: u.email,
+                                name: u.name || emailLow.split("@")[0],
+                                avatarUrl: u.avatarUrl,
+                                role: u.role || "Member"
+                              });
+                            }
+                          });
+
+                          // Add friends list
+                          (friends || []).forEach(f => {
+                            const emailLow = f.email.toLowerCase().trim();
+                            if (emailLow && emailLow !== myEmail && !contactMap.has(emailLow)) {
+                              contactMap.set(emailLow, {
+                                email: f.email,
+                                name: f.name || emailLow.split("@")[0],
+                                avatarUrl: f.avatar || (f as any).avatarUrl,
+                                role: f.role || "Member"
+                              });
+                            }
+                          });
+
+                          // Default contacts fallback
+                          const defaultContacts = [
+                            { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group" },
+                            { email: "member@perspective.sn", name: "Mariama Diallo", role: language === "fr" ? "Analyste Éco" : "Eco Analyst" },
+                            { email: "journalist@perspective.sn", name: language === "fr" ? "Journaliste Sahel" : "Sahel Journalist", role: "Correspondant" }
+                          ];
+
+                          defaultContacts.forEach(dc => {
+                            const emailLow = dc.email.toLowerCase().trim();
+                            if (emailLow !== myEmail && !contactMap.has(emailLow)) {
+                              contactMap.set(emailLow, dc);
+                            }
+                          });
+
+                          const rawContacts = Array.from(contactMap.values());
+
                           const filtered = rawContacts.filter(c =>
                             c.name.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
                             c.email.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
@@ -779,8 +817,10 @@ export function AccountDrawer({
 
                           if (filtered.length === 0) {
                             return (
-                              <div className="py-1 text-xs text-zinc-500 italic w-full text-center">
-                                {language === "fr" ? "Aucun contact trouvé" : "No contacts found"}
+                              <div className="py-2 px-2 flex flex-col items-center justify-center text-center w-full gap-1">
+                                <p className="text-xs text-zinc-500 italic">
+                                  {language === "fr" ? "Aucun contact trouvé" : "No contacts found"}
+                                </p>
                               </div>
                             );
                           }
@@ -901,16 +941,7 @@ export function AccountDrawer({
                                         
                                         {/* Attachment Preview Card */}
                                         {dm.attachment && (
-                                          <div className={`mt-2 p-2.5 rounded-xl border text-left ${
-                                            isMe 
-                                              ? "bg-black/20 border-white/30 text-white" 
-                                              : "bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100"
-                                          }`}>
-                                            <span className="text-[9px] font-bold uppercase tracking-wider block opacity-90 mb-0.5">
-                                              📄 {dm.attachment.type === "article" ? (language === "fr" ? "Article Partagé" : "Shared Article") : "Document"}
-                                            </span>
-                                            <p className="font-bold text-[11px] line-clamp-1">{dm.attachment.title}</p>
-                                          </div>
+                                          <SharedItemCard attachment={dm.attachment} compact />
                                         )}
                                       </div>
                                     )}
@@ -961,6 +992,15 @@ export function AccountDrawer({
                           }}
                           className="flex items-center gap-2"
                         >
+                          <button
+                            type="button"
+                            onClick={() => setShowInternalShareModal(true)}
+                            title={language === "fr" ? "Partager un contenu interne" : "Share internal intel"}
+                            className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700/80 text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer shrink-0"
+                          >
+                            <Share2 size={16} />
+                          </button>
+
                           <input
                             type="text"
                             value={newMessageText}
@@ -1138,13 +1178,21 @@ export function AccountDrawer({
 
             {/* Footer Bar */}
             <div className="p-4 border-t border-zinc-300/40 dark:border-zinc-800/40 bg-white/30 dark:bg-black/30 backdrop-blur-md flex justify-between items-center shrink-0 select-none">
-              <Link
-                to="/admin"
-                onClick={() => setShowProfileModal(false)}
-                className="text-[10px] font-mono font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-              >
-                {language === "fr" ? "Administration" : "Admin Panel"}
-              </Link>
+              {isAdmin ? (
+                <Link
+                  to="/admin"
+                  onClick={() => setShowProfileModal(false)}
+                  className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#E85D42] hover:underline transition-colors cursor-pointer flex items-center gap-1.5"
+                  style={{ color: currentSettings?.accentColor }}
+                >
+                  <Shield size={12} />
+                  <span>{language === "fr" ? "Administration" : "Admin Panel"}</span>
+                </Link>
+              ) : (
+                <span className="text-[9px] font-mono text-zinc-400">
+                  {language === "fr" ? "Perspective Group" : "Perspective Group"}
+                </span>
+              )}
               <button
                 onClick={() => setShowProfileModal(false)}
                 className="px-5 py-2.5 bg-zinc-900 dark:bg-zinc-100 hover:opacity-90 text-xs font-mono font-black uppercase tracking-widest text-white dark:text-zinc-900 transition-colors cursor-pointer rounded-none border-none shadow-xs"
@@ -1153,6 +1201,11 @@ export function AccountDrawer({
                 {language === "fr" ? "FERMER" : "CLOSE PORTAL"}
               </button>
             </div>
+
+            <InternalShareModal
+              isOpen={showInternalShareModal}
+              onClose={() => setShowInternalShareModal(false)}
+            />
 
           </motion.div>
         </motion.div>

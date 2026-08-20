@@ -26,12 +26,82 @@
         "lastLoginAt": { "type": "string" }
       },
       "required": ["email", "name"]
+    },
+    "AnalyticsEvent": {
+      "title": "Analytics Telemetry Event",
+      "description": "Real user telemetry pageview, article read, and interaction tracking event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "eventName": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "path": { "type": "string" },
+        "articleId": { "type": "string" },
+        "articleTitle": { "type": "string" },
+        "category": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "deviceType": { "type": "string" },
+        "referrer": { "type": "string" },
+        "country": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["eventName", "sessionId", "timestamp"]
+    },
+    "UserConsent": {
+      "title": "User Cookie Consent Record",
+      "description": "RGPD compliant cookie and telemetry permission choices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "essential": { "type": "boolean" },
+        "analytics": { "type": "boolean" },
+        "personalization": { "type": "boolean" },
+        "marketing": { "type": "boolean" },
+        "deviceType": { "type": "string" },
+        "referrer": { "type": "string" },
+        "locale": { "type": "string" },
+        "country": { "type": "string" },
+        "city": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["sessionId", "updatedAt"]
+    },
+    "DailyAnalyticsArchive": {
+      "title": "Daily Analytics Aggregated Archive",
+      "description": "Daily aggregated snapshot archiving real traffic, pageviews, and session metrics",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string" },
+        "totalPageviews": { "type": "number" },
+        "uniqueSessions": { "type": "number" },
+        "totalConsents": { "type": "number" },
+        "analyticsOptIns": { "type": "number" },
+        "marketingOptIns": { "type": "number" },
+        "leadConversions": { "type": "number" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["date", "totalPageviews", "uniqueSessions"]
     }
   },
   "firestore": {
     "/users/{userEmail}": {
       "schema": "User",
       "description": "Collection of all registered profiles and account related details"
+    },
+    "/analytics_events/{eventId}": {
+      "schema": "AnalyticsEvent",
+      "description": "Dedicated Firestore archive collection storing real user telemetry events"
+    },
+    "/user_consents/{consentId}": {
+      "schema": "UserConsent",
+      "description": "Dedicated Firestore archive collection storing user cookie consent decisions"
+    },
+    "/daily_analytics/{date}": {
+      "schema": "DailyAnalyticsArchive",
+      "description": "Dedicated Firestore archive collection storing daily aggregated analytics summaries"
     }
   }
 }

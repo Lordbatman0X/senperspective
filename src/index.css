@@ -34,19 +34,40 @@
 
 :root.dark {
   --color-brand-primary: #F06A50;
-  --color-brand-primary-hover: var(--color-brand-primary-hover);
   --color-brand-primary-hover: #E85D42;
   --color-brand-secondary: #4D9797;
   --color-brand-detail: #C69B52;
   --color-brand-dark: #F2F4F5;
-  --color-brand-muted: #AAB2BC;
-  --color-brand-border: rgba(255, 255, 255, 0.10);
+  --color-brand-muted: #CBD5E1;
+  --color-brand-border: rgba(255, 255, 255, 0.15);
   --color-brand-soft: rgba(21, 29, 39, 0.78);
-  --color-brand-white: #0B1017;
+  --color-brand-white: #F8FAFC;
   --color-brand-black: #0B1017;
 }
 
 @layer base {
+  /* High contrast styling for all form controls */
+  input, textarea, select {
+    color: inherit;
+  }
+
+  .dark input, 
+  .dark textarea, 
+  .dark select {
+    color: #F8FAFC !important;
+    background-color: #09090B !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #94A3B8 !important;
+  }
+
+  .dark label {
+    color: #E2E8F0 !important;
+  }
+
   body {
     @apply font-body text-brand-dark antialiased;
     background: 
@@ -326,6 +347,135 @@
   color: #ffffff !important;
 }
 
+.markdown-body,
+.markdown-body p {
+  color: #18181b !important;
+}
+
+/* Abdel Response Bubble Text: Pure white background with high-contrast jet-black text in both Light & Dark modes */
+.abdel-response-bubble,
+.dark .abdel-response-bubble,
+[data-theme="dark"] .abdel-response-bubble {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #e4e4e7 !important;
+}
+
+.abdel-response-bubble,
+.dark .abdel-response-bubble,
+.abdel-response-bubble *,
+.dark .abdel-response-bubble *,
+.abdel-response-bubble p,
+.dark .abdel-response-bubble p,
+.abdel-response-bubble span,
+.dark .abdel-response-bubble span,
+.abdel-response-bubble div,
+.dark .abdel-response-bubble div,
+.abdel-response-bubble li,
+.dark .abdel-response-bubble li,
+.abdel-response-bubble ul,
+.dark .abdel-response-bubble ul,
+.abdel-response-bubble ol,
+.dark .abdel-response-bubble ol,
+.abdel-response-bubble h1,
+.dark .abdel-response-bubble h1,
+.abdel-response-bubble h2,
+.dark .abdel-response-bubble h2,
+.abdel-response-bubble h3,
+.dark .abdel-response-bubble h3,
+.abdel-response-bubble h4,
+.dark .abdel-response-bubble h4,
+.abdel-response-bubble h5,
+.dark .abdel-response-bubble h5,
+.abdel-response-bubble h6,
+.dark .abdel-response-bubble h6,
+.abdel-response-bubble strong,
+.dark .abdel-response-bubble strong,
+.abdel-response-bubble b,
+.dark .abdel-response-bubble b,
+.abdel-response-bubble em,
+.dark .abdel-response-bubble em,
+.abdel-response-bubble i,
+.dark .abdel-response-bubble i,
+.abdel-response-bubble code,
+.dark .abdel-response-bubble code,
+.abdel-response-bubble blockquote,
+.dark .abdel-response-bubble blockquote,
+.abdel-response-bubble blockquote p,
+.dark .abdel-response-bubble blockquote p,
+.abdel-text-content,
+.dark .abdel-text-content,
+.abdel-text-content *,
+.dark .abdel-text-content *,
+.abdel-text-content p,
+.dark .abdel-text-content p,
+.abdel-text-content span,
+.dark .abdel-text-content span,
+.abdel-text-content div,
+.dark .abdel-text-content div,
+.abdel-text-content li,
+.dark .abdel-text-content li,
+.abdel-text-content ul,
+.dark .abdel-text-content ul,
+.abdel-text-content ol,
+.dark .abdel-text-content ol,
+.abdel-text-content h1,
+.dark .abdel-text-content h1,
+.abdel-text-content h2,
+.dark .abdel-text-content h2,
+.abdel-text-content h3,
+.dark .abdel-text-content h3,
+.abdel-text-content h4,
+.dark .abdel-text-content h4,
+.abdel-text-content strong,
+.dark .abdel-text-content strong,
+.abdel-text-content em,
+.dark .abdel-text-content em,
+.abdel-text-content code,
+.dark .abdel-text-content code {
+  color: #000000 !important;
+  --tw-prose-body: #000000 !important;
+  --tw-prose-headings: #000000 !important;
+  --tw-prose-lead: #000000 !important;
+  --tw-prose-links: #E85D42 !important;
+  --tw-prose-bold: #000000 !important;
+  --tw-prose-counters: #000000 !important;
+  --tw-prose-bullets: #000000 !important;
+  --tw-prose-hr: #e4e4e7 !important;
+  --tw-prose-quotes: #000000 !important;
+  --tw-prose-quote-borders: #E85D42 !important;
+  --tw-prose-captions: #71717a !important;
+  --tw-prose-code: #000000 !important;
+  --tw-prose-pre-code: #000000 !important;
+  --tw-prose-th-borders: #e4e4e7 !important;
+  --tw-prose-td-borders: #e4e4e7 !important;
+  --tw-prose-invert-body: #000000 !important;
+  --tw-prose-invert-headings: #000000 !important;
+  --tw-prose-invert-lead: #000000 !important;
+  --tw-prose-invert-links: #E85D42 !important;
+  --tw-prose-invert-bold: #000000 !important;
+  --tw-prose-invert-counters: #000000 !important;
+  --tw-prose-invert-bullets: #000000 !important;
+  --tw-prose-invert-hr: #e4e4e7 !important;
+  --tw-prose-invert-quotes: #000000 !important;
+  --tw-prose-invert-quote-borders: #E85D42 !important;
+  --tw-prose-invert-captions: #71717a !important;
+  --tw-prose-invert-code: #000000 !important;
+  --tw-prose-invert-pre-code: #000000 !important;
+  --tw-prose-invert-th-borders: #e4e4e7 !important;
+  --tw-prose-invert-td-borders: #e4e4e7 !important;
+}
+
+.abdel-response-bubble a,
+.dark .abdel-response-bubble a,
+.abdel-text-content a,
+.dark .abdel-text-content a {
+  color: #E85D42 !important;
+  text-decoration: underline !important;
+  font-weight: 600 !important;
+}
+
 .prose-article-reader h1,
 .prose-article-reader h2,
 .prose-article-reader h3,
@@ -345,7 +495,7 @@
 }
 
 .prose-article-reader a {
-  color: var(--color-[#E85D42]) !important;
+  color: #E85D42 !important;
   text-decoration: underline !important;
 }
 

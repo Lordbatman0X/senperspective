@@ -14,7 +14,16 @@ export type ArticleCategory =
   | 'Santé' 
   | 'Sports' 
   | 'People'
-  | 'Gouvernance';
+  | 'Gouvernance'
+  | "L'Arène"
+  | 'Dossiers'
+  | 'Dossier'
+  | 'Flash Info'
+  | 'Flash'
+  | 'Météo & Maritime'
+  | 'Chaloupe & Transports'
+  | 'Culture & People'
+  | 'Tech & Innovation';
 
 export type ArticleType = 'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion';
 
@@ -51,6 +60,7 @@ export interface Article {
   excerpt: BilingualText;
   body: BilingualText;
   featuredImage: string;
+  imageUrl?: string;
   author: string;
   date: string;
   readingTime: number; // in minutes
@@ -70,6 +80,13 @@ export interface Article {
   
   isPublished: boolean;
   isFeatured: boolean;
+  views?: number;
+  
+  // RSS & Source Attribution Metadata
+  sourceName?: string;
+  sourceDomain?: string;
+  feedUrl?: string;
+  originalUrl?: string;
 }
 
 export interface Match {

@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
+import { getSafeText } from "../lib/utils";
 import { db } from "../lib/firebase";
 import { 
   doc, 
@@ -15,6 +16,8 @@ import {
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
+import { NotificationSetupPanel } from "../components/NotificationSetupPanel";
+import { InternalShareModal } from "../components/InternalShareModal";
 import { 
   Flame, 
   Clock, 
@@ -32,6 +35,7 @@ import {
   Sparkles, 
   Bookmark, 
   MessageCircle,
+  Share2,
   FileText,
   LockKeyhole,
   CheckCircle2,
@@ -86,10 +90,10 @@ const DETAILED_ACCOLADES = [
     color: "border-rose-500/20 bg-rose-500/5 text-rose-700"
   },
   {
-    id: "premium_patron",
+    id: "loyal_reader",
     icon: (size: number) => <Trophy size={size} className="text-yellow-600 shrink-0" />,
-    title: { fr: "Membre Premium", en: "Premium Member" },
-    desc: { fr: "Abonnement Premium actif", en: "Active Premium subscription" },
+    title: { fr: "Lecteur Fidèle", en: "Loyal Reader" },
+    desc: { fr: "Lecture régulière et engagement sur Perspective", en: "Regular reading and engagement on Perspective" },
     color: "border-yellow-600/20 bg-yellow-600/5 text-yellow-700"
   },
   {
@@ -121,6 +125,7 @@ export function ProfilePage() {
   } = useStore();
 
   const [friends, setFriends] = useState<string[]>([]);
+  const [showInternalShareModal, setShowInternalShareModal] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isEditingBio, setIsEditingBio] = useState(false);
@@ -729,10 +734,10 @@ export function ProfilePage() {
       </div>
 
       {/* Profile Info Summary Glass Card (Lays elegantly on the cover) */}
-      <div className="relative -mt-20 md:-mt-24 mx-3 sm:mx-6 md:mx-8 p-6 md:p-8 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl backdrop-saturate-150 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-2xl z-20 flex flex-col md:flex-row gap-6 items-start md:items-end justify-between transition-all">
+      <div className="relative -mt-20 md:-mt-24 mx-3 sm:mx-6 md:mx-8 p-6 md:p-8 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl backdrop-saturate-150 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl shadow-2xl z-20 flex flex-col gap-6 transition-all">
         
         {/* Avatar, Name & Accreditation Row */}
-        <div className="flex flex-col md:flex-row gap-5 items-start md:items-end w-full md:w-auto">
+        <div className="flex flex-col md:flex-row gap-5 items-start md:items-end w-full">
           {/* Avatar Container laying over the card border */}
           <div className="relative w-28 h-28 md:w-36 md:h-36 rounded-2xl bg-white dark:bg-zinc-900 border-4 border-white dark:border-zinc-950 overflow-hidden shadow-2xl shrink-0 -mt-14 md:-mt-20 ring-1 ring-black/10">
             {renderNeutralAvatar(targetUser.avatarUrl, targetUser.name, 144)}
@@ -755,7 +760,7 @@ export function ProfilePage() {
           </div>
 
           {/* User Meta */}
-          <div className="space-y-1.5 md:mb-1 flex-grow">
+          <div className="space-y-2 md:mb-1 flex-grow w-full">
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="text-2xl md:text-3xl font-serif font-bold text-zinc-900 dark:text-zinc-100 tracking-tight leading-none">
                 {targetUser.name}
@@ -803,131 +808,147 @@ export function ProfilePage() {
                 </button>
               )}
             </div>
+
             {/* Followers and Following stats */}
-            <div className="flex gap-4 mt-2.5 font-mono text-xs text-zinc-500 dark:text-zinc-400 items-center">
-              <div className="bg-zinc-100 dark:bg-zinc-900/80 px-2.5 py-1 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
+            <div className="flex gap-3 pt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400 items-center mb-1">
+              <div className="bg-zinc-100 dark:bg-zinc-900/80 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">{followers.length}</span> {language === "fr" ? "abonnés" : "followers"}
               </div>
-              <div className="bg-zinc-100 dark:bg-zinc-900/80 px-2.5 py-1 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
+              <div className="bg-zinc-100 dark:bg-zinc-900/80 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">{targetFollowing.length}</span> {language === "fr" ? "abonnements" : "following"}
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Action Controls Side */}
-        <div className="flex flex-wrap gap-2.5 shrink-0 w-full md:w-auto items-center">
-          {isSelf ? (
-            <>
-              {/* Privacy Toggle */}
-              <button
-                onClick={togglePrivacy}
-                className="px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all rounded-xl shadow-xs"
-              >
-                {targetUser.hidePersonalInfo ? (
-                  <>
-                    <EyeOff size={13} style={{ color: accentColor }} />
-                    <span>{language === "fr" ? "ESPACE PRIVÉ" : "PRIVATE MODE"}</span>
-                  </>
-                ) : (
-                  <>
-                    <Eye size={13} className="text-emerald-600 dark:text-emerald-400" />
-                    <span>{language === "fr" ? "ESPACE PUBLIC" : "PUBLIC MODE"}</span>
-                  </>
-                )}
-              </button>
+            {/* Action Controls Row - Positioned neatly under Followers / Following */}
+            <div className="pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 flex flex-col gap-2.5 w-full">
+              {isSelf ? (
+                <div className="flex flex-wrap gap-2.5 items-center">
+                  {/* Privacy Toggle */}
+                  <button
+                    onClick={togglePrivacy}
+                    className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all rounded-xl shadow-xs"
+                  >
+                    {targetUser.hidePersonalInfo ? (
+                      <>
+                        <EyeOff size={13} style={{ color: accentColor }} />
+                        <span>{language === "fr" ? "ESPACE PRIVÉ" : "PRIVATE MODE"}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye size={13} className="text-emerald-600 dark:text-emerald-400" />
+                        <span>{language === "fr" ? "ESPACE PUBLIC" : "PUBLIC MODE"}</span>
+                      </>
+                    )}
+                  </button>
 
-              {/* Edit Bio Mode Trigger */}
-              <button
-                onClick={() => setIsEditingBio(!isEditingBio)}
-                className="px-4 py-2.5 text-white font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all rounded-xl border-none shadow-xs hover:opacity-90"
-                style={{ backgroundColor: accentColor }}
-              >
-                <span>{isEditingBio ? (language === "fr" ? "ANNULER" : "CANCEL") : (language === "fr" ? "MODIFIER LA BIO" : "EDIT BIO")}</span>
-              </button>
-            </>
-          ) : (
-            <div className="flex flex-wrap gap-2 items-center">
-              {/* Direct Messaging link using Perspective Accent Color */}
-              <button
-                onClick={handleOpenSecureDispatch}
-                className="px-4 py-2.5 text-white font-sans text-xs font-bold flex items-center gap-2 cursor-pointer transition-all rounded-xl border-none shadow-md hover:scale-[1.02]"
-                style={{ backgroundColor: accentColor }}
-              >
-                <MessageSquare size={14} />
-                <span>{language === "fr" ? "ENVOYER UN MESSAGE" : "MESSAGE"}</span>
-              </button>
+                  {/* Edit Bio Mode Trigger */}
+                  <button
+                    onClick={() => setIsEditingBio(!isEditingBio)}
+                    className="px-4 py-2 text-white font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 cursor-pointer transition-all rounded-xl border-none shadow-xs hover:opacity-90"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    <span>{isEditingBio ? (language === "fr" ? "ANNULER" : "CANCEL") : (language === "fr" ? "MODIFIER LA BIO" : "EDIT BIO")}</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 w-full">
+                  {/* Row 1: Direct Message, Friend, Follow */}
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {/* Direct Messaging link */}
+                    <button
+                      onClick={handleOpenSecureDispatch}
+                      className="px-3.5 py-2 text-white font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all rounded-lg border-none shadow-md hover:scale-[1.02]"
+                      style={{ backgroundColor: accentColor }}
+                    >
+                      <MessageSquare size={13} />
+                      <span>{language === "fr" ? "ENVOYER UN MESSAGE" : "MESSAGE"}</span>
+                    </button>
 
-              {/* Add/Remove Friend Contact button */}
-              <button
-                onClick={handleFriendship}
-                className={`px-4 py-2.5 font-sans text-xs font-bold flex items-center gap-2 cursor-pointer transition-all rounded-xl border shadow-xs ${
-                  isFriend 
-                    ? "bg-zinc-100 text-zinc-800 border-zinc-300 hover:bg-zinc-200 hover:text-black dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800 dark:hover:bg-zinc-200 dark:hover:text-black dark:hover:border-zinc-300" 
-                    : "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 hover:opacity-90"
-                }`}
-              >
-                {isFriend ? (
-                  <>
-                    <UserMinus size={14} className="transition-colors group-hover:text-black" />
-                    <span>{language === "fr" ? "RETIRER DES AMIS" : "REMOVE FRIEND"}</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus size={14} />
-                    <span>{language === "fr" ? "AJOUTER EN AMI" : "ADD FRIEND"}</span>
-                  </>
-                )}
-              </button>
+                    {/* Internal Share Profile button */}
+                    <button
+                      onClick={() => setShowInternalShareModal(true)}
+                      className="px-3.5 py-2 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-800 font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all rounded-lg shadow-xs"
+                    >
+                      <Share2 size={13} />
+                      <span>{language === "fr" ? "PARTAGER LE PROFIL" : "SHARE PROFILE"}</span>
+                    </button>
 
-              {/* Follow / Unfollow button */}
-              <button
-                onClick={handleFollow}
-                className={`px-4 py-2.5 font-sans text-xs font-bold flex items-center gap-2 cursor-pointer transition-all rounded-xl border shadow-xs group ${
-                  following.includes(targetUser.email.toLowerCase().trim()) 
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-zinc-200 hover:text-black dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-zinc-200 dark:hover:text-black dark:hover:border-zinc-300" 
-                    : "bg-white text-zinc-900 border-zinc-300 hover:bg-zinc-200 hover:text-black dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800 dark:hover:bg-zinc-200 dark:hover:text-black dark:hover:border-zinc-300"
-                }`}
-              >
-                <Activity size={14} className="transition-colors group-hover:text-black" />
-                <span className="transition-colors group-hover:text-black">{following.includes(targetUser.email.toLowerCase().trim()) ? (language === "fr" ? "ABONNÉ(E)" : "FOLLOWING") : (language === "fr" ? "SUIVRE" : "FOLLOW")}</span>
-              </button>
+                    {/* Add/Remove Friend Contact button */}
+                    <button
+                      onClick={handleFriendship}
+                      className={`px-3.5 py-2 font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all rounded-lg border shadow-xs ${
+                        isFriend 
+                          ? "bg-zinc-100 text-zinc-800 border-zinc-300 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800 dark:hover:bg-zinc-800" 
+                          : "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 hover:opacity-90"
+                      }`}
+                    >
+                      {isFriend ? (
+                        <>
+                          <UserMinus size={13} />
+                          <span>{language === "fr" ? "RETIRER DES AMIS" : "REMOVE FRIEND"}</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus size={13} />
+                          <span>{language === "fr" ? "AJOUTER EN AMI" : "ADD FRIEND"}</span>
+                        </>
+                      )}
+                    </button>
 
-              {/* Mute button */}
-              <button
-                onClick={handleMute}
-                className={`px-3 py-2.5 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all rounded-xl border shadow-xs ${
-                  mutes.includes(targetUser.email.toLowerCase().trim()) 
-                    ? "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200 hover:text-black dark:hover:bg-amber-200 dark:hover:text-black" 
-                    : "bg-white text-zinc-700 border-zinc-300 hover:bg-zinc-200 hover:text-black dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-800 dark:hover:bg-zinc-200 dark:hover:text-black dark:hover:border-zinc-300"
-                }`}
-                title={language === "fr" ? "Masquer les notifications" : "Mute notifications"}
-              >
-                <EyeOff size={12} className="transition-colors group-hover:text-black" />
-                <span>{mutes.includes(targetUser.email.toLowerCase().trim()) ? (language === "fr" ? "MASQUÉ" : "MUTED") : (language === "fr" ? "MASQUER" : "MUTE")}</span>
-              </button>
+                    {/* Follow / Unfollow button */}
+                    <button
+                      onClick={handleFollow}
+                      className={`px-3.5 py-2 font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all rounded-lg border shadow-xs ${
+                        following.includes(targetUser.email.toLowerCase().trim()) 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800" 
+                          : "bg-white text-zinc-900 border-zinc-300 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800"
+                      }`}
+                    >
+                      <Activity size={13} />
+                      <span>{following.includes(targetUser.email.toLowerCase().trim()) ? (language === "fr" ? "ABONNÉ(E)" : "FOLLOWING") : (language === "fr" ? "SUIVRE" : "FOLLOW")}</span>
+                    </button>
+                  </div>
 
-              {/* Block button */}
-              <button
-                onClick={handleBlock}
-                className="px-3 py-2.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-rose-600 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-xl shadow-xs"
-                title={language === "fr" ? "Bloquer le membre" : "Block member"}
-              >
-                <Lock size={12} />
-                <span>{language === "fr" ? "BLOQUER" : "BLOCK"}</span>
-              </button>
+                  {/* Row 2: Secondary Moderation Actions */}
+                  <div className="flex flex-wrap gap-2 items-center pt-1">
+                    {/* Mute button */}
+                    <button
+                      onClick={handleMute}
+                      className={`px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all rounded-md border shadow-xs ${
+                        mutes.includes(targetUser.email.toLowerCase().trim()) 
+                          ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800" 
+                          : "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-900/80 dark:text-zinc-300 dark:border-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                      }`}
+                      title={language === "fr" ? "Masquer les notifications" : "Mute notifications"}
+                    >
+                      <EyeOff size={11} />
+                      <span>{mutes.includes(targetUser.email.toLowerCase().trim()) ? (language === "fr" ? "MASQUÉ" : "MUTED") : (language === "fr" ? "MASQUER" : "MUTE")}</span>
+                    </button>
 
-              {/* Report button */}
-              <button
-                onClick={() => setShowReportModal(true)}
-                className="px-3 py-2.5 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer hover:bg-zinc-200 rounded-xl shadow-xs"
-                title={language === "fr" ? "Signaler ce membre" : "Report member"}
-              >
-                <Award size={12} />
-                <span>{language === "fr" ? "SIGNALER" : "REPORT"}</span>
-              </button>
+                    {/* Block button */}
+                    <button
+                      onClick={handleBlock}
+                      className="px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-rose-600 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-md shadow-xs"
+                      title={language === "fr" ? "Bloquer le membre" : "Block member"}
+                    >
+                      <Lock size={11} />
+                      <span>{language === "fr" ? "BLOQUER" : "BLOCK"}</span>
+                    </button>
+
+                    {/* Report button */}
+                    <button
+                      onClick={() => setShowReportModal(true)}
+                      className="px-2.5 py-1.5 bg-zinc-100 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-md shadow-xs"
+                      title={language === "fr" ? "Signaler ce membre" : "Report member"}
+                    >
+                      <Award size={11} />
+                      <span>{language === "fr" ? "SIGNALER" : "REPORT"}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
 
       </div>
@@ -1145,7 +1166,7 @@ export function ProfilePage() {
                             <span>{c.date}</span>
                           </div>
                           <p className="text-xs text-brand-dark italic font-serif leading-relaxed">
-                            "{c.text}"
+                            "{getSafeText(c.text, language)}"
                           </p>
                         </div>
                       );
@@ -1159,6 +1180,12 @@ export function ProfilePage() {
                   </p>
                 )}
               </div>
+              {/* Notification Setup Preferences Panel */}
+              {isSelf && (
+                <div className="mt-6">
+                  <NotificationSetupPanel />
+                </div>
+              )}
             </>
           ) : (
             <div className="square-card p-10 bg-brand-soft/25 border border-brand-border/15 flex flex-col items-center justify-center text-center py-24">
@@ -1240,6 +1267,20 @@ export function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* Internal Share Modal */}
+      <InternalShareModal
+        isOpen={showInternalShareModal}
+        onClose={() => setShowInternalShareModal(false)}
+        initialItem={{
+          type: "profile",
+          id: targetUser.email,
+          title: targetUser.name,
+          link: `/profile/${encodeURIComponent(targetUser.email)}`,
+          subtitle: targetUser.email,
+          image: targetUser.avatarUrl
+        }}
+      />
 
     </div>
   );

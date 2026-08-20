@@ -63,11 +63,18 @@ export function SportsSlider() {
     scrollTo(nextIdx);
   };
 
+  const getBilingualText = (obj: any) => {
+    if (!obj) return "";
+    if (typeof obj === "string") return obj;
+    return obj[language] || obj.fr || obj.en || "";
+  };
+
   // Helper to trigger Abdel AI with the matchup prompt
   const handleAskAbdelAboutMatch = (match: Match) => {
+    const leagueStr = getBilingualText(match.leagueLabel);
     const prompt = language === "fr" 
-      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques et sportifs de la rencontre suivante : ${match.teamA.name} contre ${match.teamB.name} (${match.leagueLabel.fr}) ? S'il y a des détails historiques ou sociétaux, explique-les.`
-      : `Hi Abdel, can you break down the political and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${match.leagueLabel.en})? Include any cultural or societal background.`;
+      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques et sportifs de la rencontre suivante : ${match.teamA.name} contre ${match.teamB.name} (${leagueStr}) ? S'il y a des détails historiques ou sociétaux, explique-les.`
+      : `Hi Abdel, can you break down the political and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${leagueStr})? Include any cultural or societal background.`;
     
     localStorage.setItem("abdel_prefilled_prompt", prompt);
     window.dispatchEvent(new CustomEvent("trigger_abdel_chat", { detail: { prompt } }));
@@ -226,7 +233,7 @@ export function SportsSlider() {
                     {/* Header Row of individual Match */}
                     <div className="flex justify-between items-center mb-2 pb-1 border-b border-zinc-200/10 dark:border-zinc-800/10 pointer-events-none">
                       <span className="text-[7.5px] font-black uppercase tracking-widest text-[#E85D42] bg-[#E85D42]/10 dark:bg-[#E85D42]/20 px-1.5 py-0.5 rounded">
-                        {language === "fr" ? match.leagueLabel.fr : match.leagueLabel.en}
+                        {getBilingualText(match.leagueLabel)}
                       </span>
 
                       {/* Individual Status */}
@@ -307,7 +314,7 @@ export function SportsSlider() {
 
                     {/* Brief Analyst Commentary */}
                     <p className="mt-1.5 text-[8.5px] leading-snug text-zinc-500 dark:text-zinc-400 border-l-2 border-[#E85D42]/50 pl-2 font-medium italic pointer-events-none">
-                      {language === "fr" ? match.contextInfo?.fr : match.contextInfo?.en}
+                      {getBilingualText(match.contextInfo)}
                     </p>
 
                     {/* Interactive Abdel Button */}

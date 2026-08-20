@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { getSafeImageUrl } from '../lib/imageUtils';
+import { formatCategory } from '../lib/utils';
 
 export function SearchPage() {
   const [params] = useSearchParams();
@@ -74,17 +75,17 @@ export function SearchPage() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 max-w-4xl">
-          {results.map(article => (
-            <div key={article.id} className="square-card group flex flex-col md:flex-row h-full md:h-48 overflow-hidden border border-brand-border hover:border-brand-primary transition-colors">
+          {results.map((article, idx) => (
+            <div key={`${article.id}-${idx}`} className="square-card group flex flex-col md:flex-row h-full md:h-48 overflow-hidden border border-brand-border hover:border-brand-primary transition-colors">
               <Link to={`/article/${article.slug}`} className="block relative md:w-64 h-48 md:h-full flex-shrink-0 border-b md:border-b-0 md:border-r border-brand-border">
                 <div 
                   className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                  style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+                  style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
                 />
               </Link>
               <div className="p-5 flex flex-col flex-grow bg-brand-white">
                 <Link to={`/article/${article.slug}`} className="flex-grow">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-2">{article.category}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-2">{formatCategory(article.category, language)}</div>
                   <h3 className="font-bold text-lg text-brand-dark mb-2 leading-tight group-hover:text-brand-primary transition-colors">
                     {article.title?.[language] || 'Untitled'}
                   </h3>

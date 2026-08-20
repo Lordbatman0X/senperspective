@@ -1,6 +1,7 @@
 import React from 'react';
 import { Article } from '../../types';
 import { useStore, CommentItem, SubscriberItem } from '../../store';
+import { getSafeText } from '../../lib/utils';
 import { FileText, Users, MessageSquare, TrendingUp, CheckSquare, Plus, ArrowUpRight, BarChart2, Activity, Eye, Bookmark } from 'lucide-react';
 
 interface DashboardOverviewProps {
@@ -62,20 +63,49 @@ export function DashboardOverview({
     recentInteractions: language === 'fr' ? 'Interactions récentes de l\'audience' : 'Recent Audience Interactions'
   };
 
+  const purgeDatabaseAndArticles = useStore(s => s.purgeDatabaseAndArticles);
+  const seedSampleArticles = useStore(s => s.seedSampleArticles);
+  const [showPurgeConfirm, setShowPurgeConfirm] = React.useState(false);
+
+  const handlePurge = async () => {
+    await purgeDatabaseAndArticles();
+    setShowPurgeConfirm(false);
+  };
+
   return (
     <div className="space-y-8">
       {/* Header Panel */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-zinc-900 text-white p-6 md:p-8 border-l-8 border-[#E85D42] shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-zinc-900 text-white p-6 md:p-8 border-l-8 border-[#E85D42] shadow-sm gap-4">
         <div>
           <h2 className="text-2xl md:text-3xl font-extrabold uppercase tracking-tight mb-1 text-white">{t.title}</h2>
           <p className="text-xs text-zinc-300 font-mono">{t.headerDesc}</p>
         </div>
-        <button
-          onClick={onNewArticle}
-          className="mt-4 md:mt-0 flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] text-white px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md"
-        >
-          <Plus size={16} /> {t.writeBtn}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {articles.length === 0 ? (
+            <button
+              onClick={seedSampleArticles}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md rounded-xs"
+            >
+              {language === 'fr' ? '🌱 Charger Articles Démo' : '🌱 Seed Sample Articles'}
+            </button>
+          ) : null}
+
+          <button
+            onClick={() => onGoToTab('admin_dashboard')}
+            className="flex items-center gap-1.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-300 px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm rounded-xs"
+            title={language === 'fr' ? 'Gérer et purger les collections Firestore' : 'Manage and wipe Firestore collections'}
+          >
+            <Activity size={14} className="text-red-400" />
+            {language === 'fr' ? 'Gestion Base de Données' : 'Database Manager'}
+          </button>
+
+          <button
+            onClick={onNewArticle}
+            className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] text-white px-5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md rounded-xs"
+          >
+            <Plus size={16} /> {t.writeBtn}
+          </button>
+        </div>
       </div>
 
       {/* Main Key Metrics Cards */}
@@ -239,7 +269,7 @@ export function DashboardOverview({
                     <span className="font-bold text-white">{com.author}</span>
                     <span className="text-zinc-400">{com.date}</span>
                   </div>
-                  <p className="text-zinc-200 line-clamp-2 italic">"{com.text}"</p>
+                  <p className="text-zinc-200 line-clamp-2 italic">"{getSafeText(com.text, language)}"</p>
                 </div>
               ))}
               {pendingComments.length === 0 && (

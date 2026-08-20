@@ -115,7 +115,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
     <div className="space-y-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-800 pb-3">
         <h2 className="text-3xl font-black uppercase tracking-widest text-zinc-100">Médiathèque</h2>
-        <p className="text-xs text-zinc-400 uppercase tracking-wider font-mono">Pressroom Asset Upload</p>
+        <p className="text-xs text-zinc-200 uppercase tracking-wider font-mono">Pressroom Asset Upload</p>
       </div>
 
       {/* Drag and Drop Uploader Zone */}
@@ -139,9 +139,9 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
           className="hidden"
           onChange={handleFileInput}
         />
-        <UploadCloud size={48} className={`mb-4 transition-colors ${dragActive ? 'text-[#E85D42]' : 'text-zinc-400'}`} />
+        <UploadCloud size={48} className={`mb-4 transition-colors ${dragActive ? 'text-[#E85D42]' : 'text-zinc-200'}`} />
         <h3 className="text-lg font-black uppercase tracking-wider mb-2 text-zinc-100">Drag & Drop device media</h3>
-        <p className="text-sm text-zinc-400 max-w-md leading-relaxed mb-4">
+        <p className="text-sm text-zinc-200 max-w-md leading-relaxed mb-4">
           Upload cover assets or body content images directly from your computer or phone. Supported formats: images, animated GIFs, and videos.
         </p>
         <button
@@ -170,7 +170,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
           ))}
         </div>
         <div className="relative w-full md:w-80">
-          <Search size={16} className="absolute left-3 top-2.5 text-zinc-400" />
+          <Search size={16} className="absolute left-3 top-2.5 text-zinc-200" />
           <input
             type="text"
             placeholder="Search media files..."
@@ -208,7 +208,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
                 <p className="text-xs font-bold truncate text-zinc-100 mb-1" title={m.name}>
                   {m.name}
                 </p>
-                <div className="flex justify-between items-center text-[9px] uppercase font-bold text-zinc-400">
+                <div className="flex justify-between items-center text-[9px] uppercase font-bold text-zinc-200">
                   <span className="bg-zinc-950 border border-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded-xs">{m.type}</span>
                   <span>{m.date}</span>
                 </div>
@@ -217,7 +217,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
           ))}
 
           {filtered.length === 0 && (
-            <div className="col-span-full py-16 text-center text-zinc-400 font-bold text-xs uppercase tracking-widest border-2 border-dashed border-zinc-800 bg-zinc-900/60 rounded-lg">
+            <div className="col-span-full py-16 text-center text-zinc-200 font-bold text-xs uppercase tracking-widest border-2 border-dashed border-zinc-800 bg-zinc-900/60 rounded-lg">
               No pressroom media matching filter / search terms.
             </div>
           )}
@@ -254,11 +254,11 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
 
                   <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-zinc-800 pt-3">
                     <div>
-                      <span className="text-zinc-400 block uppercase">Type</span>
+                      <span className="text-zinc-200 block uppercase">Type</span>
                       <span className="font-bold uppercase text-zinc-200">{selectedItem.type}</span>
                     </div>
                     <div>
-                      <span className="text-zinc-400 block uppercase">Uploaded</span>
+                      <span className="text-zinc-200 block uppercase">Uploaded</span>
                       <span className="font-bold text-zinc-200">{selectedItem.date}</span>
                     </div>
                   </div>
@@ -306,7 +306,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
                 </div>
               </div>
             ) : (
-              <div className="text-center py-10 text-zinc-400 italic text-xs leading-relaxed">
+              <div className="text-center py-10 text-zinc-200 italic text-xs leading-relaxed">
                 Select an asset from the library on the left to inspect variables, grab inline URLs, rename captions, or remove.
               </div>
             )}

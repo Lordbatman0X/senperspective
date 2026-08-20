@@ -1,61 +1,91 @@
 import { useEffect } from 'react';
+import { useStore } from '../store';
 
 interface SEOProps {
   title: string;
   description?: string;
   keywords?: string;
   canonical?: string;
+  ogImage?: string;
 }
 
-export function useSEO({ title, description, keywords, canonical }: SEOProps) {
+export function useSEO({ title, description, keywords, canonical, ogImage }: SEOProps) {
+  const siteSettings = useStore(s => s.siteSettings);
+
   useEffect(() => {
-    // 1. Update document title
-    document.title = title;
-
-    // 2. Update description tag
-    let descriptionMeta = document.querySelector('meta[name="description"]');
-    if (!descriptionMeta) {
-      descriptionMeta = document.createElement('meta');
-      descriptionMeta.setAttribute('name', 'description');
-      document.head.appendChild(descriptionMeta);
+    // 1. Determine title with suffix cleanly
+    let fullTitle = title;
+    if (siteSettings?.seoTitleSuffix && !title.includes('|') && !title.includes('—')) {
+      const cleanedSuffix = siteSettings.seoTitleSuffix.trim();
+      if (cleanedSuffix.startsWith('|') || cleanedSuffix.startsWith('—')) {
+        fullTitle = `${title} ${cleanedSuffix}`;
+      } else {
+        fullTitle = `${title} | ${cleanedSuffix}`;
+      }
     }
-    descriptionMeta.setAttribute('content', description || "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+    document.title = fullTitle;
 
-    // 3. Update keywords tag
-    let keywordsMeta = document.querySelector('meta[name="keywords"]');
-    if (!keywordsMeta) {
-      keywordsMeta = document.createElement('meta');
-      keywordsMeta.setAttribute('name', 'keywords');
-      document.head.appendChild(keywordsMeta);
+    // Fallbacks from siteSettings
+    const effectiveDesc = description || siteSettings?.seoDefaultDesc || "Perspective Group — Journal d'analyse, d'investigation et de réflexion indépendant basé à Dakar. L'actualité. Sans Filtre. Sans Compromis.";
+    const effectiveKeywords = keywords || siteSettings?.seoDefaultKeywords || "Sénégal, Dakar, Perspective Group, L'Arène, lutte sénégalaise, politique, géopolitique, économie, afrique";
+    const effectiveCanonical = canonical || (siteSettings?.seoCanonicalBase ? `${siteSettings.seoCanonicalBase}${window.location.pathname}` : window.location.href);
+    const effectiveOgImage = ogImage || siteSettings?.seoOgImage || "https://perspective.sn/og-preview.jpg";
+    const robotsContent = siteSettings?.seoRobotsIndex || "index, follow, max-image-preview:large, max-snippet:-1";
+
+    // Helper to create or update meta/link tags
+    const setMetaTag = (nameAttr: 'name' | 'property', nameVal: string, contentVal: string) => {
+      let tag = document.querySelector(`meta[${nameAttr}="${nameVal}"]`);
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.setAttribute(nameAttr, nameVal);
+        document.head.appendChild(tag);
+      }
+      tag.setAttribute('content', contentVal);
+    };
+
+    // 2. Meta description, keywords, robots
+    setMetaTag('name', 'description', effectiveDesc);
+    setMetaTag('name', 'keywords', effectiveKeywords);
+    setMetaTag('name', 'robots', robotsContent);
+
+    if (siteSettings?.seoGoogleSiteVerification) {
+      setMetaTag('name', 'google-site-verification', siteSettings.seoGoogleSiteVerification);
     }
-    keywordsMeta.setAttribute('content', keywords || "Sénégal, dakar, l'arène, lutte sénégalaise, politique, actualité, afrique, perspective");
 
-    // 4. Update canonical link tag
+    // 3. Update canonical link tag
     let canonicalLink = document.querySelector('link[rel="canonical"]');
     if (!canonicalLink) {
       canonicalLink = document.createElement('link');
       canonicalLink.setAttribute('rel', 'canonical');
       document.head.appendChild(canonicalLink);
     }
-    canonicalLink.setAttribute('href', canonical || window.location.href);
+    canonicalLink.setAttribute('href', effectiveCanonical);
 
-    // 5. Update OpenGraph tags
-    const ogTags = [
-      { property: 'og:title', content: title },
-      { property: 'og:description', content: description || "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine." },
-      { property: 'og:url', content: canonical || window.location.href },
-      { property: 'og:type', content: 'website' }
-    ];
+    // 4. Update OpenGraph & Twitter tags
+    setMetaTag('property', 'og:title', fullTitle);
+    setMetaTag('property', 'og:description', effectiveDesc);
+    setMetaTag('property', 'og:url', effectiveCanonical);
+    setMetaTag('property', 'og:type', 'website');
+    setMetaTag('property', 'og:image', effectiveOgImage);
 
-    ogTags.forEach(({ property, content }) => {
-      let tag = document.querySelector(`meta[property="${property}"]`);
-      if (!tag) {
-        tag = document.createElement('meta');
-        tag.setAttribute('property', property);
-        document.head.appendChild(tag);
-      }
-      tag.setAttribute('content', content);
-    });
+    setMetaTag('name', 'twitter:card', 'summary_large_image');
+    setMetaTag('name', 'twitter:title', fullTitle);
+    setMetaTag('name', 'twitter:description', effectiveDesc);
+    setMetaTag('name', 'twitter:image', effectiveOgImage);
 
-  }, [title, description, keywords, canonical]);
+  }, [
+    title, 
+    description, 
+    keywords, 
+    canonical, 
+    ogImage, 
+    siteSettings?.seoTitleSuffix, 
+    siteSettings?.seoDefaultDesc, 
+    siteSettings?.seoDefaultKeywords, 
+    siteSettings?.seoCanonicalBase,
+    siteSettings?.seoOgImage,
+    siteSettings?.seoRobotsIndex,
+    siteSettings?.seoGoogleSiteVerification
+  ]);
 }
+

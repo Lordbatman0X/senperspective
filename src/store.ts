@@ -4,8 +4,9 @@ import { get, set as idbSet, del } from 'idb-keyval';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { db } from './lib/firebase';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
+import { trackConversion } from './lib/telemetry';
 
 const idbStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
@@ -18,6 +19,14 @@ const idbStorage: StateStorage = {
     await del(name);
   },
 };
+
+export interface FriendContact {
+  email: string;
+  name: string;
+  role: string;
+  avatar: string;
+  status: string;
+}
 
 export interface MediaItem {
   id: string;
@@ -48,6 +57,15 @@ export interface AdItem {
   isAnnouncement?: boolean;
 }
 
+export interface NotificationPreferences {
+  messages: boolean;
+  newsletters: boolean;
+  newPublishes: boolean;
+  generalNews: boolean;
+  browserPush?: boolean;
+  emailAlerts?: boolean;
+}
+
 export interface ReaderProfile {
   id: string;
   name: string;
@@ -64,6 +82,7 @@ export interface ReaderProfile {
   hideEmail?: boolean;
   bio?: string;
   accolades?: string[];
+  notificationPreferences?: NotificationPreferences;
 }
 
 export interface UserAccount {
@@ -93,12 +112,14 @@ export interface DirectMessage {
   receiver: string; // email
   text: string;
   date: string;
+  read?: boolean;
   attachment?: {
-    type: 'article' | 'match' | 'comment' | 'general';
+    type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general';
     id: string;
     title: string;
     link: string;
     subtitle?: string;
+    image?: string;
   };
 }
 
@@ -120,6 +141,14 @@ export interface CommentItem {
   dislikes?: number;
   likedBy?: string[]; // array of user emails who liked
   dislikedBy?: string[]; // array of user emails who disliked
+  attachment?: {
+    type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general';
+    id: string;
+    title: string;
+    link: string;
+    subtitle?: string;
+    image?: string;
+  };
 }
 
 export interface NotificationItem {
@@ -129,6 +158,7 @@ export interface NotificationItem {
   date: string;
   isRead: boolean;
   link?: string;
+  category?: 'messages' | 'newsletters' | 'newPublishes' | 'generalNews' | 'system';
 }
 
 export interface SubscriberItem {
@@ -148,6 +178,7 @@ interface AppState {
   addArticle: (article: Article) => void;
   updateArticle: (article: Article) => void;
   deleteArticle: (id: string) => void;
+  purgeAllArticles: () => Promise<void>;
   media: MediaItem[];
   addMedia: (m: MediaItem) => void;
   deleteMedia: (id: string) => void;
@@ -164,8 +195,17 @@ interface AppState {
   dislikeComment: (id: string, userEmail: string) => void;
   directMessages: DirectMessage[];
   sendDirectMessage: (msg: Omit<DirectMessage, 'id' | 'date'>) => void;
+  deleteDirectMessage: (id: string) => void;
+  markDirectMessagesAsRead: (contactEmail: string, userEmail: string) => void;
+  friends: FriendContact[];
+  addFriend: (friend: FriendContact) => void;
+  deleteFriend: (email: string) => void;
+  abdelPrompts: { fr: string[]; en: string[] };
+  updateAbdelPrompts: (prompts: { fr: string[]; en: string[] }) => void;
   sendWarningNotification: (email: string, textFr: string, textEn: string) => void;
   notifications: NotificationItem[];
+  notificationPreferences: NotificationPreferences;
+  updateNotificationPreferences: (prefs: Partial<NotificationPreferences>) => void;
   addNotification: (notification: NotificationItem) => void;
   clearNotifications: (email: string) => void;
   deleteNotification: (id: string) => void;
@@ -192,6 +232,9 @@ interface AppState {
   notificationResponses: Record<string, 'accepted' | 'disputed'>;
   respondToNotification: (notifId: string, response: 'accepted' | 'disputed') => void;
   siteSettings: {
+    isMaintenanceMode?: boolean;
+    maintenanceMessageFr?: string;
+    maintenanceMessageEn?: string;
     fontPairing?: string;
     glassIntensity?: string;
     headerStyle?: string;
@@ -199,16 +242,32 @@ interface AppState {
     seoTitleSuffix?: string;
     seoCanonicalBase?: string;
     seoDefaultDesc?: string;
+    seoDefaultKeywords?: string;
+    seoOgImage?: string;
+    seoRobotsIndex?: string;
+    seoGoogleSiteVerification?: string;
+    googleChatWebhook?: string;
+    ga4MeasurementId?: string;
     databaseProvider?: string;
     homeSections?: string[];
+    headerNavItems?: { id: string; labelFr: string; labelEn: string; url: string; enabled: boolean; isExternal?: boolean; }[];
+    showHeaderTopBar?: boolean;
+    showHeaderTicker?: boolean;
     categories?: { id: string; fr: string; en: string; icon?: string; }[];
+    tags?: { id: string; fr: string; en: string; }[];
+    keywords?: string[];
     siteName: string;
+    boukariCorpLogo?: string;
     accentColor: string;
     editorialPhone: string;
     supportEmail: string;
     officeAddress: string;
     paywallThreshold: number;
     paywallEnabled: boolean;
+    cookieConsentEnabled?: boolean;
+    privacyPolicyTextFr?: string;
+    privacyPolicyTextEn?: string;
+    dataRetentionDays?: number;
     sportsQuadrantSelection?: {
       zone1Type?: 'match' | 'article';
       zone1Id?: string;
@@ -263,6 +322,8 @@ interface AppState {
   updateUserSecurity: (email: string, emailVerified: boolean, mfaEnabled: boolean) => void;
   updateUserPassword: (email: string, password: string) => void;
   updateUserPin: (email: string, pin: string) => void;
+  purgeDatabaseAndArticles: () => Promise<void>;
+  seedSampleArticles: () => void;
   matches: Match[];
   updateMatch: (matchId: string, updated: Partial<Match>) => void;
   addMatch: (match: Match) => void;
@@ -315,6 +376,24 @@ export const useStore = create<AppState>()(
         } catch (err) {
           console.error("Error writing article to Firestore:", err);
         }
+
+        if (article.isPublished) {
+          const currentProfile = get().readerProfile;
+          const artTitleFr = typeof article.title === 'string' ? article.title : (article.title?.fr || 'Nouvel article');
+          const artTitleEn = typeof article.title === 'string' ? article.title : (article.title?.en || 'New article');
+          get().addNotification({
+            id: 'pub-' + Date.now(),
+            email: currentProfile?.email || 'kadersdiaz3@gmail.com',
+            text: {
+              fr: `📰 Nouvel Article Publié : "${artTitleFr}"`,
+              en: `📰 New Article Released: "${artTitleEn}"`
+            },
+            date: new Date().toISOString().split('T')[0],
+            isRead: false,
+            category: 'newPublishes',
+            link: `/article/${article.slug}`
+          });
+        }
       },
       updateArticle: async (article) => {
         set({ articles: get().articles.map(a => a.id === article.id ? article : a) });
@@ -328,6 +407,35 @@ export const useStore = create<AppState>()(
       deleteArticle: (id) => {
         set({ articles: get().articles.filter(a => a.id !== id) });
         deleteDoc(doc(db, "articles", id)).catch(() => {});
+      },
+      purgeAllArticles: async () => {
+        // Capture current articles BEFORE resetting store state
+        const currentArticles = [...(get().articles || [])];
+        set({ articles: [] });
+
+        // Delete all captured articles from Firestore
+        const deletePromises = currentArticles.map(a => 
+          deleteDoc(doc(db, "articles", a.id)).catch(err => console.error(`Failed deleting ${a.id}:`, err))
+        );
+        await Promise.all(deletePromises);
+
+        // Query Firestore collection directly to delete any remaining draft or live articles
+        try {
+          const snapshot = await getDocs(collection(db, "articles"));
+          const firestoreDeletes = snapshot.docs.map(docSnap => 
+            deleteDoc(doc(db, "articles", docSnap.id)).catch(err => console.error(`Failed deleting doc ${docSnap.id}:`, err))
+          );
+          await Promise.all(firestoreDeletes);
+        } catch (e) {
+          console.error("Error purging Firestore articles collection:", e);
+        }
+
+        // Purge server-side RSS drafts and cache
+        try {
+          await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
+        } catch (e) {
+          console.error("Error calling DELETE /api/webhooks/make-rss:", e);
+        }
       },
       media: [],
       addMedia: async (m) => {
@@ -444,7 +552,19 @@ export const useStore = create<AppState>()(
           clicks: 410
         }
       ],
-      saveAd: (ad) => set({ ads: (get().ads || []).find(a => a.id === ad.id) ? (get().ads || []).map(a => a.id === ad.id ? ad : a) : [ad, ...(get().ads || [])] }),
+      saveAd: async (ad) => {
+        const existing = (get().ads || []).find(a => a.id === ad.id);
+        const updatedAds = existing
+          ? (get().ads || []).map(a => a.id === ad.id ? ad : a)
+          : [ad, ...(get().ads || [])];
+        set({ ads: updatedAds });
+        try {
+          const clean = await sanitizeFirestorePayload(ad as any);
+          await setDoc(doc(db, "ads", ad.id), clean, { merge: true });
+        } catch (err) {
+          console.error("Error saving ad to Firestore:", err);
+        }
+      },
       deleteAd: (id) => set({ ads: (get().ads || []).filter(a => a.id !== id) }),
       comments: [
         {
@@ -496,14 +616,16 @@ export const useStore = create<AppState>()(
           sender: 'member@perspective.sn',
           receiver: 'admin@perspective.sn',
           text: 'Bonjour, j\'aime beaucoup l\'article sur l\'industrialisation !',
-          date: '2026-06-25'
+          date: '2026-06-25',
+          read: true
         },
         {
           id: 'dm2',
           sender: 'admin@perspective.sn',
           receiver: 'member@perspective.sn',
           text: 'Merci Mariama ! N\'hésitez pas à le partager ou à laisser un commentaire public.',
-          date: '2026-06-25'
+          date: '2026-06-25',
+          read: true
         }
       ],
       sendDirectMessage: (msg) => {
@@ -519,7 +641,8 @@ export const useStore = create<AppState>()(
 
         // Save to Firestore
         try {
-          setDoc(doc(db, "messages", msgId), newMsg).catch(err => {
+          const cleanMsg = JSON.parse(JSON.stringify(newMsg));
+          setDoc(doc(db, "messages", msgId), cleanMsg).catch(err => {
             console.error("Failed to write message to Firestore:", err);
           });
         } catch (err) {
@@ -535,9 +658,69 @@ export const useStore = create<AppState>()(
             en: `New direct message from ${msg.sender === 'admin@perspective.sn' ? 'Admin' : msg.sender}.`
           },
           date: new Date().toISOString().split('T')[0],
-          isRead: false
+          isRead: false,
+          category: 'messages'
         });
       },
+      deleteDirectMessage: (id) => {
+        const dms = get().directMessages || [];
+        set({ directMessages: dms.filter(dm => dm.id !== id) });
+        try {
+          deleteDoc(doc(db, "messages", id)).catch(() => {});
+        } catch (err) {}
+      },
+      markDirectMessagesAsRead: (contactEmail, userEmail) => {
+        const dms = get().directMessages || [];
+        const senderClean = contactEmail ? contactEmail.toLowerCase() : '';
+        const receiverClean = userEmail ? userEmail.toLowerCase() : '';
+        let updated = false;
+
+        const newDms = dms.map(dm => {
+          if (!dm.read && dm.receiver?.toLowerCase() === receiverClean && (!senderClean || dm.sender?.toLowerCase() === senderClean)) {
+            updated = true;
+            try {
+              setDoc(doc(db, "messages", dm.id), { read: true }, { merge: true }).catch(() => {});
+            } catch (err) {}
+            return { ...dm, read: true };
+          }
+          return dm;
+        });
+
+        if (updated) {
+          set({ directMessages: newDms });
+        }
+
+        const notifs = get().notifications || [];
+        const updatedNotifs = notifs.map(n => {
+          if ((!n.email || n.email.toLowerCase() === receiverClean) && n.category === 'messages' && !n.isRead) {
+            return { ...n, isRead: true };
+          }
+          return n;
+        });
+        set({ notifications: updatedNotifs });
+      },
+      friends: [
+        { email: "fatou.ndiaye@perspective.sn", name: "Fatou Ndiaye", role: "Lectrice & Contributrice", avatar: "F", status: "En ligne" },
+        { email: "mamadou.ba@perspective.sn", name: "Mamadou Ba", role: "Observateur Politique", avatar: "M", status: "Actif" },
+        { email: "aminata.sow@perspective.sn", name: "Aminata Sow", role: "Analyste Économique", avatar: "A", status: "Absent" }
+      ],
+      addFriend: (friend) => set(state => ({ friends: [...(state.friends || []), friend] })),
+      deleteFriend: (email) => set(state => ({ friends: (state.friends || []).filter(f => f.email !== email) })),
+      abdelPrompts: {
+        fr: [
+          "Résumer l'article en cours",
+          "Quels sont les impacts géopolitiques de cet article ?",
+          "Quels sont les points clés de cette actualité sénégalaise ?",
+          "Expliquer le contexte économique de ce sujet"
+        ],
+        en: [
+          "Summarize the current article",
+          "What are the geopolitical impacts of this article?",
+          "What are the key points of this Senegalese news piece?",
+          "Explain the economic context of this topic"
+        ]
+      },
+      updateAbdelPrompts: (prompts) => set({ abdelPrompts: prompts }),
       sendWarningNotification: (email, textFr, textEn) => {
         get().addNotification({
           id: 'warning-' + Date.now(),
@@ -562,11 +745,13 @@ export const useStore = create<AppState>()(
       },
       addComment: (comment) => {
         const comments = get().comments || [];
-        set({ comments: [comment, ...comments] });
+        const filtered = comments.filter(c => c.id !== comment.id);
+        set({ comments: [comment, ...filtered] });
         
         // Write to Firestore comments collection
         try {
-          setDoc(doc(db, "comments", comment.id), comment).catch(err => {
+          const cleanComment = JSON.parse(JSON.stringify(comment));
+          setDoc(doc(db, "comments", comment.id), cleanComment).catch(err => {
             console.error("Failed to write comment to Firestore:", err);
           });
         } catch (err) {
@@ -588,7 +773,7 @@ export const useStore = create<AppState>()(
         // Notify parent author if this is a reply!
         if (comment.parentId) {
           const parent = comments.find(p => p.id === comment.parentId);
-          if (parent && parent.email && parent.email !== comment.email) {
+          if (parent && parent.email && parent.email.toLowerCase() !== comment.email?.toLowerCase()) {
             get().addNotification({
               id: 'notif-reply-' + Date.now(),
               email: parent.email,
@@ -598,10 +783,30 @@ export const useStore = create<AppState>()(
               },
               date: new Date().toISOString().split('T')[0],
               isRead: false,
+              category: 'messages',
               link: `/article/${comment.articleId}`
             });
           }
         }
+
+        // Notify reader friends about the new comment/activity across the app
+        const friendsList = get().friends || [];
+        friendsList.forEach(friend => {
+          if (friend.email && friend.email.toLowerCase() !== comment.email?.toLowerCase()) {
+            get().addNotification({
+              id: 'notif-friend-comment-' + Date.now() + '-' + Math.random().toString(36).substring(4),
+              email: friend.email,
+              text: {
+                fr: `${comment.author} (Ami) a publié un commentaire sur "${comment.articleTitle || 'un article'}" : "${comment.text.substring(0, 35)}..."`,
+                en: `${comment.author} (Friend) posted a comment on "${comment.articleTitle || 'an article'}": "${comment.text.substring(0, 35)}..."`
+              },
+              date: new Date().toISOString().split('T')[0],
+              isRead: false,
+              category: 'messages',
+              link: `/article/${comment.articleId}`
+            });
+          }
+        });
       },
       approveComment: (id) => {
         set({ comments: (get().comments || []).map(c => c.id === id ? { ...c, isApproved: true } : c) });
@@ -788,10 +993,75 @@ export const useStore = create<AppState>()(
             en: "ADMINISTRATIVE WARNING: Your recent comment on the Saly Logistics Corridor article has been flagged for a breach of community conduct. Please confirm your adherence to Perspective's guidelines."
           },
           date: '2026-06-27',
-          isRead: false
+          isRead: false,
+          category: 'system'
         }
       ],
-      addNotification: (notification) => set({ notifications: [notification, ...(get().notifications || [])] }),
+      notificationPreferences: {
+        messages: true,
+        newsletters: true,
+        newPublishes: true,
+        generalNews: true,
+        browserPush: false,
+        emailAlerts: true
+      },
+      updateNotificationPreferences: (prefs) => {
+        const current = get().notificationPreferences || {
+          messages: true,
+          newsletters: true,
+          newPublishes: true,
+          generalNews: true,
+          browserPush: false,
+          emailAlerts: true
+        };
+        const updated = { ...current, ...prefs };
+        const currentProfile = get().readerProfile;
+        if (currentProfile) {
+          const updatedProfile = { ...currentProfile, notificationPreferences: updated };
+          set({ notificationPreferences: updated, readerProfile: updatedProfile });
+          setDoc(doc(db, "users", currentProfile.id || currentProfile.email), updatedProfile, { merge: true }).catch(() => {});
+        } else {
+          set({ notificationPreferences: updated });
+        }
+      },
+      addNotification: (notification) => {
+        // Check category preferences
+        const prefs = get().notificationPreferences;
+        if (notification.category && prefs && notification.category !== 'system') {
+          if (prefs[notification.category] === false) {
+            // Category is muted by user setup preference
+            return;
+          }
+        }
+        set({ notifications: [notification, ...(get().notifications || [])] });
+
+        // Trigger browser notification if permitted
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          const textMsg = typeof notification.text === 'string' 
+            ? notification.text 
+            : (notification.text?.[get().language] || notification.text?.fr || 'Nouvelle notification');
+          
+          if (Notification.permission === 'granted') {
+            try {
+              new Notification('Perspective Group', {
+                body: textMsg,
+                icon: '/favicon.ico'
+              });
+            } catch (e) {}
+          } else if (Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+              if (permission === 'granted') {
+                try {
+                  new Notification('Perspective Group', {
+                    body: textMsg,
+                    icon: '/favicon.ico'
+                  });
+                } catch (e) {}
+              }
+            }).catch(() => {});
+          }
+        }
+      },
       clearNotifications: (email) => {
         const list = get().notifications || [];
         const hasUnread = list.some(n => n.email.toLowerCase() === email.toLowerCase() && !n.isRead);
@@ -817,13 +1087,37 @@ export const useStore = create<AppState>()(
         { email: 'mariama.sow@orange.sn', date: '2026-06-17' },
         { email: 'diop.consulting@gmail.com', date: '2026-06-19' }
       ],
-      addSubscriber: (email) => {
+      addSubscriber: async (email) => {
+        const clean = email.trim().toLowerCase();
+        if (!clean || !clean.includes('@')) return;
         const current = get().subscribers || [];
-        if (!current.some(s => s.email.toLowerCase() === email.toLowerCase())) {
-          set({ subscribers: [{ email, date: new Date().toISOString().split('T')[0] }, ...current] });
+        if (!current.some(s => s.email.toLowerCase() === clean)) {
+          const newSub = { email: clean, date: new Date().toISOString().split('T')[0] };
+          set({ subscribers: [newSub, ...current] });
+          trackConversion('newsletter_subscription', clean, { source: 'subscription_form' });
+          try {
+            const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
+            await setDoc(doc(db, "subscribers", subDocId), {
+              email: clean,
+              date: newSub.date,
+              createdAt: new Date().toISOString(),
+              active: true
+            }, { merge: true });
+          } catch (err) {
+            console.error("Error saving subscriber to Firestore:", err);
+          }
         }
       },
-      deleteSubscriber: (email) => set({ subscribers: (get().subscribers || []).filter(s => s.email !== email) }),
+      deleteSubscriber: async (email) => {
+        const clean = email.trim().toLowerCase();
+        set({ subscribers: (get().subscribers || []).filter(s => s.email.toLowerCase() !== clean) });
+        try {
+          const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
+          await deleteDoc(doc(db, "subscribers", subDocId));
+        } catch (err) {
+          console.error("Error deleting subscriber from Firestore:", err);
+        }
+      },
       readerProfile: null,
       setReaderProfile: (profile) => set((state) => {
         const updatedUsers = (state.users || []).map(u => 
@@ -912,12 +1206,25 @@ export const useStore = create<AppState>()(
         set({ interactions: [newInteraction, ...interactions] });
       },
       siteSettings: {
-        isMaintenanceMode: true,
+        isMaintenanceMode: false,
         maintenanceMessageFr: "Notre site est actuellement en cours de maintenance et de mise à jour technique. Nous serons de retour très rapidement.",
         maintenanceMessageEn: "Our platform is currently undergoing scheduled maintenance and updates. We will be back online shortly.",
         siteName: 'Perspective',
+        boukariCorpLogo: '',
         accentColor: '#E85D42',
         headerStyle: 'glass',
+        showHeaderTopBar: true,
+        showHeaderTicker: true,
+        headerNavItems: [
+          { id: 'politique', labelFr: 'Politique', labelEn: 'Politics', url: '/category/politique', enabled: true },
+          { id: 'economie', labelFr: 'Économie', labelEn: 'Economy', url: '/category/economie', enabled: true },
+          { id: 'societe', labelFr: 'Société', labelEn: 'Society', url: '/category/societe', enabled: true },
+          { id: 'international', labelFr: 'International', labelEn: 'International', url: '/category/international', enabled: true },
+          { id: 'tech', labelFr: 'Tech', labelEn: 'Tech', url: '/category/tech', enabled: true },
+          { id: 'sante', labelFr: 'Santé', labelEn: 'Health', url: '/category/sante', enabled: true },
+          { id: 'sports', labelFr: "L'Arène", labelEn: 'The Arena', url: '/larene', enabled: true },
+          { id: 'gouvernance', labelFr: 'Gouvernance', labelEn: 'Governance', url: '/category/gouvernance', enabled: true },
+        ],
         aiModelMode: 'flash',
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
@@ -926,8 +1233,12 @@ export const useStore = create<AppState>()(
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
-        paywallThreshold: 3,
-        paywallEnabled: true,
+        paywallThreshold: 9999,
+        paywallEnabled: false,
+        cookieConsentEnabled: true,
+        privacyPolicyTextFr: "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.",
+        privacyPolicyTextEn: "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.",
+        dataRetentionDays: 365,
         analystDispatches: [
           { id: 'disp-0', time: '16:00 DKR', contentFr: "Lancement des travaux de curage des canaux à Wakhinane, Yeumbeul et Rufisque par la DPGI et la SONAGED face aux risques d'inondations.", contentEn: "Launch of canal dredging operations in Wakhinane, Yeumbeul, and Rufisque by DPGI and SONAGED ahead of flood risks.", level: 'pulse' },
           { id: 'disp-1', time: '14:22 DKR', contentFr: "Tensions d'arbitrage levées sur l'axe maritime Dakar-Gorée.", contentEn: "Maritime transit clearance issued for the Dakar-Gorée axis.", level: 'standard' },
@@ -984,12 +1295,43 @@ export const useStore = create<AppState>()(
           sourceEn: "EXP: WOLOF PROVERB"
         },
         trendingCount: 4,
-        mostReadCount: 5
+        mostReadCount: 5,
+        categories: [
+          { id: 'politique', fr: 'Politique', en: 'Politics', icon: 'Landmark' },
+          { id: 'economie', fr: 'Économie', en: 'Economics', icon: 'TrendingUp' },
+          { id: 'societe', fr: 'Société', en: 'Society', icon: 'Users' },
+          { id: 'international', fr: 'International', en: 'International', icon: 'Globe' },
+          { id: 'tech', fr: 'Tech', en: 'Tech', icon: 'Cpu' },
+          { id: 'sante', fr: 'Santé', en: 'Health', icon: 'HeartPulse' },
+          { id: 'sports', fr: 'Sports', en: 'Sports', icon: 'Trophy' },
+          { id: 'people', fr: 'People', en: 'People', icon: 'Smile' },
+          { id: 'gouvernance', fr: 'Gouvernance', en: 'Governance', icon: 'ShieldCheck' },
+          { id: 'decryptages', fr: 'Décryptages', en: 'Decryptions', icon: 'BookOpen' }
+        ],
+        tags: [
+          { id: 'senegal', fr: 'Sénégal', en: 'Senegal' },
+          { id: 'dakar', fr: 'Dakar', en: 'Dakar' },
+          { id: 'cedeao', fr: 'CEDEAO', en: 'ECOWAS' },
+          { id: 'uemoa', fr: 'UEMOA', en: 'WAEMU' },
+          { id: 'gouvernance', fr: 'Gouvernance', en: 'Governance' },
+          { id: 'petrole-gaz', fr: 'Pétrole & Gaz', en: 'Oil & Gas' },
+          { id: 'infrastructures', fr: 'Infrastructures', en: 'Infrastructures' },
+          { id: 'agriculture', fr: 'Agriculture', en: 'Agriculture' },
+          { id: 'elections', fr: 'Élections', en: 'Elections' }
+        ],
+        keywords: [
+          'Sénégal', 'Dakar', 'Perspective Group', 'L\'Arène', 'politique', 'géopolitique', 'économie', 'afrique', 'investigation', 'décryptage'
+        ]
       },
-      updateSiteSettings: (settings) => {
+      updateSiteSettings: async (settings) => {
         const newSettings = { ...get().siteSettings, ...settings };
         set({ siteSettings: newSettings });
-        setDoc(doc(db, "siteSettings", "config"), newSettings, { merge: true }).catch(() => {});
+        try {
+          const clean = await sanitizeFirestorePayload(newSettings as any);
+          await setDoc(doc(db, "siteSettings", "config"), clean, { merge: true });
+        } catch (err) {
+          console.error("Error updating siteSettings in Firestore:", err);
+        }
       },
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
@@ -1047,6 +1389,60 @@ export const useStore = create<AppState>()(
         try {
           setDoc(doc(db, "users", normalized), { pin, authType: 'pin', mfaEnabled: true, twoFactorEnabled: true }, { merge: true }).catch(err => console.error("Error updating user PIN in Firestore:", err));
         } catch (e) { console.error(e); }
+      },
+      purgeDatabaseAndArticles: async () => {
+        const articlesToDelete = get().articles || [];
+        const usersToDelete = get().users || [];
+        
+        // 1. Reset local state immediately
+        set({
+          articles: [],
+          users: [],
+          comments: [],
+          directMessages: [],
+          notifications: [],
+          interactions: [],
+          savedArticles: [],
+          subscribers: [],
+          readerProfile: null
+        });
+
+        // 2. Clear client-side storage caches
+        try {
+          await del('perspective-group-storage');
+          await del('perspective-storage-v1');
+          localStorage.clear();
+        } catch (e) {
+          console.error("Error clearing local storage:", e);
+        }
+
+        // 3. Delete documents from Firestore remote collections
+        try {
+          for (const art of articlesToDelete) {
+            if (art.id) await deleteDoc(doc(db, "articles", art.id)).catch(() => {});
+          }
+          for (const usr of usersToDelete) {
+            if (usr.email) await deleteDoc(doc(db, "users", usr.email.toLowerCase().trim())).catch(() => {});
+          }
+        } catch (e) {
+          console.error("Error purging remote Firestore docs:", e);
+        }
+      },
+      seedSampleArticles: () => {
+        set({
+          articles: [],
+          users: [
+            {
+              email: 'kadersdiaz3@gmail.com',
+              name: 'Kader Diaz',
+              avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop',
+              role: 'Administrateur',
+              authType: 'password',
+              emailVerified: true,
+              mfaEnabled: true
+            }
+          ]
+        });
       },
       matches: [
         // Champions League
@@ -1261,17 +1657,27 @@ export const useStore = create<AppState>()(
           }
         }
       ],
-      updateMatch: (matchId, updated) => {
+      updateMatch: async (matchId, updated) => {
         const matches = (get().matches || []).map(m => m.id === matchId ? { ...m, ...updated } : m);
         set({ matches });
         const target = matches.find(m => m.id === matchId);
         if (target) {
-          setDoc(doc(db, "matches", matchId), target, { merge: true }).catch(() => {});
+          try {
+            const clean = await sanitizeFirestorePayload(target as any);
+            await setDoc(doc(db, "matches", matchId), clean, { merge: true });
+          } catch (e) {
+            console.error("Error updating match in Firestore:", e);
+          }
         }
       },
-      addMatch: (match) => {
+      addMatch: async (match) => {
         set({ matches: [...(get().matches || []), match] });
-        setDoc(doc(db, "matches", match.id), match, { merge: true }).catch(() => {});
+        try {
+          const clean = await sanitizeFirestorePayload(match as any);
+          await setDoc(doc(db, "matches", match.id), clean, { merge: true });
+        } catch (e) {
+          console.error("Error adding match to Firestore:", e);
+        }
       },
       deleteMatch: (matchId) => {
         set({ matches: (get().matches || []).filter(m => m.id !== matchId) });
@@ -1291,6 +1697,7 @@ export const useStore = create<AppState>()(
         comments: state.comments,
         directMessages: state.directMessages,
         notifications: state.notifications,
+        notificationPreferences: state.notificationPreferences,
         notificationResponses: state.notificationResponses,
         subscribers: state.subscribers,
         readerProfile: state.readerProfile,

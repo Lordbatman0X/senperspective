@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Article, BilingualText, KeyActor, TimelineEvent, PerspectiveBrief, StructuralForces } from '../../types';
 import { useStore } from '../../store';
-import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2 } from 'lucide-react';
+import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
+import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
 
 interface ArticleEditorTabProps {
   article: Article | null;
@@ -25,9 +26,16 @@ export function ArticleEditorTab({
   openMediaSelector,
   language,
 }: ArticleEditorTabProps) {
+  const siteSettings = useStore(s => s.siteSettings);
+  const storeAds = useStore(s => s.ads) || [];
+  const categoriesList = (siteSettings?.categories && siteSettings.categories.length > 0)
+    ? siteSettings.categories
+    : ARTICLE_CATEGORIES;
+
   // Toggle split pane preview vs single edit view
   const [splitView, setSplitView] = useState<boolean>(true);
   const [activeLangTab, setActiveLangTab] = useState<'fr' | 'en'>('fr');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form states matching types.ts schema properties
   const [slug, setSlug] = useState('');
@@ -91,19 +99,19 @@ export function ArticleEditorTab({
       setIsPublished(!!article.isPublished);
       setIsFeatured(!!article.isFeatured);
       setCommentsEnabled(article.commentsEnabled !== false);
-      setImageUrl(article.featuredImage || '');
+      setImageUrl(article.featuredImage || article.imageUrl || '');
       setAuthorName(article.author || 'Perspective Staff');
       setYoutubeId(article.youtubeVideoId || '');
       setTags(article.tags || []);
       setAdImageUrlState(article.adImageUrl || '');
       setAdLinkState(article.adLink || '');
       
-      setTitleFr(article.title?.fr || '');
-      setTitleEn(article.title?.en || '');
-      setExcerptFr(article.excerpt?.fr || '');
-      setExcerptEn(article.excerpt?.en || '');
-      setBodyFr(article.body?.fr || '');
-      setBodyEn(article.body?.en || '');
+      setTitleFr(stripHtmlTags(article.title?.fr || ''));
+      setTitleEn(stripHtmlTags(article.title?.en || ''));
+      setExcerptFr(stripHtmlTags(article.excerpt?.fr || ''));
+      setExcerptEn(stripHtmlTags(article.excerpt?.en || ''));
+      setBodyFr(stripHtmlTags(article.body?.fr || ''));
+      setBodyEn(stripHtmlTags(article.body?.en || ''));
 
       const pb = article.perspectiveBrief;
       setWhatHappenedFr(pb?.whatHappened?.fr || '');
@@ -222,49 +230,85 @@ export function ArticleEditorTab({
     reader.readAsText(file);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  // Helper to insert markdown image into active body
+  const insertImageIntoActiveBody = (url: string, altText = "Illustration") => {
+    if (!url) return;
+    const markdownImg = `\n\n![${altText}](${url})\n\n`;
+    if (activeLangTab === 'fr') {
+      setBodyFr(prev => prev ? prev + markdownImg : markdownImg.trim());
+    } else {
+      setBodyEn(prev => prev ? prev + markdownImg : markdownImg.trim());
+    }
+  };
+
+  const handleInArticleDeviceUpload = async (file: File) => {
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) {
+      alert(language === 'fr' ? 'Image trop lourde (Max 15Mo)' : 'Image too large (Max 15MB)');
+      return;
+    }
+    try {
+      const cleanName = file.name.replace(/\.[^/.]+$/, "") || "Illustration";
+      const compressed = await compressImageFile(file, 1200, 800, 0.72);
+      insertImageIntoActiveBody(compressed, cleanName);
+    } catch (e) {
+      console.error("Failed to compress in-article image:", e);
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
     if (!titleFr.trim() && !titleEn.trim()) {
       alert('Please fill out at least a French or English Title for this journal entry!');
       return;
     }
 
-    const compiled: Article = {
-      id: article?.id || slug || 'art-' + Date.now().toString(),
-      slug: slug || article?.slug || 'art-' + Date.now().toString(),
-      date: article?.date || new Date().toISOString(),
-      category: category as any,
-      type,
-      isPublished,
-      isFeatured,
-      commentsEnabled,
-      featuredImage: imageUrl,
-      youtubeVideoId: youtubeId,
-      author: authorName.trim() || 'Perspective Staff',
-      readingTime: Math.max(1, Math.round(wordCount.fr / 200)),
-      tags,
-      title: { fr: titleFr || titleEn, en: titleEn || titleFr },
-      excerpt: { fr: excerptFr || excerptEn, en: excerptEn || excerptFr },
-      body: { fr: bodyFr || bodyEn, en: bodyEn || bodyFr },
-      perspectiveBrief: {
-        whatHappened: { fr: whatHappenedFr || whatHappenedEn, en: whatHappenedEn || whatHappenedFr },
-        whyItMatters: { fr: whyItMattersFr || whyItMattersEn, en: whyItMattersEn || whyItMattersFr },
-        whatToWatchNext: { fr: whatToWatchNextFr || whatToWatchNextEn, en: whatToWatchNextEn || whatToWatchNextFr }
-      },
-      keyActors,
-      timeline,
-      structuralForces: {
-        political: { fr: forcePolFr || forcePolEn, en: forcePolEn || forcePolFr },
-        economic: { fr: forceEcoFr || forceEcoEn, en: forceEcoEn || forceEcoFr },
-        social: { fr: forceSocFr || forceEcoFr, en: forceSocEn || forceEcoEn },
-        international: { fr: forceIntFr || forceIntEn, en: forceIntEn || forceIntFr }
-      },
-      relatedArticleIds: relatedIds,
-      adImageUrl: adImageUrlState || undefined,
-      adLink: adLinkState || undefined
-    };
+    setIsSaving(true);
+    try {
+      const compiled: Article = {
+        id: article?.id || slug || 'art-' + Date.now().toString(),
+        slug: slug || article?.slug || 'art-' + Date.now().toString(),
+        date: article?.date || new Date().toISOString(),
+        category: category as any,
+        type,
+        isPublished,
+        isFeatured,
+        commentsEnabled,
+        featuredImage: imageUrl.trim() || undefined,
+        imageUrl: imageUrl.trim() || undefined,
+        youtubeVideoId: extractYoutubeId(youtubeId) || undefined,
+        author: authorName.trim() || 'Perspective Staff',
+        readingTime: Math.max(1, Math.round(wordCount.fr / 200)),
+        tags,
+        title: { fr: titleFr || titleEn, en: titleEn || titleFr },
+        excerpt: { fr: excerptFr || excerptEn, en: excerptEn || excerptFr },
+        body: { fr: bodyFr || bodyEn, en: bodyEn || bodyFr },
+        perspectiveBrief: {
+          whatHappened: { fr: whatHappenedFr || whatHappenedEn, en: whatHappenedEn || whatHappenedFr },
+          whyItMatters: { fr: whyItMattersFr || whyItMattersEn, en: whyItMattersEn || whyItMattersFr },
+          whatToWatchNext: { fr: whatToWatchNextFr || whatToWatchNextEn, en: whatToWatchNextEn || whatToWatchNextFr }
+        },
+        keyActors,
+        timeline,
+        structuralForces: {
+          political: { fr: forcePolFr || forcePolEn, en: forcePolEn || forcePolFr },
+          economic: { fr: forceEcoFr || forceEcoEn, en: forceEcoEn || forceEcoFr },
+          social: { fr: forceSocFr || forceEcoFr, en: forceSocEn || forceEcoEn },
+          international: { fr: forceIntFr || forceIntEn, en: forceIntEn || forceIntFr }
+        },
+        relatedArticleIds: relatedIds,
+        adImageUrl: adImageUrlState || undefined,
+        adLink: adLinkState || undefined
+      };
 
-    onSave(compiled);
+      await onSave(compiled);
+    } catch (err) {
+      console.error("Save error:", err);
+      alert("Erreur lors de l'enregistrement: " + ((err as Error).message || "Veuillez réessayer"));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Tag list managers
@@ -403,9 +447,14 @@ export function ArticleEditorTab({
           <button
             onClick={handleSave}
             type="button"
-            className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] text-white px-5 py-2.5 text-xs font-black uppercase tracking-widest leading-none shadow-md transition-all cursor-pointer rounded-xs"
+            disabled={isSaving}
+            className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] disabled:opacity-50 text-white px-5 py-2.5 text-xs font-black uppercase tracking-widest leading-none shadow-md transition-all cursor-pointer rounded-xs"
           >
-            <Save size={14} /> {language === 'fr' ? 'Enregistrer' : 'Save Frame'}
+            {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} 
+            {isSaving 
+              ? (language === 'fr' ? 'Enregistrement...' : 'Saving...')
+              : (language === 'fr' ? 'Enregistrer' : 'Save Frame')
+            }
           </button>
         </div>
       </div>
@@ -426,8 +475,8 @@ export function ArticleEditorTab({
                   onChange={e => setCategory(e.target.value)}
                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-semibold focus:outline-none focus:border-[#E85D42] rounded-md"
                 >
-                  {ARTICLE_CATEGORIES.map(c => (
-                    <option key={c.id} value={c.fr}>{c.fr} / {c.en}</option>
+                  {categoriesList.map(c => (
+                    <option key={c.id} value={c.fr}>{c.fr}{c.en ? ` / ${c.en}` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -528,7 +577,6 @@ export function ArticleEditorTab({
                 <div>
                   <select
                     value={(() => {
-                      const storeAds = useStore.getState().ads || [];
                       const matched = storeAds.find(a => a.imageUrl === adImageUrlState && a.targetUrl === adLinkState);
                       return matched ? matched.id : '';
                     })()}
@@ -538,7 +586,6 @@ export function ArticleEditorTab({
                         setAdImageUrlState('');
                         setAdLinkState('');
                       } else {
-                        const storeAds = useStore.getState().ads || [];
                         const matched = storeAds.find(a => a.id === selectedId);
                         if (matched) {
                           setAdImageUrlState(matched.imageUrl);
@@ -549,7 +596,7 @@ export function ArticleEditorTab({
                     className="w-full text-xs font-semibold bg-zinc-950 border border-zinc-700/80 p-2 focus:outline-none focus:border-[#E85D42] text-zinc-100 rounded-md"
                   >
                     <option value="">{language === 'fr' ? '-- Rotation de Campagnes Pub Normales --' : '-- Default / Random Ad Rotations --'}</option>
-                    {(useStore.getState().ads || []).map(ad => (
+                    {storeAds.map(ad => (
                       <option key={ad.id} value={ad.id}>
                         {ad.name} ({ad.position.toUpperCase()})
                       </option>
@@ -628,31 +675,51 @@ export function ArticleEditorTab({
                     />
                   </div>
                   <div>
-                    <div className="flex justify-between items-center mb-1">
+                    <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5">
                       <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">Texte de l'article (Markdown FR)</label>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Device Upload */}
                         <label className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded cursor-pointer transition-all">
                           <Upload size={12} className="text-[#E85D42]" />
-                          <span>Insérer Image</span>
+                          <span>Appareil</span>
                           <input 
                             type="file" 
                             accept="image/*" 
                             onChange={(e) => {
                               const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (ev) => {
-                                  if (typeof ev.target?.result === 'string') {
-                                    setBodyFr(prev => prev + `\n\n![Image](${ev.target?.result})\n\n`);
-                                  }
-                                };
-                                reader.readAsDataURL(file);
-                              }
+                              if (file) handleInArticleDeviceUpload(file);
+                              e.target.value = '';
                             }} 
                             className="hidden" 
                           />
                         </label>
-                        <span className="text-[10px] text-zinc-400 font-mono">{wordCount.fr} mots • {Math.round(wordCount.fr / 200)} min</span>
+
+                        {/* Mediatheque Selector */}
+                        <button
+                          type="button"
+                          onClick={() => openMediaSelector((url) => insertImageIntoActiveBody(url, 'Illustration Médiathèque'))}
+                          className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded cursor-pointer transition-all"
+                        >
+                          <ImageIcon size={12} className="text-[#E85D42]" />
+                          <span>Médiathèque</span>
+                        </button>
+
+                        {/* URL prompt */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = prompt("Entrez l'URL de l'image :");
+                            if (url && url.trim()) {
+                              insertImageIntoActiveBody(url.trim(), 'Image');
+                            }
+                          }}
+                          className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded cursor-pointer transition-all"
+                        >
+                          <LinkIcon size={12} className="text-[#E85D42]" />
+                          <span>Lien URL</span>
+                        </button>
+
+                        <span className="text-[10px] text-zinc-400 font-mono ml-2">{wordCount.fr} mots • {Math.round(wordCount.fr / 200)} min</span>
                       </div>
                     </div>
                     <textarea 
@@ -687,31 +754,51 @@ export function ArticleEditorTab({
                     />
                   </div>
                   <div>
-                    <div className="flex justify-between items-center mb-1">
+                    <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5">
                       <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">Article Body (Markdown EN)</label>
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Device Upload */}
                         <label className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded cursor-pointer transition-all">
                           <Upload size={12} className="text-[#E85D42]" />
-                          <span>Insert Image</span>
+                          <span>Device</span>
                           <input 
                             type="file" 
                             accept="image/*" 
                             onChange={(e) => {
                               const file = e.target.files?.[0];
-                              if (file) {
-                                const reader = new FileReader();
-                                reader.onload = (ev) => {
-                                  if (typeof ev.target?.result === 'string') {
-                                    setBodyEn(prev => prev + `\n\n![Image](${ev.target?.result})\n\n`);
-                                  }
-                                };
-                                reader.readAsDataURL(file);
-                              }
+                              if (file) handleInArticleDeviceUpload(file);
+                              e.target.value = '';
                             }} 
                             className="hidden" 
                           />
                         </label>
-                        <span className="text-[10px] text-zinc-400 font-mono">{wordCount.en} words • {Math.round(wordCount.en / 200)} min</span>
+
+                        {/* Mediatheque Selector */}
+                        <button
+                          type="button"
+                          onClick={() => openMediaSelector((url) => insertImageIntoActiveBody(url, 'Media Library Illustration'))}
+                          className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded cursor-pointer transition-all"
+                        >
+                          <ImageIcon size={12} className="text-[#E85D42]" />
+                          <span>Médiathèque</span>
+                        </button>
+
+                        {/* URL prompt */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = prompt("Enter image URL:");
+                            if (url && url.trim()) {
+                              insertImageIntoActiveBody(url.trim(), 'Image');
+                            }
+                          }}
+                          className="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-600 px-2.5 py-1 text-[10px] font-bold uppercase rounded cursor-pointer transition-all"
+                        >
+                          <LinkIcon size={12} className="text-[#E85D42]" />
+                          <span>Image URL</span>
+                        </button>
+
+                        <span className="text-[10px] text-zinc-400 font-mono ml-2">{wordCount.en} words • {Math.round(wordCount.en / 200)} min</span>
                       </div>
                     </div>
                     <textarea 
@@ -732,7 +819,7 @@ export function ArticleEditorTab({
             <h3 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-2 flex items-center gap-1.5">
               <ImageIcon size={14} /> Assets & Cover Imagery
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">
                   {language === 'fr' ? 'Image de Couverture (URL ou Fichier Appareil)' : 'Header Cover Image (URL or Device File)'}
@@ -749,7 +836,7 @@ export function ArticleEditorTab({
                   {/* Direct device upload button */}
                   <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-600 px-3 py-2 text-xs font-bold uppercase rounded-md cursor-pointer transition-all shrink-0">
                     <Upload size={14} className="text-[#E85D42]" />
-                    <span>{language === 'fr' ? 'Importer Fichier' : 'Upload File'}</span>
+                    <span>{language === 'fr' ? 'Importer' : 'Upload'}</span>
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -797,15 +884,63 @@ export function ArticleEditorTab({
                   </div>
                 )}
               </div>
+
               <div>
-                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Embedded YouTube ID</label>
-                <input 
-                  type="text" 
-                  value={youtubeId} 
-                  onChange={e => setYoutubeId(e.target.value)} 
-                  className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
-                  placeholder="e.g. jNQXAC9IVRw (ID only)" 
-                />
+                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">
+                  {language === 'fr' ? 'Vidéo YouTube Intégrée (Lien URL ou ID)' : 'Embedded YouTube Video (URL or ID)'}
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Film size={14} className="absolute left-2.5 top-2.5 text-zinc-500" />
+                    <input 
+                      type="text" 
+                      value={youtubeId} 
+                      onChange={e => setYoutubeId(e.target.value)} 
+                      className="w-full pl-8 pr-3 py-2 bg-zinc-950 border border-zinc-700/80 text-zinc-100 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
+                      placeholder="https://www.youtube.com/watch?v=... ou ID" 
+                    />
+                  </div>
+                  {youtubeId && (
+                    <button
+                      type="button"
+                      onClick={() => setYoutubeId('')}
+                      className="px-2.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-md text-xs transition-colors"
+                      title="Effacer"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Live YouTube Preview in Admin */}
+                {(() => {
+                  const cleanYt = extractYoutubeId(youtubeId);
+                  if (!cleanYt) return (
+                    <p className="text-[10px] text-zinc-500 mt-1 italic">
+                      {language === 'fr' ? 'Collez un lien YouTube standard, un lien court (youtu.be) ou un identifiant vidéo.' : 'Paste a standard YouTube URL, short link (youtu.be), or video ID.'}
+                    </p>
+                  );
+                  return (
+                    <div className="mt-3 bg-black border border-zinc-800 p-2 rounded-md space-y-2">
+                      <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                        <span className="text-[#E85D42] font-bold flex items-center gap-1">
+                          <Film size={12} /> ID: {cleanYt}
+                        </span>
+                        <span className="text-emerald-400">Prêt pour diffusion</span>
+                      </div>
+                      <div className="relative aspect-video w-full overflow-hidden rounded bg-zinc-900 border border-zinc-800">
+                        <iframe 
+                          src={`https://www.youtube.com/embed/${cleanYt}`} 
+                          title="YouTube Preview" 
+                          frameBorder="0" 
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                          allowFullScreen 
+                          className="absolute inset-0 w-full h-full"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -878,7 +1013,7 @@ export function ArticleEditorTab({
                   </button>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Actor Full Name</label>
+                      <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Actor Full Name</label>
                       <input 
                         type="text" 
                         className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -889,7 +1024,7 @@ export function ArticleEditorTab({
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Role / Position</label>
+                      <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Role / Position</label>
                       <input 
                         type="text" 
                         className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -902,7 +1037,7 @@ export function ArticleEditorTab({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Significance text (FR)</label>
+                      <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Significance text (FR)</label>
                       <textarea 
                         rows={1.5} 
                         className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -912,7 +1047,7 @@ export function ArticleEditorTab({
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Significance text (EN)</label>
+                      <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Significance text (EN)</label>
                       <textarea 
                         rows={1.5} 
                         className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -956,7 +1091,7 @@ export function ArticleEditorTab({
                     <Trash2 size={13} />
                   </button>
                   <div>
-                    <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Date / Time string</label>
+                    <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Date / Time string</label>
                     <input 
                       type="text" 
                       className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -968,7 +1103,7 @@ export function ArticleEditorTab({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Description (FR)</label>
+                      <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Description (FR)</label>
                       <textarea 
                         rows={1.5} 
                         className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -979,7 +1114,7 @@ export function ArticleEditorTab({
                       />
                     </div>
                     <div>
-                      <label className="text-[9px] uppercase font-bold text-zinc-400 block mb-0.5">Description (EN)</label>
+                      <label className="text-[9px] uppercase font-bold text-zinc-200 block mb-0.5">Description (EN)</label>
                       <textarea 
                         rows={1.5} 
                         className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
@@ -1006,7 +1141,7 @@ export function ArticleEditorTab({
             <div className="space-y-4">
               {/* Political */}
               <div className="border border-zinc-800 p-4 bg-zinc-950/60 rounded-md">
-                <span className="text-[10px] font-mono text-zinc-400 block mb-2 uppercase">POLITICAL FORCES</span>
+                <span className="text-[10px] font-mono text-zinc-200 block mb-2 uppercase">POLITICAL FORCES</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <textarea value={forcePolFr} onChange={e => setForcePolFr(e.target.value)} placeholder="Variables politiques (FR)" className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" rows={2} />
@@ -1019,7 +1154,7 @@ export function ArticleEditorTab({
 
               {/* Economic */}
               <div className="border border-zinc-800 p-4 bg-zinc-950/60 rounded-md">
-                <span className="text-[10px] font-mono text-zinc-400 block mb-2 uppercase">ECONOMIC FORCES</span>
+                <span className="text-[10px] font-mono text-zinc-200 block mb-2 uppercase">ECONOMIC FORCES</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <textarea value={forceEcoFr} onChange={e => setForceEcoFr(e.target.value)} placeholder="Facteurs économiques (FR)" className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" rows={2} />
@@ -1032,7 +1167,7 @@ export function ArticleEditorTab({
 
               {/* Social */}
               <div className="border border-zinc-800 p-4 bg-zinc-950/60 rounded-md">
-                <span className="text-[10px] font-mono text-zinc-400 block mb-2 uppercase">SOCIAL FORCES</span>
+                <span className="text-[10px] font-mono text-zinc-200 block mb-2 uppercase">SOCIAL FORCES</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <textarea value={forceSocFr} onChange={e => setForceSocFr(e.target.value)} placeholder="Influences sociales & démographiques (FR)" className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" rows={2} />
@@ -1045,7 +1180,7 @@ export function ArticleEditorTab({
 
               {/* International */}
               <div className="border border-zinc-800 p-4 bg-zinc-950/60 rounded-md">
-                <span className="text-[10px] font-mono text-zinc-400 block mb-2 uppercase">INTERNATIONAL INFLUENCE</span>
+                <span className="text-[10px] font-mono text-zinc-200 block mb-2 uppercase">INTERNATIONAL INFLUENCE</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <textarea value={forceIntFr} onChange={e => setForceIntFr(e.target.value)} placeholder="Géopolitique et contexte global (FR)" className="w-full bg-zinc-900 border border-zinc-700/80 text-zinc-100 p-2 text-xs focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" rows={2} />
@@ -1078,6 +1213,29 @@ export function ArticleEditorTab({
                 />
                 <button type="button" onClick={handleAddTag} className="bg-zinc-950 text-white border border-zinc-700 px-4 text-xs uppercase font-bold hover:bg-zinc-800 rounded-md cursor-pointer">Add</button>
               </div>
+
+              {/* Preset Tag Suggestions from Taxonomy */}
+              {siteSettings?.tags && siteSettings.tags.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  <span className="text-[9px] text-zinc-400 font-mono uppercase self-center mr-1">Suggestions:</span>
+                  {siteSettings.tags.map(st => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => {
+                        if (!tags.includes(st.fr)) setTags([...tags, st.fr]);
+                      }}
+                      className={`text-[9px] px-2 py-0.5 border rounded-full font-mono cursor-pointer transition-all ${
+                        tags.includes(st.fr)
+                          ? 'bg-[#E85D42] text-white border-[#E85D42]'
+                          : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-zinc-600'
+                      }`}
+                    >
+                      + {st.fr}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex flex-wrap gap-1.5 pt-1">
                 {tags.map(t => (
                   <span key={t} className="bg-[#E85D42]/20 border border-[#E85D42]/40 text-[#E85D42] py-0.5 px-2 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 select-none rounded-xs">
@@ -1163,29 +1321,71 @@ export function ArticleEditorTab({
                 </ReactMarkdown>
               </div>
 
+              {/* YouTube Video Preview in Live Split Pane */}
+              {(() => {
+                const previewYtId = extractYoutubeId(youtubeId);
+                if (!previewYtId) return null;
+                return (
+                  <div className="border border-zinc-800 bg-black p-3 rounded-md space-y-2">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                      <span className="text-[#E85D42] font-bold flex items-center gap-1.5">
+                        <Film size={13} /> VIDÉO ASSOCIÉE
+                      </span>
+                      <span>1080p • YouTube</span>
+                    </div>
+                    <div className="relative aspect-video w-full overflow-hidden rounded bg-zinc-950 border border-zinc-800">
+                      <iframe 
+                        src={`https://www.youtube.com/embed/${previewYtId}`} 
+                        title="YouTube Preview" 
+                        frameBorder="0" 
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                        allowFullScreen 
+                        className="absolute inset-0 w-full h-full"
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Preview Brief */}
-              <div className="border-t-4 border-[#E85D42] bg-zinc-950 p-6 space-y-4 shadow-sm border border-zinc-800 rounded-md">
-                <h4 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-1.5">PERSPECTIVE BRIEF FOCUS</h4>
-                
-                <div>
-                  <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">What Happened</h5>
-                  <p className="text-xs text-zinc-400 mt-1 italic">
-                    {activeLangTab === 'fr' ? whatHappenedFr || 'TBD' : whatHappenedEn || 'TBD'}
-                  </p>
-                </div>
-                <div>
-                  <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">Why It Matters</h5>
-                  <p className="text-xs text-zinc-400 mt-1 italic">
-                    {activeLangTab === 'fr' ? whyItMattersFr || 'TBD' : whyItMattersEn || 'TBD'}
-                  </p>
-                </div>
-                <div>
-                  <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">What To Watch Next</h5>
-                  <p className="text-xs text-zinc-400 mt-1 italic">
-                    {activeLangTab === 'fr' ? whatToWatchNextFr || 'TBD' : whatToWatchNextEn || 'TBD'}
-                  </p>
-                </div>
-              </div>
+              {(() => {
+                const wh = (activeLangTab === 'fr' ? whatHappenedFr || whatHappenedEn : whatHappenedEn || whatHappenedFr).trim();
+                const wm = (activeLangTab === 'fr' ? whyItMattersFr || whyItMattersEn : whyItMattersEn || whyItMattersFr).trim();
+                const wn = (activeLangTab === 'fr' ? whatToWatchNextFr || whatToWatchNextEn : whatToWatchNextEn || whatToWatchNextFr).trim();
+
+                if (!wh && !wm && !wn) return null;
+
+                return (
+                  <div className="border-t-4 border-[#E85D42] bg-zinc-950 p-6 space-y-4 shadow-sm border border-zinc-800 rounded-md">
+                    <h4 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-1.5">PERSPECTIVE BRIEF FOCUS</h4>
+                    
+                    {wh !== '' && (
+                      <div>
+                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">What Happened</h5>
+                        <p className="text-xs text-zinc-400 mt-1 italic">
+                          {wh}
+                        </p>
+                      </div>
+                    )}
+                    {wm !== '' && (
+                      <div>
+                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">Why It Matters</h5>
+                        <p className="text-xs text-zinc-400 mt-1 italic">
+                          {wm}
+                        </p>
+                      </div>
+                    )}
+                    {wn !== '' && (
+                      <div>
+                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">What To Watch Next</h5>
+                        <p className="text-xs text-zinc-400 mt-1 italic">
+                          {wn}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Key Actors layout items */}
               {keyActors.length > 0 && (

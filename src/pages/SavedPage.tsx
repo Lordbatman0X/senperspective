@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store';
-import { formatRelativeDate } from '../lib/utils';
+import { formatRelativeDate, formatCategory } from '../lib/utils';
 import { getSafeImageUrl } from '../lib/imageUtils';
 
 export function SavedPage() {
@@ -33,15 +33,15 @@ export function SavedPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {saved.map(article => (
-            <div key={article.id} className="square-card group flex flex-col h-full overflow-hidden">
+          {saved.map((article, idx) => (
+            <div key={`${article.id}-${idx}`} className="square-card group flex flex-col h-full overflow-hidden">
               <Link to={`/article/${article.slug}`} className="block relative h-48 overflow-hidden">
                 <div 
                   className="w-full h-full bg-cover bg-center transition-transform duration-700 group-hover:scale-105"
-                  style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+                  style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
                 />
                 <div className="absolute top-0 left-0 bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 m-4">
-                  {article.category}
+                  {formatCategory(article.category, language)}
                 </div>
               </Link>
               <div className="p-5 flex flex-col flex-grow">

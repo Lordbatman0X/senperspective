@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Navigate, Link } from 'react-router-dom';
+import { useParams, Navigate, Link, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { Markdown } from '../components/Markdown';
 import { renderNeutralAvatar } from '../components/AccountDrawer';
+import { SharedItemCard } from '../components/SharedItemCard';
+import { InternalShareModal } from '../components/InternalShareModal';
 import { Article } from '../types';
-import { Bookmark, MessageSquare, Send, User, LogOut, Globe, ShieldCheck, Check, ThumbsUp, ThumbsDown, Edit2, Trash2, Share2, Copy, Play, Pause, Square, Volume2, Mail } from 'lucide-react';
-import { calculateReadingTime, formatRelativeDate } from '../lib/utils';
-import { getSafeImageUrl } from '../lib/imageUtils';
+import { Bookmark, MessageSquare, Send, User, LogOut, Globe, ShieldCheck, Check, ThumbsUp, ThumbsDown, Edit2, Trash2, Share2, Copy, Play, Pause, Square, Volume2, Mail, Film, ExternalLink } from 'lucide-react';
+import { calculateReadingTime, formatRelativeDate, extractYoutubeId, getSafeText, formatCategory } from '../lib/utils';
+import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSEO } from '../hooks/useSEO';
 
@@ -16,14 +18,14 @@ function MiniCarouselCard({ article }: { article: Article }) {
     <Link to={`/article/${article.slug}`} className="group min-w-[240px] w-[240px] flex-shrink-0 square-card block overflow-hidden">
       <div 
         className="w-full h-32 bg-cover bg-center border-b border-zinc-200 dark:border-zinc-800 transition-colors"
-        style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage)})` }}
+        style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
       />
       <div className="p-4 bg-transparent">
         <div className="text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-1">
-          {article.category}
+          {formatCategory(article.category, language)}
         </div>
         <h4 className="font-bold text-sm leading-snug text-brand-muted group-hover:text-[#E85D42] dark:group-hover:text-[#E85D42] transition-colors mb-2 line-clamp-2">
-          {article.title?.[language] || 'Untitled'}
+          {article.title?.[language] || article.title?.fr || 'Sans titre'}
         </h4>
         <div className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
           {formatRelativeDate(article.date, language)}
@@ -35,6 +37,7 @@ function MiniCarouselCard({ article }: { article: Article }) {
 
 export function ArticlePage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { 
     articles, 
     language, 
@@ -56,17 +59,26 @@ export function ArticlePage() {
     setShowProfileDrawer,
     setActiveProfileTab
   } = useStore();
+
+  useEffect(() => {
+    if (location.hash === '#comments' || window.location.hash === '#comments') {
+      const timer = setTimeout(() => {
+        const el = document.getElementById('comments');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [location.hash, id]);
   const [comment, setComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
   const [commentSuccess, setCommentSuccess] = useState(false);
   const [articleNewsletterEmail, setArticleNewsletterEmail] = useState('');
   const [articleNewsletterSuccess, setArticleNewsletterSuccess] = useState(false);
 
-  // Sharing local states
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [shareSuccessMsg, setShareSuccessMsg] = useState("");
-  const [internalRecipient, setInternalRecipient] = useState("admin@perspective.sn");
-  const [internalMsg, setInternalMsg] = useState("");
+  // Sharing local state
+  const [showInternalShareModal, setShowInternalShareModal] = useState(false);
 
   // Comment Control edit states
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -310,7 +322,24 @@ export function ArticlePage() {
     setEmail('');
   };
 
-  const article = articles.find(a => a.slug === id || a.id === id);
+  const decodedId = id ? decodeURIComponent(id) : '';
+  const article = articles.find(a => 
+    a.slug === id || 
+    a.id === id || 
+    a.slug === decodedId || 
+    a.id === decodedId ||
+    (a.slug && decodedId && a.slug.toLowerCase() === decodedId.toLowerCase()) ||
+    (a.id && decodedId && a.id.toLowerCase() === decodedId.toLowerCase())
+  );
+
+  const [isArticleLoading, setIsArticleLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsArticleLoading(false);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [id]);
 
   useSEO({
     title: article ? `${article.title?.[language] || article.title?.fr || 'Article'} | The Perspective Group` : 'Perspective Journal Article',
@@ -387,8 +416,27 @@ export function ArticlePage() {
     window.scrollTo(0, 0);
   }, [id]);
 
+  if (!article && (isArticleLoading || articles.length === 0)) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center space-y-4">
+        <div className="w-8 h-8 border-2 border-[#E85D42] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs font-mono uppercase tracking-widest text-zinc-400">
+          Chargement de l'article...
+        </p>
+      </div>
+    );
+  }
+
   if (!article) {
-    return <Navigate to="/" replace />;
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center space-y-4 font-sans">
+        <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">Article non trouvé</h2>
+        <p className="text-sm text-zinc-500 max-w-md">Cet article n'existe plus ou l'adresse saisie est incorrecte.</p>
+        <Link to="/" className="px-5 py-2.5 bg-[#E85D42] hover:bg-[#D45037] text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all">
+          Retour à l'accueil
+        </Link>
+      </div>
+    );
   }
 
   const isSaved = savedArticles?.includes(article.id) || false;
@@ -418,30 +466,8 @@ export function ArticlePage() {
     adLabel: language === 'fr' ? 'Publicité' : 'Advertisement'
   };
 
-  // Mocking 3 images to mix within the markdown. We'll split the markdown body into 4 parts if possible.
-  const paragraphs = (article.body?.[language] || '').split('\n\n');
-  const injectImages = [
-    `https://images.unsplash.com/photo-1542301980-327c4ff75ed6?q=80&w=800&h=400&fit=crop`,
-    `https://images.unsplash.com/photo-1593113568853-3c9902787332?q=80&w=800&h=400&fit=crop`,
-    `https://images.unsplash.com/photo-1581056771107-24ca5f033842?q=80&w=800&h=400&fit=crop`
-  ];
-  const renderedContent = [];
-  
-  // Roughly inject images every few paragraphs
-  for (let i = 0; i < paragraphs.length; i++) {
-    renderedContent.push(
-      <div key={`p-${i}`} className="mb-6">
-        <Markdown>
-          {paragraphs[i]}
-        </Markdown>
-      </div>
-    );
-    if ((i === 1 || i === 3 || i === 5) && injectImages[Math.floor(i/2)]) {
-       renderedContent.push(
-         <img key={`img-${i}`} src={injectImages[Math.floor(i/2)]} alt="Context" className="w-full h-auto max-h-[400px] object-cover my-10 border border-brand-border" />
-       );
-    }
-  }
+  const articleBodyText = article.body?.[language] || article.body?.fr || article.body?.en || '';
+  const cleanYoutubeId = extractYoutubeId(article.youtubeVideoId || '');
 
   return (
     <>
@@ -462,8 +488,8 @@ export function ArticlePage() {
         
         {/* Title & Excerpt above image */}
         <header className="mb-10 text-center max-w-4xl mx-auto relative">
-          <Link to={`/category/${article.category.toLowerCase()}`} className="inline-block bg-brand-primary text-white text-xs font-bold uppercase tracking-widest px-3 py-1 mb-6 hover:bg-[#c94931] transition-colors">
-            {article.category}
+          <Link to={`/category/${formatCategory(article.category, language).toLowerCase()}`} className="inline-block bg-brand-primary text-white text-xs font-bold uppercase tracking-widest px-3 py-1 mb-6 hover:bg-[#c94931] transition-colors">
+            {formatCategory(article.category, language)}
           </Link>
           <h1 className="text-4xl md:text-6xl font-black leading-[1.05] tracking-tight mb-6 text-brand-dark">
             {article.title?.[language] || 'Untitled'}
@@ -489,7 +515,7 @@ export function ArticlePage() {
 
              {/* Share Button */}
              <button 
-               onClick={() => setShowShareModal(true)}
+               onClick={() => setShowInternalShareModal(true)}
                className="flex items-center gap-2 text-[10px] uppercase font-bold tracking-widest border border-brand-border text-brand-dark hover:bg-brand-white/50 px-3 py-1.5 transition-colors cursor-pointer"
              >
                <Share2 size={14} strokeWidth={2} />
@@ -582,39 +608,77 @@ export function ArticlePage() {
         </header>
 
       {/* Perspective Brief */}
-      {article.perspectiveBrief && (
-        <div className="relative z-20 max-w-3xl mx-auto px-4 -mb-16 md:-mb-24 mt-4">
-          <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
+      {(() => {
+        const pb = article.perspectiveBrief;
+        if (!pb) return null;
+
+        const formatText = (val: any) => {
+          if (!val) return '';
+          if (typeof val === 'string') return val.trim();
+          if (typeof val === 'object') return (val[language] || val.fr || val.en || '').trim();
+          return String(val).trim();
+        };
+
+        const whatHappenedText = formatText(pb.whatHappened);
+        const whyItMattersText = formatText(pb.whyItMatters);
+        const watchNextText = formatText(pb.whatToWatchNext);
+
+        if (!whatHappenedText && !whyItMattersText && !watchNextText) {
+          return null;
+        }
+
+        return (
+          <div className="relative z-20 max-w-3xl mx-auto px-4 -mb-16 md:-mb-24 mt-4">
+            <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
               <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2">
                 {t.brief}
               </h3>
               <ul className="space-y-4">
-                <li>
-                  <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whatHappened}</strong>
-                  <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                    {article.perspectiveBrief.whatHappened?.[language] || (language === 'fr' ? "De récentes tensions ont mis à l'épreuve l'équilibre des pouvoirs institutionnels à Dakar." : "Recent tensions have tested the balance of institutional power in Dakar.")}
-                  </span>
-                </li>
-                <li>
-                  <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whyItMatters}</strong>
-                  <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                    {article.perspectiveBrief.whyItMatters?.[language] || (language === 'fr' ? "La stabilité institutionnelle du Sénégal est une clé de voûte de l'Afrique de l'Ouest." : "Senegal's institutional stability is a keystone for West Africa.")}
-                  </span>
-                </li>
+                {whatHappenedText !== '' && (
+                  <li>
+                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whatHappened}</strong>
+                    <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                      {whatHappenedText}
+                    </span>
+                  </li>
+                )}
+                {whyItMattersText !== '' && (
+                  <li>
+                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whyItMatters}</strong>
+                    <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                      {whyItMattersText}
+                    </span>
+                  </li>
+                )}
+                {watchNextText !== '' && (
+                  <li>
+                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.watchNext}</strong>
+                    <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                      {watchNextText}
+                    </span>
+                  </li>
+                )}
               </ul>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
-      {/* Featured Image */}
-      <div className="relative mb-0 border-y-4 border-brand-dark z-10">
-        <img src={getSafeImageUrl(article.featuredImage)} alt="" className="w-full h-auto min-h-[400px] max-h-[700px] object-cover" />
+      {/* Featured Image - Reduced Size */}
+      <div className="relative mb-0 z-10 max-w-5xl mx-auto px-4 sm:px-6 my-4">
+        <img 
+          src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
+          alt="" 
+          className="w-full h-auto max-h-[380px] sm:max-h-[440px] object-cover rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800" 
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
+          }}
+        />
       </div>
 
       {/* Main Content overlapping image slightly */}
-      <div className="max-w-4xl mx-auto px-4 relative z-10 -mt-20 md:-mt-32 mb-16">
+      <div className="max-w-4xl mx-auto px-4 relative z-10 -mt-10 sm:-mt-14 mb-16">
         <div className="w-full">
-          
           {/* Main Article Content */}
           <div 
             style={{ 
@@ -622,28 +686,28 @@ export function ArticlePage() {
             }}
             className="article-box w-full p-6 md:p-12 shadow-2xl backdrop-blur-md border border-zinc-200/80 dark:border-zinc-800/80 rounded-none text-left"
           >
-              <div className="prose prose-lg prose-brand max-w-none prose-headings:font-black prose-headings:uppercase prose-headings:tracking-widest animate-fadeIn prose-article-reader text-zinc-900 dark:text-white">
-                {renderedContent}
-              </div>
+            <Markdown className="animate-fadeIn prose-article-reader text-zinc-900 dark:text-white">
+              {articleBodyText}
+            </Markdown>
           </div>
 
         </div>
       </div>
 
-      {/* Youtube Video Spot (Reduced Size) */}
-      {article.youtubeVideoId && article.youtubeVideoId.trim() !== '' && (
-        <div className="max-w-2xl mx-auto mb-16 bg-brand-black text-white p-2">
-           <div className="aspect-video w-full flex items-center justify-center bg-brand-black border border-brand-border relative cursor-pointer">
-               <iframe 
-                 src={`https://www.youtube.com/embed/${article.youtubeVideoId}`} 
-                 title="YouTube video player" 
-                 frameBorder="0" 
-                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                 allowFullScreen 
-                 className="absolute inset-0 w-full h-full z-10"
-               ></iframe>
-           </div>
-        </div>
+      {/* Youtube Video Spot (Clean, full-width video with no outer box/bezel) */}
+      {cleanYoutubeId && (
+        <section className="max-w-4xl mx-auto mb-12 px-4">
+          <div className="relative aspect-video w-full overflow-hidden shadow-2xl bg-black">
+            <iframe 
+              src={`https://www.youtube.com/embed/${cleanYoutubeId}?rel=0&modestbranding=1`} 
+              title="Perspective Video Report" 
+              frameBorder="0" 
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+              allowFullScreen 
+              className="absolute inset-0 w-full h-full"
+            />
+          </div>
+        </section>
       )}
 
       {/* Insert Ad Space below the video/content */}
@@ -658,7 +722,7 @@ export function ArticlePage() {
 
       {/* Comment Section */}
       {article.commentsEnabled !== false && (
-      <div className="max-w-4xl mx-auto mb-16 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-6 md:p-8 border-t-4 border-t-[#E85D42] shadow-sm">
+      <div id="comments" className="max-w-4xl mx-auto mb-16 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-6 md:p-8 border-t-4 border-t-[#E85D42] shadow-sm">
          <div className="flex items-center justify-between mb-6 border-b-2 border-zinc-900 dark:border-zinc-100 pb-3">
             <div className="flex items-center gap-3">
                <MessageSquare className="text-[#E85D42]" />
@@ -763,14 +827,19 @@ export function ArticlePage() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-xs text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 p-3.5 leading-relaxed border-l-2 border-[#E85D42] rounded-none border border-zinc-200/60 dark:border-zinc-800/60">
-                          "{c.text}"
+                        <div className="text-xs text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 p-3.5 leading-relaxed border-l-2 border-[#E85D42] rounded-none border border-zinc-200/60 dark:border-zinc-800/60">
+                          <p>"{getSafeText(c.text, language)}"</p>
                           {!c.isApproved && (
                             <span className="block mt-1 text-[8px] text-amber-500 font-bold uppercase tracking-wider animate-pulse">
                               ({language === 'fr' ? 'En attente de modération' : 'Awaiting moderation'})
                             </span>
                           )}
-                        </p>
+                          {c.attachment && (
+                            <div className="mt-2">
+                              <SharedItemCard attachment={c.attachment} />
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       {/* Reply & Controls Action button */}
@@ -966,7 +1035,7 @@ export function ArticlePage() {
                               </div>
                             ) : (
                               <p className="text-xs text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 leading-relaxed border-l border-zinc-300 dark:border-zinc-700 p-2.5 rounded-none font-sans border border-zinc-200/50 dark:border-zinc-800/50">
-                                "{reply.text}"
+                                "{getSafeText(reply.text, language)}"
                                 {!reply.isApproved && (
                                   <span className="block mt-1 text-[8px] text-amber-500 font-bold uppercase tracking-wider animate-pulse">
                                     ({language === 'fr' ? 'En attente de modération' : 'Awaiting moderation'})
@@ -1185,8 +1254,8 @@ export function ArticlePage() {
           <div className="max-w-6xl mx-auto mb-16">
              <h3 style={{ color: '#444646' }} className="text-xl font-black uppercase tracking-widest mb-6 border-b-2 border-zinc-950 dark:border-zinc-200 pb-2">{t.related}</h3>
              <div className="flex overflow-x-auto hide-scrollbar gap-6 pt-3 pb-4 -mt-3 scroll-smooth">
-               {carouselRelated.map(article => (
-                  <MiniCarouselCard key={article.id} article={article} />
+               {carouselRelated.map((article, idx) => (
+                  <MiniCarouselCard key={`${article.id}-${idx}`} article={article} />
                ))}
              </div>
           </div>
@@ -1214,7 +1283,11 @@ export function ArticlePage() {
                         {language === 'fr' ? 'EXPLORER' : 'EXPLORE'} →
                       </span>
                     </div>
-                    <p className="text-sm text-brand-muted leading-relaxed mt-1">{actor.significance[language]}</p>
+                    <p className="text-sm text-brand-muted leading-relaxed mt-1">
+                      {typeof actor.significance === 'object'
+                        ? ((actor.significance as any)[language] || (actor.significance as any).fr || (actor.significance as any).en || '')
+                        : (actor.significance || '')}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -1230,7 +1303,11 @@ export function ArticlePage() {
                   <div key={i} className="relative">
                     <div className="absolute w-4 h-4 glass border-2 border-brand-primary bg-brand-white rounded-full -left-[33px] top-0"></div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-brand-muted mb-2">{event.date}</div>
-                    <div className="text-sm font-semibold text-brand-dark bg-brand-soft p-3 border border-brand-border">{event.description[language]}</div>
+                    <div className="text-sm font-semibold text-brand-dark bg-brand-soft p-3 border border-brand-border">
+                      {typeof event.description === 'object'
+                        ? ((event.description as any)[language] || (event.description as any).fr || (event.description as any).en || '')
+                        : (event.description || '')}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1240,188 +1317,18 @@ export function ArticlePage() {
 
 
 
-      {/* Dynamic Immersive Sharing Options Card Overlay */}
-      <AnimatePresence>
-        {showShareModal && (
-          <div className="fixed inset-0 z-55 flex items-center justify-center p-4">
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowShareModal(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-xs"
-            />
-
-            {/* Modal Body */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.18 }}
-              className="relative w-full max-w-md bg-white dark:bg-[#0c0c0e] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-6 text-brand-dark flex flex-col font-sans z-50 text-left"
-            >
-              <div className="flex justify-between items-center pb-3 border-b border-zinc-200 dark:border-zinc-800 mb-4">
-                <h3 className="text-sm font-black uppercase tracking-widest text-brand-primary flex items-center gap-2">
-                  <Share2 size={16} />
-                  <span>{language === 'fr' ? 'OPTIONS DE PARTAGE' : 'MATERIAL DISPATCH OPTIONS'}</span>
-                </h3>
-                <button
-                  onClick={() => setShowShareModal(false)}
-                  className="p-1 text-zinc-455 hover:text-brand-dark transition-colors cursor-pointer text-xs font-mono"
-                >
-                  [×] {language === 'fr' ? 'FERMER' : 'CLOSE'}
-                </button>
-              </div>
-
-              {/* Inline Toast Alerts */}
-              {shareSuccessMsg && (
-                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 p-3 text-xs font-semibold mb-3 leading-normal animate-fadeIn">
-                  {shareSuccessMsg}
-                </div>
-              )}
-
-              {/* SECTION A: PRIMARY INTERNAL JOURNAL MESSAGES SHARING */}
-              <div className="space-y-3 bg-zinc-50 dark:bg-zinc-950/40 p-4 border border-zinc-200 dark:border-zinc-800 mb-4">
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-[#E85D42] flex items-center gap-1.5 font-mono">
-                  <MessageSquare size={12} />
-                  <span>{language === 'fr' ? 'Partager en Interne (Messages)' : 'Internal Dispatch (Messages)'}</span>
-                </h4>
-                
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <label className="text-[8.5px] uppercase text-zinc-500 font-bold block mb-1">
-                      {language === 'fr' ? 'Sélectionner le destinataire :' : 'Select recipient :'}
-                    </label>
-                    <select
-                      value={internalRecipient}
-                      onChange={(e) => setInternalRecipient(e.target.value)}
-                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 p-2 text-xs text-brand-dark dark:text-zinc-200 font-semibold focus:outline-none"
-                    >
-                      <option value="admin@perspective.sn">{language === 'fr' ? 'Admin Rédaction' : 'Editorial Admin'}</option>
-                      <option value="member@perspective.sn">Mariama Diallo</option>
-                      <option value="kadersdiaz3@gmail.com">Kader Diaz</option>
-                      <option value="journalist@perspective.sn">{language === 'fr' ? 'Journaliste Sahel' : 'Sahel Journalist'}</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[8.5px] uppercase text-zinc-500 font-bold block mb-1">
-                      {language === 'fr' ? 'Note ou Commentaire (Optionnel) :' : 'Custom Dispatch Note (Optional) :'}
-                    </label>
-                    <input
-                      type="text"
-                      placeholder={language === 'fr' ? "Ex: Regarde cette analyse incroyable..." : "e.g. Look at this briefing..."}
-                      value={internalMsg}
-                      onChange={(e) => setInternalMsg(e.target.value)}
-                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 p-2 text-xs text-zinc-800 dark:text-zinc-100 focus:outline-none"
-                    />
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      if (!article) return;
-                      const fullText = `[PARTAGE_MATÉRIEL] ${article.title?.[language]}\n${internalMsg ? `"${internalMsg}"\n` : ''}Lien: ${window.location.origin}/article/${article.slug}`;
-                      sendDirectMessage({
-                        sender: readerProfile?.email || 'member@perspective.sn',
-                        receiver: internalRecipient,
-                        text: fullText
-                      });
-                      setShareSuccessMsg(language === 'fr' ? "✓ Envoyé avec succès !" : "✓ Dispatched internally!");
-                      setTimeout(() => {
-                        setShareSuccessMsg("");
-                        setShowShareModal(false);
-                        setInternalMsg("");
-                        // Seamlessly open Sliding drawer to Messages
-                        setActiveProfileTab("messages");
-                        setShowProfileDrawer(true);
-                      }, 1200);
-                    }}
-                    className="w-full bg-brand-primary hover:bg-[#c94931] text-white py-2 text-[10px] font-black uppercase tracking-widest transition-colors rounded-none mt-1 cursor-pointer"
-                  >
-                    {language === 'fr' ? 'PARTAGER INTERNEMENT' : 'DISPATCH INTERNALLY'}
-                  </button>
-                </div>
-              </div>
-
-              {/* SECTION B: EXTERNAL CHANNELS */}
-              <div className="space-y-3">
-                <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-400 block border-b border-zinc-100 dark:border-zinc-800 pb-1 font-mono">
-                  {language === 'fr' ? 'Réseaux et Canaux Externes' : 'External Platforms'}
-                </span>
-
-                <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
-                  {/* WhatsApp */}
-                  <a
-                    href={`https://api.whatsapp.com/send?text=${encodeURIComponent((article?.title?.[language] || '') + ' - ' + window.location.href)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 transition-colors text-emerald-600 dark:text-emerald-400 font-bold"
-                  >
-                    <span>WhatsApp</span>
-                  </a>
-
-                  {/* Facebook */}
-                  <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 transition-colors text-blue-600 dark:text-blue-400 font-bold"
-                  >
-                    <span>Facebook</span>
-                  </a>
-
-                  {/* Message (SMS) */}
-                  <a
-                    href={`sms:?&body=${encodeURIComponent((article?.title?.[language] || '') + ' ' + window.location.href)}`}
-                    className="p-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 transition-colors text-rose-500 font-bold"
-                  >
-                    <span>Message</span>
-                  </a>
-
-                  {/* TikTok Citation Copy */}
-                  <button
-                    onClick={() => {
-                      if (!article) return;
-                      navigator.clipboard.writeText(`Perspective Sahel: ${article.title?.[language]} #sahel #geopolitique ${window.location.href}`);
-                      setShareSuccessMsg(language === 'fr' ? "✓ Citation TikTok copiée !" : "✓ TikTok Citation copied!");
-                      setTimeout(() => setShareSuccessMsg(""), 3000);
-                    }}
-                    className="p-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 transition-colors text-zinc-800 dark:text-zinc-200 font-bold cursor-pointer"
-                  >
-                    <span>TikTok</span>
-                  </button>
-
-                  {/* YouTube Citation Copy */}
-                  <button
-                    onClick={() => {
-                      if (!article) return;
-                      navigator.clipboard.writeText(`Source: Perspective Sahel - "${article.title?.[language]}" - Link: ${window.location.href}`);
-                      setShareSuccessMsg(language === 'fr' ? "✓ Lien YouTube copié !" : "✓ YouTube citation copied!");
-                      setTimeout(() => setShareSuccessMsg(""), 3000);
-                    }}
-                    className="p-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 transition-colors text-red-600 dark:text-red-400 font-bold cursor-pointer"
-                  >
-                    <span>YouTube</span>
-                  </button>
-
-                  {/* Copy Link */}
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(window.location.href);
-                      setShareSuccessMsg(language === 'fr' ? "✓ Lien de l'article copié !" : "✓ Article link copied!");
-                      setTimeout(() => setShareSuccessMsg(""), 3000);
-                    }}
-                    className="p-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 transition-colors text-[#E85D42] font-bold cursor-pointer"
-                  >
-                    <span>{language === 'fr' ? 'COPIER' : 'COPY'}</span>
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <InternalShareModal
+        isOpen={showInternalShareModal}
+        onClose={() => setShowInternalShareModal(false)}
+        initialItem={article ? {
+          type: "article",
+          id: article.slug || article.id,
+          title: typeof article.title === "string" ? article.title : article.title?.[language] || "",
+          link: `/article/${article.slug || article.id}`,
+          subtitle: typeof article.excerpt === "string" ? article.excerpt : article.excerpt?.[language] || "",
+          image: article.featuredImage || article.imageUrl
+        } : undefined}
+      />
 
     </motion.article>
     </>

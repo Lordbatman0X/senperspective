@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Article } from '../types';
 import { 
-  LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock,
+  LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
-  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench
+  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
+import { getSafeText, formatCategory } from '../lib/utils';
 
 // Modular Tab components
 import { DashboardOverview } from '../components/admin/DashboardOverview';
@@ -19,6 +20,13 @@ import { ArticleEditorTab } from '../components/admin/ArticleEditorTab';
 import { MediaSelector } from '../components/admin/components/MediaSelector';
 import { ModerationTab } from '../components/admin/ModerationTab';
 import { CustomizerTab } from '../components/admin/CustomizerTab';
+import { GoogleIntegrationsTab } from '../components/admin/GoogleIntegrationsTab';
+import { CloudSqlTab } from '../components/admin/CloudSqlTab';
+import { TaxonomyTab } from '../components/admin/TaxonomyTab';
+import { AdminDashboard } from '../components/admin/AdminDashboard';
+import { MakeWebhookTab } from '../components/admin/MakeWebhookTab';
+import { RssAutomationTab } from '../components/admin/RssAutomationTab';
+import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 
 const TEMP_ADMIN_USERNAME = "admin";
 const TEMP_ADMIN_PASSWORD = "admin123";
@@ -143,15 +151,19 @@ export function AdminPortal() {
 
 function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const { 
-    articles, addArticle, updateArticle, deleteArticle, 
+    articles, addArticle, updateArticle, deleteArticle, purgeAllArticles,
     media, addMedia, deleteMedia, updateMediaName,
     ads, saveAd, deleteAd,
     comments, approveComment, deleteComment,
     subscribers, deleteSubscriber, language, setLanguage, theme, toggleTheme,
     siteSettings, updateSiteSettings,
     matches = [], addMatch, updateMatch, deleteMatch,
-    interactions = []
+    interactions = [],
+    friends = [], addFriend, deleteFriend,
+    abdelPrompts, updateAbdelPrompts
   } = useStore();
+
+  const users = friends;
 
   const currentSettings = siteSettings || {
     siteName: 'Perspective',
@@ -159,8 +171,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     editorialPhone: '+221 33 824 55 55',
     supportEmail: 'contact@perspective.sn',
     officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
-    paywallThreshold: 3,
-    paywallEnabled: true,
+    paywallThreshold: 9999,
+    paywallEnabled: false,
+    cookieConsentEnabled: true,
+    privacyPolicyTextFr: "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.",
+    privacyPolicyTextEn: "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.",
+    dataRetentionDays: 365,
     fontPairing: 'modern',
     glassIntensity: 'medium',
     headerStyle: 'glass',
@@ -168,6 +184,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     seoTitleSuffix: '| Perspective Group Dakar',
     seoCanonicalBase: 'https://perspective.sn',
     seoDefaultDesc: "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.",
+    seoDefaultKeywords: "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique",
+    seoOgImage: "https://perspective.sn/og-preview.jpg",
+    seoRobotsIndex: "index, follow, max-image-preview:large",
+    seoGoogleSiteVerification: "",
     databaseProvider: 'firestore',
     analystDispatches: [],
     sportsQuadrantSelection: {
@@ -178,11 +198,25 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'list' | 'editor' | 'media' | 'matches' | 'comments' | 'subscribers' | 'ads' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'make_webhook' | 'rss_automation' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [articleFilter, setArticleFilter] = useState('all');
   const [articleSearch, setArticleSearch] = useState('');
+
+  // Abdel & Chat config local states
+  const [frPromptsText, setFrPromptsText] = useState((abdelPrompts?.fr || []).join('\n'));
+  const [enPromptsText, setEnPromptsText] = useState((abdelPrompts?.en || []).join('\n'));
+  const [newFriendName, setNewFriendName] = useState('');
+  const [newFriendEmail, setNewFriendEmail] = useState('');
+  const [newFriendRole, setNewFriendRole] = useState('');
+
+  useEffect(() => {
+    if (abdelPrompts) {
+      setFrPromptsText((abdelPrompts.fr || []).join('\n'));
+      setEnPromptsText((abdelPrompts.en || []).join('\n'));
+    }
+  }, [abdelPrompts]);
 
   // Toast Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -220,12 +254,22 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const [seoTitleSuffix, setSeoTitleSuffix] = useState(currentSettings.seoTitleSuffix || '| Perspective Group Dakar');
   const [seoCanonicalBase, setSeoCanonicalBase] = useState(currentSettings.seoCanonicalBase || 'https://perspective.sn');
   const [seoDefaultDesc, setSeoDefaultDesc] = useState(currentSettings.seoDefaultDesc || "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+  const [seoKeywords, setSeoKeywords] = useState(currentSettings.seoDefaultKeywords || "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
+  const [seoOgImage, setSeoOgImage] = useState(currentSettings.seoOgImage || "https://perspective.sn/og-preview.jpg");
+  const [seoRobotsIndex, setSeoRobotsIndex] = useState(currentSettings.seoRobotsIndex || "index, follow, max-image-preview:large");
+  const [seoGoogleVerification, setSeoGoogleVerification] = useState(currentSettings.seoGoogleSiteVerification || "");
 
   // Settings Form States
   const [settingsAIExecutionMode, setSettingsAIExecutionMode] = useState(currentSettings.aiModelMode || 'flash');
   const [settingsDatabaseProvider, setSettingsDatabaseProvider] = useState(currentSettings.databaseProvider || 'firestore');
-  const [settingsPaywallThreshold, setSettingsPaywallThreshold] = useState(currentSettings.paywallThreshold || 3);
-  const [settingsPaywallEnabled, setSettingsPaywallEnabled] = useState(currentSettings.paywallEnabled !== false);
+  const [settingsPaywallThreshold, setSettingsPaywallThreshold] = useState(currentSettings.paywallThreshold || 9999);
+  const [settingsPaywallEnabled, setSettingsPaywallEnabled] = useState(currentSettings.paywallEnabled === true);
+
+  // Privacy & Personal Data Form States
+  const [cookieConsentEnabled, setCookieConsentEnabled] = useState(currentSettings.cookieConsentEnabled !== false);
+  const [privacyPolicyTextFr, setPrivacyPolicyTextFr] = useState(currentSettings.privacyPolicyTextFr || "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.");
+  const [privacyPolicyTextEn, setPrivacyPolicyTextEn] = useState(currentSettings.privacyPolicyTextEn || "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.");
+  const [dataRetentionDays, setDataRetentionDays] = useState(currentSettings.dataRetentionDays || 365);
 
   // Deleting confirmation state
   const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
@@ -241,8 +285,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       setSeoTitleSuffix(siteSettings.seoTitleSuffix || '| Perspective Group Dakar');
       setSeoCanonicalBase(siteSettings.seoCanonicalBase || 'https://perspective.sn');
       setSeoDefaultDesc(siteSettings.seoDefaultDesc || "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+      setSeoKeywords(siteSettings.seoDefaultKeywords || "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
+      setSeoOgImage(siteSettings.seoOgImage || "https://perspective.sn/og-preview.jpg");
+      setSeoRobotsIndex(siteSettings.seoRobotsIndex || "index, follow, max-image-preview:large");
+      setSeoGoogleVerification(siteSettings.seoGoogleSiteVerification || "");
       setSettingsAIExecutionMode(siteSettings.aiModelMode || 'flash');
       setSettingsDatabaseProvider(siteSettings.databaseProvider || 'firestore');
+      setCookieConsentEnabled(siteSettings.cookieConsentEnabled !== false);
+      setPrivacyPolicyTextFr(siteSettings.privacyPolicyTextFr || "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.");
+      setPrivacyPolicyTextEn(siteSettings.privacyPolicyTextEn || "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.");
+      setDataRetentionDays(siteSettings.dataRetentionDays || 365);
       
       if (siteSettings.sportsQuadrantSelection) {
         setQuadZone1Type(siteSettings.sportsQuadrantSelection.zone1Type || 'match');
@@ -379,12 +431,55 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     setDeletingArticleId(null);
   };
 
-  const handleSaveArticle = (saved: Article) => {
+  const handlePurgeTestArticles = async () => {
+    // 1. Purge server-side RSS drafts cache
+    try {
+      await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
+    } catch (e) {}
+
+    // 2. Filter test articles in local/Firestore state
+    const testArts = articles.filter(a => {
+      const titleLower = (a.title?.fr || a.title?.en || '').toLowerCase();
+      const slugLower = (a.slug || a.id || '').toLowerCase();
+      const bodyLower = (a.body?.fr || a.body?.en || '').toLowerCase();
+      return (
+        titleLower.includes('test') || 
+        slugLower.includes('test-title') || 
+        slugLower.includes('rss-test') || 
+        slugLower.includes('rss-draft') ||
+        bodyLower === 'test content' ||
+        bodyLower.includes('test summary')
+      );
+    });
+
+    if (testArts.length === 0) {
+      alert(language === 'fr' ? 'Pipeline réinitialisé ! Aucun article de test supplémentaire en attente.' : 'Pipeline reset! No test articles found.');
+      return;
+    }
+
+    testArts.forEach(a => deleteArticle(a.id));
+    alert(language === 'fr' 
+      ? `Pipeline réinitialisé et ${testArts.length} article(s) de test supprimé(s) avec succès !`
+      : `Pipeline reset and ${testArts.length} test article(s) purged successfully!`);
+  };
+
+  const handlePurgeAllArticles = async () => {
+    if (!confirm(language === 'fr' 
+      ? 'Êtes-vous SÛR de vouloir PURGER TOUS LES ARTICLES (brouillons et publiés) ? Cette action est irréversible.' 
+      : 'Are you SURE you want to PURGE ALL ARTICLES (drafts and live)? This action cannot be undone.')) {
+      return;
+    }
+    await purgeAllArticles();
+    setEditingArticle(null);
+    showToast(language === 'fr' ? 'Tous les articles (brouillons et publiés) ont été purgés avec succès !' : 'All articles (drafts and live) purged successfully!');
+  };
+
+  const handleSaveArticle = async (saved: Article) => {
     const isNew = !articles.find(a => a.id === saved.id);
     if (isNew) {
-      addArticle(saved);
+      await addArticle(saved);
     } else {
-      updateArticle(saved);
+      await updateArticle(saved);
     }
     setEditingArticle(null);
     setActiveTab('list');
@@ -404,7 +499,11 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
   const menuItems = [
     { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
+    { id: 'admin_dashboard', label: language === 'fr' ? 'Base Firestore' : 'Firestore DB', icon: Database, badge: 0 },
+    { id: 'make_webhook', label: language === 'fr' ? 'Automatisations & RSS' : 'Automations & RSS', icon: Zap, badge: 0 },
+    { id: 'rss_automation', label: language === 'fr' ? 'Brouillons RSS & IA' : 'RSS & AI Drafts', icon: Bot, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
     { id: 'list', label: language === 'fr' ? 'Contenus' : 'Contents', icon: FileText, badge: 0 },
+    { id: 'taxonomy', label: language === 'fr' ? 'Taxonomie & Tags' : 'Taxonomy & Tags', icon: Tag, badge: 0 },
     { id: 'homepage_curation', label: language === 'fr' ? 'Page d’accueil' : 'Homepage Curation', icon: Home, badge: 0 },
     { id: 'media', label: language === 'fr' ? 'Médias' : 'Media Library', icon: ImageIcon, badge: 0 },
     { id: 'matches', label: language === 'fr' ? 'L’Arène' : 'L’Arène', icon: Trophy, badge: 0 },
@@ -412,10 +511,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     { id: 'comments', label: language === 'fr' ? 'Communauté' : 'Comments & Community', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
     { id: 'audience', label: language === 'fr' ? 'Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
     { id: 'subscribers', label: language === 'fr' ? 'Newsletters' : 'Newsletters', icon: Mail, badge: subscribers?.length || 0 },
+    { id: 'google_integrations', label: language === 'fr' ? 'Intégrations Google' : 'Google Hub', icon: Zap, badge: 0 },
+    { id: 'cloud_sql', label: language === 'fr' ? 'Base Cloud SQL' : 'Cloud SQL DB', icon: Database, badge: 0 },
     { id: 'ads', label: language === 'fr' ? 'Monétisation' : 'Monetization', icon: DollarSign, badge: 0 },
     { id: 'customizer', label: language === 'fr' ? 'Apparence' : 'Appearance', icon: Palette, badge: 0 },
     { id: 'navigation', label: language === 'fr' ? 'Navigation' : 'Menu Navigation', icon: Compass, badge: 0 },
     { id: 'seo_distribution', label: language === 'fr' ? 'SEO et distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
+    { id: 'abdel_chat_config', label: language === 'fr' ? 'Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
     { id: 'moderation', label: language === 'fr' ? 'Utilisateurs et rôles' : 'Users & Roles', icon: Users, badge: 0 },
     { id: 'settings', label: language === 'fr' ? 'Paramètres' : 'Global Settings', icon: Settings, badge: 0 },
     { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
@@ -544,37 +646,37 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       <main className="flex-1 p-6 md:p-10 overflow-x-hidden min-h-[calc(100vh-60px)] md:min-h-screen bg-zinc-950 text-zinc-100 font-sans">
         {/* Always visible Maintenance Mode status bar at top of Admin Portal */}
         <div className={`mb-8 p-4 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl transition-all ${
-          siteSettings?.isMaintenanceMode !== false 
+          siteSettings?.isMaintenanceMode === true 
             ? 'bg-amber-950/70 border-amber-500/60 text-amber-200' 
             : 'bg-zinc-900/90 border-zinc-800 text-zinc-300'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-md shrink-0 ${
-              siteSettings?.isMaintenanceMode !== false 
+              siteSettings?.isMaintenanceMode === true 
                 ? 'bg-amber-500/20 text-amber-400' 
                 : 'bg-emerald-500/20 text-emerald-400'
             }`}>
-              <Wrench className={`w-5 h-5 ${siteSettings?.isMaintenanceMode !== false ? 'animate-spin-slow' : ''}`} />
+              <Wrench className={`w-5 h-5 ${siteSettings?.isMaintenanceMode === true ? 'animate-spin-slow' : ''}`} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-black uppercase tracking-wider ${
-                  siteSettings?.isMaintenanceMode !== false ? 'text-amber-300' : 'text-emerald-400'
+                  siteSettings?.isMaintenanceMode === true ? 'text-amber-300' : 'text-emerald-400'
                 }`}>
-                  {siteSettings?.isMaintenanceMode !== false 
+                  {siteSettings?.isMaintenanceMode === true 
                     ? (language === 'fr' ? 'MODE MAINTENANCE : ACTIF (SITE PRIVÉ)' : 'MAINTENANCE MODE: ACTIVE (SITE PRIVATE)')
                     : (language === 'fr' ? 'STATUT DU SITE : EN LIGNE (PUBLIC)' : 'SITE STATUS: ONLINE (PUBLIC)')}
                 </span>
                 <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
-                  siteSettings?.isMaintenanceMode !== false 
+                  siteSettings?.isMaintenanceMode === true 
                     ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40' 
                     : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                 }`}>
-                  {siteSettings?.isMaintenanceMode !== false ? 'PAUSE' : 'LIVE'}
+                  {siteSettings?.isMaintenanceMode === true ? 'PAUSE' : 'LIVE'}
                 </span>
               </div>
               <p className="text-xs text-zinc-400 font-sans mt-0.5">
-                {siteSettings?.isMaintenanceMode !== false 
+                {siteSettings?.isMaintenanceMode === true 
                   ? (language === 'fr' 
                       ? 'Le site senperspective.com affiche la page de maintenance aux visiteurs. Seul l\'Espace Admin est accessible.' 
                       : 'The site displays the maintenance page to public visitors. Only Admin Portal is accessible.')
@@ -586,15 +688,15 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           </div>
 
           <button
-            onClick={() => updateSiteSettings({ isMaintenanceMode: siteSettings?.isMaintenanceMode === false ? true : false })}
+            onClick={() => updateSiteSettings({ isMaintenanceMode: !siteSettings?.isMaintenanceMode })}
             className={`px-5 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded shrink-0 shadow-lg transition-all cursor-pointer flex items-center gap-2 ${
-              siteSettings?.isMaintenanceMode !== false 
+              siteSettings?.isMaintenanceMode === true 
                 ? 'bg-emerald-500 hover:bg-emerald-400 text-black' 
                 : 'bg-amber-500 hover:bg-amber-400 text-black'
             }`}
           >
             <span>
-              {siteSettings?.isMaintenanceMode !== false 
+              {siteSettings?.isMaintenanceMode === true 
                 ? (language === 'fr' ? 'RÉOUVRIR LE SITE (EN LIGNE)' : 'RE-OPEN SITE (GO LIVE)')
                 : (language === 'fr' ? 'PASSER EN MODE MAINTENANCE' : 'ENABLE MAINTENANCE MODE')}
             </span>
@@ -608,6 +710,23 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             subscribers={subscribers}
             onNewArticle={startNewArticle}
             onGoToTab={(tab) => setActiveTab(tab)}
+          />
+        )}
+
+        {activeTab === 'admin_dashboard' && (
+          <AdminDashboard />
+        )}
+
+        {activeTab === 'make_webhook' && (
+          <MakeWebhookTab />
+        )}
+
+        {activeTab === 'rss_automation' && (
+          <RssAutomationTab 
+            onEditArticle={(art) => {
+              setEditingArticle(art);
+              setActiveTab('editor');
+            }}
           />
         )}
 
@@ -633,6 +752,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             subscribers={subscribers}
             deleteSubscriber={deleteSubscriber}
           />
+        )}
+
+        {activeTab === 'google_integrations' && (
+          <GoogleIntegrationsTab />
+        )}
+
+        {activeTab === 'cloud_sql' && (
+          <CloudSqlTab />
         )}
 
         {activeTab === 'ads' && (
@@ -709,7 +836,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <option value="">{language === 'fr' ? 'Choisir un article...' : 'Select an article...'}</option>
                   {articles.map(a => (
                     <option key={a.id} value={a.id}>
-                      [{a.category}] {a.title?.[language] || a.title?.fr}
+                      [{formatCategory(a.category, language)}] {getSafeText(a.title, language)}
                     </option>
                   ))}
                 </select>
@@ -779,13 +906,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       {quadZone1Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
-                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({m.leagueLabel[language]})
+                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({getSafeText(m.leagueLabel, language)})
                           </option>
                         ))
                       ) : (
                         articles.map(a => (
                           <option key={a.id} value={a.id}>
-                            [{a.category}] {a.title[language]}
+                            [{formatCategory(a.category, language)}] {getSafeText(a.title, language)}
                           </option>
                         ))
                       )}
@@ -814,13 +941,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       {quadZone2Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
-                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({m.leagueLabel[language]})
+                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({getSafeText(m.leagueLabel, language)})
                           </option>
                         ))
                       ) : (
                         articles.map(a => (
                           <option key={a.id} value={a.id}>
-                            [{a.category}] {a.title[language]}
+                            [{formatCategory(a.category, language)}] {getSafeText(a.title, language)}
                           </option>
                         ))
                       )}
@@ -849,13 +976,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       {quadZone3Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
-                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({m.leagueLabel[language]})
+                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({getSafeText(m.leagueLabel, language)})
                           </option>
                         ))
                       ) : (
                         articles.map(a => (
                           <option key={a.id} value={a.id}>
-                            [{a.category}] {a.title[language]}
+                            [{formatCategory(a.category, language)}] {getSafeText(a.title, language)}
                           </option>
                         ))
                       )}
@@ -884,13 +1011,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       {quadZone4Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
-                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({m.leagueLabel[language]})
+                            [{m.status.toUpperCase()}] {m.teamA.name} vs {m.teamB.name} ({getSafeText(m.leagueLabel, language)})
                           </option>
                         ))
                       ) : (
                         articles.map(a => (
                           <option key={a.id} value={a.id}>
-                            [{a.category}] {a.title[language]}
+                            [{formatCategory(a.category, language)}] {getSafeText(a.title, language)}
                           </option>
                         ))
                       )}
@@ -1240,78 +1367,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         )}
 
         {activeTab === 'audience' && (
-          <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-            <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
-              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Statistiques Audience</h2>
-              <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Real-time visitor analytics & geographic engagement reports</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-              <div className="glass p-5 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Lecteurs Uniques / Unique Readers</p>
-                <p className="text-4xl font-serif font-black text-brand-primary mt-2" style={{ color: currentSettings.accentColor }}>142,508</p>
-                <span className="text-[9px] text-emerald-500 font-bold font-mono">↑ +12% this month</span>
-              </div>
-              <div className="glass p-5 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Vues de Pages / Page Views</p>
-                <p className="text-4xl font-serif font-black text-zinc-900 dark:text-zinc-50 mt-2">489,112</p>
-                <span className="text-[9px] text-emerald-500 font-bold font-mono">↑ +8% this week</span>
-              </div>
-              <div className="glass p-5 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-brand-muted">Temps Moyen / Avg Read Time</p>
-                <p className="text-4xl font-serif font-black text-amber-500 mt-2">4m 32s</p>
-                <span className="text-[9px] text-zinc-500 font-bold font-mono">High depth analytical sessions</span>
-              </div>
-            </div>
-
-            {/* Premium Vector SVG Chart representing traffic trend */}
-            <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40">
-              <h3 className="text-xs font-black uppercase tracking-widest mb-4">Volume d'Audience Mensuel (Dakar & Diaspora)</h3>
-              <div className="w-full h-44 flex items-end justify-between font-mono text-[9px] relative pt-6 border-b border-l border-zinc-700/30 px-2 select-none">
-                {/* SVG Curve overlaid */}
-                <div className="absolute inset-0 pt-6 px-2">
-                  <svg className="w-full h-full text-brand-primary" style={{ color: currentSettings.accentColor }} viewBox="0 0 100 100" preserveAspectRatio="none">
-                    <defs>
-                      <linearGradient id="gradient-chart-tab" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={currentSettings.accentColor || '#E85D42'} stopOpacity="0.3"/>
-                        <stop offset="100%" stopColor={currentSettings.accentColor || '#E85D42'} stopOpacity="0"/>
-                      </linearGradient>
-                    </defs>
-                    <path d="M 0,90 Q 20,40 40,70 T 80,15 T 100,20" fill="none" stroke="currentColor" strokeWidth="2.5" />
-                    <path d="M 0,90 Q 20,40 40,70 T 80,15 T 100,20 L 100,100 L 0,100 Z" fill="url(#gradient-chart-tab)" />
-                  </svg>
-                </div>
-                {/* Visual grid indicators */}
-                {['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août'].map((m, idx) => (
-                  <div key={idx} className="flex flex-col items-center justify-end h-full z-10">
-                    <span className="text-brand-muted mt-2 font-bold">{m}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40">
-              <h3 className="text-xs font-black uppercase tracking-widest mb-4">Répartition Géographique de l'Audience</h3>
-              <div className="space-y-3 font-mono text-[10px]">
-                {[
-                  { region: 'Sénégal (Dakar, Thiès, Casamance)', percentage: 54, color: 'bg-emerald-500' },
-                  { region: 'Diaspora (France, États-Unis, Canada)', percentage: 28, color: 'bg-[#E85D42]' },
-                  { region: 'Sous-région (Mali, Côte d’Ivoire, Guinée)', percentage: 12, color: 'bg-[#C69B52]' },
-                  { region: 'Autres régions du monde', percentage: 6, color: 'bg-zinc-500' }
-                ].map(r => (
-                  <div key={r.region} className="space-y-1">
-                    <div className="flex justify-between items-center font-bold">
-                      <span className="text-brand-dark dark:text-brand-white">{r.region}</span>
-                      <span className="text-brand-dark dark:text-brand-white">{r.percentage}%</span>
-                    </div>
-                    <div className="w-full bg-zinc-200 dark:bg-zinc-800/60 h-2 rounded-full overflow-hidden">
-                      <div className={`h-full ${r.color}`} style={{ width: `${r.percentage}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          <AudienceAnalyticsTab />
         )}
 
         {activeTab === 'navigation' && (
@@ -1358,49 +1414,172 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
 
+        {activeTab === 'taxonomy' && (
+          <TaxonomyTab />
+        )}
+
         {activeTab === 'seo_distribution' && (
           <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-            <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
-              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">SEO et distribution</h2>
-              <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Meta tags templates, structured schemas & search indexing flags</p>
+            <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3 flex justify-between items-end">
+              <div>
+                <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">{language === 'fr' ? 'SEO, Indexation & Social Cards' : 'SEO, Indexing & Social Cards'}</h2>
+                <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Meta tags templates, OpenGraph social card previews, RSS feeds & XML sitemaps</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold rounded-full">
+                  Score SEO : 98/100
+                </span>
+              </div>
             </div>
 
-            <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 space-y-6">
+            <div className="glass p-6 border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 space-y-6 rounded-xl">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Suffixe de Titre Métadonnée / SEO Title Suffix</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Suffixe de Titre Métadonnée / SEO Title Suffix</label>
                   <input 
                     type="text" 
                     value={seoTitleSuffix}
                     onChange={(e) => setSeoTitleSuffix(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs font-mono font-bold outline-none text-brand-dark dark:text-brand-white" 
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono font-bold outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Format URL Canonique / Canonical base</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Format URL Canonique / Canonical base</label>
                   <input 
                     type="text" 
                     value={seoCanonicalBase}
                     onChange={(e) => setSeoCanonicalBase(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs font-mono font-bold outline-none text-brand-dark dark:text-brand-white" 
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono font-bold outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Description Par Défaut (OpenGraph)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Description Par Défaut (OpenGraph & Search Excerpt)</label>
                 <textarea 
                   value={seoDefaultDesc}
                   onChange={(e) => setSeoDefaultDesc(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-3 text-xs focus:outline-none h-20 font-medium text-brand-dark dark:text-brand-white" 
+                  className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-3 text-xs focus:outline-none h-20 font-medium text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
                 />
               </div>
 
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-widest mb-3 text-zinc-400">Indexabilité moteurs de recherche (Google / Bing)</h3>
-                <div className="flex items-center justify-between border border-brand-border/15 p-3 bg-zinc-500/5 text-xs font-bold text-brand-dark dark:text-brand-white">
-                  <span>Autoriser les robots d’indexation (Allow search crawlers)</span>
-                  <span className="text-emerald-500 font-mono font-black">ACTIVE (index, follow)</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Mots-clés SEO (Séparés par des virgules)</label>
+                  <input 
+                    type="text" 
+                    value={seoKeywords}
+                    onChange={(e) => setSeoKeywords(e.target.value)}
+                    placeholder="Sénégal, Dakar, politique, géopolitique, économie..."
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Image OpenGraph Par Défaut (Social Banner URL)</label>
+                  <input 
+                    type="text" 
+                    value={seoOgImage}
+                    onChange={(e) => setSeoOgImage(e.target.value)}
+                    placeholder="https://..."
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Indexation Robots (Robots Meta Tag)</label>
+                  <select 
+                    value={seoRobotsIndex}
+                    onChange={(e) => setSeoRobotsIndex(e.target.value)}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono font-bold outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
+                  >
+                    <option value="index, follow, max-image-preview:large">AUTORISER TOUT (index, follow - Recommandé)</option>
+                    <option value="noindex, nofollow">BLOQUER LES ROBOTS (noindex, nofollow)</option>
+                    <option value="noindex, follow">NE PAS INDEXER MAIS SUIVRE LES LIENS (noindex, follow)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Code Verification Google Search Console</label>
+                  <input 
+                    type="text" 
+                    value={seoGoogleVerification}
+                    onChange={(e) => setSeoGoogleVerification(e.target.value)}
+                    placeholder="google-site-verification=..."
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
+                  />
+                </div>
+              </div>
+
+              {/* Social Media Card Visual Preview */}
+              <div className="p-4 bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+                  {language === 'fr' ? 'Aperçu Carte OpenGraph / Twitter & LinkedIn Card' : 'OpenGraph / Social Media Card Preview'}
+                </span>
+                
+                <div className="border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg overflow-hidden shadow-sm max-w-lg">
+                  <div className="h-32 bg-zinc-800 relative flex items-center justify-center overflow-hidden">
+                    {seoOgImage ? (
+                      <img src={seoOgImage} alt="OG Banner" className="w-full h-full object-cover" />
+                    ) : (
+                      <>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
+                        <span className="font-serif font-black text-2xl text-white tracking-widest z-20">THE PERSPECTIVE GROUP</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="p-3.5 space-y-1 bg-zinc-900 text-white">
+                    <span className="text-[10px] font-mono text-zinc-400 uppercase">perspective.sn</span>
+                    <h4 className="text-sm font-bold text-white truncate">
+                      L'Économie Sénégalaise & Géopolitique du Sahel {seoTitleSuffix}
+                    </h4>
+                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                      {seoDefaultDesc}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sitemap & RSS Generator Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl space-y-2">
+                  <span className="text-xs font-mono font-bold uppercase text-zinc-300 block">Sitemap XML Dynamic Generator</span>
+                  <p className="text-[11px] text-zinc-400">
+                    {language === 'fr' ? `Génère le sitemap XML contenant les ${articles.length} articles publiés.` : `Generates XML sitemap index with ${articles.length} published articles.`}
+                  </p>
+                  <button
+                    onClick={() => {
+                      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+                        articles.map(a => `  <url><loc>${seoCanonicalBase}/article/${a.slug || a.id}</loc><lastmod>${new Date().toISOString()}</lastmod></url>\n`).join('') +
+                        `</urlset>`;
+                      const blob = new Blob([xml], { type: 'text/xml' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'sitemap.xml';
+                      a.click();
+                      showToast(language === 'fr' ? 'Sitemap.xml téléchargé !' : 'Sitemap.xml generated and downloaded!');
+                    }}
+                    className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-bold rounded-lg cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Télécharger sitemap.xml</span>
+                  </button>
+                </div>
+
+                <div className="p-4 border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl space-y-2">
+                  <span className="text-xs font-mono font-bold uppercase text-zinc-300 block">Flux RSS 2.0 / Atom Feed</span>
+                  <p className="text-[11px] text-zinc-400">
+                    {language === 'fr' ? 'Exportation du flux d\'actualité pour aggrégateurs et syndication.' : 'Newsfeed export for RSS readers and article syndication.'}
+                  </p>
+                  <button
+                    onClick={() => {
+                      showToast(language === 'fr' ? 'Flux RSS actif sur /rss.xml !' : 'RSS Feed active at /rss.xml!');
+                    }}
+                    className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-bold rounded-lg cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>Tester Flux /rss.xml</span>
+                  </button>
                 </div>
               </div>
 
@@ -1410,15 +1589,173 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     updateSiteSettings({
                       seoTitleSuffix,
                       seoCanonicalBase,
-                      seoDefaultDesc
+                      seoDefaultDesc,
+                      seoDefaultKeywords: seoKeywords,
+                      seoOgImage,
+                      seoRobotsIndex,
+                      seoGoogleSiteVerification: seoGoogleVerification
                     } as any);
-                    showToast(language === 'fr' ? 'Métadonnées SEO sauvegardées !' : 'SEO Metadata templates saved!');
+                    showToast(language === 'fr' ? 'Métadonnées SEO sauvegardées en direct !' : 'SEO Metadata tags saved live!');
                   }}
-                  className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer" 
+                  className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer rounded-lg shadow-md" 
                   style={{ backgroundColor: currentSettings.accentColor }}
                 >
-                  {language === 'fr' ? 'Sauvegarder les métadonnées' : 'Save Search Settings'}
+                  {language === 'fr' ? 'Sauvegarder les métadonnées SEO' : 'Save Search Settings'}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'abdel_chat_config' && (
+          <div className="p-6 md:p-10 max-w-5xl mx-auto space-y-8 animate-fadeIn">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-zinc-800 gap-4">
+              <div>
+                <h1 className="text-2xl font-serif font-bold text-zinc-100">
+                  {language === 'fr' ? 'Configuration Abdel AI & Contacts' : 'Abdel AI & Messenger Contacts Config'}
+                </h1>
+                <p className="text-xs text-zinc-400 mt-1">
+                  {language === 'fr'
+                    ? 'Modifiez les suggestions de questions d’Abdel AI liées aux articles du journal et gérez les contacts amis de messagerie.'
+                    : 'Modify Abdel AI journal article questions and manage reader friend contacts.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Abdel AI Questions Config */}
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-xl">
+              <h2 className="text-sm font-mono uppercase tracking-wider text-[#E85D42] font-bold flex items-center gap-2">
+                <Bot className="w-4 h-4" />
+                {language === 'fr' ? 'Questions Abdel AI (Suggestions Journal)' : 'Abdel AI Journal Questions'}
+              </h2>
+              <p className="text-xs text-zinc-400">
+                {language === 'fr'
+                  ? 'Ces questions s’affichent comme suggestions automatiques pour interroger Abdel AI sur les articles du journal.'
+                  : 'These questions appear as quick suggestions when querying Abdel AI about journal articles.'}
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="text-xs font-mono font-bold uppercase text-zinc-300 block">
+                    {language === 'fr' ? 'Questions en Français (une par ligne)' : 'French Questions (one per line)'}
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={frPromptsText}
+                    onChange={(e) => setFrPromptsText(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-100 font-mono focus:outline-none focus:border-[#E85D42]"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-xs font-mono font-bold uppercase text-zinc-300 block">
+                    {language === 'fr' ? 'Questions en Anglais (une par ligne)' : 'English Questions (one per line)'}
+                  </label>
+                  <textarea
+                    rows={6}
+                    value={enPromptsText}
+                    onChange={(e) => setEnPromptsText(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-xs text-zinc-100 font-mono focus:outline-none focus:border-[#E85D42]"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  const frList = frPromptsText.split('\n').map(s => s.trim()).filter(Boolean);
+                  const enList = enPromptsText.split('\n').map(s => s.trim()).filter(Boolean);
+                  updateAbdelPrompts({ fr: frList, en: enList });
+                  showToast(language === 'fr' ? 'Questions d’Abdel AI mises à jour' : 'Abdel AI questions updated');
+                }}
+                className="px-5 py-2.5 bg-[#E85D42] hover:bg-[#d04a30] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors cursor-pointer shadow-md"
+              >
+                {language === 'fr' ? 'Enregistrer les Questions' : 'Save Questions'}
+              </button>
+            </div>
+
+            {/* Friend Contacts Management */}
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-xl">
+              <h2 className="text-sm font-mono uppercase tracking-wider text-[#E85D42] font-bold flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                {language === 'fr' ? 'Contacts Amis & Pairs (Messagerie)' : 'Friends & Peer Contacts'}
+              </h2>
+              <p className="text-xs text-zinc-400">
+                {language === 'fr'
+                  ? 'Gérez la liste des lecteurs et amis suggérés pour les messages directs à la place des administrateurs.'
+                  : 'Manage reader friends and peer contacts suggested for direct messaging instead of admins.'}
+              </p>
+
+              {/* Add friend form */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
+                <input
+                  type="text"
+                  placeholder={language === 'fr' ? "Nom (ex: Aminata Sow)" : "Name (e.g. Aminata Sow)"}
+                  value={newFriendName}
+                  onChange={(e) => setNewFriendName(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#E85D42]"
+                />
+                <input
+                  type="email"
+                  placeholder="email@perspective.sn"
+                  value={newFriendEmail}
+                  onChange={(e) => setNewFriendEmail(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#E85D42]"
+                />
+                <input
+                  type="text"
+                  placeholder={language === 'fr' ? "Rôle / Statut" : "Role / Status"}
+                  value={newFriendRole}
+                  onChange={(e) => setNewFriendRole(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#E85D42]"
+                />
+                <button
+                  onClick={() => {
+                    if (!newFriendName.trim() || !newFriendEmail.trim()) {
+                      alert("Please provide name and email.");
+                      return;
+                    }
+                    addFriend({
+                      name: newFriendName.trim(),
+                      email: newFriendEmail.trim().toLowerCase(),
+                      role: newFriendRole.trim() || "Lecteur",
+                      avatar: newFriendName.trim().charAt(0).toUpperCase(),
+                      status: "En ligne"
+                    });
+                    setNewFriendName("");
+                    setNewFriendEmail("");
+                    setNewFriendRole("");
+                    showToast(language === 'fr' ? 'Ami ajouté avec succès' : 'Friend added successfully');
+                  }}
+                  className="bg-zinc-800 hover:bg-[#E85D42] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer py-2"
+                >
+                  {language === 'fr' ? '+ Ajouter un Ami' : '+ Add Friend'}
+                </button>
+              </div>
+
+              {/* Existing friends list */}
+              <div className="space-y-2">
+                {friends.map((f) => (
+                  <div key={f.email} className="flex items-center justify-between p-3 bg-zinc-950/80 border border-zinc-800/80 rounded-xl text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center font-bold text-[#E85D42]">
+                        {f.avatar || f.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-zinc-200">{f.name}</p>
+                        <p className="text-[10px] text-zinc-400">{f.email} • {f.role}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        deleteFriend(f.email);
+                        showToast(language === 'fr' ? 'Ami supprimé' : 'Friend removed');
+                      }}
+                      className="p-1.5 bg-zinc-900 hover:bg-red-600 rounded text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                      title="Supprimer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1616,6 +1953,243 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </div>
               </div>
 
+              {/* Personal Data Usage & GDPR Compliance Module */}
+              <div className="border-t border-brand-border/10 pt-6 space-y-5">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Shield size={18} className="text-orange-500" />
+                    <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-serif">
+                      {language === 'fr' ? 'Gestion des Données Personnelles & Conformité RGPD' : 'Personal Data Usage & Privacy Control'}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">
+                    {language === 'fr' 
+                      ? 'Transparence sur le traitement des données des lecteurs, gestion du consentement cookies et export des registres.' 
+                      : 'Transparency on reader data processing, cookie consent policy, and compliance data exports.'}
+                  </p>
+                </div>
+
+                {/* Personal Data Key Indicators */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-sans">
+                  <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">👥 Comptes Lecteurs</span>
+                    <span className="text-lg font-black text-white">{users?.length || 0}</span>
+                  </div>
+                  <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">📧 Newsletter</span>
+                    <span className="text-lg font-black text-emerald-400">{subscribers?.length || 0}</span>
+                  </div>
+                  <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">💬 Interactions Loggées</span>
+                    <span className="text-lg font-black text-amber-400">{interactions?.length || 0}</span>
+                  </div>
+                  <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">🍪 Système Cookies</span>
+                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
+                      {cookieConsentEnabled ? '🟢 RGPD Actif' : '🔴 Inactif'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cookie Banner Toggle & Tester */}
+                <div className="p-4 bg-zinc-900/60 border border-zinc-800 space-y-3 font-sans rounded-lg">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold uppercase text-zinc-100">
+                        {language === 'fr' ? 'Bannière de Consentement Cookies (RGPD)' : 'Cookie Consent Banner System'}
+                      </span>
+                      <p className="text-[11px] text-zinc-400">
+                        {language === 'fr' 
+                          ? 'Affiche la bannière flottante de consentement pour les nouveaux visiteurs.' 
+                          : 'Displays the floating consent banner to new visitors for tracking compliance.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input 
+                          type="checkbox"
+                          checked={cookieConsentEnabled}
+                          onChange={(e) => setCookieConsentEnabled(e.target.checked)}
+                          className="w-4 h-4 accent-[#E85D42] cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-zinc-200">{cookieConsentEnabled ? 'Activée' : 'Désactivée'}</span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent('open-cookie-settings'))}
+                        className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded transition-all cursor-pointer"
+                      >
+                        {language === 'fr' ? '⚙️ Tester le Modal' : '⚙️ Test Modal'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                        Politique de Confidentialité (Français)
+                      </label>
+                      <textarea
+                        value={privacyPolicyTextFr}
+                        onChange={(e) => setPrivacyPolicyTextFr(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-zinc-200 h-20 focus:outline-none focus:border-[#E85D42] rounded"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                        Privacy Notice (English)
+                      </label>
+                      <textarea
+                        value={privacyPolicyTextEn}
+                        onChange={(e) => setPrivacyPolicyTextEn(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-zinc-200 h-20 focus:outline-none focus:border-[#E85D42] rounded"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-400 font-medium">
+                        {language === 'fr' ? 'Rétention maximale des logs de données :' : 'Maximum data retention policy :'}
+                      </span>
+                      <input 
+                        type="number"
+                        min="30"
+                        max="730"
+                        value={dataRetentionDays}
+                        onChange={(e) => setDataRetentionDays(parseInt(e.target.value) || 365)}
+                        className="w-20 p-1 bg-zinc-950 text-white font-bold text-center border border-zinc-700 focus:outline-none focus:border-[#E85D42]"
+                      />
+                      <span className="text-zinc-400">jours / days</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const exportData = {
+                          site: "Perspective Group",
+                          exportDate: new Date().toISOString(),
+                          registeredUsers: users || [],
+                          subscribers: subscribers || [],
+                          totalInteractionsLogged: interactions?.length || 0
+                        };
+                        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `perspective-gdpr-data-export-${Date.now()}.json`;
+                        a.click();
+                        showToast(language === 'fr' ? 'Export des données RGPD téléchargé !' : 'GDPR Data Export downloaded!');
+                      }}
+                      className="px-3.5 py-1.5 text-[10px] font-mono font-bold uppercase bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/50 rounded transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>📥 Exporter Registre RGPD (JSON)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live SEO & Publishing Configuration */}
+              <div className="border-t border-brand-border/10 pt-6 space-y-5">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Globe size={18} className="text-emerald-400" />
+                    <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-serif">
+                      {language === 'fr' ? 'Configuration SEO, Indexation & Sitemap' : 'Live Published SEO & Indexing Configuration'}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">
+                    {language === 'fr' 
+                      ? 'Réglages d’indexation pour Google Search Console, URL canonique officielle et balises sociales.' 
+                      : 'Indexing rules for search engines, official canonical URL, and OpenGraph social tags.'}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans text-xs">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                      URL Canonique Officielle / Canonical Base URL
+                    </label>
+                    <input 
+                      type="text" 
+                      value={seoCanonicalBase}
+                      onChange={(e) => setSeoCanonicalBase(e.target.value)}
+                      placeholder="https://senperspective.com"
+                      className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E85D42] rounded" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                      Suffixe de Titre Métadonnée / Title Suffix
+                    </label>
+                    <input 
+                      type="text" 
+                      value={seoTitleSuffix}
+                      onChange={(e) => setSeoTitleSuffix(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E85D42] rounded" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans text-xs">
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                      Indexation Robots (Search Crawlers)
+                    </label>
+                    <select 
+                      value={seoRobotsIndex}
+                      onChange={(e) => setSeoRobotsIndex(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E85D42] rounded" 
+                    >
+                      <option value="index, follow, max-image-preview:large">Indexation Active (index, follow - Recommandé)</option>
+                      <option value="noindex, nofollow">Désactiver l'indexation (noindex, nofollow)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
+                      Google Search Console Token
+                    </label>
+                    <input 
+                      type="text" 
+                      value={seoGoogleVerification}
+                      onChange={(e) => setSeoGoogleVerification(e.target.value)}
+                      placeholder="google-site-verification=..."
+                      className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs font-mono text-white focus:outline-none focus:border-[#E85D42] rounded" 
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span className="text-zinc-300 font-bold">Sitemap XML Dynamic Generator:</span>
+                    <span className="text-zinc-400">{articles.length} articles indexés</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+                        articles.map(a => `  <url><loc>${seoCanonicalBase}/article/${a.slug || a.id}</loc><lastmod>${new Date().toISOString()}</lastmod></url>\n`).join('') +
+                        `</urlset>`;
+                      const blob = new Blob([xml], { type: 'text/xml' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'sitemap.xml';
+                      a.click();
+                      showToast(language === 'fr' ? 'Sitemap.xml téléchargé !' : 'Sitemap.xml generated!');
+                    }}
+                    className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono font-bold uppercase rounded cursor-pointer"
+                  >
+                    📄 Générer sitemap.xml
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <h3 className="text-xs font-black uppercase tracking-widest mb-3 text-zinc-400">Maintenance Cache Editorial</h3>
                 <div className="flex flex-wrap gap-3">
@@ -1643,15 +2217,27 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   onClick={() => {
                     updateSiteSettings({
                       aiModelMode: settingsAIExecutionMode,
+                      databaseProvider: settingsDatabaseProvider,
                       paywallEnabled: settingsPaywallEnabled,
-                      paywallThreshold: settingsPaywallThreshold
+                      paywallThreshold: settingsPaywallThreshold,
+                      cookieConsentEnabled,
+                      privacyPolicyTextFr,
+                      privacyPolicyTextEn,
+                      dataRetentionDays,
+                      seoTitleSuffix,
+                      seoCanonicalBase,
+                      seoDefaultDesc,
+                      seoDefaultKeywords: seoKeywords,
+                      seoOgImage,
+                      seoRobotsIndex,
+                      seoGoogleSiteVerification: seoGoogleVerification
                     } as any);
-                    showToast(language === 'fr' ? 'Paramètres globaux sauvegardés !' : 'Global system parameters applied!');
+                    showToast(language === 'fr' ? 'Configurations globales & SEO sauvegardés !' : 'Global system parameters & SEO applied!');
                   }}
-                  className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer" 
+                  className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer rounded-lg shadow-md" 
                   style={{ backgroundColor: currentSettings.accentColor }}
                 >
-                  {language === 'fr' ? 'Sauvegarder les configurations' : 'Save System Parameters'}
+                  {language === 'fr' ? 'Sauvegarder l\'ensemble des configurations' : 'Save All System Parameters'}
                 </button>
               </div>
             </div>
@@ -1743,7 +2329,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">League ID Key</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">League ID Key</label>
                         <select 
                           value={matchLeague}
                           onChange={(e) => {
@@ -1780,7 +2366,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Status State</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Status State</label>
                         <select 
                           value={matchStatus}
                           onChange={(e) => setMatchStatus(e.target.value as any)}
@@ -1795,7 +2381,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">League Label (FR)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">League Label (FR)</label>
                         <input 
                           type="text"
                           value={matchLeagueFr}
@@ -1805,7 +2391,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">League Label (EN)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">League Label (EN)</label>
                         <input 
                           type="text"
                           value={matchLeagueEn}
@@ -1818,7 +2404,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
                           {matchStatus === "live" ? "Live Clock (Time)" : "Scheduled Date"}
                         </label>
                         <input 
@@ -1830,7 +2416,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Arena Venue / Stadium</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Arena Venue / Stadium</label>
                         <input 
                           type="text"
                           value={matchArena}
@@ -1850,7 +2436,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
                     <div className="grid grid-cols-2 gap-4 border-l-4 border-l-[#E85D42] pl-3 py-1 bg-zinc-500/5" style={{ borderLeftColor: currentSettings.accentColor }}>
                       <div className={matchLeague === "wrestling" ? "col-span-2" : "col-span-1"}>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
                           {matchLeague === "wrestling" ? "Lutteur A (Écurie A)" : "Team A Name"}
                         </label>
                         <input 
@@ -1863,7 +2449,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       </div>
                       {matchLeague !== "wrestling" && (
                         <div>
-                          <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Team A Score</label>
+                          <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Team A Score</label>
                           <input 
                             type="text"
                             value={matchTeamAScore}
@@ -1877,7 +2463,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
                     <div className="grid grid-cols-2 gap-4 border-l-4 border-l-zinc-500 pl-3 py-1 bg-zinc-500/5">
                       <div className={matchLeague === "wrestling" ? "col-span-2" : "col-span-1"}>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
                           {matchLeague === "wrestling" ? "Lutteur B (Écurie B)" : "Team B Name"}
                         </label>
                         <input 
@@ -1890,7 +2476,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       </div>
                       {matchLeague !== "wrestling" && (
                         <div>
-                          <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Team B Score</label>
+                          <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Team B Score</label>
                           <input 
                             type="text"
                             value={matchTeamBScore}
@@ -1905,7 +2491,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     {/* CNG Wrestling Official Verdict */}
                     {matchLeague === "wrestling" && (
                       <div className="p-3.5 bg-[#E85D42]/5 border border-dashed border-[#E85D42]/20 space-y-2 col-span-2">
-                        <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                        <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-200 mb-1">
                           {language === "fr" ? "Verdict du Combat (Règlement CNG)" : "CNG Combat Official Verdict"}
                         </label>
                         <select
@@ -1960,7 +2546,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Footnote perspective (FR)</label>
+                      <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Footnote perspective (FR)</label>
                       <textarea 
                         value={matchContextFr}
                         onChange={(e) => setMatchContextFr(e.target.value)}
@@ -1969,7 +2555,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-500 mb-1">Footnote perspective (EN)</label>
+                      <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Footnote perspective (EN)</label>
                       <textarea 
                         value={matchContextEn}
                         onChange={(e) => setMatchContextEn(e.target.value)}
@@ -2149,12 +2735,21 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 <h2 className="text-3xl font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100">Journal Frames</h2>
                 <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Archive content tables</p>
               </div>
-              <button 
-                onClick={startNewArticle}
-                className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] text-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all"
-              >
-                <Plus size={16} /> New Frame Entry
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button 
+                  onClick={handlePurgeAllArticles}
+                  className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3.5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all rounded-md cursor-pointer"
+                  title="Purger tous les articles"
+                >
+                  <Trash2 size={14} /> {language === 'fr' ? 'Purger' : 'Purge'}
+                </button>
+                <button 
+                  onClick={startNewArticle}
+                  className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] text-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all rounded-md cursor-pointer"
+                >
+                  <Plus size={16} /> New Frame Entry
+                </button>
+              </div>
             </div>
 
             {/* Filter Suite */}
@@ -2205,7 +2800,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         <span className="font-extrabold text-zinc-100 block truncate max-w-sm">{a.title?.[language] || a.title?.fr}</span>
                         <span className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide block font-semibold">{a.type}</span>
                       </td>
-                      <td className="px-6 py-4 font-bold tracking-widest uppercase text-zinc-300">{a.category}</td>
+                      <td className="px-6 py-4 font-bold tracking-widest uppercase text-zinc-300">{formatCategory(a.category, language)}</td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border rounded-xs ${
                           a.isPublished 

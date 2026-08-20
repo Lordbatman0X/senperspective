@@ -244,7 +244,7 @@ export function ModerationTab() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-800 pb-3 gap-4">
         <div>
           <h2 className="text-2xl font-extrabold uppercase tracking-tight text-zinc-100">{t.title}</h2>
-          <p className="text-xs text-zinc-400 font-mono">{t.subtitle}</p>
+          <p className="text-xs text-zinc-200 font-mono">{t.subtitle}</p>
         </div>
         <button
           onClick={() => setShowAddModal(true)}
@@ -264,7 +264,7 @@ export function ModerationTab() {
                 <UserPlus size={18} className="text-[#E85D42]" />
                 {language === 'fr' ? 'Nouveau Compte Utilisateur' : 'Create User Account'}
               </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-zinc-400 hover:text-white">✕</button>
+              <button onClick={() => setShowAddModal(false)} className="text-zinc-200 hover:text-white">✕</button>
             </div>
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div>
@@ -377,7 +377,7 @@ export function ModerationTab() {
           className={`px-6 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer bg-transparent ${
             activeSubTab === 'directory'
               ? 'border-[#E85D42] text-[#E85D42]'
-              : 'border-transparent text-zinc-400 hover:text-zinc-100'
+              : 'border-transparent text-zinc-200 hover:text-zinc-100'
           }`}
         >
           {language === 'fr' ? 'Annuaire des Utilisateurs' : 'User Directory'}
@@ -387,7 +387,7 @@ export function ModerationTab() {
           className={`px-6 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer bg-transparent flex items-center gap-2 ${
             activeSubTab === 'reports'
               ? 'border-rose-500 text-rose-400'
-              : 'border-transparent text-zinc-400 hover:text-zinc-100'
+              : 'border-transparent text-zinc-200 hover:text-zinc-100'
           }`}
         >
           <AlertTriangle size={14} />
@@ -401,7 +401,7 @@ export function ModerationTab() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-zinc-900/80 backdrop-blur-md p-4 border border-zinc-800 rounded-lg flex flex-col sm:flex-row gap-4 items-center justify-between shadow-xl">
               <div className="relative w-full sm:w-72">
-                <Search size={14} className="absolute left-3 top-3 text-zinc-400" />
+                <Search size={14} className="absolute left-3 top-3 text-zinc-200" />
                 <input
                   type="text"
                   placeholder={t.searchPlaceholder}
@@ -452,14 +452,14 @@ export function ModerationTab() {
                             {user.role}
                           </span>
                         </h4>
-                        <p className="text-xs text-zinc-400 font-mono mt-0.5">{user.email}</p>
+                        <p className="text-xs text-zinc-200 font-mono mt-0.5">{user.email}</p>
                       </div>
                     </div>
 
                     {/* Actions Area */}
                     <div className="flex items-center gap-3 self-end sm:self-auto">
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold">{language === 'fr' ? 'Rôle' : 'Role'}</span>
+                        <span className="text-[10px] uppercase tracking-wider text-zinc-200 font-bold">{language === 'fr' ? 'Rôle' : 'Role'}</span>
                         <select
                           value={user.role}
                           onChange={e => handleRoleChange(user.email, e.target.value)}
@@ -483,7 +483,7 @@ export function ModerationTab() {
                         <button
                           onClick={() => handleDeleteClick(user.email)}
                           disabled={user.role === 'Admin' && mergedUsers.filter(u => u.role === 'Admin').length <= 1}
-                          className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-950/40 transition-all rounded-md disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none"
+                          className="p-2 text-zinc-200 hover:text-red-400 hover:bg-red-950/40 transition-all rounded-md disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer bg-transparent border-none"
                           title="Supprimer le compte"
                         >
                           <Trash2 size={16} />
@@ -494,7 +494,7 @@ export function ModerationTab() {
                 ))}
 
                 {filteredUsers.length === 0 && (
-                  <div className="p-12 text-center text-zinc-400 font-bold text-xs uppercase tracking-wider bg-zinc-900/60">
+                  <div className="p-12 text-center text-zinc-200 font-bold text-xs uppercase tracking-wider bg-zinc-900/60">
                     {language === 'fr' ? 'Aucun membre trouvé.' : 'No members found.'}
                   </div>
                 )}
@@ -509,18 +509,18 @@ export function ModerationTab() {
                 <Activity className="text-[#E85D42]" size={20} />
                 <h3 className="font-extrabold text-sm uppercase tracking-wider text-white">{t.logTitle}</h3>
               </div>
-              <p className="text-xs text-zinc-400">{t.logSubtitle}</p>
+              <p className="text-xs text-zinc-200">{t.logSubtitle}</p>
             </div>
 
             <div className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-lg max-h-[500px] overflow-y-auto divide-y divide-zinc-800 shadow-xl">
               {(interactions || []).length === 0 ? (
-                <div className="p-8 text-center text-xs text-zinc-400 font-bold uppercase tracking-wider">
+                <div className="p-8 text-center text-xs text-zinc-200 font-bold uppercase tracking-wider">
                   {t.emptyLogs}
                 </div>
               ) : (
                 (interactions || []).map(log => (
                   <div key={log.id} className="p-3.5 hover:bg-zinc-800/50 transition-colors space-y-1 text-xs">
-                    <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono">
+                    <div className="flex justify-between items-center text-[10px] text-zinc-200 font-mono">
                       <span className="font-bold text-zinc-200 truncate max-w-[140px]">{log.email}</span>
                       <span>{log.date}</span>
                     </div>
@@ -537,7 +537,7 @@ export function ModerationTab() {
         <div className="space-y-6 max-w-4xl">
           {/* Security reports tickets */}
           {reports.length === 0 ? (
-            <div className="p-12 text-center text-zinc-400 font-bold text-xs uppercase tracking-wider bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-lg shadow-xl">
+            <div className="p-12 text-center text-zinc-200 font-bold text-xs uppercase tracking-wider bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-lg shadow-xl">
               {language === 'fr' ? 'Aucun signalement actif de sécurité.' : 'No active security reports recorded.'}
             </div>
           ) : (
@@ -549,14 +549,14 @@ export function ModerationTab() {
                       <span className="text-rose-300 bg-rose-950/80 px-2 py-0.5 border border-rose-800 rounded-xs">
                         {report.reason}
                       </span>
-                      <span className="text-zinc-400">
+                      <span className="text-zinc-200">
                         {report.date}
                       </span>
                     </div>
                     <h4 className="font-bold text-sm text-zinc-100">
                       {language === 'fr' ? 'Utilisateur signalé :' : 'Reported User :'} <span className="font-mono text-xs text-[#E85D42]">{report.reportedUser}</span>
                     </h4>
-                    <p className="text-xs text-zinc-400 font-mono">
+                    <p className="text-xs text-zinc-200 font-mono">
                       {language === 'fr' ? 'Signalé par :' : 'Reported by :'} {report.reportedBy}
                     </p>
                     {report.details && (

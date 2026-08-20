@@ -5,8 +5,8 @@ import { Trophy, Activity, MessageSquare, ChevronLeft, Calendar, HelpCircle, Shi
 import { motion, AnimatePresence } from "motion/react";
 import { Match, Article } from "../types";
 import { useSEO } from "../hooks/useSEO";
-import { formatRelativeDate } from "../lib/utils";
-import { getSafeImageUrl } from "../lib/imageUtils";
+import { formatRelativeDate, formatCategory } from "../lib/utils";
+import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from "../lib/imageUtils";
 
 export function LArenePage() {
   const { language, articles = [], matches = [] } = useStore();
@@ -23,7 +23,7 @@ export function LArenePage() {
 
   // Get ONLY sports articles - strictly no non-sports fallback
   const displayedArticles = articles.filter(
-    (a) => a.isPublished && (
+    (a) => a.isPublished !== false && (a as any).status !== 'draft' && (
       a.category?.toLowerCase() === "sports" ||
       a.category?.toLowerCase() === "sport" ||
       a.tags?.some(t => t.toLowerCase().includes("sport") || t.toLowerCase().includes("lutte") || t.toLowerCase().includes("basket") || t.toLowerCase().includes("football"))
@@ -142,20 +142,23 @@ export function LArenePage() {
 
         {displayedArticles.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {displayedArticles.map((article) => (
+            {displayedArticles.map((article, idx) => (
               <div 
-                key={article.id} 
+                key={`${article.id}-${idx}`} 
                 className="group flex flex-col h-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-[#E85D42] dark:hover:border-[#E85D42] transition-all duration-300 shadow-sm hover:shadow-md overflow-hidden"
               >
                 <Link to={`/article/${article.slug || article.id}`} className="block relative h-52 overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                   <img
-                    src={getSafeImageUrl(article.featuredImage)}
+                    src={getSafeImageUrl(article.featuredImage || article.imageUrl)}
                     alt={article.title[language] || article.title.fr}
                     className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
+                    }}
                   />
                   <div className="absolute top-3 left-3 bg-[#E85D42] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 shadow-sm">
-                    {article.category || "Sports"}
+                    {formatCategory(article.category, language) || "Sports"}
                   </div>
                   {article.type && (
                     <div className="absolute top-3 right-3 bg-zinc-950/80 backdrop-blur-md text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 border border-white/20">
