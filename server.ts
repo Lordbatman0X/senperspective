@@ -4,20 +4,18 @@ import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 
 export const app = express();
+const PORT = 3000;
 
-async function startServer() {
-  const PORT = 3000;
-
-  // Enable CORS for webhooks and API clients
-  app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    if (req.method === "OPTIONS") {
-      return res.sendStatus(200);
-    }
-    next();
-  });
+// Enable CORS for webhooks and API clients
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -2662,12 +2660,18 @@ Context Details: ${JSON.stringify(locationInfo)}`;
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    (async () => {
+      try {
+        const { createServer: createViteServer } = await import("vite");
+        const vite = await createViteServer({
+          server: { middlewareMode: true },
+          appType: "spa",
+        });
+        app.use(vite.middlewares);
+      } catch (err) {
+        console.error("Vite middleware error:", err);
+      }
+    })();
   } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
@@ -2681,8 +2685,5 @@ Context Details: ${JSON.stringify(locationInfo)}`;
       console.log(`Server running on http://localhost:${PORT}`);
     });
   }
-}
-
-startServer();
 
 export default app;
