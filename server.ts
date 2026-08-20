@@ -2577,16 +2577,23 @@ Context Details: ${JSON.stringify(locationInfo)}`;
         try {
           const { sql } = await import("@vercel/postgres");
           await sql`CREATE TABLE IF NOT EXISTS perspective_store (key TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`;
-          await sql`INSERT INTO perspective_store (key, value) VALUES ('full_database', ${JSON.stringify(snapshot)}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP;`;
+          const jsonVal = JSON.stringify(snapshot);
+          await sql`INSERT INTO perspective_store (key, value) VALUES ('full_database', ${jsonVal}::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP;`;
           storedInPostgres = true;
         } catch (pgErr) {
           console.warn("[Vercel Postgres Import Error]", pgErr);
         }
       }
 
-      // 3. Always write fallback copy to disk/tmp
-      const vercelSnapshotPath = path.join(baseStorageDir, "vercel-db-snapshot.json");
-      fs.writeFileSync(vercelSnapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
+      // 3. Always write fallback copy to disk/tmp if writable
+      let storedInLocalFile = false;
+      try {
+        const vercelSnapshotPath = path.join(baseStorageDir, "vercel-db-snapshot.json");
+        fs.writeFileSync(vercelSnapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
+        storedInLocalFile = true;
+      } catch (fileErr) {
+        console.warn("[Vercel Local Snapshot Write Notice]", fileErr);
+      }
 
       return res.json({
         success: true,
@@ -2602,7 +2609,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
         storageStatus: {
           storedInKv,
           storedInPostgres,
-          storedInLocalFile: true
+          storedInLocalFile
         }
       });
     } catch (err: any) {
