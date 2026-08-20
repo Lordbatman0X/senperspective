@@ -40,86 +40,139 @@ export const RSS_CATEGORIES = [
   'Tech & Innovation'
 ];
 
+// Helper for safe client API calls preventing JSON parse errors on HTML responses
+export async function safeFetchJson(url: string, options?: RequestInit) {
+  try {
+    const res = await fetch(url, options);
+    const contentType = res.headers.get("content-type") || "";
+    const text = await res.text();
+    
+    if (!contentType.includes("application/json") && text.trim().startsWith("<")) {
+      return { 
+        ok: false, 
+        status: res.status, 
+        data: null, 
+        error: `Le serveur a retourné une réponse HTML au lieu de JSON (HTTP ${res.status}). Vérifiez les routes API.` 
+      };
+    }
+    
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return { 
+        ok: false, 
+        status: res.status, 
+        data: null, 
+        error: `Structure de réponse JSON invalide reçue de ${url} (HTTP ${res.status}).` 
+      };
+    }
+    
+    return { ok: res.ok, status: res.status, data, error: data?.error || null };
+  } catch (err: any) {
+    return { ok: false, status: 0, data: null, error: err?.message || "Erreur de connexion réseau" };
+  }
+}
+
 export const ALL_RELIABLE_RSS_FEEDS = [
   // --- SÉNÉGAL PRESS & MEDIA ---
-  { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal', active: true },
-  { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal', active: true },
-  { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "L'Arène", pack: 'senegal', active: true },
-  { id: 'seneweb', name: 'Seneweb Actualités', url: 'https://www.seneweb.com/rss/actualites.rss', category: 'Société', pack: 'senegal', active: true },
-  { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', active: true },
-  { id: 'sudquotidien-gn', name: 'Sud Quotidien (Google News Wire)', url: 'https://news.google.com/rss/search?q=Sud+Quotidien+Senegal', category: 'Dossiers', pack: 'senegal', active: true },
-  { id: 'lequotidien-gn', name: 'Le Quotidien Sénégal (Google News Wire)', url: 'https://news.google.com/rss/search?q=Le+Quotidien+Senegal', category: 'Société', pack: 'senegal', active: true },
-  { id: 'rts-gn', name: 'RTS Sénégal (Google News Wire)', url: 'https://news.google.com/rss/search?q=RTS+Senegal', category: 'Politique', pack: 'senegal', active: true },
+  { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "L'Arène", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'seneweb', name: 'Seneweb Actualités Wire', url: 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'allafrica-senegal', name: 'AllAfrica Sénégal (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'sudquotidien-gn', name: 'Sud Quotidien (Google Wire)', url: 'https://news.google.com/rss/search?q=Sud+Quotidien+Senegal', category: 'Dossiers', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'lequotidien-gn', name: 'Le Quotidien Sénégal (Google Wire)', url: 'https://news.google.com/rss/search?q=Le+Quotidien+Senegal', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'rts-gn', name: 'RTS Sénégal (Google Wire)', url: 'https://news.google.com/rss/search?q=RTS+Senegal', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
 
   // --- AFRIQUE & REGIONAL WIRE ---
-  { id: 'rfiafrique', name: 'RFI Afrique', url: 'https://www.rfi.fr/fr/afrique/rss', category: 'International', pack: 'africa', active: true },
-  { id: 'jeuneafrique', name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', category: 'Dossiers', pack: 'africa', active: true },
-  { id: 'bbcafrique', name: 'BBC Afrique (FR)', url: 'https://www.bbc.com/afrique/index.xml', category: 'International', pack: 'africa', active: true },
-  { id: 'bbcafrica-en', name: 'BBC Africa (EN)', url: 'https://feeds.bbci.co.uk/news/world/africa/rss.xml', category: 'International', pack: 'africa', active: true },
-  { id: 'france24-afrique-fr', name: 'France 24 Afrique (FR)', url: 'https://www.france24.com/fr/afrique/rss', category: 'International', pack: 'africa', active: true },
-  { id: 'france24-africa-en', name: 'France 24 Africa (EN)', url: 'https://www.france24.com/en/africa/rss', category: 'International', pack: 'africa', active: true },
-  { id: 'africanews', name: 'Africanews Wire', url: 'https://www.africanews.com/feed/rss', category: 'International', pack: 'africa', active: true },
-  { id: 'allafrica-latest', name: 'AllAfrica Latest (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', category: 'International', pack: 'africa', active: true },
-  { id: 'allafrica-westafrica', name: 'AllAfrica West Africa (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/westafrica/headlines.rdf', category: 'International', pack: 'africa', active: true },
-  { id: 'allafrica-senegal', name: 'AllAfrica Senegal (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'africa', active: true },
-  { id: 'afrikcom', name: 'Afrik.com', url: 'https://www.afrik.com/feed', category: 'Société', pack: 'africa', active: true },
-  { id: 'aip-ci', name: 'AIP (Agence Ivoirienne de Presse)', url: 'https://www.aip.ci/feed/', category: 'International', pack: 'africa', active: true },
+  { id: 'rfiafrique', name: 'RFI Afrique', url: 'https://www.rfi.fr/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'jeuneafrique', name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', category: 'Dossiers', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'bbcafrique', name: 'BBC Afrique (FR)', url: 'https://www.bbc.com/afrique/index.xml', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'bbcafrica-en', name: 'BBC Africa (EN)', url: 'https://feeds.bbci.co.uk/news/world/africa/rss.xml', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'france24-afrique-fr', name: 'France 24 Afrique (FR)', url: 'https://www.france24.com/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'france24-africa-en', name: 'France 24 Africa (EN)', url: 'https://www.france24.com/en/africa/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'africanews', name: 'Africanews Wire', url: 'https://www.africanews.com/feed/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'allafrica-latest', name: 'AllAfrica Latest (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'allafrica-westafrica', name: 'AllAfrica West Africa (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/westafrica/headlines.rdf', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'afrikcom', name: 'Afrik.com (Google Wire)', url: 'https://news.google.com/rss/search?q=site:afrik.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'aip-ci', name: 'AIP (Agence Ivoirienne de Presse)', url: 'https://news.google.com/rss/search?q=Agence+Ivoirienne+de+Presse&hl=fr&gl=SN&ceid=SN:fr', category: 'International', pack: 'africa', originCountry: "Côte d'Ivoire", originFlag: '🇨🇮', originRegion: 'Afrique & Sub-Saharienne', active: true },
 
   // --- INTERNATIONAL & WORLD PRESS ---
-  { id: 'reuters-world', name: 'Reuters World News', url: 'https://feeds.reuters.com/Reuters/worldNews', category: 'International', pack: 'world', active: true },
-  { id: 'reuters-biz', name: 'Reuters Business', url: 'https://feeds.reuters.com/reuters/businessNews', category: 'Économie', pack: 'world', active: true },
-  { id: 'bbc-world', name: 'BBC World News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'International', pack: 'world', active: true },
-  { id: 'cnn-world', name: 'CNN World News', url: 'https://rss.cnn.com/rss/edition_world.rss', category: 'International', pack: 'world', active: true },
-  { id: 'aljazeera', name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', category: 'International', pack: 'world', active: true },
-  { id: 'france24-en', name: 'France 24 English', url: 'https://www.france24.com/en/rss', category: 'International', pack: 'world', active: true },
-  { id: 'france24-fr', name: 'France 24 Français', url: 'https://www.france24.com/fr/rss', category: 'International', pack: 'world', active: true },
-  { id: 'bloomberg-mkts', name: 'Bloomberg Markets', url: 'https://feeds.bloomberg.com/markets/news.rss', category: 'Économie', pack: 'world', active: true },
-  { id: 'guardian-world', name: 'The Guardian World', url: 'https://www.theguardian.com/world/rss', category: 'International', pack: 'world', active: true },
-  { id: 'politico-us', name: 'Politico World & Politics', url: 'https://www.politico.com/rss/politics08.xml', category: 'Politique', pack: 'world', active: true },
-  { id: 'ap-gn', name: 'Associated Press (AP Google Wire)', url: 'https://news.google.com/rss/search?q=Associated+Press+World', category: 'International', pack: 'world', active: true },
-  { id: 'economist-gn', name: 'The Economist (Google Wire)', url: 'https://news.google.com/rss/search?q=The+Economist', category: 'Économie', pack: 'world', active: true },
-  { id: 'dw-world', name: 'Deutsche Welle (DW)', url: 'https://rss.dw.com/rdf/rss-en-all', category: 'International', pack: 'world', active: true },
-  { id: 'nhk-world', name: 'NHK World News', url: 'https://www3.nhk.or.jp/rssxml/news/globalnewsroom.xml', category: 'International', pack: 'world', active: true },
-  { id: 'npr-news', name: 'NPR News', url: 'https://feeds.npr.org/1001/rss.xml', category: 'International', pack: 'world', active: true },
-  { id: 'cbc-top', name: 'CBC Top Stories', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories', category: 'International', pack: 'world', active: true },
-  { id: 'foxnews', name: 'Fox News Latest', url: 'https://feeds.foxnews.com/foxnews/latest', category: 'International', pack: 'world', active: true },
+  { id: 'bbc-world', name: 'BBC World News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global', active: true },
+  { id: 'aljazeera', name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', category: 'International', pack: 'world', originCountry: 'Qatar', originFlag: '🇶🇦', originRegion: 'International & Global', active: true },
+  { id: 'france24-en', name: 'France 24 English', url: 'https://www.france24.com/en/rss', category: 'International', pack: 'world', originCountry: 'France', originFlag: '🇫🇷', originRegion: 'International & Global', active: true },
+  { id: 'france24-fr', name: 'France 24 Français', url: 'https://www.france24.com/fr/rss', category: 'International', pack: 'world', originCountry: 'France', originFlag: '🇫🇷', originRegion: 'International & Global', active: true },
+  { id: 'bloomberg-mkts', name: 'Bloomberg Markets', url: 'https://feeds.bloomberg.com/markets/news.rss', category: 'Économie', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global', active: true },
+  { id: 'guardian-world', name: 'The Guardian World', url: 'https://www.theguardian.com/world/rss', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global', active: true },
+  { id: 'reuters-world', name: 'Reuters World (Google Wire)', url: 'https://news.google.com/rss/search?q=Reuters+World+News&hl=fr&gl=SN&ceid=SN:fr', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global', active: true },
+  { id: 'reuters-biz', name: 'Reuters Business (Google Wire)', url: 'https://news.google.com/rss/search?q=Reuters+Business+News&hl=fr&gl=SN&ceid=SN:fr', category: 'Économie', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global', active: true },
+  { id: 'cnn-world', name: 'CNN World (Google Wire)', url: 'https://news.google.com/rss/search?q=CNN+World+News&hl=fr&gl=SN&ceid=SN:fr', category: 'International', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global', active: true },
+  { id: 'dw-world', name: 'Deutsche Welle (DW)', url: 'https://rss.dw.com/rdf/rss-en-all', category: 'International', pack: 'world', originCountry: 'Allemagne', originFlag: '🇩🇪', originRegion: 'International & Global', active: true },
+  { id: 'cbc-top', name: 'CBC Top Stories', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories', category: 'International', pack: 'world', originCountry: 'Canada', originFlag: '🇨🇦', originRegion: 'International & Global', active: true },
+  { id: 'foxnews', name: 'Fox News Latest', url: 'https://feeds.foxnews.com/foxnews/latest', category: 'International', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global', active: true },
 
   // --- SPORTS & L'ARÈNE / FOOTBALL ---
-  { id: 'ligue1-senegal-gn', name: 'Ligue 1 Sénégal (Google Wire)', url: 'https://news.google.com/rss/search?q=Ligue+1+Senegal', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'teranga-lions-gn', name: 'Équipe du Sénégal (Teranga Lions Wire)', url: 'https://news.google.com/rss/search?q=Teranga+Lions', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'caf-champions-gn', name: 'CAF Champions League (Google Wire)', url: 'https://news.google.com/rss/search?q=CAF+Champions+League', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'bbc-epl', name: 'BBC Premier League', url: 'https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'bbc-ucl', name: 'BBC UEFA Champions League', url: 'https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'bbc-uel', name: 'BBC UEFA Europa League', url: 'https://feeds.bbci.co.uk/sport/football/europa-league/rss.xml', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'espn-fc', name: 'ESPN FC Global Soccer', url: 'https://www.espn.com/espn/rss/soccer/news', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1 (France)', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'realmadrid-gn', name: 'Real Madrid CF Wire', url: 'https://news.google.com/rss/search?q=Real+Madrid', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'barcelona-gn', name: 'FC Barcelona Wire', url: 'https://news.google.com/rss/search?q=FC+Barcelona', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'liverpool-gn', name: 'Liverpool FC Wire', url: 'https://news.google.com/rss/search?q=Liverpool', category: "L'Arène", pack: 'sports', active: true },
-  { id: 'mancity-gn', name: 'Manchester City Wire', url: 'https://news.google.com/rss/search?q=Manchester+City', category: "L'Arène", pack: 'sports', active: true },
-
-  // --- MÉTÉO & MARITIME ---
-  { id: 'dakar-meteo', name: 'ANACIM (Météo & Climat)', url: 'https://www.anacim.sn/feed/', category: 'Météo & Maritime', pack: 'maritime', active: true },
-  { id: 'chaloupe-goree', name: 'Port Autonome (Liaison Gorée & Maritime)', url: 'https://portdakar.sn/feed/', category: 'Chaloupe & Transports', pack: 'maritime', active: true }
+  { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
+  { id: 'bbc-epl', name: 'BBC Premier League', url: 'https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
+  { id: 'bbc-ucl', name: 'BBC UEFA Champions League', url: 'https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
+  { id: 'bbc-uel', name: 'BBC UEFA Europa League', url: 'https://feeds.bbci.co.uk/sport/football/europa-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
+  { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
+  { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1 (France)', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "L'Arène", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "L'Arène & Sports", active: true },
+  { id: 'espn-fc', name: 'ESPN FC Soccer (Google Wire)', url: 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr', category: "L'Arène", pack: 'sports', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: "L'Arène & Sports", active: true },
+  { id: 'teranga-lions-gn', name: 'Équipe du Sénégal (Teranga Lions Wire)', url: 'https://news.google.com/rss/search?q=Teranga+Lions', category: "L'Arène", pack: 'sports', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: "L'Arène & Sports", active: true }
 ];
 
 const DEFAULT_RSS_FEEDS = ALL_RELIABLE_RSS_FEEDS.slice(0, 12);
 
-export function ensureValidUrl(url: string | undefined | null): string | null {
-  if (!url || typeof url !== 'string') return null;
+export function normalizeRssFeedUrl(url: string | undefined | null, feedName?: string): string {
+  if (!url || typeof url !== 'string') return '';
   const trimmed = url.trim();
+  const lower = trimmed.toLowerCase();
+
+  if (lower.includes('feeds.reuters.com') || lower.includes('reuters.com/rss')) {
+    if (lower.includes('business') || (feedName && feedName.toLowerCase().includes('business'))) {
+      return 'https://news.google.com/rss/search?q=site:reuters.com+business&hl=fr&gl=SN&ceid=SN:fr';
+    }
+    return 'https://news.google.com/rss/search?q=site:reuters.com+world&hl=fr&gl=SN&ceid=SN:fr';
+  }
+
+  if (lower.includes('seneweb.com/rss') || lower.includes('seneweb.com/feed')) {
+    return 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr';
+  }
+
+  if (lower.includes('rss.cnn.com')) {
+    return 'https://news.google.com/rss/search?q=site:cnn.com+world&hl=fr&gl=SN&ceid=SN:fr';
+  }
+
+  if (lower.includes('nhk.or.jp')) {
+    return 'https://news.google.com/rss/search?q=NHK+World+News&hl=fr&gl=SN&ceid=SN:fr';
+  }
+
+  if (lower.includes('espn.com/espn/rss') || (lower.includes('espn.com') && lower.includes('rss'))) {
+    return 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr';
+  }
+
+  return trimmed;
+}
+
+export function ensureValidUrl(url: string | undefined | null, feedName?: string): string | null {
+  if (!url || typeof url !== 'string') return null;
+  let trimmed = url.trim();
   if (!trimmed || trimmed === '#' || trimmed === 'undefined' || trimmed === 'null') return null;
+  trimmed = normalizeRssFeedUrl(trimmed, feedName);
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
   return `https://${trimmed}`;
 }
 
-export function getArticleSourceInfo(draft: any, rssFeeds: any[] = DEFAULT_RSS_FEEDS) {
+export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_RSS_FEEDS) {
   let sourceName = draft.sourceName || "";
   let sourceDomain = draft.sourceDomain || "";
   let rawUrl = draft.originalUrl || draft.sourceUrl || "";
   let feedUrl = draft.feedUrl || "";
+  let originCountry = draft.sourceCountry || draft.originCountry || "";
+  let originFlag = draft.sourceFlag || draft.originFlag || "";
 
   let originalUrl = ensureValidUrl(rawUrl) || ensureValidUrl(feedUrl) || "";
 
@@ -139,36 +192,53 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = DEFAULT_RSS_F
     }
   }
 
-  if (!sourceName && sourceDomain) {
-    if (sourceDomain.includes("aps.sn")) sourceName = "APS (Agence de Presse Sénégalaise)";
-    else if (sourceDomain.includes("lesoleil.sn")) sourceName = "Le Soleil";
-    else if (sourceDomain.includes("rfi.fr")) sourceName = "RFI Afrique";
-    else if (sourceDomain.includes("jeuneafrique.com")) sourceName = "Jeune Afrique";
-    else if (sourceDomain.includes("senenews.com")) sourceName = "SeneNews";
-    else if (sourceDomain.includes("seneweb.com")) sourceName = "Seneweb";
-    else if (sourceDomain.includes("pressafrik.com")) sourceName = "PressAfrik";
-    else if (sourceDomain.includes("bbc.") || sourceDomain.includes("bbci.co.uk")) sourceName = "BBC News";
-    else if (sourceDomain.includes("reuters.com")) sourceName = "Reuters";
-    else if (sourceDomain.includes("cnn.com")) sourceName = "CNN";
-    else if (sourceDomain.includes("aljazeera.com")) sourceName = "Al Jazeera";
-    else if (sourceDomain.includes("france24.com")) sourceName = "France 24";
-    else if (sourceDomain.includes("africanews.com")) sourceName = "Africanews";
-    else if (sourceDomain.includes("allafrica.com")) sourceName = "AllAfrica";
-    else if (sourceDomain.includes("bloomberg.com")) sourceName = "Bloomberg";
-    else if (sourceDomain.includes("theguardian.com")) sourceName = "The Guardian";
-    else if (sourceDomain.includes("politico.com")) sourceName = "Politico";
-    else if (sourceDomain.includes("dw.com")) sourceName = "Deutsche Welle";
-    else if (sourceDomain.includes("espn.com")) sourceName = "ESPN FC";
-    else if (sourceDomain.includes("skysports.com")) sourceName = "Sky Sports";
-    else if (sourceDomain.includes("bfmtv.com")) sourceName = "RMC Sport";
-    else if (sourceDomain.includes("google.com")) sourceName = "Google News Wire";
-    else sourceName = sourceDomain;
+  // Find matching feed definition
+  const matchedFeed = rssFeeds.find((f: any) => 
+    (f.url && feedUrl && f.url === feedUrl) || 
+    (f.url && originalUrl && f.url === originalUrl) ||
+    (f.id && draft.id && draft.id.includes(f.id)) ||
+    (sourceDomain && f.url && f.url.includes(sourceDomain))
+  );
+
+  if (matchedFeed) {
+    if (!sourceName) sourceName = matchedFeed.name;
+    if (!originCountry) originCountry = matchedFeed.originCountry;
+    if (!originFlag) originFlag = matchedFeed.originFlag;
   }
 
-  if (!sourceName && feedUrl) {
-    const matchedFeed = rssFeeds.find((f: any) => f.url === feedUrl);
-    if (matchedFeed) {
-      sourceName = matchedFeed.name;
+  // Fallback origin rules based on domain or name
+  if (!originCountry) {
+    const lower = (sourceName + " " + sourceDomain + " " + originalUrl).toLowerCase();
+    if (lower.includes("senegal") || lower.includes("sénégal") || lower.includes(".sn") || lower.includes("aps") || lower.includes("lesoleil") || lower.includes("seneweb") || lower.includes("senenews") || lower.includes("pressafrik")) {
+      originCountry = "Sénégal";
+      originFlag = "🇸🇳";
+    } else if (lower.includes("ivoir") || lower.includes("aip.ci") || lower.includes(".ci")) {
+      originCountry = "Côte d'Ivoire";
+      originFlag = "🇨🇮";
+    } else if (lower.includes("rfi") || lower.includes("france24") || lower.includes("jeuneafrique") || lower.includes("afrik") || lower.includes("africanews") || lower.includes("allafrica")) {
+      originCountry = "Panafricain";
+      originFlag = "🌍";
+    } else if (lower.includes("bbc") || lower.includes("guardian") || lower.includes("skysports") || lower.includes("reuters")) {
+      originCountry = "Royaume-Uni";
+      originFlag = "🇬🇧";
+    } else if (lower.includes("aljazeera")) {
+      originCountry = "Qatar";
+      originFlag = "🇶🇦";
+    } else if (lower.includes("rmc") || lower.includes("bfmtv")) {
+      originCountry = "France";
+      originFlag = "🇫🇷";
+    } else if (lower.includes("dw") || lower.includes("deutsche")) {
+      originCountry = "Allemagne";
+      originFlag = "🇩🇪";
+    } else if (lower.includes("cbc")) {
+      originCountry = "Canada";
+      originFlag = "🇨🇦";
+    } else if (lower.includes("cnn") || lower.includes("fox") || lower.includes("npr") || lower.includes("politico") || lower.includes("espn")) {
+      originCountry = "États-Unis";
+      originFlag = "🇺🇸";
+    } else {
+      originCountry = "International";
+      originFlag = "🌐";
     }
   }
 
@@ -176,7 +246,7 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = DEFAULT_RSS_F
     sourceName = "Source RSS Fil d'Actualité";
   }
 
-  return { sourceName, sourceDomain, originalUrl, feedUrl };
+  return { sourceName, sourceDomain, originalUrl, feedUrl, originCountry, originFlag };
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
@@ -189,7 +259,17 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // State for RSS feeds
   const [rssFeeds, setRssFeeds] = useState(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    return saved ? JSON.parse(saved) : DEFAULT_RSS_FEEDS;
+    if (!saved) return DEFAULT_RSS_FEEDS;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        return parsed.map((f: any) => ({
+          ...f,
+          url: normalizeRssFeedUrl(f.url, f.name)
+        }));
+      }
+    } catch (_) {}
+    return DEFAULT_RSS_FEEDS;
   });
 
   // Real-time Health Dashboard state
@@ -1378,12 +1458,19 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                           />
 
                           <div className="min-w-0 flex-1 space-y-1">
-                            {/* PROMINENT SOURCE VERIFICATION BADGE */}
+                            {/* PROMINENT SOURCE VERIFICATION & ORIGIN BADGE */}
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-blue-500/15 text-blue-400 border border-blue-500/30">
                                 <Globe size={11} className="text-blue-400" />
                                 <span>Source : {srcInfo.sourceName}</span>
                               </span>
+
+                              {srcInfo.originCountry && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                  <span className="text-xs">{srcInfo.originFlag}</span>
+                                  <span>Origine : {srcInfo.originCountry}</span>
+                                </span>
+                              )}
 
                               {srcInfo.sourceDomain && (
                                 <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
@@ -1646,10 +1733,18 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                     <div>
                       <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Nom du Média Source' : 'Source Media Name'} :</span>
                       <strong className="text-white text-sm">{src.sourceName}</strong>
+                    </div>
+
+                    <div>
+                      <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Origine Géographique' : 'Geographic Origin'} :</span>
+                      <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
+                        <span>{src.originFlag}</span>
+                        <span>{src.originCountry}</span>
+                      </span>
                     </div>
 
                     {src.sourceDomain && (

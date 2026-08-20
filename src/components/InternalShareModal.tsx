@@ -20,8 +20,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store';
 import { useAuth } from '../contexts/AuthContext';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { db, safeOnSnapshot } from '../lib/firebase';
+import { collection } from 'firebase/firestore';
 import { SharedAttachment } from './SharedItemCard';
 
 interface InternalShareModalProps {
@@ -100,17 +100,17 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     const myEmail = readerProfile.email.toLowerCase().trim();
     const friendsRef = collection(db, "users", myEmail, "friends");
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = safeOnSnapshot(
       friendsRef,
       (snapshot) => {
-        const loadedFriends = snapshot.docs.map(doc => doc.id.toLowerCase().trim());
+        const loadedFriends = snapshot.docs.map((doc: any) => doc.id.toLowerCase().trim());
         setFriendsList(loadedFriends);
         if (loadedFriends.length > 0 && selectedRecipientEmail === 'admin@perspective.sn') {
           setSelectedRecipientEmail(loadedFriends[0]);
         }
       },
       (error) => {
-        console.error("Error loading friends in InternalShareModal:", error);
+        console.warn("Notice loading friends in InternalShareModal:", error);
       }
     );
 

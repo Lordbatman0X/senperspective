@@ -4,12 +4,11 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { db } from "../lib/firebase";
+import { db, safeOnSnapshot } from "../lib/firebase";
 import { 
   doc, 
   setDoc, 
   collection, 
-  onSnapshot, 
   deleteDoc,
   updateDoc
 } from "firebase/firestore";
@@ -151,9 +150,9 @@ export function ProfilePage() {
   useEffect(() => {
     if (!readerProfile?.email) return;
     const followingRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "following");
-    const unsubscribe = onSnapshot(followingRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(followingRef, (snapshot) => {
       const list: string[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         list.push(docSnap.id.toLowerCase().trim());
       });
       setFollowing(list);
@@ -168,9 +167,9 @@ export function ProfilePage() {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
     const followersRef = collection(db, "users", dec, "followers");
-    const unsubscribe = onSnapshot(followersRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(followersRef, (snapshot) => {
       const list: string[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         list.push(docSnap.id.toLowerCase().trim());
       });
       setFollowers(list);
@@ -185,9 +184,9 @@ export function ProfilePage() {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
     const targetFollowingRef = collection(db, "users", dec, "following");
-    const unsubscribe = onSnapshot(targetFollowingRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(targetFollowingRef, (snapshot) => {
       const list: string[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         list.push(docSnap.id.toLowerCase().trim());
       });
       setTargetFollowing(list);
@@ -201,9 +200,9 @@ export function ProfilePage() {
   useEffect(() => {
     if (!readerProfile?.email) return;
     const blocksRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "blocks");
-    const unsubscribe = onSnapshot(blocksRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(blocksRef, (snapshot) => {
       const list: string[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         list.push(docSnap.id.toLowerCase().trim());
       });
       setBlocks(list);
@@ -217,9 +216,9 @@ export function ProfilePage() {
   useEffect(() => {
     if (!readerProfile?.email) return;
     const mutesRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "mutes");
-    const unsubscribe = onSnapshot(mutesRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(mutesRef, (snapshot) => {
       const list: string[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         list.push(docSnap.id.toLowerCase().trim());
       });
       setMutes(list);
@@ -235,9 +234,9 @@ export function ProfilePage() {
     if (!dec || !readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
     const targetBlocksRef = collection(db, "users", dec, "blocks");
-    const unsubscribe = onSnapshot(targetBlocksRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(targetBlocksRef, (snapshot) => {
       let blocked = false;
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         if (docSnap.id.toLowerCase().trim() === myEmail) {
           blocked = true;
         }
@@ -253,14 +252,14 @@ export function ProfilePage() {
   useEffect(() => {
     if (!readerProfile?.email) return;
     const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
-    const unsubscribe = onSnapshot(friendsRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(friendsRef, (snapshot) => {
       const list: string[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         list.push(docSnap.id.toLowerCase().trim());
       });
       setFriends(list);
     }, (err) => {
-      console.error("Error loading friends list:", err);
+      console.warn("Error loading friends list:", err);
     });
     return () => unsubscribe();
   }, [readerProfile?.email]);
@@ -272,7 +271,7 @@ export function ProfilePage() {
   useEffect(() => {
     if (!decodedEmail) return;
     const userDocRef = doc(db, "users", decodedEmail);
-    const unsub = onSnapshot(userDocRef, (snap) => {
+    const unsub = safeOnSnapshot(userDocRef, (snap) => {
       if (snap.exists()) {
         setTargetUserData({ id: snap.id, ...snap.data() });
       } else {

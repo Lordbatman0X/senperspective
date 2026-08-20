@@ -5,8 +5,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { db } from "../lib/firebase";
-import { doc, updateDoc, collection, onSnapshot, setDoc, deleteDoc } from "firebase/firestore";
+import { db, safeOnSnapshot } from "../lib/firebase";
+import { doc, updateDoc, collection, setDoc, deleteDoc } from "firebase/firestore";
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -244,17 +244,17 @@ export function AccountDrawer({
   useEffect(() => {
     if (!readerProfile?.email) return;
     const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
-    const unsubscribe = onSnapshot(
+    const unsubscribe = safeOnSnapshot(
       friendsRef,
       (snapshot) => {
         const list: string[] = [];
-        snapshot.forEach((docSnap) => {
+        snapshot.forEach((docSnap: any) => {
           list.push(docSnap.id.toLowerCase().trim());
         });
         setFriendsList(list);
       },
       (error) => {
-        console.error("Error fetching friends:", error);
+        console.warn("Notice fetching friends:", error);
       }
     );
     return () => unsubscribe();

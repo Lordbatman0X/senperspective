@@ -1,7 +1,12 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp, getApps, getApp, setLogLevel } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, onSnapshot, Query, DocumentReference } from "firebase/firestore";
 import rawConfig from "../../firebase-applet-config.json";
+
+// Silence internal Firebase SDK log noise
+try {
+  setLogLevel('silent');
+} catch (_) {}
 
 const defaultConfig = {
   projectId: "earnest-strand-z71nt",
@@ -22,4 +27,58 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId || defaultConfig.firestoreDatabaseId);
+
+let globalQuotaExceeded = false;
+
+export function isQuotaExceeded(): boolean {
+  return globalQuotaExceeded;
+}
+
+export function markQuotaExceeded(): void {
+  globalQuotaExceeded = true;
+}
+
+export function safeOnSnapshot(
+  ref: any,
+  onNext: (snapshot: any) => void,
+  onError?: (error: any) => void
+): () => void {
+  if (globalQuotaExceeded) {
+    if (onError) {
+      onError({ code: 'resource-exhausted', message: 'Firestore quota limit reached. Using local state fallback.' });
+    }
+    return () => {};
+  }
+
+  let unsubscribeFn: (() => void) | null = null;
+
+  unsubscribeFn = onSnapshot(
+    ref,
+    (snapshot: any) => {
+      onNext(snapshot);
+    },
+    (error: any) => {
+      if (
+        error?.code === 'resource-exhausted' ||
+        (error?.message && (error.message.includes('Quota exceeded') || error.message.includes('quota')))
+      ) {
+        globalQuotaExceeded = true;
+        if (unsubscribeFn) {
+          try { unsubscribeFn(); } catch (_) {}
+        }
+      }
+      if (onError) {
+        onError(error);
+      }
+    }
+  );
+
+  return () => {
+    if (unsubscribeFn) {
+      try { unsubscribeFn(); } catch (_) {}
+    }
+  };
+}
+
 export default app;
+

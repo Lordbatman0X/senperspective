@@ -3,8 +3,8 @@ import { useStore, UserAccount, UserInteraction } from '../../store';
 import { useAuth } from '../../contexts/AuthContext';
 import { Users, Trash2, ShieldAlert, Key, UserCheck, Activity, Search, Shield, Eye, EyeOff, AlertTriangle, Award, Lock, Plus, UserPlus } from 'lucide-react';
 import { renderNeutralAvatar } from '../AccountDrawer';
-import { db } from '../../lib/firebase';
-import { collection, onSnapshot, doc, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db, safeOnSnapshot } from '../../lib/firebase';
+import { collection, doc, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 export function ModerationTab() {
   const { language, users: storeUsers, interactions, deleteUser, updateUserRole } = useStore();
@@ -32,9 +32,9 @@ export function ModerationTab() {
   // Real-time synchronization with Firestore users collection
   useEffect(() => {
     const usersRef = collection(db, "users");
-    const unsubscribeUsers = onSnapshot(usersRef, (snapshot) => {
+    const unsubscribeUsers = safeOnSnapshot(usersRef, (snapshot) => {
       const list: any[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
         list.push({
           email: data.email || docSnap.id,
@@ -55,7 +55,7 @@ export function ModerationTab() {
   // Real-time safety reports list
   useEffect(() => {
     const reportsRef = collection(db, "reports");
-    const unsubscribe = onSnapshot(reportsRef, (snapshot) => {
+    const unsubscribe = safeOnSnapshot(reportsRef, (snapshot) => {
       const list: any[] = [];
       snapshot.forEach((docSnap) => {
         list.push({ id: docSnap.id, ...docSnap.data() });

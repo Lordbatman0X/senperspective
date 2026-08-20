@@ -5,8 +5,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { trackPageView } from '../../lib/telemetry';
-import { db } from '../../lib/firebase';
-import { collection, onSnapshot, doc, setDoc } from 'firebase/firestore';
+import { db, safeOnSnapshot } from '../../lib/firebase';
+import { collection, doc, setDoc } from 'firebase/firestore';
 
 export function AudienceAnalyticsTab() {
   const { language, articles, subscribers, friends, interactions, comments, ads } = useStore();
@@ -249,24 +249,24 @@ export function AudienceAnalyticsTab() {
       setLoading(false);
     };
 
-    const unsubArchive = onSnapshot(collection(db, 'analytics_archive'), (snapshot) => {
-      archiveList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubArchive = safeOnSnapshot(collection(db, 'analytics_archive'), (snapshot) => {
+      archiveList = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       processCombinedData();
     }, (err) => {
       console.warn('Error fetching analytics_archive from Firestore:', err);
       processCombinedData();
     });
 
-    const unsubEvents = onSnapshot(collection(db, 'analytics_events'), (snapshot) => {
-      eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubEvents = safeOnSnapshot(collection(db, 'analytics_events'), (snapshot) => {
+      eventsList = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       processCombinedData();
     }, (err) => {
       console.warn('Error fetching analytics_events from Firestore:', err);
       processCombinedData();
     });
 
-    const unsubConsents = onSnapshot(collection(db, 'user_consents'), (snapshot) => {
-      consentsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsubConsents = safeOnSnapshot(collection(db, 'user_consents'), (snapshot) => {
+      consentsList = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
       processCombinedData();
     }, (err) => {
       console.warn('Error fetching user_consents from Firestore:', err);

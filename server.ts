@@ -3,8 +3,9 @@ import path from "path";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 
+export const app = express();
+
 async function startServer() {
-  const app = express();
   const PORT = 3000;
 
   // Enable CORS for webhooks and API clients
@@ -21,18 +22,23 @@ async function startServer() {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-  // Persistent RSS Drafts Storage File
-  const rssFile = path.join(process.cwd(), "rss-drafts.json");
+  // Persistent RSS Drafts Storage File (uses /tmp on Vercel to avoid read-only filesystem errors)
+  const baseStorageDir = process.env.VERCEL ? "/tmp" : process.cwd();
+  const rssFile = path.join(baseStorageDir, "rss-drafts.json");
   let rssDraftsRepository: any[] = [];
 
   // Persistent Analytics & Consented Audience Storage Files
-  const analyticsEventsFile = path.join(process.cwd(), "analytics-events.json");
-  const userConsentsFile = path.join(process.cwd(), "user-consents.json");
+  const analyticsEventsFile = path.join(baseStorageDir, "analytics-events.json");
+  const userConsentsFile = path.join(baseStorageDir, "user-consents.json");
   let analyticsEventsRepository: any[] = [];
   let userConsentsRepository: any[] = [];
 
   try {
-    if (fs.existsSync(rssFile)) {
+    const seedRssPath = path.join(process.cwd(), "rss-drafts.json");
+    if (fs.existsSync(seedRssPath)) {
+      const content = fs.readFileSync(seedRssPath, "utf-8");
+      rssDraftsRepository = JSON.parse(content);
+    } else if (fs.existsSync(rssFile)) {
       const content = fs.readFileSync(rssFile, "utf-8");
       rssDraftsRepository = JSON.parse(content);
     }
@@ -41,10 +47,16 @@ async function startServer() {
   }
 
   try {
-    if (fs.existsSync(analyticsEventsFile)) {
+    const seedEventsPath = path.join(process.cwd(), "analytics-events.json");
+    const seedConsentsPath = path.join(process.cwd(), "user-consents.json");
+    if (fs.existsSync(seedEventsPath)) {
+      analyticsEventsRepository = JSON.parse(fs.readFileSync(seedEventsPath, "utf-8"));
+    } else if (fs.existsSync(analyticsEventsFile)) {
       analyticsEventsRepository = JSON.parse(fs.readFileSync(analyticsEventsFile, "utf-8"));
     }
-    if (fs.existsSync(userConsentsFile)) {
+    if (fs.existsSync(seedConsentsPath)) {
+      userConsentsRepository = JSON.parse(fs.readFileSync(seedConsentsPath, "utf-8"));
+    } else if (fs.existsSync(userConsentsFile)) {
       userConsentsRepository = JSON.parse(fs.readFileSync(userConsentsFile, "utf-8"));
     }
   } catch (err) {
@@ -506,8 +518,39 @@ async function startServer() {
     return items;
   };
 
+  const normalizeRssFeedUrl = (rawUrl: string, feedName?: string): string => {
+    if (!rawUrl || typeof rawUrl !== 'string') return rawUrl;
+    const lower = rawUrl.toLowerCase().trim();
+
+    if (lower.includes('feeds.reuters.com') || lower.includes('reuters.com/rss')) {
+      if (lower.includes('business') || (feedName && feedName.toLowerCase().includes('business'))) {
+        return 'https://news.google.com/rss/search?q=site:reuters.com+business&hl=fr&gl=SN&ceid=SN:fr';
+      }
+      return 'https://news.google.com/rss/search?q=site:reuters.com+world&hl=fr&gl=SN&ceid=SN:fr';
+    }
+
+    if (lower.includes('seneweb.com/rss') || lower.includes('seneweb.com/feed')) {
+      return 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr';
+    }
+
+    if (lower.includes('rss.cnn.com')) {
+      return 'https://news.google.com/rss/search?q=site:cnn.com+world&hl=fr&gl=SN&ceid=SN:fr';
+    }
+
+    if (lower.includes('nhk.or.jp')) {
+      return 'https://news.google.com/rss/search?q=NHK+World+News&hl=fr&gl=SN&ceid=SN:fr';
+    }
+
+    if (lower.includes('espn.com/espn/rss') || (lower.includes('espn.com') && lower.includes('rss'))) {
+      return 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr';
+    }
+
+    return rawUrl.trim();
+  };
+
   // Resilient RSS fetcher with automatic Google News query wire bridge fallback
-  const fetchRssFeedResilient = async (url: string, feedName?: string) => {
+  const fetchRssFeedResilient = async (rawUrl: string, feedName?: string) => {
+    const url = normalizeRssFeedUrl(rawUrl, feedName);
     const startTime = Date.now();
     const headers = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -544,7 +587,7 @@ async function startServer() {
 
     // Direct fetch failed or returned 0 items -> Fallback to Google News Wire Query Bridge
     const fallbackQuery = feedName || (url.includes("news.google.com") ? "Senegal News" : url.replace(/^https?:\/\//, "").split("/")[0]);
-    console.log(`[RSS RESILIENCE BRIDGE] Direct fetch for ${url} failed/empty (${errorMessage || '0 items'}). Fallback to Google News Wire query for "${fallbackQuery}"...`);
+    console.info(`[RSS RESILIENCE BRIDGE] Direct fetch for ${url} empty/unavailable (${errorMessage || '0 items'}). Relaying via Google Wire Gateway for "${fallbackQuery}"...`);
 
     try {
       const gnUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(fallbackQuery)}&hl=fr&gl=SN&ceid=SN:fr`;
@@ -565,12 +608,12 @@ async function startServer() {
             status: "healthy" as const,
             latencyMs,
             isFallbackBridge: true,
-            errorMessage: errorMessage ? `Relayed via Wire Bridge (${errorMessage})` : undefined
+            errorMessage: errorMessage ? `Relayed via Wire Gateway (${errorMessage})` : undefined
           };
         }
       }
     } catch (gnErr: any) {
-      console.warn(`[RSS RESILIENCE BRIDGE FAILED] ${gnErr?.message}`);
+      console.warn(`[RSS RESILIENCE BRIDGE NOTICE] ${gnErr?.message}`);
     }
 
     const latencyMs = Date.now() - startTime;
@@ -586,18 +629,68 @@ async function startServer() {
 
   // --- AUTOMATED RSS DRAFTING SCHEDULER SYSTEM ---
   const BACKEND_RSS_FEEDS = [
-    { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal' },
-    { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal' },
-    { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "L'Arène", pack: 'senegal' },
-    { id: 'seneweb', name: 'Seneweb Actualités', url: 'https://www.seneweb.com/rss/actualites.rss', category: 'Société', pack: 'senegal' },
-    { id: 'rfiafrique', name: 'RFI Afrique', url: 'https://www.rfi.fr/fr/afrique/rss', category: 'International', pack: 'africa' },
-    { id: 'jeuneafrique', name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', category: 'Dossiers', pack: 'africa' },
-    { id: 'france24-afrique-fr', name: 'France 24 Afrique (FR)', url: 'https://www.france24.com/fr/afrique/rss', category: 'International', pack: 'africa' },
-    { id: 'bbc-world', name: 'BBC World News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'International', pack: 'world' },
-    { id: 'guardian-world', name: 'The Guardian World', url: 'https://www.theguardian.com/world/rss', category: 'International', pack: 'world' },
-    { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports' },
-    { id: 'espn-fc', name: 'ESPN FC Global Soccer', url: 'https://www.espn.com/espn/rss/soccer/news', category: "L'Arène", pack: 'sports' }
+    // Senegal Wire
+    { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "L'Arène", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'seneweb', name: 'Seneweb Actualités', url: 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'allafrica-senegal', name: 'AllAfrica Sénégal Wire', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+
+    // Africa Regional Wire
+    { id: 'rfiafrique', name: 'RFI Afrique', url: 'https://www.rfi.fr/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+    { id: 'jeuneafrique', name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', category: 'Dossiers', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+    { id: 'bbcafrique', name: 'BBC Afrique (FR)', url: 'https://www.bbc.com/afrique/index.xml', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+    { id: 'france24-afrique-fr', name: 'France 24 Afrique (FR)', url: 'https://www.france24.com/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+    { id: 'africanews', name: 'Africanews Wire', url: 'https://www.africanews.com/feed/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+    { id: 'allafrica-latest', name: 'AllAfrica Dernières Dépêches', url: 'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+
+    // World Press Wire
+    { id: 'bbc-world', name: 'BBC World News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global' },
+    { id: 'aljazeera', name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', category: 'International', pack: 'world', originCountry: 'Qatar', originFlag: '🇶🇦', originRegion: 'International & Global' },
+    { id: 'france24-fr', name: 'France 24 Monde (FR)', url: 'https://www.france24.com/fr/rss', category: 'International', pack: 'world', originCountry: 'France', originFlag: '🇫🇷', originRegion: 'International & Global' },
+    { id: 'guardian-world', name: 'The Guardian World', url: 'https://www.theguardian.com/world/rss', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global' },
+    { id: 'dw-world', name: 'Deutsche Welle (DW)', url: 'https://rss.dw.com/rdf/rss-en-all', category: 'International', pack: 'world', originCountry: 'Allemagne', originFlag: '🇩🇪', originRegion: 'International & Global' },
+    { id: 'cbc-top', name: 'CBC News Canada', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories', category: 'International', pack: 'world', originCountry: 'Canada', originFlag: '🇨🇦', originRegion: 'International & Global' },
+    { id: 'foxnews', name: 'Fox News Latest', url: 'https://feeds.foxnews.com/foxnews/latest', category: 'International', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global' },
+
+    // Sports Wire
+    { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports" },
+    { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports" },
+    { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "L'Arène", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "L'Arène & Sports" }
   ];
+
+  function getFeedOriginMetadata(url: string, name?: string) {
+    const lower = (url + " " + (name || "")).toLowerCase();
+    if (lower.includes("aps.sn") || lower.includes("lesoleil.sn") || lower.includes("seneweb") || lower.includes("senenews") || lower.includes("pressafrik") || lower.includes("anacim") || lower.includes("portdakar") || lower.includes("senegal")) {
+      return { country: "Sénégal", flag: "🇸🇳", region: "Sénégal & Ouest-Africain" };
+    }
+    if (lower.includes("aip.ci") || lower.includes("ivoir")) {
+      return { country: "Côte d'Ivoire", flag: "🇨🇮", region: "Sénégal & Ouest-Africain" };
+    }
+    if (lower.includes("rfi") || lower.includes("france24") || lower.includes("jeuneafrique") || lower.includes("afrik") || lower.includes("africanews") || lower.includes("allafrica")) {
+      return { country: "Panafricain", flag: "🌍", region: "Afrique & Sub-Saharienne" };
+    }
+    if (lower.includes("bbc") || lower.includes("guardian") || lower.includes("skysports") || lower.includes("reuters")) {
+      return { country: "Royaume-Uni", flag: "🇬🇧", region: "International & Global" };
+    }
+    if (lower.includes("aljazeera")) {
+      return { country: "Qatar", flag: "🇶🇦", region: "International & Global" };
+    }
+    if (lower.includes("rmc") || lower.includes("bfmtv")) {
+      return { country: "France", flag: "🇫🇷", region: "International & Global" };
+    }
+    if (lower.includes("dw") || lower.includes("deutsche")) {
+      return { country: "Allemagne", flag: "🇩🇪", region: "International & Global" };
+    }
+    if (lower.includes("cbc")) {
+      return { country: "Canada", flag: "🇨🇦", region: "International & Global" };
+    }
+    if (lower.includes("cnn") || lower.includes("fox") || lower.includes("npr") || lower.includes("politico") || lower.includes("espn")) {
+      return { country: "États-Unis", flag: "🇺🇸", region: "International & Global" };
+    }
+    return { country: "International", flag: "🌐", region: "International & Global" };
+  }
 
   interface RssAutomationConfig {
     enabled: boolean;
@@ -1086,6 +1179,8 @@ Required Schema:
       srcDomain = "";
     }
 
+    const originMeta = getFeedOriginMetadata(cleanOrigLink || feedCategory || "", srcName);
+
     const draftArticle: any = {
       id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9) + "-" + Math.floor(Math.random() * 1000000),
       slug,
@@ -1108,6 +1203,9 @@ Required Schema:
       structuralForces: json.structuralForces || null,
       sourceName: srcName,
       sourceDomain: srcDomain,
+      sourceCountry: originMeta.country,
+      sourceFlag: originMeta.flag,
+      sourceRegion: originMeta.region,
       originalUrl: cleanOrigLink,
       views: 0
     };
@@ -1569,29 +1667,20 @@ Generate the JSON article object according to the schema.`;
         return res.status(400).json({ success: false, error: "Missing 'feedUrl' parameter." });
       }
 
-      console.log(`[RSS AUTO GENERATOR] Fetching RSS feed from: ${feedUrl} (Category: ${feedCategory || 'Auto'})`);
-      const fetchRes = await fetch(feedUrl, {
-        headers: { 
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-        }
-      });
-
-      if (!fetchRes.ok) {
-        return res.status(400).json({ success: false, error: `HTTP ${fetchRes.status} fetching RSS feed from ${feedUrl}` });
-      }
-
-      const xmlText = await fetchRes.text();
-      const items = parseRssXmlFeed(xmlText).slice(0, Math.min(Number(maxItems) || 3, 10));
-
-      if (items.length === 0) {
+      console.log(`[RSS AUTO GENERATOR] Fetching RSS feed via resilient engine: ${feedUrl} (Category: ${feedCategory || 'Auto'})`);
+      const fetchResult = await fetchRssFeedResilient(feedUrl);
+      
+      if (!fetchResult.items || fetchResult.items.length === 0) {
         return res.json({
           success: true,
           feedUrl,
           generatedCount: 0,
           articles: [],
-          message: "No feed items found in XML."
+          message: fetchResult.errorMessage || "No feed items retrieved."
         });
       }
+
+      const items = fetchResult.items.slice(0, Math.min(Number(maxItems) || 3, 10));
 
       const generatedDrafts: any[] = [];
       const apiKey = process.env.GEMINI_API_KEY;
@@ -1801,6 +1890,9 @@ Required Schema:
               views: 0,
               sourceName: srcName,
               sourceDomain: srcDomain,
+              sourceCountry: getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName).country,
+              sourceFlag: getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName).flag,
+              sourceRegion: getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName).region,
               feedUrl: feedUrl,
               sourceUrl: cleanOrigLink,
               originalUrl: cleanOrigLink
@@ -2373,15 +2465,210 @@ Context Details: ${JSON.stringify(locationInfo)}`;
     }
   });
 
+  // ==========================================
+  // VERCEL STORAGE & MIGRATION API ENDPOINTS
+  // ==========================================
+
+  // Storage status check
+  app.get("/api/vercel-db/status", async (req, res) => {
+    const hasKv = Boolean(process.env.KV_REST_API_URL || process.env.KV_URL);
+    const hasPostgres = Boolean(process.env.POSTGRES_URL || process.env.VERCEL_POSTGRES_URL);
+    const hasBlob = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+    const isVercel = Boolean(process.env.VERCEL);
+
+    let activeProvider = "local-serverless";
+    if (hasKv) activeProvider = "vercel-kv";
+    else if (hasPostgres) activeProvider = "vercel-postgres";
+
+    return res.json({
+      success: true,
+      isVercel,
+      activeProvider,
+      storage: {
+        vercelKv: hasKv,
+        vercelPostgres: hasPostgres,
+        vercelBlob: hasBlob
+      },
+      message: hasKv || hasPostgres
+        ? `Connecté avec succès à Vercel ${hasKv ? "KV (Redis)" : "Postgres"}`
+        : "Base de données Vercel non encore liée. Utilisation du stockage local/serveur."
+    });
+  });
+
+  // Export database snapshot from Vercel Storage / Server
+  app.get("/api/vercel-db/export", async (req, res) => {
+    try {
+      let snapshot: any = null;
+
+      if (process.env.KV_REST_API_URL || process.env.KV_URL) {
+        try {
+          const { kv } = await import("@vercel/kv");
+          snapshot = await kv.get("perspective_full_database");
+        } catch (kvErr) {
+          console.warn("[Vercel KV Read Error]", kvErr);
+        }
+      }
+
+      if (!snapshot) {
+        const vercelSnapshotPath = path.join(baseStorageDir, "vercel-db-snapshot.json");
+        if (fs.existsSync(vercelSnapshotPath)) {
+          snapshot = JSON.parse(fs.readFileSync(vercelSnapshotPath, "utf-8"));
+        }
+      }
+
+      return res.json({
+        success: true,
+        snapshot: snapshot || {},
+        exportedAt: new Date().toISOString()
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || err });
+    }
+  });
+
+  // Import Firebase or JSON snapshot into Vercel Storage
+  app.post("/api/vercel-db/import", async (req, res) => {
+    try {
+      const payload = req.body || {};
+      const {
+        articles = [],
+        users = [],
+        comments = [],
+        messages = [],
+        media = [],
+        subscribers = [],
+        siteSettings = {},
+        matches = [],
+        reports = []
+      } = payload;
+
+      const snapshot = {
+        articles,
+        users,
+        comments,
+        messages,
+        media,
+        subscribers,
+        siteSettings,
+        matches,
+        reports,
+        updatedAt: new Date().toISOString()
+      };
+
+      let storedInKv = false;
+      let storedInPostgres = false;
+
+      // 1. Try Vercel KV if available
+      if (process.env.KV_REST_API_URL || process.env.KV_URL) {
+        try {
+          const { kv } = await import("@vercel/kv");
+          await kv.set("perspective_full_database", snapshot);
+          await kv.set("perspective_articles", articles);
+          await kv.set("perspective_users", users);
+          await kv.set("perspective_comments", comments);
+          await kv.set("perspective_messages", messages);
+          await kv.set("perspective_settings", siteSettings);
+          storedInKv = true;
+        } catch (kvErr) {
+          console.warn("[Vercel KV Import Error]", kvErr);
+        }
+      }
+
+      // 2. Try Vercel Postgres if available
+      if (process.env.POSTGRES_URL || process.env.VERCEL_POSTGRES_URL) {
+        try {
+          const { sql } = await import("@vercel/postgres");
+          await sql`CREATE TABLE IF NOT EXISTS perspective_store (key TEXT PRIMARY KEY, value JSONB, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);`;
+          await sql`INSERT INTO perspective_store (key, value) VALUES ('full_database', ${JSON.stringify(snapshot)}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP;`;
+          storedInPostgres = true;
+        } catch (pgErr) {
+          console.warn("[Vercel Postgres Import Error]", pgErr);
+        }
+      }
+
+      // 3. Always write fallback copy to disk/tmp
+      const vercelSnapshotPath = path.join(baseStorageDir, "vercel-db-snapshot.json");
+      fs.writeFileSync(vercelSnapshotPath, JSON.stringify(snapshot, null, 2), "utf-8");
+
+      return res.json({
+        success: true,
+        message: "Migration vers Vercel Storage réussie !",
+        counts: {
+          articles: articles.length,
+          users: users.length,
+          comments: comments.length,
+          messages: messages.length,
+          media: media.length,
+          subscribers: subscribers.length
+        },
+        storageStatus: {
+          storedInKv,
+          storedInPostgres,
+          storedInLocalFile: true
+        }
+      });
+    } catch (err: any) {
+      console.error("Error importing snapshot into Vercel DB:", err);
+      return res.status(500).json({ success: false, error: err?.message || err });
+    }
+  });
+
+  // Collection getter endpoint
+  app.get("/api/vercel-db/data/:collection", async (req, res) => {
+    try {
+      const collectionName = req.params.collection;
+      let data: any = null;
+
+      if (process.env.KV_REST_API_URL || process.env.KV_URL) {
+        try {
+          const { kv } = await import("@vercel/kv");
+          data = await kv.get(`perspective_${collectionName}`);
+        } catch (_) {}
+      }
+
+      if (!data) {
+        const vercelSnapshotPath = path.join(baseStorageDir, "vercel-db-snapshot.json");
+        if (fs.existsSync(vercelSnapshotPath)) {
+          const full = JSON.parse(fs.readFileSync(vercelSnapshotPath, "utf-8"));
+          data = full[collectionName] || null;
+        }
+      }
+
+      return res.json({ success: true, collection: collectionName, data: data || [] });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || err });
+    }
+  });
+
+  // Explicit API 404 handler to prevent API calls falling through to SPA index.html
+  app.all("/api/*", (req, res) => {
+    return res.status(404).json({
+      success: false,
+      error: `API Route non trouvée: ${req.method} ${req.path}`
+    });
+  });
+
+  // Global API error handler ensuring JSON responses
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path.startsWith('/api')) {
+      console.error(`[API ERROR ${req.method} ${req.path}]`, err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Erreur interne du serveur API"
+      });
+    }
+    next(err);
+  });
+
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
+  } else if (!process.env.VERCEL) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
@@ -2389,9 +2676,13 @@ Context Details: ${JSON.stringify(locationInfo)}`;
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
