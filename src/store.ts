@@ -3,6 +3,7 @@ import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { get, set as idbSet, del } from 'idb-keyval';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
+import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import { db } from './lib/firebase';
 import { doc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
@@ -31,7 +32,7 @@ export interface FriendContact {
 export interface MediaItem {
   id: string;
   url: string;
-  type: 'image' | 'video' | 'gif';
+  type: 'image' | 'video' | 'gif' | string;
   name: string;
   date: string;
 }
@@ -114,7 +115,7 @@ export interface DirectMessage {
   date: string;
   read?: boolean;
   attachment?: {
-    type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general';
+    type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general' | string;
     id: string;
     title: string;
     link: string;
@@ -142,7 +143,7 @@ export interface CommentItem {
   likedBy?: string[]; // array of user emails who liked
   dislikedBy?: string[]; // array of user emails who disliked
   attachment?: {
-    type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general';
+    type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general' | string;
     id: string;
     title: string;
     link: string;
@@ -437,7 +438,7 @@ export const useStore = create<AppState>()(
           console.error("Error calling DELETE /api/webhooks/make-rss:", e);
         }
       },
-      media: [],
+      media: seedMedia && seedMedia.length > 0 ? (seedMedia as MediaItem[]) : [],
       addMedia: async (m) => {
         set({ media: [m, ...(get().media || [])] });
         try {
@@ -566,68 +567,8 @@ export const useStore = create<AppState>()(
         }
       },
       deleteAd: (id) => set({ ads: (get().ads || []).filter(a => a.id !== id) }),
-      comments: [
-        {
-          id: 'c1',
-          articleId: 'l-economie-senegalaise-cap-vers-l-industrialisation',
-          articleTitle: 'L’Économie Sénégalaise : Cap vers l’Industrialisation',
-          author: 'Amadou Diallo',
-          email: 'amadou@example.com',
-          text: 'Excellente analyse. Le secteur de la transformation locale de nos produits agricoles est en effet la clé de notre indépendance économique.',
-          date: '2026-06-18',
-          isApproved: true,
-          likes: 5,
-          dislikes: 0,
-          likedBy: [],
-          dislikedBy: []
-        },
-        {
-          id: 'c2',
-          articleId: 'l-economie-senegalaise-cap-vers-l-industrialisation',
-          articleTitle: 'L’Économie Sénégalaise : Cap vers l’Industrialisation',
-          author: 'Fatoumata Ndiaye',
-          email: 'fatou@example.com',
-          text: 'Qu’en est-il du coût de l’énergie pour les nouvelles industries ? C’est souvent le principal obstacle au Sénégal.',
-          date: '2026-06-19',
-          isApproved: true,
-          likes: 2,
-          dislikes: 1,
-          likedBy: [],
-          dislikedBy: []
-        },
-        {
-          id: 'c3',
-          articleId: 'analyse-politique-cohabitation-parlementaire',
-          articleTitle: 'Analyse Politique : Cohabitation Parlementaire',
-          author: 'Moussa Sy',
-          email: 'moussa@example.com',
-          text: 'La cohabitation est une chance pour la démocratie sénégalaise, elle pousse à la recherche de consensus nationaux.',
-          date: '2026-06-20',
-          isApproved: true,
-          likes: 8,
-          dislikes: 0,
-          likedBy: [],
-          dislikedBy: []
-        }
-      ],
-      directMessages: [
-        {
-          id: 'dm1',
-          sender: 'member@perspective.sn',
-          receiver: 'admin@perspective.sn',
-          text: 'Bonjour, j\'aime beaucoup l\'article sur l\'industrialisation !',
-          date: '2026-06-25',
-          read: true
-        },
-        {
-          id: 'dm2',
-          sender: 'admin@perspective.sn',
-          receiver: 'member@perspective.sn',
-          text: 'Merci Mariama ! N\'hésitez pas à le partager ou à laisser un commentaire public.',
-          date: '2026-06-25',
-          read: true
-        }
-      ],
+      comments: seedComments && seedComments.length > 0 ? (seedComments as CommentItem[]) : [],
+      directMessages: seedMessages && seedMessages.length > 0 ? (seedMessages as DirectMessage[]) : [],
       sendDirectMessage: (msg) => {
         const dms = get().directMessages || [];
         const msgId = 'dm-' + Date.now().toString() + Math.random().toString(36).substring(4);
@@ -1430,7 +1371,11 @@ export const useStore = create<AppState>()(
       },
       seedSampleArticles: () => {
         set({
-          articles: [],
+          articles: seedArticles,
+          media: seedMedia as MediaItem[],
+          comments: seedComments as CommentItem[],
+          directMessages: seedMessages as DirectMessage[],
+          matches: seedMatches,
           users: [
             {
               email: 'kadersdiaz3@gmail.com',
@@ -1705,6 +1650,22 @@ export const useStore = create<AppState>()(
         siteSettings: state.siteSettings,
         matches: state.matches
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          if (!state.articles || state.articles.length < 10) {
+            state.articles = seedArticles;
+          }
+          if (!state.media || state.media.length === 0) {
+            state.media = seedMedia as MediaItem[];
+          }
+          if (!state.comments || state.comments.length === 0) {
+            state.comments = seedComments as CommentItem[];
+          }
+          if (!state.directMessages || state.directMessages.length === 0) {
+            state.directMessages = seedMessages as DirectMessage[];
+          }
+        }
+      }
     }
   )
 );

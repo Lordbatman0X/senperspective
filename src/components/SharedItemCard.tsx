@@ -4,7 +4,7 @@ import { Newspaper, Zap, User, MessageSquare, ExternalLink } from 'lucide-react'
 import { useStore } from '../store';
 
 export interface SharedAttachment {
-  type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general';
+  type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general' | string;
   id: string;
   title: string;
   link: string;
@@ -13,7 +13,7 @@ export interface SharedAttachment {
 }
 
 interface SharedItemCardProps {
-  attachment: SharedAttachment;
+  attachment: SharedAttachment | any;
   compact?: boolean;
 }
 

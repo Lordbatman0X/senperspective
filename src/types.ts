@@ -76,10 +76,11 @@ export interface Article {
   timeline?: TimelineEvent[];
   structuralForces?: StructuralForces;
   
-  relatedArticleIds: string[]; // IDs of related articles
+  relatedArticleIds?: string[]; // IDs of related articles
   
   isPublished: boolean;
   isFeatured: boolean;
+  isTrending?: boolean;
   views?: number;
   
   // RSS & Source Attribution Metadata
@@ -87,6 +88,7 @@ export interface Article {
   sourceDomain?: string;
   feedUrl?: string;
   originalUrl?: string;
+  sourceUrl?: string;
 }
 
 export interface Match {
