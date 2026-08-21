@@ -253,12 +253,12 @@ export function AdminDashboard() {
                     : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${dbStatus === 'connected' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
-                  {dbStatus === 'connected' ? 'Firebase Firestore (Cloud DB)' : 'Checking / Offline Fallback'}
+                  {dbStatus === 'connected' ? 'Cloud Database (Active)' : 'Checking / Offline Fallback'}
                 </div>
               </div>
 
               <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-                Firestore Database Engine
+                {isFr ? 'Moteur de Base de Données Cloud' : 'Cloud Database Engine'}
                 <span className="text-xs font-normal text-zinc-400 font-mono">
                   (Region: europe-west2)
                 </span>
@@ -301,7 +301,7 @@ export function AdminDashboard() {
         <div className="mt-6 pt-6 border-t border-zinc-800/80 grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-zinc-900/60 border border-zinc-800/80 p-3.5 rounded-lg">
             <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider font-semibold">
-              {isFr ? 'Total Documents Firestore' : 'Total Firestore Documents'}
+              {isFr ? 'Total Documents BD' : 'Total Cloud DB Documents'}
             </p>
             <p className="text-2xl font-black text-white mt-1">{totalDocuments}</p>
           </div>
@@ -326,19 +326,19 @@ export function AdminDashboard() {
             </p>
             <p className="text-xs font-bold uppercase tracking-wider text-emerald-400 mt-2 flex items-center gap-1.5">
               <CheckCircle2 size={13} />
-              Firestore + IDB
+              Cloud DB + Local
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. FIRESTORE COLLECTIONS MONITORING GRID */}
+      {/* 2. CLOUD DB COLLECTIONS MONITORING GRID */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
               <Layers size={18} className="text-brand-coral" />
-              {isFr ? 'Gestion & Surveillance des Collections Firestore' : 'Firestore Collection Manager & Monitor'}
+              {isFr ? 'Gestion & Surveillance des Collections de la Base de Données' : 'Cloud DB Collection Manager & Monitor'}
             </h3>
             <p className="text-xs text-zinc-400">
               {isFr ? 'Supervisez la taille, inspectez le contenu ou purgez individuellement chaque collection' : 'Inspect documents, verify counts, or manually wipe individual collections'}

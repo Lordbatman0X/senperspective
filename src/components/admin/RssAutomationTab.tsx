@@ -1562,7 +1562,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
               <div className="h-8 w-0.5 bg-gradient-to-b from-amber-500 via-emerald-500 to-emerald-400 animate-pulse" />
               <div className="px-3 py-1 bg-zinc-900 border border-zinc-700 rounded-full text-[10px] font-mono font-bold text-zinc-300 shadow flex items-center gap-1.5">
                 <CheckCircle2 size={12} className="text-emerald-400" />
-                <span>Publication Live → Base de Données Firestore & Web Portal</span>
+                <span>Publication Live → Base de Données Cloud & Web Portal</span>
               </div>
               <div className="h-8 w-0.5 bg-gradient-to-b from-emerald-400 to-emerald-500 animate-pulse" />
             </div>

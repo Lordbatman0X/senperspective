@@ -226,7 +226,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
               {language === 'fr' ? 'Envoyer une Newsletter' : 'Broadcast Campaign'}
             </h3>
             <span className="text-[10px] font-mono text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-md border border-zinc-200 dark:border-zinc-700">
-              ⚡ {language === 'fr' ? 'Enregistrement direct Firestore' : 'Live Firestore Recording'}
+              ⚡ {language === 'fr' ? 'Enregistrement Base de Données Cloud' : 'Live Cloud DB Recording'}
             </span>
           </div>
 

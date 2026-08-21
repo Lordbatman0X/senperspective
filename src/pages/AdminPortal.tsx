@@ -537,7 +537,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
   const menuItems = [
     { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
-    { id: 'admin_dashboard', label: language === 'fr' ? 'Base Firestore' : 'Firestore DB', icon: Database, badge: 0 },
+    { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données' : 'Database Manager', icon: Database, badge: 0 },
     { id: 'make_webhook', label: language === 'fr' ? 'Automatisations & RSS' : 'Automations & RSS', icon: Zap, badge: 0 },
     { id: 'rss_automation', label: language === 'fr' ? 'Brouillons RSS & IA' : 'RSS & AI Drafts', icon: Bot, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
     { id: 'list', label: language === 'fr' ? 'Contenus' : 'Contents', icon: FileText, badge: 0 },
@@ -1870,7 +1870,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     onChange={(e) => setSettingsDatabaseProvider(e.target.value)}
                     className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs focus:outline-none font-bold font-mono text-brand-dark dark:text-brand-white"
                   >
-                    <option value="firestore">Firebase Firestore (Production Clé-en-main)</option>
+                    <option value="firestore">{language === 'fr' ? 'Base de Données Document Cloud (Production Clé-en-main)' : 'Cloud Document Database (Production Ready)'}</option>
                     <option value="local">Local Storage Client (Fallback d’urgence)</option>
                   </select>
                 </div>

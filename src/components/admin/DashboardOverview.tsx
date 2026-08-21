@@ -93,7 +93,7 @@ export function DashboardOverview({
           <button
             onClick={() => onGoToTab('admin_dashboard')}
             className="flex items-center gap-1.5 bg-red-950/80 hover:bg-red-900 border border-red-800 text-red-300 px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm rounded-xs"
-            title={language === 'fr' ? 'Gérer et purger les collections Firestore' : 'Manage and wipe Firestore collections'}
+            title={language === 'fr' ? 'Gérer et purger les collections de la base de données' : 'Manage and wipe database collections'}
           >
             <Activity size={14} className="text-red-400" />
             {language === 'fr' ? 'Gestion Base de Données' : 'Database Manager'}

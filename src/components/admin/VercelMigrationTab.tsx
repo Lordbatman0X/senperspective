@@ -160,7 +160,7 @@ export function VercelMigrationTab() {
               Migration Firebase vers Vercel
             </h2>
             <p className="text-zinc-400 text-sm mt-2 max-w-2xl leading-relaxed">
-              Transférez gratuitement et en 1 clic l'intégralité de vos articles, utilisateurs, commentaires, messages directs et réglages depuis Firebase Firestore vers la base de données Vercel (Postgres ou Vercel KV / Redis).
+              Transférez gratuitement et en 1 clic l'intégralité de vos articles, utilisateurs, commentaires, messages directs et réglages depuis votre base de données document vers la base de données Vercel (Postgres ou Vercel KV / Redis).
             </p>
           </div>
 
@@ -311,7 +311,7 @@ export function VercelMigrationTab() {
                 <h4 className="font-bold text-sm text-brand-dark dark:text-zinc-100">Exporter Firebase</h4>
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
-                Téléchargez l'intégralité de la base Firebase Firestore sous forme de snapshot JSON sécurisé contenant tous vos contenus.
+                Téléchargez l'intégralité de la base de données cloud sous forme de snapshot JSON sécurisé contenant tous vos contenus.
               </p>
             </div>
             <button

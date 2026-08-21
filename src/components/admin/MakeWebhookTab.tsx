@@ -366,8 +366,8 @@ Output ONLY valid, parseable JSON. Do not surround with triple backticks or mark
             </h2>
             <p className="text-xs sm:text-sm text-zinc-400 max-w-2xl leading-relaxed">
               {isFr
-                ? 'Connectez n’importe quel outil d’automatisation (Zapier, N8N, Make.com, Pipedream), agent IA (OpenAI, Claude, Gemini, Maia) ou flux RSS XML. Aucune clé secrète requise — publication directe dans Firestore.'
-                : 'Connect any automation app (Zapier, N8N, Make.com, Pipedream), AI model (OpenAI, Claude, Gemini, Maia), or RSS feed. No secret key needed — direct ingestion into Firestore.'}
+                ? 'Connectez n’importe quel outil d’automatisation (Zapier, N8N, Make.com, Pipedream), agent IA (OpenAI, Claude, Gemini, Maia) ou flux RSS XML. Aucune clé secrète requise — publication directe dans la base de données.'
+                : 'Connect any automation app (Zapier, N8N, Make.com, Pipedream), AI model (OpenAI, Claude, Gemini, Maia), or RSS feed. No secret key needed — direct ingestion into Cloud Database.'}
             </p>
           </div>
 
@@ -493,7 +493,7 @@ Output ONLY valid, parseable JSON. Do not surround with triple backticks or mark
         <div className="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-lg flex items-center justify-between text-xs font-mono text-emerald-200">
           <span className="flex items-center gap-2">
             <ShieldCheck size={16} className="text-emerald-400" />
-            <span>Accès libre et sécurisé sans clé secrète. Synchronisation Firestore instantanée.</span>
+            <span>Accès libre et sécurisé sans clé secrète. Synchronisation base de données instantanée.</span>
           </span>
           <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
             Tous Outils Autorisés

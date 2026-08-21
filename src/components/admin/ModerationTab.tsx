@@ -140,7 +140,7 @@ export function ModerationTab() {
           password: newPassword,
           registeredAt: new Date().toISOString()
         }, { merge: true });
-        setSuccessMsg(language === 'fr' ? `Utilisateur ${newName} enregistré dans Firestore.` : `User ${newName} saved to Firestore.`);
+        setSuccessMsg(language === 'fr' ? `Utilisateur ${newName} enregistré dans la base de données.` : `User ${newName} saved to Database.`);
         setShowAddModal(false);
         setNewEmail('');
         setNewName('');

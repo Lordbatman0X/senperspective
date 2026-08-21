@@ -334,7 +334,7 @@ export function AudienceAnalyticsTab() {
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              {isFr ? 'Données Réelles Sync Firestore' : 'Live Real User Tracking'}
+              {isFr ? 'Données Réelles Sync Cloud DB' : 'Live Real User Tracking'}
             </span>
             <span className="text-[10px] font-mono text-zinc-400">
               RGPD Telemetry
@@ -346,8 +346,8 @@ export function AudienceAnalyticsTab() {
           </h2>
           <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
             {isFr 
-              ? 'Toutes les données ci-dessous proviennent exclusivement d’événements de trafic réels archivés dans Firebase Firestore. Aucun chiffre simulé.'
-              : 'All metrics below derive strictly from real user events stored in Firebase Firestore.'}
+              ? 'Toutes les données ci-dessous proviennent exclusivement d’événements de trafic réels archivés dans la base de données cloud. Aucun chiffre simulé.'
+              : 'All metrics below derive strictly from real user events stored in Cloud Database.'}
           </p>
         </div>
 
@@ -488,7 +488,7 @@ export function AudienceAnalyticsTab() {
               {isFr ? 'Graphique du Trafic Réel (14 Derniers Jours)' : 'Real Traffic Graphic (Last 14 Days)'}
             </h3>
             <p className="text-xs text-zinc-400 mt-0.5">
-              {isFr ? 'Évolution quotidienne des pages vues et sessions réelles archivées dans Firebase Firestore.' : 'Daily pageviews & unique sessions stored in Firestore.'}
+              {isFr ? 'Évolution quotidienne des pages vues et sessions réelles archivées dans la base de données.' : 'Daily pageviews & unique sessions stored in Cloud DB.'}
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs font-mono">
