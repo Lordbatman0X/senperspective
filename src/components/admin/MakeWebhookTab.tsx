@@ -4,6 +4,7 @@ import {
   CheckCircle2, AlertCircle, RefreshCw, ExternalLink, ShieldCheck, Layers, BookOpen, Bot, Trash2
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { safeFetchJson } from '../../lib/apiUtils';
 
 export function MakeWebhookTab() {
   const { language, siteSettings } = useStore();
@@ -285,27 +286,26 @@ Output ONLY valid, parseable JSON. Do not surround with triple backticks or mark
     setTestLoading(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/webhooks/incoming-rss', {
+      const { ok, data, error } = await safeFetchJson('/api/webhooks/incoming-rss', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(sampleJsonPayload)
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (ok && data?.success) {
         setTestResult({
           success: true,
           message: isFr 
-            ? '✓ Article test reçu et synchronisé avec succès dans la base Firestore !' 
-            : '✓ Test article successfully received and synced to Firestore!',
+            ? '✓ Article test reçu et synchronisé avec succès dans la base de données !' 
+            : '✓ Test article successfully received and synced to database!',
           permalink: data.permalink,
           article: data.article
         });
       } else {
         setTestResult({
           success: false,
-          message: data.error || 'Webhook test dispatch failed.'
+          message: error || data?.error || 'Webhook test dispatch failed.'
         });
       }
     } catch (err: any) {
@@ -325,9 +325,8 @@ Output ONLY valid, parseable JSON. Do not surround with triple backticks or mark
     setPurgeLoading(true);
     setTestResult(null);
     try {
-      const res = await fetch('/api/articles/purge', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const { ok, data, error } = await safeFetchJson('/api/articles/purge', { method: 'POST' });
+      if (ok && data?.success) {
         setTestResult({
           success: true,
           message: isFr 
@@ -337,7 +336,7 @@ Output ONLY valid, parseable JSON. Do not surround with triple backticks or mark
       } else {
         setTestResult({
           success: false,
-          message: data.error || 'Purge request failed.'
+          message: error || data?.error || 'Purge request failed.'
         });
       }
     } catch (err: any) {

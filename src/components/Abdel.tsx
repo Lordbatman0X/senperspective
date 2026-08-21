@@ -7,6 +7,7 @@ import { Article } from "../types";
 import { Markdown } from "../components/Markdown";
 import { getAbdelContextualPrompts } from "../lib/abdelPrompts";
 import { getSafeText } from "../lib/utils";
+import { safeFetchJson } from "../lib/apiUtils";
 
 export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();
@@ -164,7 +165,7 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/chat", {
+      const { ok, data, error } = await safeFetchJson<{ response?: string }>("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -191,12 +192,16 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP Error ${response.status}`);
+      if (ok && data?.response) {
+        setMessages((prev) => [...prev, { role: "abdel", text: data.response }]);
+      } else {
+        setMessages((prev) => [...prev, {
+          role: "abdel",
+          text: data?.response || (language === "fr"
+            ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
+            : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment.")
+        }]);
       }
-
-      const data = await response.json();
-      setMessages((prev) => [...prev, { role: "abdel", text: data.response || (language === "fr" ? "Pas de réponse." : "No response.") }]);
     } catch (e) {
       setMessages((prev) => [...prev, {
         role: "abdel",

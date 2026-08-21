@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { trackPageView } from '../../lib/telemetry';
+import { safeFetchJson } from '../../lib/apiUtils';
 import { db, safeOnSnapshot } from '../../lib/firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 
@@ -280,13 +281,17 @@ export function AudienceAnalyticsTab() {
     };
   }, [subscribers, friends, interactions, articles]);
 
-  const fetchDashboardData = () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
-    fetch('/api/analytics/dashboard')
-      .then(res => res.json())
-      .then(json => { if (json.success) setData(json); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    try {
+      const { ok, data: json } = await safeFetchJson('/api/analytics/dashboard');
+      if (ok && json?.success) {
+        setData(json);
+      }
+    } catch (_) {
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExportCSV = () => {

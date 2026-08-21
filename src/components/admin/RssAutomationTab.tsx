@@ -322,9 +322,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // Fetch Schedule Config from Server
   const fetchScheduleConfig = async () => {
     try {
-      const res = await fetch('/api/rss-automation/config');
-      const data = await res.json();
-      if (res.ok && data.success && data.config) {
+      const { ok, data } = await safeFetchJson('/api/rss-automation/config');
+      if (ok && data?.success && data?.config) {
         setAutoSchedule(data.config);
       }
     } catch (e) {
@@ -374,17 +373,16 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         autoPublish: updatedFields.autoPublish ?? autoSchedule.autoPublish
       };
 
-      const res = await fetch('/api/rss-automation/config', {
+      const { ok, data, error } = await safeFetchJson('/api/rss-automation/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (ok && data?.success) {
         setAutoSchedule(data.config);
         showStatus(isFr ? 'Planning d\'automatisation mis à jour !' : 'Automation schedule updated!');
       } else {
-        throw new Error(data.error || 'Failed to save schedule');
+        throw new Error(error || data?.error || 'Failed to save schedule');
       }
     } catch (err: any) {
       showStatus(err.message, 'error');
@@ -396,13 +394,12 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   const handleTriggerScheduleNow = async () => {
     setScheduleLoading(true);
     try {
-      const res = await fetch('/api/rss-automation/trigger-now', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const { ok, data, error } = await safeFetchJson('/api/rss-automation/trigger-now', { method: 'POST' });
+      if (ok && data?.success) {
         showStatus(isFr ? 'Cycle d\'ingestion automatique lancé en arrière-plan !' : 'Automated drafting cycle initiated!');
         fetchScheduleConfig();
       } else {
-        throw new Error(data.error || 'Trigger failed');
+        throw new Error(error || data?.error || 'Trigger failed');
       }
     } catch (err: any) {
       showStatus(err.message, 'error');
@@ -459,14 +456,13 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         ? rssFeeds.filter((f: any) => f.url === specificUrl)
         : rssFeeds;
 
-      const res = await fetch('/api/rss/health-check', {
+      const { ok, data, error } = await safeFetchJson('/api/rss/health-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feeds: targetFeeds })
       });
 
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.results)) {
+      if (ok && data?.success && Array.isArray(data.results)) {
         setFeedHealthMap(prev => {
           const next = { ...prev };
           data.results.forEach((r: any) => {
@@ -553,15 +549,14 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       const feedObj = rssFeeds.find((f: any) => f.id === feedId || f.url === feedUrl);
       const cat = feedCategory || feedObj?.category || 'Économie';
 
-      const res = await fetch('/api/rss/fetch-and-generate', {
+      const { ok, data, error } = await safeFetchJson('/api/rss/fetch-and-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feedUrl, category: cat, maxItems: 3, autoPublish: false })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch and process RSS feed');
+      if (!ok || !data?.success) {
+        throw new Error(error || data?.error || 'Failed to fetch and process RSS feed');
       }
 
       if (Array.isArray(data.articles) && data.articles.length > 0) {
@@ -619,13 +614,12 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       for (const feed of rssFeeds) {
         if (feed.active !== false) {
           try {
-            const res = await fetch('/api/rss/fetch-and-generate', {
+            const { ok, data } = await safeFetchJson('/api/rss/fetch-and-generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ feedUrl: feed.url, category: feed.category || 'Économie', maxItems: 2, autoPublish: false })
             });
-            const data = await res.json();
-            if (res.ok && data.success && Array.isArray(data.articles)) {
+            if (ok && data?.success && Array.isArray(data.articles)) {
               data.articles.forEach((art: Article) => addArticle(art));
               totalGenerated += data.generatedCount || 0;
             }
@@ -655,15 +649,14 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
     setPromptLoading(true);
     try {
-      const res = await fetch('/api/generate-rss-article', {
+      const { ok, data, error } = await safeFetchJson('/api/generate-rss-article', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: manualPrompt, category: manualCategory, autoPublish: false })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to generate article from prompt');
+      if (!ok || !data?.success) {
+        throw new Error(error || data?.error || 'Failed to generate article from prompt');
       }
 
       if (data.article) {
@@ -687,15 +680,14 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // Action: Publish a draft article
   const handlePublishDraft = async (draft: Article) => {
     try {
-      const res = await fetch('/api/rss/publish-draft', {
+      const { ok, data, error } = await safeFetchJson('/api/rss/publish-draft', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ articleId: draft.id })
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to publish draft');
+      if (!ok || !data?.success) {
+        throw new Error(error || data?.error || 'Failed to publish draft');
       }
 
       updateArticle({ ...draft, isPublished: true });

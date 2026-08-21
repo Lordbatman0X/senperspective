@@ -8,10 +8,21 @@ export async function safeFetchJson<T = any>(
 ): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
   try {
     const res = await fetch(url, options);
-    const contentType = res.headers.get('content-type') || '';
+    const text = await res.text();
 
-    if (contentType.includes('application/json')) {
-      const data = await res.json();
+    let data: any = null;
+    let isJson = false;
+
+    if (text && text.trim()) {
+      try {
+        data = JSON.parse(text);
+        isJson = true;
+      } catch (_) {
+        isJson = false;
+      }
+    }
+
+    if (isJson) {
       if (!res.ok) {
         return {
           ok: false,
@@ -23,9 +34,8 @@ export async function safeFetchJson<T = any>(
       return { ok: true, status: res.status, data };
     }
 
-    const text = await res.text();
-    // Strip HTML tags if present to get clean text error message
-    const cleanMsg = text.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+    // Response was not JSON (e.g. plain text or HTML error page)
+    const cleanMsg = (text || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
     const preview = cleanMsg.slice(0, 160) || `Erreur HTTP ${res.status}`;
 
     return {
@@ -41,3 +51,4 @@ export async function safeFetchJson<T = any>(
     };
   }
 }
+
