@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubscriberItem, useStore } from '../../store';
 import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck } from 'lucide-react';
-import { db } from '../../lib/firebase';
-import { collection, addDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { db, collection, addDoc, getDocs, query, orderBy } from '../../lib/mongodb';
 import { 
   connectGoogleGmail, 
   getCachedGoogleToken, 

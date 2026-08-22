@@ -1,5 +1,6 @@
-import { auth } from './firebase';
-import { GoogleAuthProvider, signInWithPopup, User } from 'firebase/auth';
+import { auth, GoogleAuthProvider, signInWithPopup } from './mongodb';
+
+type User = any;
 
 // In-memory & persistent access token cache
 let cachedAccessToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('pg_google_access_token') : null;

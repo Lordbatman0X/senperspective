@@ -1,26 +1,26 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { 
-  User,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence
-} from "firebase/auth";
-import { 
+  auth, 
+  db, 
+  safeOnSnapshot, 
   doc, 
   setDoc, 
   getDoc, 
   collection, 
-  onSnapshot,
-  getDocs,
-  query,
-  deleteDoc
-} from "firebase/firestore";
-import { auth, db, safeOnSnapshot } from "../lib/firebase";
+  onSnapshot, 
+  getDocs, 
+  query, 
+  deleteDoc, 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  MongoUser as User
+} from "../lib/mongodb";
 import { useStore } from "../store";
 import { sampleArticles } from "../data";
 import { Article } from "../types";

@@ -5,8 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { db, safeOnSnapshot } from "../lib/firebase";
-import { doc, updateDoc, collection, setDoc, deleteDoc } from "firebase/firestore";
+import { db, safeOnSnapshot, doc, updateDoc, collection, setDoc, deleteDoc } from "../lib/mongodb";
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,

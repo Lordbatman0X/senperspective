@@ -16,14 +16,21 @@ export function Footer() {
   
   const text = {
     desc: language === 'fr' 
-      ? 'Perspective Group — Média d\'analyse et de réflexion. Notre promesse : L\'actualité. Sans Filtre. Sans Compromis. Politique, géopolitique, économie, société, culture ou sport : toutes les actualités sont traitées avec la même profondeur.'
-      : 'Perspective Group — Media for analysis and reflection. Our promise: News. Unfiltered. Uncompromised. Politics, geopolitics, economy, society, culture, or sports: all news is treated with equal depth.',
+      ? (siteSettings?.footerDescFr || 'Perspective Group. Média d\'analyse et de réflexion. Notre promesse : L\'actualité. Sans Filtre. Sans Compromis. Politique, géopolitique, économie, société, culture ou sport : toutes les actualités sont traitées avec la même profondeur.')
+      : (siteSettings?.footerDescEn || 'Perspective Group. Media for analysis and reflection. Our promise: News. Unfiltered. Uncompromised. Politics, geopolitics, economy, society, culture, or sports: all news is treated with equal depth.'),
+    unitLabel: language === 'fr'
+      ? (siteSettings?.boukariCorpUnitLabelFr || 'Unité Opérationnelle de')
+      : (siteSettings?.boukariCorpUnitLabelEn || 'An Operational Unit of'),
+    corpName: siteSettings?.boukariCorpName || 'Boukari Corporation',
+    copyright: language === 'fr'
+      ? (siteSettings?.footerCopyrightFr || '© 2026 Perspective Group. Tous droits réservés.')
+      : (siteSettings?.footerCopyrightEn || '© 2026 Perspective Group. All rights reserved.'),
+    location: siteSettings?.footerLocationText || 'Perspective Group, Dakar, Sénégal',
     about: language === 'fr' ? 'À propos' : 'About',
     contact: language === 'fr' ? 'Contact' : 'Contact Us'
   };
 
   const editions = (siteSettings?.categories && siteSettings.categories.length > 0) ? siteSettings.categories : ARTICLE_CATEGORIES;
-  const currentYear = new Date().getFullYear();
 
   return (
     <footer className="bg-brand-black text-white mt-16 pb-12">
@@ -46,11 +53,11 @@ export function Footer() {
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
               {text.desc}
             </p>
-            <a href={`mailto:${siteSettings.supportEmail}`} className="font-bold hover:text-white transition-colors text-sm" style={{ color: siteSettings.accentColor }}>
-              {siteSettings.supportEmail}
+            <a href={`mailto:${siteSettings.supportEmail || 'contact@perspective.sn'}`} className="font-bold hover:text-white transition-colors text-sm" style={{ color: siteSettings.accentColor }}>
+              {siteSettings.supportEmail || 'contact@perspective.sn'}
             </a>
 
-            {/* Subtle Operational Unit of Boukari Corporation Badge */}
+            {/* Subtle Operational Unit Badge */}
             <div className="flex items-center gap-4 mt-8 pt-6 border-t border-zinc-800/80 w-full">
               <div 
                 className="h-16 sm:h-20 flex items-center justify-center shrink-0 overflow-hidden"
@@ -72,10 +79,10 @@ export function Footer() {
               </div>
               <div className="flex flex-col">
                 <span className="text-[11px] font-mono text-zinc-300 font-bold uppercase tracking-wider">
-                  {language === 'fr' ? 'Unité Opérationnelle de' : 'An Operational Unit of'}
+                  {text.unitLabel}
                 </span>
                 <span className="text-base sm:text-lg font-black uppercase tracking-widest text-white drop-shadow-xs">
-                  Boukari Corporation
+                  {text.corpName}
                 </span>
               </div>
             </div>
@@ -118,22 +125,24 @@ export function Footer() {
                   <span>{language === 'fr' ? 'Gestion des cookies' : 'Cookie Preferences'}</span>
                 </button>
               </li>
-              <li>
-                <button 
-                  onClick={() => window.dispatchEvent(new CustomEvent('open-draft-policies'))}
-                  className="text-amber-400/90 hover:text-amber-300 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer text-left flex items-center gap-1.5"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>{language === 'fr' ? 'Charte de Sécurité & CGU (Projet)' : 'Safe Use Policies (Draft)'}</span>
-                </button>
-              </li>
+              {siteSettings?.showDraftPoliciesInFooter && (
+                <li>
+                  <button 
+                    onClick={() => window.dispatchEvent(new CustomEvent('open-draft-policies'))}
+                    className="text-amber-400/90 hover:text-amber-300 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer text-left flex items-center gap-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span>{language === 'fr' ? 'Charte de Sécurité & CGU (Projet)' : 'Safe Use Policies (Draft)'}</span>
+                  </button>
+                </li>
+              )}
             </ul>
             
             <div className="flex flex-col gap-1.5 text-sm text-gray-400 font-mono mt-2 pt-4 border-t border-zinc-800/80">
               <p className="font-bold uppercase tracking-widest text-[9px] text-zinc-500">{language === 'fr' ? 'SIÈGE & RÉDACTION' : 'HEADQUARTERS'}</p>
-              <p className="text-xs italic leading-tight text-zinc-300">{siteSettings.officeAddress || 'Dakar, Sénégal'}</p>
+              <p className="text-xs italic leading-tight text-zinc-300">{siteSettings.officeAddress || 'Immeuble Tamaro, Rue Mohamed V, Dakar'}</p>
               <p className="font-bold uppercase tracking-widest text-[9px] text-zinc-500 mt-2">{language === 'fr' ? 'CONTACT DÉDIÉ' : 'HOTLINE'}</p>
-              <p className="text-xs font-sans font-extrabold text-white">{siteSettings.editorialPhone || '77 681 87 38'}</p>
+              <p className="text-xs font-sans font-extrabold text-white">{siteSettings.editorialPhone || '+221 33 824 55 55'}</p>
             </div>
           </div>
         </div>
@@ -141,13 +150,12 @@ export function Footer() {
         {/* Bottom Copyright & Rights Reserved Badge Bar */}
         <div className="border-t border-zinc-800/80 pt-8 mt-12 flex flex-col sm:flex-row justify-between items-center text-xs text-zinc-400 font-mono gap-4">
           <div className="flex items-center gap-2.5">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             <span className="font-semibold text-zinc-300">
-              © {currentYear} Perspective Group. {language === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
+              {text.copyright}
             </span>
           </div>
           <div className="text-[11px] text-zinc-500 uppercase tracking-widest font-bold">
-            Perspective Group — Dakar, Sénégal
+            {text.location}
           </div>
         </div>
       </div>

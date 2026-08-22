@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
-import { db } from "../lib/firebase";
-import { doc, deleteDoc } from "firebase/firestore";
+import { db, doc, deleteDoc } from "../lib/mongodb";
 import { 
   Search, 
   X, 
@@ -953,12 +952,12 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
             </div>
           </div>
 
-          {/* V. Double factor PIN section */}
+          {/* V. Security PIN section */}
           <div className="border border-zinc-300 dark:border-zinc-800 rounded-none overflow-hidden bg-white dark:bg-zinc-900/80 shadow-xs">
             <details className="group">
               <summary className="flex justify-between items-center p-3.5 cursor-pointer bg-zinc-100/80 dark:bg-zinc-800/50 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 transition-colors select-none">
                 <span className="text-[10px] font-mono font-black uppercase text-zinc-900 dark:text-zinc-100 tracking-wider">
-                  {language === "fr" ? "▼ DOUBLE FACTEUR PIN & SECURITE" : "▼ TWO-FACTOR PIN & PASSWORD"}
+                  {language === "fr" ? "▼ CODE PIN & SÉCURITÉ DU COMPTE" : "▼ ACCOUNT SECURITY PIN"}
                 </span>
               </summary>
               <div className="p-4 space-y-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/40">
@@ -966,75 +965,51 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                   <div className="space-y-3 font-mono text-[9px]">
                     <div className="flex items-center gap-1.5 font-bold uppercase text-zinc-900 dark:text-zinc-100">
                       <Lock size={12} style={{ color: currentSettings.accentColor }} />
-                      <span>{language === "fr" ? "Protection Double Facteur (PIN 2FA)" : "Two-Factor PIN Protection"}</span>
+                      <span>{language === "fr" ? "Code PIN d'Authentification Rapide" : "Quick Access PIN Code"}</span>
                     </div>
                     
-                    {readerProfile.mfaEnabled ? (
-                      <div className="space-y-3">
-                        <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-300 font-bold flex items-center gap-1.5">
-                          <Shield size={12} />
-                          <span>{language === "fr" ? "Authentification forte active" : "Strong 2FA protection is active"}</span>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-[8.5px] font-bold uppercase text-zinc-800 dark:text-zinc-200 block">{language === "fr" ? "Définir un Code PIN (4 à 6 chiffres)" : "Set Security PIN (4 to 6 Digits)"}</label>
+                        <div className="relative">
+                          <input
+                            type={showSecurityPinInput ? "text" : "password"}
+                            maxLength={6}
+                            inputMode="numeric"
+                            placeholder="••••"
+                            value={securityPinInput}
+                            onChange={(e) => setSecurityPinInput(e.target.value.replace(/\D/g, ''))}
+                            className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2 pr-10 w-full focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-mono text-center tracking-widest text-sm text-zinc-900 dark:text-zinc-100 rounded-none shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSecurityPinInput(!showSecurityPinInput)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+                            title={showSecurityPinInput ? "Cacher" : "Afficher"}
+                          >
+                            {showSecurityPinInput ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => {
-                            const updated = { ...readerProfile, mfaEnabled: false };
-                            setReaderProfile(updated);
-                            updateUserSecurity(readerProfile.email, true, false);
-                            setSettingsSuccessMsg(language === "fr" ? "✓ Protection double facteur désactivée." : "✓ Two-factor protection deactivated.");
-                            setTimeout(() => setSettingsSuccessMsg(""), 3000);
-                          }}
-                          className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 uppercase tracking-wider text-[8.5px] cursor-pointer rounded-none border-none shadow-xs"
-                        >
-                          {language === "fr" ? "DÉSACTIVER LA PROTECTION SÉCURISÉE" : "DEACTIVATE TWO-FACTOR"}
-                        </button>
                       </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="space-y-1">
-                          <label className="text-[8.5px] font-bold uppercase text-zinc-800 dark:text-zinc-200 block">{language === "fr" ? "Définir un Code PIN (4 à 6 chiffres)" : "Set Security PIN (4 to 6 Digits)"}</label>
-                          <div className="relative">
-                            <input
-                              type={showSecurityPinInput ? "text" : "password"}
-                              maxLength={6}
-                              inputMode="numeric"
-                              placeholder="••••"
-                              value={securityPinInput}
-                              onChange={(e) => setSecurityPinInput(e.target.value.replace(/\D/g, ''))}
-                              className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2 pr-10 w-full focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 font-mono text-center tracking-widest text-sm text-zinc-900 dark:text-zinc-100 rounded-none shadow-xs"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowSecurityPinInput(!showSecurityPinInput)}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
-                              title={showSecurityPinInput ? "Cacher" : "Afficher"}
-                            >
-                              {showSecurityPinInput ? <EyeOff size={15} /> : <Eye size={15} />}
-                            </button>
-                          </div>
-                        </div>
-                        {securityError && <p className="text-rose-600 text-[8.5px] font-bold">{securityError}</p>}
-                        <button
-                          onClick={() => {
-                            if (securityPinInput.length < 4 || securityPinInput.length > 6) {
-                              setSecurityError(language === "fr" ? "Le PIN doit contenir entre 4 et 6 chiffres." : "The PIN must contain 4 to 6 digits.");
-                              return;
-                            }
-                            setSecurityError("");
-                            const updated = { ...readerProfile, mfaEnabled: true };
-                            setReaderProfile(updated);
-                            updateUserSecurity(readerProfile.email, true, true);
-                            updateUserPin(readerProfile.email, securityPinInput);
-                            setSecurityPinInput("");
-                            setSettingsSuccessMsg(language === "fr" ? "✓ Protection double-facteur et PIN enregistrés sur Firebase !" : "✓ Two-Factor PIN Protection Saved to Firebase!");
-                            setTimeout(() => setSettingsSuccessMsg(""), 3000);
-                          }}
-                          className="w-full text-white font-black py-2.5 uppercase tracking-wider text-[8.5px] cursor-pointer rounded-none border-none shadow-xs"
-                          style={{ backgroundColor: currentSettings.accentColor }}
-                        >
-                          {language === "fr" ? "ACTIVER LA PROTECTION SÉCURISÉE" : "ACTIVATE SECURE PIN"}
-                        </button>
-                      </div>
-                    )}
+                      {securityError && <p className="text-rose-600 text-[8.5px] font-bold">{securityError}</p>}
+                      <button
+                        onClick={() => {
+                          if (securityPinInput.length < 4 || securityPinInput.length > 6) {
+                            setSecurityError(language === "fr" ? "Le PIN doit contenir entre 4 et 6 chiffres." : "The PIN must contain 4 to 6 digits.");
+                            return;
+                          }
+                          setSecurityError("");
+                          updateUserPin(readerProfile.email, securityPinInput);
+                          setSecurityPinInput("");
+                          setSettingsSuccessMsg(language === "fr" ? "✓ Code PIN enregistré avec succès !" : "✓ Security PIN Code Saved Successfully!");
+                          setTimeout(() => setSettingsSuccessMsg(""), 3000);
+                        }}
+                        className="w-full text-white font-black py-2.5 uppercase tracking-wider text-[8.5px] cursor-pointer rounded-none border-none shadow-xs"
+                        style={{ backgroundColor: currentSettings.accentColor }}
+                      >
+                        {language === "fr" ? "ENREGISTRER LE CODE PIN" : "SAVE SECURITY PIN"}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-[10px] italic text-zinc-600 dark:text-zinc-400">{language === "fr" ? "Veuillez valider votre compte d'abord." : "Please verify your account first."}</p>

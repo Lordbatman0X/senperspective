@@ -5,8 +5,7 @@ import {
   Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { db } from '../../lib/firebase';
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { db, collection, getDocs, deleteDoc, doc } from '../../lib/mongodb';
 
 interface CollectionStats {
   name: string;

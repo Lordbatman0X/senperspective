@@ -4,8 +4,7 @@ import { get, set as idbSet, del } from 'idb-keyval';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { db } from './lib/firebase';
-import { doc, setDoc, deleteDoc, getDocs, collection } from 'firebase/firestore';
+import { db, doc, setDoc, deleteDoc, getDocs, collection } from './lib/mongodb';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
@@ -263,6 +262,14 @@ interface AppState {
     editorialPhone: string;
     supportEmail: string;
     officeAddress: string;
+    footerDescFr?: string;
+    footerDescEn?: string;
+    boukariCorpUnitLabelFr?: string;
+    boukariCorpUnitLabelEn?: string;
+    boukariCorpName?: string;
+    footerCopyrightFr?: string;
+    footerCopyrightEn?: string;
+    footerLocationText?: string;
     paywallThreshold: number;
     paywallEnabled: boolean;
     cookieConsentEnabled?: boolean;
@@ -1174,9 +1181,18 @@ export const useStore = create<AppState>()(
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
+        footerDescFr: "Perspective Group. Média d'analyse et de réflexion. Notre promesse : L'actualité. Sans Filtre. Sans Compromis. Politique, géopolitique, économie, société, culture ou sport : toutes les actualités sont traitées avec la même profondeur.",
+        footerDescEn: "Perspective Group. Media for analysis and reflection. Our promise: News. Unfiltered. Uncompromised. Politics, geopolitics, economy, society, culture, or sports: all news is treated with equal depth.",
+        boukariCorpUnitLabelFr: "Unité Opérationnelle de",
+        boukariCorpUnitLabelEn: "An Operational Unit of",
+        boukariCorpName: "Boukari Corporation",
+        footerCopyrightFr: "© 2026 Perspective Group. Tous droits réservés.",
+        footerCopyrightEn: "© 2026 Perspective Group. All rights reserved.",
+        footerLocationText: "Perspective Group, Dakar, Sénégal",
         paywallThreshold: 9999,
         paywallEnabled: false,
         cookieConsentEnabled: true,
+        showDraftPoliciesInFooter: false,
         privacyPolicyTextFr: "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.",
         privacyPolicyTextEn: "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.",
         dataRetentionDays: 365,

@@ -3,8 +3,7 @@ import { useStore, UserAccount, UserInteraction } from '../../store';
 import { useAuth } from '../../contexts/AuthContext';
 import { Users, Trash2, ShieldAlert, Key, UserCheck, Activity, Search, Shield, Eye, EyeOff, AlertTriangle, Award, Lock, Plus, UserPlus } from 'lucide-react';
 import { renderNeutralAvatar } from '../AccountDrawer';
-import { db, safeOnSnapshot } from '../../lib/firebase';
-import { collection, doc, deleteDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db, safeOnSnapshot, collection, doc, deleteDoc, setDoc, updateDoc } from '../../lib/mongodb';
 
 export function ModerationTab() {
   const { language, users: storeUsers, interactions, deleteUser, updateUserRole } = useStore();

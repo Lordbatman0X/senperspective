@@ -2,9 +2,23 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
+import { 
+  connectMongo, 
+  getCollectionDocs, 
+  getDocument, 
+  saveDocument, 
+  deleteDocument, 
+  wipeCollection, 
+  registerUser, 
+  loginUser,
+  updateUserPasswordServer
+} from "./src/lib/mongoServer";
 
 export const app = express();
 const PORT = 3000;
+
+// Connect to MongoDB on server startup
+connectMongo().catch((err) => console.warn("[MongoDB Startup Warning]", err));
 
 // Enable CORS for webhooks and API clients
 app.use((req, res, next) => {
@@ -19,6 +33,126 @@ app.use((req, res, next) => {
 
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+  // ==========================================
+  // MONGOBD REST API ROUTES (Database & Auth)
+  // ==========================================
+
+  // GET /api/mongodb/collection/:name
+  app.get("/api/mongodb/collection/:name", async (req, res) => {
+    try {
+      const { name } = req.params;
+      const formatted = await getCollectionDocs(name);
+      return res.json({ success: true, count: formatted.length, documents: formatted });
+    } catch (err: any) {
+      console.error("[MongoDB GET COLLECTION ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+    }
+  });
+
+  // GET /api/mongodb/doc/:collection/:id
+  app.get("/api/mongodb/doc/:collection/:id", async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      const doc = await getDocument(collection, id);
+      if (!doc) {
+        return res.json({ success: true, data: null });
+      }
+      return res.json({ success: true, id: doc.id, data: doc.data });
+    } catch (err: any) {
+      console.error("[MongoDB GET DOC ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+    }
+  });
+
+  // POST /api/mongodb/doc/:collection/:id
+  app.post("/api/mongodb/doc/:collection/:id", async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      const { data, merge } = req.body || {};
+      const updated = await saveDocument(collection, id, data, merge ?? true);
+      return res.json({ success: true, id: updated.id, data: updated.data });
+    } catch (err: any) {
+      console.error("[MongoDB POST DOC ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+    }
+  });
+
+  // DELETE /api/mongodb/doc/:collection/:id
+  app.delete("/api/mongodb/doc/:collection/:id", async (req, res) => {
+    try {
+      const { collection, id } = req.params;
+      await deleteDocument(collection, id);
+      return res.json({ success: true, message: `Document ${id} supprimé de MongoDB.` });
+    } catch (err: any) {
+      console.error("[MongoDB DELETE DOC ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+    }
+  });
+
+  // DELETE /api/mongodb/collection/:name/wipe
+  app.delete("/api/mongodb/collection/:name/wipe", async (req, res) => {
+    try {
+      const { name } = req.params;
+      const deletedCount = await wipeCollection(name);
+      return res.json({ success: true, message: `Collection ${name} purgée (${deletedCount} documents).` });
+    } catch (err: any) {
+      console.error("[MongoDB WIPE COLLECTION ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+    }
+  });
+
+  // AUTH ENDPOINTS FOR MONGODB
+  app.post("/api/mongodb/auth/register", async (req, res) => {
+    try {
+      const { email, password, name } = req.body || {};
+      if (!email) {
+        return res.status(400).json({ success: false, error: "Email requis." });
+      }
+      const userData = await registerUser(email, password, name);
+      return res.json({ success: true, user: userData });
+    } catch (err: any) {
+      console.error("[MongoDB AUTH REGISTER ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur d'inscription MongoDB" });
+    }
+  });
+
+  app.post("/api/mongodb/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body || {};
+      if (!email) {
+        return res.status(400).json({ success: false, error: "Email requis." });
+      }
+      const userData = await loginUser(email, password);
+      return res.json({ success: true, user: userData });
+    } catch (err: any) {
+      console.error("[MongoDB AUTH LOGIN ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur de connexion MongoDB" });
+    }
+  });
+
+  app.post("/api/mongodb/auth/logout", async (_req, res) => {
+    return res.json({ success: true, message: "Déconnexion MongoDB réussie." });
+  });
+
+  app.post("/api/mongodb/auth/reset-password", async (req, res) => {
+    const { email } = req.body || {};
+    return res.json({ success: true, message: `Instructions de réinitialisation envoyées à ${email}.` });
+  });
+
+  app.post("/api/mongodb/auth/update-password", async (req, res) => {
+    try {
+      const { email, password } = req.body || {};
+      if (!email || !password) {
+        return res.status(400).json({ success: false, error: "Email et mot de passe requis." });
+      }
+      const result = await updateUserPasswordServer(email, password);
+      return res.json({ success: true, message: `Mot de passe mis à jour pour ${email}`, result });
+    } catch (err: any) {
+      console.error("[MongoDB UPDATE PASSWORD ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur de mise à jour" });
+    }
+  });
 
   // Persistent RSS Drafts Storage File (uses /tmp on Vercel to avoid read-only filesystem errors)
   const baseStorageDir = process.env.VERCEL ? "/tmp" : process.cwd();
@@ -204,6 +338,14 @@ app.use((req, res, next) => {
         body: JSON.stringify(firestoreBody)
       });
       console.log(`[FIRESTORE SYNC SUCCESS] Synced article "${article.id}" directly to Firestore.`);
+
+      // Sync to MongoDB database
+      try {
+        await saveDocument("articles", article.id, article, false);
+        console.log(`[MONGODB SYNC SUCCESS] Synced article "${article.id}" directly to MongoDB.`);
+      } catch (mErr) {
+        console.warn("[MONGODB SYNC NOTICE]", mErr);
+      }
     } catch (err) {
       console.error("[FIRESTORE SYNC ERROR]", err);
     }
@@ -218,6 +360,14 @@ app.use((req, res, next) => {
 
       await fetch(url, { method: "DELETE" });
       console.log(`[FIRESTORE DELETE SUCCESS] Deleted article "${articleId}" from Firestore.`);
+
+      // Delete from MongoDB database
+      try {
+        await deleteDocument("articles", articleId);
+        console.log(`[MONGODB DELETE SUCCESS] Deleted article "${articleId}" from MongoDB.`);
+      } catch (mErr) {
+        console.warn("[MONGODB DELETE NOTICE]", mErr);
+      }
     } catch (err) {
       console.error("[FIRESTORE DELETE ERROR]", err);
     }

@@ -1,5 +1,4 @@
-import { db } from './firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db, collection, getDocs, doc, getDoc } from './mongodb';
 import { useStore } from '../store';
 import { safeFetchJson } from './apiUtils';
 

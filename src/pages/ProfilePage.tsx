@@ -4,14 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { db, safeOnSnapshot } from "../lib/firebase";
-import { 
-  doc, 
-  setDoc, 
-  collection, 
-  deleteDoc,
-  updateDoc
-} from "firebase/firestore";
+import { db, safeOnSnapshot, doc, setDoc, collection, deleteDoc, updateDoc } from "../lib/mongodb";
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";

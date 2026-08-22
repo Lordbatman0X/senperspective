@@ -308,58 +308,6 @@ export function Header() {
     }
   };
 
-  const handleVerify2FA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError("");
-    setAuthSuccess("");
-
-    if (!twoFactorInputCode || twoFactorInputCode.trim() !== generated2FACode) {
-      setAuthError(language === "fr" ? "Code de vérification 2FA invalide." : "Invalid 2FA verification code.");
-      return;
-    }
-
-    if (!pendingAuthData) return;
-
-    try {
-      if (pendingAuthData.type === "register") {
-        await registerWithEmail(
-          pendingAuthData.email,
-          pendingAuthData.pass,
-          pendingAuthData.name,
-          "Member",
-          pendingAuthData.avatar,
-          pendingAuthData.authType,
-          pendingAuthData.pin,
-          true
-        );
-        setAuthSuccess(
-          language === "fr"
-            ? "Vérification 2FA réussie ! Compte sécurisé et enregistré dans Firebase."
-            : "2FA Verification successful! Account secured and saved in Firebase."
-        );
-      } else {
-        await loginWithEmail(pendingAuthData.email, pendingAuthData.credential, pendingAuthData.rememberMe);
-        setAuthSuccess(language === "fr" ? "Connexion sécurisée 2FA réussie !" : "2FA Secure Login successful!");
-      }
-
-      setTimeout(() => {
-        setIs2FAChallengeActive(false);
-        setPendingAuthData(null);
-        setShowSignUpModal(false);
-        setAuthSuccess("");
-        setRegEmail("");
-        setRegName("");
-        setRegPassword("");
-        setRegPin("");
-        setLoginEmail("");
-        setLoginCredential("");
-      }, 1000);
-    } catch (err: any) {
-      console.error("2FA Auth submission error:", err);
-      setAuthError(language === "fr" ? `Erreur d'authentification: ${err.message}` : `Auth error: ${err.message}`);
-    }
-  };
-
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
@@ -372,22 +320,6 @@ export function Header() {
       }
 
       const cleanEmail = loginEmail.trim().toLowerCase();
-      const existingUser = (allUsers || []).find((u: any) => u.email?.toLowerCase() === cleanEmail);
-      const isMFA = existingUser?.mfaEnabled || existingUser?.twoFactorEnabled || false;
-
-      if (isMFA) {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGenerated2FACode(code);
-        setTwoFactorInputCode("");
-        setPendingAuthData({
-          type: "login",
-          email: cleanEmail,
-          credential: loginCredential,
-          rememberMe
-        });
-        setIs2FAChallengeActive(true);
-        return;
-      }
 
       try {
         await loginWithEmail(cleanEmail, loginCredential, rememberMe);
@@ -446,23 +378,6 @@ export function Header() {
 
       const cleanEmail = regEmail.trim().toLowerCase();
       const firebasePassword = regAuthType === "password" ? regPassword : regPin + "0000";
-
-      if (regEnable2FA) {
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGenerated2FACode(code);
-        setTwoFactorInputCode("");
-        setPendingAuthData({
-          type: "register",
-          email: cleanEmail,
-          pass: firebasePassword,
-          name: regName.trim(),
-          avatar: regAvatar,
-          authType: regAuthType,
-          pin: regPin
-        });
-        setIs2FAChallengeActive(true);
-        return;
-      }
 
       try {
         await registerWithEmail(
@@ -1210,83 +1125,10 @@ export function Header() {
               )}
 
               {/* Form */}
-              {is2FAChallengeActive ? (
-                <form onSubmit={handleVerify2FA} className="space-y-4 font-sans text-left">
-                  <div className="p-3 bg-[#E85D42]/10 border border-[#E85D42]/30 text-center">
-                    <div className="flex items-center justify-center gap-2 text-[#E85D42] font-black uppercase text-xs tracking-wider mb-1">
-                      <ShieldCheck size={18} />
-                      <span>{language === "fr" ? "VÉRIFICATION DOUBLE FACTEUR 2FA" : "TWO-FACTOR 2FA VERIFICATION"}</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-300">
-                      {language === "fr" 
-                        ? `Un code de sécurité à 6 chiffres a été généré pour ${pendingAuthData?.email || "votre compte"}.`
-                        : `A 6-digit security code was generated for ${pendingAuthData?.email || "your account"}.`}
-                    </p>
-                  </div>
-
-                  {/* Instant 2FA Notification Banner */}
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-mono flex items-center justify-between rounded-none">
-                    <span>{language === "fr" ? "Code 2FA généré :" : "Generated 2FA Code:"} <strong>{generated2FACode}</strong></span>
-                    <button
-                      type="button"
-                      onClick={() => setTwoFactorInputCode(generated2FACode)}
-                      className="text-[9px] font-bold uppercase px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors cursor-pointer"
-                    >
-                      {language === "fr" ? "Insérer" : "Auto-fill"}
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                      {language === "fr" ? "Code de sécurité à 6 chiffres :" : "6-Digit Security Code:"}
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={show2FACode ? "text" : "password"}
-                        maxLength={6}
-                        inputMode="numeric"
-                        required
-                        value={twoFactorInputCode}
-                        onChange={(e) => setTwoFactorInputCode(e.target.value.replace(/\D/g, ""))}
-                        placeholder="123456"
-                        className="w-full bg-zinc-900 border border-zinc-800 focus:outline-none focus:border-[#E85D42] text-lg text-white p-3 pr-10 font-mono font-bold text-center tracking-widest shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] rounded-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShow2FACode(!show2FACode)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                        title={show2FACode ? "Cacher" : "Afficher"}
-                      >
-                        {show2FACode ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIs2FAChallengeActive(false);
-                        setPendingAuthData(null);
-                      }}
-                      className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] font-bold uppercase tracking-wider py-3 border border-zinc-700 transition-colors cursor-pointer"
-                    >
-                      {language === "fr" ? "ANNULER" : "CANCEL"}
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 bg-[#E85D42] hover:bg-[#D45037] text-white text-[10px] font-black uppercase tracking-wider py-3 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <ShieldCheck size={14} />
-                      {language === "fr" ? "CONFIRMER & VALIDER 2FA" : "CONFIRM & VERIFY 2FA"}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <form
-                  onSubmit={handleAuthSubmit}
-                  className="space-y-4 font-sans text-left"
-                >
+              <form
+                onSubmit={handleAuthSubmit}
+                className="space-y-4 font-sans text-left"
+              >
                   {authTab === "register" ? (
                     <>
                       {/* Avatar Select - Register Only */}
@@ -1457,21 +1299,6 @@ export function Header() {
                           </div>
                         </div>
                       )}
-
-                      {/* 2FA Security Checkbox */}
-                      <div className="flex items-center gap-2 mt-3 p-2.5 bg-zinc-900 border border-zinc-800 select-none">
-                        <input
-                          type="checkbox"
-                          id="reg-enable-2fa-check"
-                          checked={regEnable2FA}
-                          onChange={(e) => setRegEnable2FA(e.target.checked)}
-                          className="w-3.5 h-3.5 accent-[#E85D42] border border-zinc-700 bg-zinc-950 cursor-pointer"
-                        />
-                        <label htmlFor="reg-enable-2fa-check" className="text-[9.5px] font-bold uppercase tracking-wider text-zinc-300 cursor-pointer flex items-center gap-1.5">
-                          <ShieldCheck size={13} className="text-[#E85D42]" />
-                          {language === "fr" ? "Activer la Sécurité 2FA (Double Facteur)" : "Enable 2FA Security Protection"}
-                        </label>
-                      </div>
                     </>
                   ) : (
                     <>
@@ -1605,7 +1432,6 @@ export function Header() {
                         : "REGISTER & START"}
                   </button>
                 </form>
-              )}
             </motion.div>
           </motion.div>
         )}

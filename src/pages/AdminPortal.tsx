@@ -28,9 +28,8 @@ import { MakeWebhookTab } from '../components/admin/MakeWebhookTab';
 import { RssAutomationTab } from '../components/admin/RssAutomationTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { VercelMigrationTab } from '../components/admin/VercelMigrationTab';
+import { SecurityTab } from '../components/admin/SecurityTab';
 
-const TEMP_ADMIN_USERNAME = "admin";
-const TEMP_ADMIN_PASSWORD = "admin123";
 const ADMIN_SESSION_KEY = "perspective-temp-admin-session";
 
 export function AdminPortal() {
@@ -85,13 +84,6 @@ export function AdminPortal() {
       }
       setLoading(false);
     }, 400);
-  };
-
-  const handleQuickAdminLogin = () => {
-    setUsername(TEMP_ADMIN_USERNAME);
-    setPassword(TEMP_ADMIN_PASSWORD);
-    sessionStorage.setItem(ADMIN_SESSION_KEY, "authenticated");
-    setSessionAuth(true);
   };
 
   const handleLogout = () => {
@@ -157,21 +149,6 @@ export function AdminPortal() {
             >
               {loading ? (language === 'fr' ? 'Connexion...' : 'Signing in...') : (language === 'fr' ? 'Connexion' : 'Sign In')}
             </button>
-
-            <div className="pt-3 border-t border-zinc-800/80 text-center space-y-2">
-              <button
-                type="button"
-                onClick={handleQuickAdminLogin}
-                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-orange-400 font-bold text-xs rounded-lg transition-colors border border-orange-500/30 flex items-center justify-center gap-2"
-              >
-                <ShieldCheck className="w-4 h-4 text-orange-400" />
-                <span>{language === 'fr' ? 'Accès Rapide Admin (1-Clic)' : 'Quick Admin Access (1-Click)'}</span>
-              </button>
-              
-              <p className="text-[10px] text-zinc-500 font-mono">
-                {language === 'fr' ? 'Identifiants: admin / admin123 ou votre email admin' : 'Credentials: admin / admin123 or your admin email'}
-              </p>
-            </div>
             
             <div className="pt-2 text-center">
               <a href="/" className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-orange-400 transition-colors">
@@ -236,7 +213,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [articleFilter, setArticleFilter] = useState('all');
@@ -557,6 +534,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     { id: 'navigation', label: language === 'fr' ? 'Navigation' : 'Menu Navigation', icon: Compass, badge: 0 },
     { id: 'seo_distribution', label: language === 'fr' ? 'SEO et distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
     { id: 'abdel_chat_config', label: language === 'fr' ? 'Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
+    { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Passwords', icon: ShieldCheck, badge: 0 },
     { id: 'moderation', label: language === 'fr' ? 'Utilisateurs et rôles' : 'Users & Roles', icon: Users, badge: 0 },
     { id: 'settings', label: language === 'fr' ? 'Paramètres' : 'Global Settings', icon: Settings, badge: 0 },
     { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
@@ -812,6 +790,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             deleteAd={deleteAd}
             openMediaSelector={openImgSelector}
           />
+        )}
+
+        {activeTab === 'security' && (
+          <SecurityTab />
         )}
 
         {activeTab === 'moderation' && (

@@ -24,12 +24,6 @@ export const AuthPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // 2FA State
-  const [is2FAActive, setIs2FAActive] = useState(false);
-  const [generatedCode, setGeneratedCode] = useState('');
-  const [inputCode, setInputCode] = useState('');
-  const [pendingAccount, setPendingAccount] = useState<{ email: string; pass: string; name?: string } | null>(null);
-
   const accentColor = siteSettings?.accentColor || '#E85D42';
 
   useEffect(() => {
@@ -84,16 +78,11 @@ export const AuthPage: React.FC = () => {
           return;
         }
 
-        // Trigger 2FA step simulation for security
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedCode(code);
-        setPendingAccount({ email, pass: credential });
-        setIs2FAActive(true);
-        setSuccessMessage(
-          language === 'fr'
-            ? 'Code de sécurité 2FA généré. Entrez le code ci-dessous.'
-            : '2FA security code generated. Enter the code below.'
-        );
+        await loginWithEmail(email.trim(), credential);
+        setSuccessMessage(language === 'fr' ? 'Connexion réussie !' : 'Authentication successful!');
+        setTimeout(() => {
+          navigate('/profile/' + encodeURIComponent(email.trim()));
+        }, 1000);
       } else {
         if (!name.trim()) {
           setErrorMessage(language === 'fr' ? 'Veuillez indiquer votre nom.' : 'Please enter your name.');
@@ -126,32 +115,6 @@ export const AuthPage: React.FC = () => {
     } catch (err: any) {
       console.error('Auth submit error:', err);
       setErrorMessage(err.message || (language === 'fr' ? 'Une erreur est survenue.' : 'An error occurred.'));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleVerify2FA = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (inputCode.trim() !== generatedCode.trim()) {
-      setErrorMessage(language === 'fr' ? 'Code 2FA incorrect.' : 'Incorrect 2FA code.');
-      return;
-    }
-
-    if (!pendingAccount) return;
-
-    setIsSubmitting(true);
-    setErrorMessage('');
-
-    try {
-      await loginWithEmail(pendingAccount.email, pendingAccount.pass);
-      setSuccessMessage(language === 'fr' ? 'Connexion réussie !' : 'Authentication successful!');
-      setIs2FAActive(false);
-      setTimeout(() => {
-        navigate('/profile/' + encodeURIComponent(pendingAccount.email));
-      }, 1000);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Login failed');
     } finally {
       setIsSubmitting(false);
     }
@@ -203,7 +166,7 @@ export const AuthPage: React.FC = () => {
         <div className="grid grid-cols-3 bg-zinc-950 p-1 border border-zinc-800 mb-6 font-mono text-[10px] font-bold uppercase tracking-wider">
           <button
             type="button"
-            onClick={() => { setAuthTab('login'); setIs2FAActive(false); setErrorMessage(''); setSuccessMessage(''); }}
+            onClick={() => { setAuthTab('login'); setErrorMessage(''); setSuccessMessage(''); }}
             className={`py-2 text-center transition-all cursor-pointer ${
               authTab === 'login' ? 'bg-[#E85D42] text-white font-extrabold shadow' : 'text-zinc-400 hover:text-white'
             }`}
@@ -212,7 +175,7 @@ export const AuthPage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => { setAuthTab('register'); setIs2FAActive(false); setErrorMessage(''); setSuccessMessage(''); }}
+            onClick={() => { setAuthTab('register'); setErrorMessage(''); setSuccessMessage(''); }}
             className={`py-2 text-center transition-all cursor-pointer ${
               authTab === 'register' ? 'bg-[#E85D42] text-white font-extrabold shadow' : 'text-zinc-400 hover:text-white'
             }`}
@@ -221,7 +184,7 @@ export const AuthPage: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => { setAuthTab('newsletter'); setIs2FAActive(false); setErrorMessage(''); setSuccessMessage(''); }}
+            onClick={() => { setAuthTab('newsletter'); setErrorMessage(''); setSuccessMessage(''); }}
             className={`py-2 text-center transition-all cursor-pointer ${
               authTab === 'newsletter' ? 'bg-[#E85D42] text-white font-extrabold shadow' : 'text-zinc-400 hover:text-white'
             }`}
@@ -243,57 +206,7 @@ export const AuthPage: React.FC = () => {
           </div>
         )}
 
-        {/* 2FA Challenge Verification Form */}
-        {is2FAActive ? (
-          <form onSubmit={handleVerify2FA} className="space-y-5 text-left">
-            <div className="p-4 bg-[#E85D42]/10 border border-[#E85D42]/30 text-center">
-              <div className="flex items-center justify-center gap-2 text-[#E85D42] font-black uppercase text-xs tracking-wider mb-1">
-                <ShieldCheck size={20} />
-                <span>{language === 'fr' ? 'VÉRIFICATION SÉCURISÉE 2FA' : 'SECURE 2FA VERIFICATION'}</span>
-              </div>
-              <p className="text-xs text-zinc-300">
-                {language === 'fr'
-                  ? `Code de sécurité à 6 chiffres généré pour ${pendingAccount?.email}.`
-                  : `6-digit security code generated for ${pendingAccount?.email}.`}
-              </p>
-            </div>
-
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs font-mono flex items-center justify-between">
-              <span>{language === 'fr' ? 'Code 2FA :' : '2FA Code:'} <strong>{generatedCode}</strong></span>
-              <button
-                type="button"
-                onClick={() => setInputCode(generatedCode)}
-                className="text-[10px] font-bold uppercase px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 cursor-pointer"
-              >
-                {language === 'fr' ? 'Remplir automatiquement' : 'Auto-fill'}
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400 mb-1">
-                {language === 'fr' ? 'Saisir le Code 2FA' : 'Enter 2FA Code'}
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="123456"
-                className="w-full bg-zinc-950 border border-zinc-800 px-4 py-3 text-center text-lg font-mono font-bold tracking-widest text-white focus:outline-none focus:border-[#E85D42]"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full py-3.5 bg-[#E85D42] text-white text-xs font-bold uppercase tracking-wider hover:bg-[#d04b32] transition-colors cursor-pointer flex items-center justify-center gap-2"
-            >
-              {isSubmitting ? <RefreshCw className="animate-spin" size={16} /> : <ShieldCheck size={16} />}
-              <span>{language === 'fr' ? 'Valider et accéder au compte' : 'Verify & Enter Dashboard'}</span>
-            </button>
-          </form>
-        ) : authTab === 'newsletter' ? (
+        {authTab === 'newsletter' ? (
           /* Newsletter Signup Form */
           <form onSubmit={handleNewsletterSubmit} className="space-y-4 text-left">
             <div>
