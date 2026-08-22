@@ -447,6 +447,64 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     }
   };
 
+  const [savingTestToDrafts, setSavingTestToDrafts] = useState(false);
+
+  // Send tested article directly to drafts queue
+  const handleSendTestToDrafts = async () => {
+    if (!testResult || !testResult.article) return;
+    setSavingTestToDrafts(true);
+    try {
+      const testArt = testResult.article;
+      const draftArt: any = {
+        id: testArt.id || ('art-test-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)),
+        slug: testArt.slug || ((testArt.title?.fr || testArt.title?.en || 'article-test').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4)),
+        category: testArt.category || 'Économie',
+        type: testArt.type || 'News',
+        title: testArt.title || { fr: 'Article Test', en: 'Test Article' },
+        excerpt: testArt.excerpt || { fr: '', en: '' },
+        body: testArt.body || { fr: '', en: '' },
+        featuredImage: testArt.featuredImage || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80',
+        author: testArt.author || 'Rédaction Perspective Desk',
+        date: new Date().toISOString(),
+        publishedAt: new Date().toISOString(),
+        readingTime: testArt.readingTime || 4,
+        tags: testArt.tags || ['Test', 'Perspective', 'IA'],
+        isPublished: false,
+        status: 'Draft',
+        perspectiveBrief: testArt.perspectiveBrief || null,
+        timeline: testArt.timeline || [],
+        keyActors: testArt.keyActors || [],
+        structuralForces: testArt.structuralForces || null,
+        sourceName: testArt.sourceName || 'Testeur Charte Éditoriale IA',
+        sourceDomain: 'perspective.sn',
+        engineUsed: testResult.engineUsed || 'Dual Engine AI'
+      };
+
+      const { ok, data } = await safeFetchJson('/api/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...draftArt,
+          isPublished: false
+        })
+      });
+
+      await addArticle(data?.article || draftArt);
+      if (onRefreshArticles) onRefreshArticles();
+
+      showStatus(
+        isFr 
+          ? 'L\'article testé a été envoyé aux brouillons avec succès !' 
+          : 'Tested article sent to drafts successfully!'
+      );
+      setActiveNewsroomTab('drafts');
+    } catch (err: any) {
+      showStatus(err.message || 'Erreur lors de l\'envoi aux brouillons', 'error');
+    } finally {
+      setSavingTestToDrafts(false);
+    }
+  };
+
   // Add Forbidden Phrase
   const handleAddForbiddenPhrase = () => {
     const trimmed = newForbiddenTag.trim().toLowerCase();
@@ -2271,6 +2329,32 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
                 <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 max-h-60 overflow-y-auto leading-relaxed text-zinc-300 whitespace-pre-line font-mono text-[11px]">
                   {testResult.article.body?.fr || testResult.article.body?.en}
+                </div>
+
+                {/* Send Tested Article to Drafts Queue Button */}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-zinc-800/80">
+                  <div className="text-[11px] font-mono text-zinc-400 flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-emerald-400" />
+                    <span>{isFr ? 'Article conforme à la charte de la rédaction' : 'Conforms to newsroom editorial guidelines'}</span>
+                  </div>
+
+                  <button
+                    onClick={handleSendTestToDrafts}
+                    disabled={savingTestToDrafts}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-98"
+                  >
+                    {savingTestToDrafts ? (
+                      <>
+                        <RefreshCw size={14} className="animate-spin text-white" />
+                        <span>{isFr ? 'Transfert vers les Brouillons...' : 'Saving to Drafts...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={14} />
+                        <span>{isFr ? 'Envoyer l\'Article Testé aux Brouillons' : 'Send Tested Article to Drafts'}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             )}

@@ -1060,6 +1060,37 @@ app.use((req, res, next) => {
       rawBody = rawExcerpt || rawTitle;
     }
 
+    // Ensure incoming RSS items respect Journal Editorial Prompts via Dual-Engine AI
+    let enrichedBrief = bodyData.perspectiveBrief || null;
+    let enrichedStructuralForces = bodyData.structuralForces || null;
+    let enrichedTimeline = bodyData.timeline || [];
+    let enrichedKeyActors = bodyData.keyActors || [];
+
+    if (!enrichedBrief && bodyData.rewriteWithAi !== false) {
+      try {
+        const genResult = await orchestrateDualEngineArticleGeneration({
+          rssItem: bodyData,
+          prompt: `${rawTitle}\n${rawBody}`,
+          category: bodyData.category || "Politique",
+          type: (bodyData.type as ArticleStyleType) || "News",
+          preferredEngine: "auto"
+        });
+
+        if (genResult && genResult.article) {
+          const enriched = genResult.article;
+          if (enriched.title?.fr) bodyData.title = enriched.title;
+          if (enriched.excerpt?.fr) bodyData.excerpt = enriched.excerpt;
+          if (enriched.body?.fr) bodyData.body = enriched.body;
+          enrichedBrief = enriched.perspectiveBrief;
+          enrichedStructuralForces = enriched.structuralForces;
+          enrichedTimeline = enriched.timeline || [];
+          enrichedKeyActors = enriched.keyActors || [];
+        }
+      } catch (aiErr) {
+        console.warn("[WEBHOOK AI REWRITE] Falling back to structured raw parse:", aiErr);
+      }
+    }
+
     const stripHtmlServer = (str: string) => {
       if (!str) return "";
       return str
@@ -1186,7 +1217,11 @@ app.use((req, res, next) => {
       originalUrl: origUrl,
       sourceDomain: srcDomain,
       sourceName: srcName || "Flux RSS Officiel",
-      feedUrl: bodyData.feedUrl || ""
+      feedUrl: bodyData.feedUrl || "",
+      perspectiveBrief: enrichedBrief,
+      structuralForces: enrichedStructuralForces,
+      timeline: enrichedTimeline,
+      keyActors: enrichedKeyActors
     };
 
     rssDraftsRepository.unshift(newArticle);
