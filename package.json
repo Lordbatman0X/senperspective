@@ -28,6 +28,7 @@
     "mongodb": "^7.5.0",
     "mongoose": "^9.9.3",
     "motion": "^12.23.24",
+    "openai": "^7.5.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-markdown": "^10.1.0",

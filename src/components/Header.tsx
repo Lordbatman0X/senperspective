@@ -2362,9 +2362,7 @@ export function Header() {
                     <div className="p-2.5 border-b border-zinc-900 bg-zinc-950/80 flex gap-1.5 overflow-x-auto shrink-0">
                       {[
                         { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin" },
-                        { email: "member@perspective.sn", name: "Mariama Diallo" },
-                        { email: "kadersdiaz3@gmail.com", name: "Kader Diaz" },
-                        { email: "journalist@perspective.sn", name: language === "fr" ? "Journaliste Sahel" : "Sahel Journalist" }
+                        { email: "kadersdiaz3@gmail.com", name: "Kader Diaz" }
                       ].map((contact) => (
                         <button
                           key={contact.email}

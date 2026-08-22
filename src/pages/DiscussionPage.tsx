@@ -12,6 +12,7 @@ import {
 export const DiscussionPage: React.FC = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const { 
     directMessages, 
@@ -71,9 +72,7 @@ export const DiscussionPage: React.FC = () => {
 
   // Default Editorial / Support contacts
   const defaultContacts = [
-    { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", status: "En ligne" },
-    { email: "member@perspective.sn", name: "Mariama Diallo", role: language === "fr" ? "Analyste Éco" : "Eco Analyst", avatar: "M", status: "En ligne" },
-    { email: "journalist@perspective.sn", name: language === "fr" ? "Journaliste Sahel" : "Sahel Journalist", role: "Correspondant", avatar: "J", status: "En mission" }
+    { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", status: "En ligne" }
   ];
 
   defaultContacts.forEach(dc => {
@@ -99,7 +98,7 @@ export const DiscussionPage: React.FC = () => {
   }, [allUsers, friends]);
 
   const activeContact = contacts.find(c => c.email.toLowerCase() === activeContactEmail.toLowerCase()) || contacts[0] || {
-    email: "contact@perspective.sn", name: "Admin Rédaction", role: "Perspective Group", avatar: "P", status: "En ligne"
+    email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", status: language === "fr" ? "En ligne" : "Online"
   };
 
   const conversation = (directMessages || []).filter(
@@ -108,8 +107,13 @@ export const DiscussionPage: React.FC = () => {
   );
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversation]);
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [conversation.length, activeContactEmail]);
 
   useEffect(() => {
     if (activeContact?.email && userEmail) {
@@ -279,7 +283,7 @@ export const DiscussionPage: React.FC = () => {
           </div>
 
           {/* Messages Stream */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#08080a]">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#08080a]">
             {conversation.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 text-zinc-500 space-y-3">
                 <MessageSquare size={40} className="text-zinc-700" />

@@ -3,6 +3,13 @@ import path from "path";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { 
+  orchestrateDualEngineArticleGeneration, 
+  ArticleStyleType,
+  getEditorialGuidelines,
+  saveEditorialGuidelines,
+  resetEditorialGuidelinesToDefault
+} from "./server/aiNewsroomEngine";
+import { 
   connectMongo, 
   getCollectionDocs, 
   getDocument, 
@@ -1200,120 +1207,17 @@ app.use((req, res, next) => {
   app.post("/api/webhooks/make-article", handleUniversalArticleWebhook);
   app.post("/api/webhooks/make-rss", handleUniversalArticleWebhook);
 
-  // Helper to convert single RSS item into complete Perspective structured draft
-  const processSingleItemToPerspectiveDraft = async (item: any, feedCategory?: string): Promise<any> => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    let json: any = null;
+  // Helper to convert single RSS item into complete Perspective structured draft using dual-engine storytelling AI
+  const processSingleItemToPerspectiveDraft = async (item: any, feedCategory?: string, articleType: ArticleStyleType = "News"): Promise<any> => {
+    const genResult = await orchestrateDualEngineArticleGeneration({
+      rssItem: item,
+      category: feedCategory || "Économie",
+      type: articleType,
+      preferredEngine: "auto"
+    });
 
-    if (apiKey && apiKey.trim() !== "") {
-      const ai = new GoogleGenAI({ apiKey });
-      const systemInstruction = `You are senior editorial desk AI for Perspective Group (senperspective.com), a premier West African journal of record.
-Given an RSS news item, do NOT output raw or unadapted wire copy. You MUST adapt and transform the facts into Perspective's signature analytical article identity with clear factual explanation, deep contextual grounding, and neutral journalistic authority.
-
-PERSPECTIVE IDENTITY & SCHEMA REQUIREMENTS:
-1. "title" & "excerpt": Analytical, clear, engaging, and professional in both French and English.
-2. "body": A comprehensive, multi-paragraph Markdown article structured with clear section headers (## Contexte & Explication des Faits, ## Analyse des Enjeux & Impacts, ## Perspectives & Prochaines Étapes). Do NOT output brief or unadapted raw wire snippets.
-3. "perspectiveBrief": 3 bullet summary objects containing "whatHappened", "whyItMatters", "whatToWatchNext".
-4. "timeline": Array of chronological milestone objects [{ "date": "YYYY-MM-DD", "description": { "fr": "...", "en": "..." } }].
-5. "keyActors": Key actors/institutions involved with strategic roles and significance.
-6. "structuralForces": Political, economic, social, and international forces.
-7. "author": Must be "Rédaction Perspective".
-
-Required Schema:
-{
-  "title": { "fr": "Titre analytique", "en": "English Title" },
-  "excerpt": { "fr": "Chapeau de 2-3 phrases", "en": "English Abstract" },
-  "body": { "fr": "Texte complet en Markdown avec sous-titres ##", "en": "Full structured Markdown with ## subheadings" },
-  "category": "Politique|Économie|Société|International|L'Arène|Dossiers|Flash Info|Météo & Maritime|Chaloupe & Transports|Culture & People|Tech & Innovation",
-  "type": "News|Analysis|Deep Dive|Explainer|Opinion",
-  "author": "Rédaction Perspective",
-  "featuredImage": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
-  "tags": ["RSS", "Sénégal"],
-  "perspectiveBrief": {
-    "whatHappened": { "fr": "Rappel des faits.", "en": "Summary of facts." },
-    "whyItMatters": { "fr": "Pourquoi cela compte.", "en": "Why it matters." },
-    "whatToWatchNext": { "fr": "Points à surveiller.", "en": "What to watch." }
-  },
-  "timeline": [
-    { "date": "2026-08-19", "description": { "fr": "Événement clé", "en": "Key event" } }
-  ],
-  "keyActors": [
-    { "name": "Nom de l'acteur", "role": "Rôle", "significance": { "fr": "Rôle stratégique", "en": "Strategic role" } }
-  ],
-  "structuralForces": {
-    "political": { "fr": "Forces politiques", "en": "Political forces" },
-    "economic": { "fr": "Forces économiques", "en": "Economic forces" },
-    "social": { "fr": "Forces sociales", "en": "Social forces" },
-    "international": { "fr": "Forces internationales", "en": "International forces" }
-  }
-}`;
-
-      const userMsg = `RSS Item: ${JSON.stringify(item)}${feedCategory ? `\nTarget Category: ${feedCategory}` : ''}`;
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
-
-      for (const model of modelsToTry) {
-        try {
-          const apiCall = ai.models.generateContent({
-            model,
-            contents: [{ role: "user", parts: [{ text: userMsg }] }],
-            config: { systemInstruction, responseMimeType: "application/json", temperature: 0.2 }
-          });
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout")), 25000)
-          );
-          const response = await Promise.race([apiCall, timeoutPromise]);
-          json = JSON.parse(response.text || "{}");
-          if (json && json.title) break;
-        } catch (e: any) {
-          const errMsg = e?.message || String(e);
-          if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota")) {
-            console.warn(`[RSS ITEM AI RATE LIMIT] Model ${model} rate-limited, trying next model...`);
-          } else {
-            console.warn(`[RSS ITEM AI MODEL FAILED] ${model}:`, errMsg.slice(0, 100));
-          }
-        }
-      }
-    }
-
-    if (!json || !json.title) {
-      const descClean = item.body || item.description || item.title || "";
-      const formattedBodyFr = `## Contexte & Explication des Faits\n\n${descClean}\n\n## Analyse & Enjeux Perspective\n\nCet événement s'inscrit dans un contexte d'analyse stratégique régionale. La Rédaction de Perspective étudie l'impact institutionnel et socio-économique de ces développements.\n\n## Perspectives & Suivi\n\nPerspective poursuivra son travail de veille journalistique pour documenter les suites de ce dossier.`;
-      const formattedBodyEn = `## Context & Fact Explanation\n\n${descClean}\n\n## Perspective Analysis & Key Issues\n\nThis event is part of an ongoing regional strategic analysis. Perspective's editorial desk is evaluating the institutional and socio-economic impact of these developments.\n\n## Outlook & Monitoring\n\nPerspective will continue its investigative coverage to track further developments.`;
-
-      json = {
-        title: { fr: item.title || "Analyse d'Actualité - Perspective", en: item.title || "Perspective News Analysis" },
-        excerpt: { fr: descClean.slice(0, 220) + (descClean.length > 220 ? "..." : ""), en: descClean.slice(0, 220) + (descClean.length > 220 ? "..." : "") },
-        body: { fr: formattedBodyFr, en: formattedBodyEn },
-        category: feedCategory || "Économie",
-        type: "Analysis",
-        author: "Rédaction Perspective",
-        perspectiveBrief: {
-          whatHappened: { fr: descClean.slice(0, 180), en: descClean.slice(0, 180) },
-          whyItMatters: { fr: "Impact direct sur les enjeux socio-économiques et institutionnels régionaux.", en: "Direct impact on regional socio-economic and institutional stakes." },
-          whatToWatchNext: { fr: "Suivre l'évolution des réactions sectorielles et des communications officielles.", en: "Monitor industry responses and official announcements." }
-        },
-        timeline: [
-          { date: new Date().toISOString().split('T')[0], description: { fr: item.title || "Développement majeur", en: item.title || "Major development" } }
-        ],
-        keyActors: [
-          { name: "Rédaction Perspective", role: "Journal d'Analyse", significance: { fr: "Traitement analytique de l'information", en: "Analytical news coverage" } }
-        ],
-        structuralForces: {
-          political: { fr: "Analyse des dynamiques de gouvernance.", en: "Analysis of governance dynamics." },
-          economic: { fr: "Évaluation des retombées économiques.", en: "Assessment of economic fallout." },
-          social: { fr: "Suivi de l'impact communautaire.", en: "Monitoring of community impact." },
-          international: { fr: "Implications régionales Ouest-Africaines.", en: "West African regional implications." }
-        }
-      };
-    }
-
-    const cleanTitle = json.title?.fr || item.title || "article";
-    const slug = cleanTitle
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "") + "-" + Date.now().toString().slice(-4);
+    const enriched = genResult.article;
+    const cleanTitle = enriched.title?.fr || item.title || "Actualité";
 
     let cleanOrigLink = item.sourceUrl || item.link || item.url || "";
     let srcDomain = "";
@@ -1331,30 +1235,33 @@ Required Schema:
 
     const draftArticle: any = {
       id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9) + "-" + Math.floor(Math.random() * 1000000),
-      slug,
-      category: feedCategory || json.category || "Économie",
-      type: json.type || "Analysis",
-      title: json.title || { fr: cleanTitle, en: cleanTitle },
-      excerpt: json.excerpt || { fr: item.description?.slice(0, 200) || "", en: item.description?.slice(0, 200) || "" },
-      body: json.body || { fr: item.body || item.description || "", en: item.body || item.description || "" },
-      author: json.author || "Rédaction Perspective",
+      slug: enriched.slug,
+      category: feedCategory || enriched.category || "Économie",
+      type: enriched.type || articleType,
+      title: enriched.title,
+      excerpt: enriched.excerpt,
+      body: enriched.body,
+      author: enriched.author || "Rédaction Perspective",
       publishedAt: new Date().toISOString(),
-      featuredImage: json.featuredImage || item.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+      featuredImage: enriched.featuredImage || item.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
       isFeatured: false,
       isBreaking: false,
-      readTime: "4 min",
-      tags: json.tags || ["RSS", "Sénégal"],
+      readTime: `${enriched.readingTime || 4} min`,
+      tags: enriched.tags || ["RSS", "Sénégal", "Perspective"],
       status: "Draft",
-      perspectiveBrief: json.perspectiveBrief || null,
-      timeline: json.timeline || [],
-      keyActors: json.keyActors || [],
-      structuralForces: json.structuralForces || null,
+      perspectiveBrief: enriched.perspectiveBrief || null,
+      timeline: enriched.timeline || [],
+      keyActors: enriched.keyActors || [],
+      structuralForces: enriched.structuralForces || null,
       sourceName: srcName,
       sourceDomain: srcDomain,
       sourceCountry: originMeta.country,
       sourceFlag: originMeta.flag,
       sourceRegion: originMeta.region,
       originalUrl: cleanOrigLink,
+      engineUsed: genResult.engineUsed,
+      failoverTriggered: genResult.failoverTriggered,
+      failoverReason: genResult.failoverReason,
       views: 0
     };
 
@@ -1517,7 +1424,9 @@ Required Schema:
         healthyCount: results.filter(r => r.status === "healthy").length,
         degradedCount: results.filter(r => r.status === "degraded").length,
         errorCount: results.filter(r => r.status === "error").length,
-        geminiAiStatus: process.env.GEMINI_API_KEY ? "ready" : "no_key",
+        geminiAiStatus: (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") ? "ready" : "no_key",
+        openAiStatus: (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "") ? "ready" : "no_key",
+        aiDualEngineReady: !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY),
         results
       });
     } catch (err: any) {
@@ -1625,170 +1534,140 @@ Required Schema:
   app.delete("/api/articles/purge", purgeRssDraftsHandler);
   app.post("/api/articles/purge", purgeRssDraftsHandler);
 
-  // Generate & Ingest RSS Article using Gemini AI (POST /api/generate-rss-article)
+  // AI Engine Status Endpoint (GET /api/ai-engine/status)
+  app.get("/api/ai-engine/status", (req, res) => {
+    const geminiConfigured = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "" && process.env.GEMINI_API_KEY !== "undefined";
+    const openAiConfigured = !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "" && process.env.OPENAI_API_KEY !== "undefined";
+
+    return res.json({
+      success: true,
+      gemini: {
+        configured: geminiConfigured,
+        status: geminiConfigured ? "ready" : "unconfigured",
+        models: ["gemini-2.5-flash", "gemini-2.5-pro"]
+      },
+      openai: {
+        configured: openAiConfigured,
+        status: openAiConfigured ? "ready" : "unconfigured",
+        models: ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
+      },
+      failoverActive: true,
+      mode: "dual-orchestrator",
+      storytellingEngine: "Perspective Editorial Standards v3"
+    });
+  });
+
+  // Editorial Guidelines Endpoints (GET, POST, RESET, TEST)
+  app.get("/api/editorial-guidelines", (req, res) => {
+    try {
+      const guidelines = getEditorialGuidelines();
+      return res.json({ success: true, guidelines });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error fetching guidelines" });
+    }
+  });
+
+  app.post("/api/editorial-guidelines", (req, res) => {
+    try {
+      const updated = saveEditorialGuidelines(req.body || {});
+      return res.json({ success: true, message: "Charte éditoriale et directives IA enregistrées avec succès !", guidelines: updated });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error saving guidelines" });
+    }
+  });
+
+  app.post("/api/editorial-guidelines/reset", (req, res) => {
+    try {
+      const resetConfig = resetEditorialGuidelinesToDefault();
+      return res.json({ success: true, message: "Charte éditoriale réinitialisée aux standards par défaut.", guidelines: resetConfig });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error resetting guidelines" });
+    }
+  });
+
+  app.post("/api/editorial-guidelines/test", async (req, res) => {
+    try {
+      const { testPrompt, customGuidelines, category = "Économie", type = "News" } = req.body || {};
+      const samplePrompt = testPrompt || "Projet de ligne de chemin de fer Dakar-Bamako : enjeux de désenclavement et financement régional";
+
+      const genResult = await orchestrateDualEngineArticleGeneration({
+        prompt: samplePrompt,
+        category,
+        type: type as ArticleStyleType,
+        customGuidelinesOverride: customGuidelines
+      });
+
+      return res.json({
+        success: true,
+        message: "Test de rédaction exécuté avec succès.",
+        engineUsed: genResult.engineUsed,
+        article: genResult.article
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err?.message || "Error running guidelines test" });
+    }
+  });
+
+  // Generate & Ingest RSS Article using Dual-Engine Storytelling AI (POST /api/generate-rss-article)
   app.post("/api/generate-rss-article", async (req, res) => {
     try {
-      const { rssItem, prompt, category, autoPublish } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
+      const { rssItem, prompt, category, type = "News", preferredEngine = "auto", autoPublish } = req.body;
 
-      if (!apiKey || apiKey.trim() === "" || apiKey === "undefined" || apiKey === "null") {
-        return res.status(400).json({
-          success: false,
-          error: "GEMINI_API_KEY is not configured on the server."
-        });
-      }
+      const genResult = await orchestrateDualEngineArticleGeneration({
+        rssItem,
+        prompt,
+        category: category || "Économie",
+        type: (type as ArticleStyleType) || "News",
+        preferredEngine: preferredEngine || "auto"
+      });
 
-      const ai = new GoogleGenAI({ apiKey });
-
-      const systemInstruction = `You are senior editorial desk AI for Perspective Group (senperspective.com), a premier West African journal of record.
-Given an RSS news item or raw topic prompt, generate a high quality, analytical bilingual article object in strict JSON format.
-
-Perspective Writing Style:
-- Authoritative, analytical, rigorous, and forward-looking.
-- Focus on West African dynamics, Senegal, ECOWAS, geopolitics, and socio-economic stakes.
-- Impeccable bilingual delivery in French (fr) and English (en).
-
-Output format (MUST be valid JSON):
-{
-  "title": { "fr": "Titre analytique en français", "en": "Analytical title in English" },
-  "excerpt": { "fr": "Chapeau de 2-3 phrases résumant les enjeux en français", "en": "Analytical 2-3 sentence abstract in English" },
-  "body": { "fr": "Texte complet structuré en Markdown avec sous-titres (##, ###)", "en": "Full structured Markdown text with subheadings (##, ###)" },
-  "category": "Politique|Économie|Société|International|Tech|Santé|Sports|Gouvernance",
-  "type": "News|Analysis|Deep Dive|Explainer|Opinion",
-  "author": "Rédaction Perspective",
-  "featuredImage": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
-  "tags": ["Sénégal", "Analyse", "Perspective Group"],
-  "readingTime": 5,
-  "perspectiveBrief": {
-    "whatHappened": { "fr": "Résumé synthétique des faits.", "en": "Concise summary of key events." },
-    "whyItMatters": { "fr": "Pourquoi cette actualité est déterminante.", "en": "Why this news is critical for the region." },
-    "whatToWatchNext": { "fr": "Événements à surveiller prochainement.", "en": "Key developments to watch next." }
-  },
-  "timeline": [
-    {
-      "date": "2026-08-19",
-      "description": { "fr": "Événement clé dans la chronologie.", "en": "Key milestone event in the timeline." }
-    }
-  ],
-  "keyActors": [
-    {
-      "name": "Nom de l'acteur",
-      "role": "Rôle / Fonction",
-      "significance": { "fr": "Importance stratégique.", "en": "Strategic significance." }
-    }
-  ],
-  "structuralForces": {
-    "political": { "fr": "Analyse des forces politiques.", "en": "Analysis of political forces." },
-    "economic": { "fr": "Impacts économiques.", "en": "Economic impacts." },
-    "social": { "fr": "Retombées sociales.", "en": "Social impacts." },
-    "international": { "fr": "Implications régionales CEDEAO.", "en": "ECOWAS regional implications." }
-  }
-}`;
-
-      const userMessage = `RSS Item / Topic Data:
-Title/Context: ${typeof rssItem === 'object' ? JSON.stringify(rssItem) : (rssItem || prompt || "Actualité Ouest-Africaine")}
-Category Preference: ${category || "analyse"}
-
-Generate the JSON article object according to the schema.`;
-
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
-      let responseText = "";
-
-      for (const model of modelsToTry) {
-        try {
-          const apiCall = ai.models.generateContent({
-            model,
-            contents: [{ role: "user", parts: [{ text: userMessage }] }],
-            config: {
-              systemInstruction,
-              responseMimeType: "application/json",
-              temperature: 0.2
-            }
-          });
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout on model ${model}`)), 25000)
-          );
-          const response = await Promise.race([apiCall, timeoutPromise]);
-          if (response.text && response.text.trim()) {
-            responseText = response.text;
-            break;
-          }
-        } catch (mErr: any) {
-          const errMsg = mErr?.message || String(mErr);
-          if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota")) {
-            console.warn(`[GEMINI RATE LIMIT] Model ${model} rate-limited/quota exceeded, switching to next model...`);
-          } else {
-            console.warn(`[GEMINI RSS GEN RETRY] Model ${model} failed (${errMsg.slice(0, 120)}), trying next...`);
-          }
-        }
-      }
-
-      let jsonResult: any = {};
-
-      if (!responseText) {
-        console.warn("[GEMINI RSS GEN] All AI models failed, using structured fallback draft.");
-        const fallbackTopic = prompt || (typeof rssItem === 'object' ? rssItem.title : rssItem) || "Actualité Ouest-Africaine";
-        jsonResult = {
-          title: { fr: fallbackTopic, en: fallbackTopic },
-          excerpt: { fr: `Analyse éditoriale de Perspective sur : ${fallbackTopic}`, en: `Perspective editorial analysis on: ${fallbackTopic}` },
-          body: { fr: `## Analyse Perspective\n\nCet article concerne : ${fallbackTopic}.\n\nLes équipes de la rédaction Perspective suivent cette actualité stratégique pour en analyser les retombées socio-économiques et politiques régionales.`, en: `## Perspective Analysis\n\nThis article covers: ${fallbackTopic}.\n\nPerspective editorial desk is monitoring this strategic development to analyze its regional socio-economic and political impacts.` },
-          category: category || "Économie",
-          type: "Analysis"
-        };
-      } else {
-        try {
-          jsonResult = JSON.parse(responseText);
-        } catch (e) {
-          console.warn("[GEMINI RSS GEN] JSON parse failed, using fallback");
-          const fallbackTopic = prompt || "Actualité Ouest-Africaine";
-          jsonResult = {
-            title: { fr: fallbackTopic, en: fallbackTopic },
-            excerpt: { fr: `Analyse éditoriale sur : ${fallbackTopic}`, en: `Editorial analysis on: ${fallbackTopic}` },
-            body: { fr: responseText || fallbackTopic, en: responseText || fallbackTopic },
-            category: category || "Économie",
-            type: "Analysis"
-          };
-        }
-      }
-
+      const enriched = genResult.article;
       const isPub = autoPublish === true;
-      const slug = (jsonResult.title?.fr || "article")
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") + "-" + Date.now().toString().slice(-4);
+
+      let cleanOrigLink = typeof rssItem === "object" ? (rssItem.sourceUrl || rssItem.link || rssItem.url || "") : "";
+      let srcDomain = "";
+      let srcName = typeof rssItem === "object" ? (rssItem.sourceName || "") : "";
+      try {
+        if (cleanOrigLink) {
+          const pUrl = new URL(cleanOrigLink);
+          srcDomain = pUrl.hostname.replace(/^www\./, "");
+        }
+      } catch (e) {
+        srcDomain = "";
+      }
+
+      const originMeta = getFeedOriginMetadata(cleanOrigLink || category || "", srcName);
 
       const newArticle: any = {
         id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 6),
-        slug,
-        category: jsonResult.category || category || "Économie",
-        type: jsonResult.type || "Analysis",
-        title: {
-          fr: jsonResult.title?.fr || "Article Perspective",
-          en: jsonResult.title?.en || jsonResult.title?.fr || "Perspective Article"
-        },
-        excerpt: {
-          fr: jsonResult.excerpt?.fr || "",
-          en: jsonResult.excerpt?.en || jsonResult.excerpt?.fr || ""
-        },
-        body: {
-          fr: jsonResult.body?.fr || "",
-          en: jsonResult.body?.en || jsonResult.body?.fr || ""
-        },
-        featuredImage: jsonResult.featuredImage || jsonResult.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
-        author: jsonResult.author || "Rédaction Perspective",
+        slug: enriched.slug,
+        category: enriched.category || category || "Économie",
+        type: enriched.type || type || "News",
+        title: enriched.title,
+        excerpt: enriched.excerpt,
+        body: enriched.body,
+        featuredImage: enriched.featuredImage || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+        author: enriched.author || "Rédaction Perspective",
         date: new Date().toISOString(),
-        readingTime: jsonResult.readingTime || 5,
-        tags: Array.isArray(jsonResult.tags) ? jsonResult.tags : ["RSS", "Perspective"],
-        perspectiveBrief: jsonResult.perspectiveBrief || null,
-        timeline: jsonResult.timeline || [],
-        keyActors: jsonResult.keyActors || [],
-        structuralForces: jsonResult.structuralForces || null,
+        readingTime: enriched.readingTime || 4,
+        tags: enriched.tags || ["RSS", "Sénégal", "Perspective"],
+        perspectiveBrief: enriched.perspectiveBrief || null,
+        timeline: enriched.timeline || [],
+        keyActors: enriched.keyActors || [],
+        structuralForces: enriched.structuralForces || null,
         relatedArticleIds: [],
-        isPublished: isPub, // Draft by default
+        isPublished: isPub,
         isFeatured: false,
-        views: 0
+        views: 0,
+        sourceName: srcName || "Rédaction Perspective Desk",
+        sourceDomain: srcDomain,
+        sourceCountry: originMeta.country,
+        sourceFlag: originMeta.flag,
+        sourceRegion: originMeta.region,
+        originalUrl: cleanOrigLink,
+        engineUsed: genResult.engineUsed,
+        failoverTriggered: genResult.failoverTriggered,
+        failoverReason: genResult.failoverReason
       };
 
       rssDraftsRepository.unshift(newArticle);
@@ -1797,25 +1676,27 @@ Generate the JSON article object according to the schema.`;
 
       return res.status(201).json({
         success: true,
-        message: `Article generated with Gemini AI and synchronized as ${isPub ? 'Published' : 'Draft'}`,
+        message: `Article generated via ${genResult.engineUsed} ${genResult.failoverTriggered ? '(Failover Active)' : ''} and saved as ${isPub ? 'Published' : 'Draft'}`,
         permalink: `/article/${newArticle.slug}`,
+        engineUsed: genResult.engineUsed,
+        failoverTriggered: genResult.failoverTriggered,
         article: newArticle
       });
     } catch (err: any) {
-      console.error("Gemini RSS Generation Error:", err);
+      console.error("Dual-Engine RSS Generation Error:", err);
       return res.status(500).json({ success: false, error: err.message || "Failed to generate article" });
     }
   });
 
-  // Automated RSS Fetch & AI Batch Generation Endpoint
+  // Automated RSS Fetch & AI Batch Generation Endpoint (POST /api/rss/fetch-and-generate)
   app.post("/api/rss/fetch-and-generate", async (req, res) => {
     try {
-      const { feedUrl, category: feedCategory, maxItems = 3, autoPublish = false } = req.body;
+      const { feedUrl, category: feedCategory, maxItems = 3, autoPublish = false, preferredEngine = "auto", type = "News" } = req.body;
       if (!feedUrl || typeof feedUrl !== "string") {
         return res.status(400).json({ success: false, error: "Missing 'feedUrl' parameter." });
       }
 
-      console.log(`[RSS AUTO GENERATOR] Fetching RSS feed via resilient engine: ${feedUrl} (Category: ${feedCategory || 'Auto'})`);
+      console.log(`[NEWSROOM ENGINE] Ingesting wire feed: ${feedUrl} (Category: ${feedCategory || 'Auto'}, Type: ${type})`);
       const fetchResult = await fetchRssFeedResilient(feedUrl);
       
       if (!fetchResult.items || fetchResult.items.length === 0) {
@@ -1829,240 +1710,123 @@ Generate the JSON article object according to the schema.`;
       }
 
       const items = fetchResult.items.slice(0, Math.min(Number(maxItems) || 3, 10));
-
       const generatedDrafts: any[] = [];
-      const apiKey = process.env.GEMINI_API_KEY;
 
-      if (!apiKey || apiKey.trim() === "") {
-        // Fallback without Gemini AI
-        for (const item of items) {
-          const art = await processAndStoreSingleArticle(item);
-          art.category = feedCategory || art.category || "Économie";
-          art.isPublished = autoPublish;
-          generatedDrafts.push(art);
-        }
-      } else {
-        const ai = new GoogleGenAI({ apiKey });
-        const systemInstruction = `You are senior editorial desk AI for Perspective Group (senperspective.com), a premier West African journal of record.
-Given an RSS news item, do NOT output raw or unadapted wire copy. You MUST adapt and transform the facts into Perspective's signature analytical article identity with clear factual explanation, deep contextual grounding, and neutral journalistic authority.
+      // Process RSS items concurrently using unified dual-engine
+      const itemTasks = items.map(async (item) => {
+        try {
+          const genResult = await orchestrateDualEngineArticleGeneration({
+            rssItem: item,
+            feedUrl,
+            category: feedCategory || "Économie",
+            type: (type as ArticleStyleType) || "News",
+            preferredEngine
+          });
 
-PERSPECTIVE IDENTITY & SCHEMA REQUIREMENTS:
-1. "title" & "excerpt": Analytical, clear, engaging, and professional in both French and English.
-2. "body": A comprehensive, multi-paragraph Markdown article structured with clear section headers (## Contexte & Explication des Faits, ## Analyse des Enjeux & Impacts, ## Perspectives & Prochaines Étapes). Do NOT output brief or unadapted raw wire snippets.
-3. "perspectiveBrief": 3 bullet summary objects containing "whatHappened", "whyItMatters", "whatToWatchNext".
-4. "timeline": Array of chronological milestone objects [{ "date": "YYYY-MM-DD", "description": { "fr": "...", "en": "..." } }].
-5. "keyActors": Key actors/institutions involved with strategic roles and significance.
-6. "structuralForces": Political, economic, social, and international forces.
-7. "author": Must be "Rédaction Perspective".
-
-Required Schema:
-{
-  "title": { "fr": "Titre analytique", "en": "English Title" },
-  "excerpt": { "fr": "Chapeau de 2-3 phrases", "en": "English Abstract" },
-  "body": { "fr": "Texte complet en Markdown avec sous-titres ##", "en": "Full structured Markdown with ## subheadings" },
-  "category": "Politique|Économie|Société|International|L'Arène|Dossiers|Flash Info|Météo & Maritime|Chaloupe & Transports|Culture & People|Tech & Innovation",
-  "type": "News|Analysis|Deep Dive|Explainer|Opinion",
-  "author": "Rédaction Perspective",
-  "featuredImage": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
-  "tags": ["RSS", "Sénégal"],
-  "perspectiveBrief": {
-    "whatHappened": { "fr": "Rappel des faits.", "en": "Summary of facts." },
-    "whyItMatters": { "fr": "Pourquoi cela compte.", "en": "Why it matters." },
-    "whatToWatchNext": { "fr": "Points à surveiller.", "en": "What to watch." }
-  },
-  "timeline": [
-    { "date": "2026-08-19", "description": { "fr": "Événement clé", "en": "Key event" } }
-  ],
-  "keyActors": [
-    { "name": "Nom de l'acteur", "role": "Rôle", "significance": { "fr": "Rôle stratégique", "en": "Strategic role" } }
-  ],
-  "structuralForces": {
-    "political": { "fr": "Forces politiques", "en": "Political forces" },
-    "economic": { "fr": "Forces économiques", "en": "Economic forces" },
-    "social": { "fr": "Forces sociales", "en": "Social forces" },
-    "international": { "fr": "Forces internationales", "en": "International forces" }
-  }
-}`;
-
-        // Process RSS items concurrently
-        const itemTasks = items.map(async (item) => {
-          try {
-            const userMsg = `RSS Item: ${JSON.stringify(item)}${feedCategory ? `\nTarget Category: ${feedCategory}` : ''}`;
-            const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"];
-            let json: any = null;
-
-            for (const model of modelsToTry) {
-              try {
-                const apiCall = ai.models.generateContent({
-                  model,
-                  contents: [{ role: "user", parts: [{ text: userMsg }] }],
-                  config: { systemInstruction, responseMimeType: "application/json", temperature: 0.2 }
-                });
-                const timeoutPromise = new Promise<never>((_, reject) =>
-                  setTimeout(() => reject(new Error("Timeout")), 25000)
-                );
-                const response = await Promise.race([apiCall, timeoutPromise]);
-                json = JSON.parse(response.text || "{}");
-                if (json && json.title) break;
-              } catch (e: any) {
-                const errMsg = e?.message || String(e);
-                if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("Quota")) {
-                  console.warn(`[RSS ITEM AI RATE LIMIT] Model ${model} rate-limited, trying next model...`);
-                } else {
-                  console.warn(`[RSS ITEM AI MODEL FAILED] ${model}:`, errMsg.slice(0, 100));
-                }
-              }
-            }
-
-            if (!json || !json.title) {
-              // Fallback: adapt RSS item into full Perspective article standard with briefs and timeline
-              const descClean = item.body || item.description || item.title || "";
-              const formattedBodyFr = `## Contexte & Explication des Faits\n\n${descClean}\n\n## Analyse & Enjeux Perspective\n\nCet événement s'inscrit dans un contexte d'analyse stratégique régionale. La Rédaction de Perspective étudie l'impact institutionnel et socio-économique de ces développements.\n\n## Perspectives & Suivi\n\nPerspective poursuivra son travail de veille journalistique pour documenter les suites de ce dossier.`;
-              const formattedBodyEn = `## Context & Fact Explanation\n\n${descClean}\n\n## Perspective Analysis & Key Issues\n\nThis event is part of an ongoing regional strategic analysis. Perspective's editorial desk is evaluating the institutional and socio-economic impact of these developments.\n\n## Outlook & Monitoring\n\nPerspective will continue its investigative coverage to track further developments.`;
-
-              json = {
-                title: { fr: item.title || "Analyse d'Actualité - Perspective", en: item.title || "Perspective News Analysis" },
-                excerpt: { fr: descClean.slice(0, 220) + (descClean.length > 220 ? "..." : ""), en: descClean.slice(0, 220) + (descClean.length > 220 ? "..." : "") },
-                body: { fr: formattedBodyFr, en: formattedBodyEn },
-                category: feedCategory || "Économie",
-                type: "Analysis",
-                author: "Rédaction Perspective",
-                perspectiveBrief: {
-                  whatHappened: { fr: descClean.slice(0, 180), en: descClean.slice(0, 180) },
-                  whyItMatters: { fr: "Impact direct sur les enjeux socio-économiques et institutionnels régionaux.", en: "Direct impact on regional socio-economic and institutional stakes." },
-                  whatToWatchNext: { fr: "Suivre l'évolution des réactions sectorielles et des communications officielles.", en: "Monitor industry responses and official announcements." }
-                },
-                timeline: [
-                  { date: new Date().toISOString().split('T')[0], description: { fr: item.title || "Développement majeur", en: item.title || "Major development" } }
-                ],
-                keyActors: [
-                  { name: "Rédaction Perspective", role: "Journal d'Analyse", significance: { fr: "Traitement analytique de l'information", en: "Analytical news coverage" } }
-                ],
-                structuralForces: {
-                  political: { fr: "Analyse des dynamiques de gouvernance.", en: "Analysis of governance dynamics." },
-                  economic: { fr: "Évaluation des retombées économiques.", en: "Assessment of economic fallout." },
-                  social: { fr: "Suivi de l'impact communautaire.", en: "Monitoring of community impact." },
-                  international: { fr: "Implications régionales Ouest-Africaines.", en: "West African regional implications." }
-                }
-              };
-            }
-
-            const cleanTitle = json.title?.fr || item.title || "article";
-            const slug = cleanTitle
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")
-              .replace(/[^a-z0-9]+/g, "-")
-              .replace(/^-+|-+$/g, "") + "-" + Date.now().toString().slice(-4);
-
-            let cleanOrigLink = item.sourceUrl || item.link || item.url || feedUrl;
-            if (cleanOrigLink && !cleanOrigLink.startsWith('http://') && !cleanOrigLink.startsWith('https://')) {
-              try {
-                const feedObj = new URL(feedUrl);
-                cleanOrigLink = new URL(cleanOrigLink, feedObj.origin).toString();
-              } catch (e) {
-                cleanOrigLink = `https://${cleanOrigLink}`;
-              }
-            }
-
-            let srcDomain = "";
-            let srcName = item.sourceName || "";
+          const enriched = genResult.article;
+          let cleanOrigLink = item.sourceUrl || item.link || item.url || feedUrl;
+          if (cleanOrigLink && !cleanOrigLink.startsWith('http://') && !cleanOrigLink.startsWith('https://')) {
             try {
-              const pUrl = new URL(feedUrl);
-              srcDomain = pUrl.hostname.replace(/^www\./, "");
+              const feedObj = new URL(feedUrl);
+              cleanOrigLink = new URL(cleanOrigLink, feedObj.origin).toString();
             } catch (e) {
-              srcDomain = "feed";
+              cleanOrigLink = `https://${cleanOrigLink}`;
             }
-
-            if (!srcName) {
-              if (srcDomain.includes("aps.sn")) srcName = "APS (Agence de Presse Sénégalaise)";
-              else if (srcDomain.includes("lesoleil.sn")) srcName = "Le Soleil";
-              else if (srcDomain.includes("rfi.fr")) srcName = "RFI Afrique";
-              else if (srcDomain.includes("jeuneafrique.com")) srcName = "Jeune Afrique";
-              else if (srcDomain.includes("senenews.com")) srcName = "SeneNews";
-              else if (srcDomain.includes("seneweb.com")) srcName = "Seneweb";
-              else if (srcDomain.includes("pressafrik.com")) srcName = "PressAfrik";
-              else if (srcDomain.includes("bbc.") || srcDomain.includes("bbci.co.uk")) srcName = "BBC News";
-              else if (srcDomain.includes("reuters.com")) srcName = "Reuters Wire";
-              else if (srcDomain.includes("cnn.com")) srcName = "CNN International";
-              else if (srcDomain.includes("aljazeera.com")) srcName = "Al Jazeera";
-              else if (srcDomain.includes("france24.com")) srcName = "France 24";
-              else if (srcDomain.includes("africanews.com")) srcName = "Africanews";
-              else if (srcDomain.includes("allafrica.com")) srcName = "AllAfrica";
-              else if (srcDomain.includes("bloomberg.com")) srcName = "Bloomberg";
-              else if (srcDomain.includes("theguardian.com")) srcName = "The Guardian";
-              else if (srcDomain.includes("politico.com")) srcName = "Politico";
-              else if (srcDomain.includes("dw.com")) srcName = "Deutsche Welle (DW)";
-              else if (srcDomain.includes("nhk.or.jp")) srcName = "NHK World";
-              else if (srcDomain.includes("npr.org")) srcName = "NPR News";
-              else if (srcDomain.includes("cbc.ca")) srcName = "CBC News";
-              else if (srcDomain.includes("foxnews.com")) srcName = "Fox News";
-              else if (srcDomain.includes("afrik.com")) srcName = "Afrik.com";
-              else if (srcDomain.includes("aip.ci")) srcName = "AIP (Côte d'Ivoire)";
-              else if (srcDomain.includes("espn.com")) srcName = "ESPN FC";
-              else if (srcDomain.includes("skysports.com")) srcName = "Sky Sports";
-              else if (srcDomain.includes("bfmtv.com")) srcName = "RMC Sport";
-              else if (srcDomain.includes("google.com")) srcName = "Google News Sync";
-              else srcName = srcDomain;
-            }
-
-            const draftArticle: any = {
-              id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9) + "-" + Math.floor(Math.random() * 1000000),
-              slug,
-              category: feedCategory || json.category || "Économie",
-              type: json.type || "Analysis",
-              title: {
-                fr: json.title?.fr || item.title || "Article Perspective",
-                en: json.title?.en || item.title || "Perspective Article"
-              },
-              excerpt: {
-                fr: json.excerpt?.fr || item.description || "",
-                en: json.excerpt?.en || item.description || ""
-              },
-              body: {
-                fr: json.body?.fr || item.content || item.description || "",
-                en: json.body?.en || item.content || item.description || ""
-              },
-              featuredImage: json.featuredImage || item.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
-              author: "Rédaction Perspective",
-              date: new Date().toISOString(),
-              readingTime: json.readingTime || 4,
-              tags: Array.isArray(json.tags) ? json.tags : ["RSS", "Sénégal"],
-              perspectiveBrief: json.perspectiveBrief || null,
-              timeline: json.timeline || [],
-              keyActors: json.keyActors || [],
-              structuralForces: json.structuralForces || null,
-              relatedArticleIds: [],
-              isPublished: autoPublish,
-              isFeatured: false,
-              views: 0,
-              sourceName: srcName,
-              sourceDomain: srcDomain,
-              sourceCountry: getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName).country,
-              sourceFlag: getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName).flag,
-              sourceRegion: getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName).region,
-              feedUrl: feedUrl,
-              sourceUrl: cleanOrigLink,
-              originalUrl: cleanOrigLink
-            };
-
-            rssDraftsRepository.unshift(draftArticle);
-            await saveRssDrafts();
-            await syncArticleToFirestore(draftArticle);
-            return draftArticle;
-          } catch (itemErr) {
-            console.warn("[RSS BATCH ITEM FAILED]", itemErr);
-            return null;
           }
-        });
 
-        const results = await Promise.allSettled(itemTasks);
-        results.forEach(res => {
-          if (res.status === "fulfilled" && res.value) {
-            generatedDrafts.push(res.value);
+          let srcDomain = "";
+          let srcName = item.sourceName || "";
+          try {
+            const pUrl = new URL(feedUrl);
+            srcDomain = pUrl.hostname.replace(/^www\./, "");
+          } catch (e) {
+            srcDomain = "feed";
           }
-        });
-      }
+
+          if (!srcName) {
+            if (srcDomain.includes("aps.sn")) srcName = "APS (Agence de Presse Sénégalaise)";
+            else if (srcDomain.includes("lesoleil.sn")) srcName = "Le Soleil";
+            else if (srcDomain.includes("rfi.fr")) srcName = "RFI Afrique";
+            else if (srcDomain.includes("jeuneafrique.com")) srcName = "Jeune Afrique";
+            else if (srcDomain.includes("senenews.com")) srcName = "SeneNews";
+            else if (srcDomain.includes("seneweb.com")) srcName = "Seneweb";
+            else if (srcDomain.includes("pressafrik.com")) srcName = "PressAfrik";
+            else if (srcDomain.includes("bbc.") || srcDomain.includes("bbci.co.uk")) srcName = "BBC News";
+            else if (srcDomain.includes("reuters.com")) srcName = "Reuters Wire";
+            else if (srcDomain.includes("cnn.com")) srcName = "CNN International";
+            else if (srcDomain.includes("aljazeera.com")) srcName = "Al Jazeera";
+            else if (srcDomain.includes("france24.com")) srcName = "France 24";
+            else if (srcDomain.includes("africanews.com")) srcName = "Africanews";
+            else if (srcDomain.includes("allafrica.com")) srcName = "AllAfrica";
+            else if (srcDomain.includes("bloomberg.com")) srcName = "Bloomberg";
+            else if (srcDomain.includes("theguardian.com")) srcName = "The Guardian";
+            else if (srcDomain.includes("politico.com")) srcName = "Politico";
+            else if (srcDomain.includes("dw.com")) srcName = "Deutsche Welle (DW)";
+            else if (srcDomain.includes("nhk.or.jp")) srcName = "NHK World";
+            else if (srcDomain.includes("npr.org")) srcName = "NPR News";
+            else if (srcDomain.includes("cbc.ca")) srcName = "CBC News";
+            else if (srcDomain.includes("foxnews.com")) srcName = "Fox News";
+            else if (srcDomain.includes("afrik.com")) srcName = "Afrik.com";
+            else if (srcDomain.includes("aip.ci")) srcName = "AIP (Côte d'Ivoire)";
+            else if (srcDomain.includes("espn.com")) srcName = "ESPN FC";
+            else if (srcDomain.includes("skysports.com")) srcName = "Sky Sports";
+            else if (srcDomain.includes("bfmtv.com")) srcName = "RMC Sport";
+            else if (srcDomain.includes("google.com")) srcName = "Google News Sync";
+            else srcName = srcDomain;
+          }
+
+          const originMeta = getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName);
+
+          const draftArticle: any = {
+            id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9) + "-" + Math.floor(Math.random() * 1000000),
+            slug: enriched.slug,
+            category: feedCategory || enriched.category || "Économie",
+            type: enriched.type || type || "News",
+            title: enriched.title,
+            excerpt: enriched.excerpt,
+            body: enriched.body,
+            featuredImage: enriched.featuredImage || item.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+            author: enriched.author || "Rédaction Perspective",
+            date: new Date().toISOString(),
+            readingTime: enriched.readingTime || 4,
+            tags: enriched.tags || ["RSS", "Sénégal", "Perspective"],
+            perspectiveBrief: enriched.perspectiveBrief || null,
+            timeline: enriched.timeline || [],
+            keyActors: enriched.keyActors || [],
+            structuralForces: enriched.structuralForces || null,
+            relatedArticleIds: [],
+            isPublished: autoPublish,
+            isFeatured: false,
+            views: 0,
+            sourceName: srcName,
+            sourceDomain: srcDomain,
+            sourceCountry: originMeta.country,
+            sourceFlag: originMeta.flag,
+            sourceRegion: originMeta.region,
+            feedUrl: feedUrl,
+            sourceUrl: cleanOrigLink,
+            originalUrl: cleanOrigLink,
+            engineUsed: genResult.engineUsed,
+            failoverTriggered: genResult.failoverTriggered,
+            failoverReason: genResult.failoverReason
+          };
+
+          rssDraftsRepository.unshift(draftArticle);
+          await saveRssDrafts();
+          await syncArticleToFirestore(draftArticle);
+          return draftArticle;
+        } catch (itemErr) {
+          console.warn("[RSS BATCH ITEM FAILED]", itemErr);
+          return null;
+        }
+      });
+
+      const results = await Promise.allSettled(itemTasks);
+      results.forEach(res => {
+        if (res.status === "fulfilled" && res.value) {
+          generatedDrafts.push(res.value);
+        }
+      });
 
       return res.json({
         success: true,
@@ -2550,7 +2314,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
       }
 
       // Try primary model with automatic fallbacks for rate limits and high demand
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest", "gemini-3.6-flash"];
+      const modelsToTry = ["gemini-2.5-flash", "gemini-2.5-pro"];
       let responseText = "";
 
       for (const model of modelsToTry) {

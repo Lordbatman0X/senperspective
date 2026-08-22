@@ -90,7 +90,7 @@ export function Footer() {
 
           {/* Column 2: Editions */}
           <div className="flex flex-col">
-            <h3 className="font-sans font-black tracking-widest uppercase text-base mb-6 text-zinc-200">Éditions</h3>
+            <h3 className="font-sans font-black tracking-widest uppercase text-base mb-6 text-zinc-200">{language === 'fr' ? 'Éditions' : 'Editions'}</h3>
             <ul className="grid grid-cols-2 gap-y-3.5">
               {editions.map(ed => (
                 <li key={ed.id}>

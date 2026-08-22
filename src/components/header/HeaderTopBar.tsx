@@ -234,57 +234,67 @@ export function HeaderTopBar() {
       language === "fr" ? "fr-FR" : "en-US",
       { weekday: "long", year: "numeric", month: "long", day: "numeric" },
     ),
+    shortDate: currentTime.toLocaleDateString(
+      language === "fr" ? "fr-FR" : "en-US",
+      { weekday: "short", day: "numeric", month: "short" }
+    ),
     time: timeFormatted,
     weather: `${locationInfo.cityName} ${tempString} • ${condString}`
   };
 
   return (
-    <div className={`${location.pathname === "/" ? "hidden md:block" : ""} bg-zinc-900 text-white font-sans border-b border-zinc-800 shadow-inner overflow-hidden`}>
-      <div className="max-w-7xl mx-auto px-4 py-1.5 flex flex-row justify-between items-center text-gray-300 text-[9px] md:text-[10px] gap-2 overflow-hidden">
-        <div className="flex items-center gap-3 md:gap-5 min-w-0">
-          <span className="font-semibold uppercase tracking-widest hidden sm:inline text-[#d0d4dc] shrink-0">
-            {t.date}
+    <div className="bg-zinc-900 text-white font-sans border-b border-zinc-800 shadow-inner overflow-hidden">
+      <div className="max-w-7xl mx-auto px-2 md:px-4 py-1.5 flex flex-row justify-between items-center text-gray-300 text-[8.5px] xs:text-[9px] md:text-[10px] gap-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+        <div className="flex items-center gap-2 xs:gap-3 md:gap-5 min-w-0 shrink-0 whitespace-nowrap">
+          <span className="font-semibold uppercase tracking-wider text-[#d0d4dc] shrink-0">
+            <span className="inline md:hidden">{t.shortDate}</span>
+            <span className="hidden md:inline">{t.date}</span>
           </span>
-          <span className="flex items-center gap-1.5 font-medium uppercase tracking-widest shrink-0">
-            <Clock size={11} className="text-gray-400" /> {t.time} {locationInfo.cityCode}
+          <span className="text-zinc-600 font-bold shrink-0">•</span>
+          <span className="flex items-center gap-1 font-medium uppercase tracking-wider shrink-0">
+            <Clock size={10} className="text-gray-400 shrink-0" /> {t.time}
           </span>
-          <span className="flex items-center gap-1.5 font-medium shrink-0">
+          <span className="text-zinc-600 font-bold shrink-0">•</span>
+          <span
+            className="flex items-center gap-1.5 font-medium shrink-0 cursor-pointer"
+            title={`${locationInfo.cityName} ${tempString} • ${condString}`}
+          >
             <div className="relative w-4 h-4 flex items-center justify-center shrink-0">
               {isDayTheme ? (
-                <Sun size={11} className="text-yellow-500 shrink-0" />
+                <Sun size={12} className="text-amber-400 animate-[spin_12s_linear_infinite] shrink-0" />
               ) : (
-                <Moon size={11} className="text-blue-300 shrink-0" />
+                <Moon size={12} className="text-blue-300 animate-pulse shrink-0" />
               )}
               {overlayIcon && (
-                <div className="absolute -bottom-1 -right-1 bg-zinc-900 rounded-none p-0.5 border border-zinc-800 flex items-center justify-center z-10 shadow-sm">
+                <div className="absolute -bottom-1 -right-1 bg-zinc-900 rounded-none p-0.5 border border-zinc-800 flex items-center justify-center z-10 shadow-xs">
                   {overlayIcon}
                 </div>
               )}
             </div>
-            <span className="uppercase tracking-widest text-gray-300">
+            <span className="hidden md:inline uppercase tracking-wider text-gray-300">
               {t.weather}
             </span>
           </span>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 md:gap-3 shrink-0 ml-auto">
           <button
             onClick={toggleTheme}
             className="p-1 rounded-none hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
             title="Toggle Theme"
           >
-            {theme === "dark" ? <Sun size={12} /> : <Moon size={12} />}
+            {theme === "dark" ? <Sun size={11} /> : <Moon size={11} />}
           </button>
-          <div className="flex bg-black/40 p-0.5 rounded-none shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)] border border-zinc-700 mr-1">
+          <div className="flex bg-black/40 p-0.5 rounded-none shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)] border border-zinc-700">
             <button
               onClick={() => setLanguage("fr")}
-              className={`px-1.5 py-0.2 rounded-none text-[8px] md:text-[9px] font-bold transition-all duration-200 uppercase tracking-widest ${language === "fr" ? "bg-[#E85D42] text-white shadow-sm" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
+              className={`px-1 py-0.2 rounded-none text-[8px] md:text-[9px] font-bold transition-all duration-200 uppercase tracking-widest ${language === "fr" ? "bg-[#E85D42] text-white shadow-xs" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
             >
               FR
             </button>
             <button
               onClick={() => setLanguage("en")}
-              className={`px-1.5 py-0.2 rounded-none text-[8px] md:text-[9px] font-bold transition-all duration-200 uppercase tracking-widest ${language === "en" ? "bg-[#E85D42] text-white shadow-sm" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
+              className={`px-1 py-0.2 rounded-none text-[8px] md:text-[9px] font-bold transition-all duration-200 uppercase tracking-widest ${language === "en" ? "bg-[#E85D42] text-white shadow-xs" : "text-gray-400 hover:text-white hover:bg-white/10"}`}
             >
               EN
             </button>

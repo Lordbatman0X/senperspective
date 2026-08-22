@@ -273,6 +273,7 @@ interface AppState {
     paywallThreshold: number;
     paywallEnabled: boolean;
     cookieConsentEnabled?: boolean;
+    showDraftPoliciesInFooter?: boolean;
     privacyPolicyTextFr?: string;
     privacyPolicyTextEn?: string;
     dataRetentionDays?: number;
@@ -647,25 +648,21 @@ export const useStore = create<AppState>()(
         });
         set({ notifications: updatedNotifs });
       },
-      friends: [
-        { email: "fatou.ndiaye@perspective.sn", name: "Fatou Ndiaye", role: "Lectrice & Contributrice", avatar: "F", status: "En ligne" },
-        { email: "mamadou.ba@perspective.sn", name: "Mamadou Ba", role: "Observateur Politique", avatar: "M", status: "Actif" },
-        { email: "aminata.sow@perspective.sn", name: "Aminata Sow", role: "Analyste Économique", avatar: "A", status: "Absent" }
-      ],
+      friends: [],
       addFriend: (friend) => set(state => ({ friends: [...(state.friends || []), friend] })),
       deleteFriend: (email) => set(state => ({ friends: (state.friends || []).filter(f => f.email !== email) })),
       abdelPrompts: {
         fr: [
-          "Résumer l'article en cours",
-          "Quels sont les impacts géopolitiques de cet article ?",
-          "Quels sont les points clés de cette actualité sénégalaise ?",
-          "Expliquer le contexte économique de ce sujet"
+          "Quelles sont les actualités majeures aujourd'hui sur Perspective ?",
+          "Résumer les faits marquants en Afrique de l'Ouest",
+          "Quels dossiers géopolitiques et économiques suivre actuellement ?",
+          "Recommande-moi une grande enquête du journal"
         ],
         en: [
-          "Summarize the current article",
-          "What are the geopolitical impacts of this article?",
-          "What are the key points of this Senegalese news piece?",
-          "Explain the economic context of this topic"
+          "What are today's major headlines on Perspective?",
+          "Summarize key West African developments",
+          "Which geopolitical & economic topics should I follow?",
+          "Recommend a major investigation or editorial breakdown"
         ]
       },
       updateAbdelPrompts: (prompts) => set({ abdelPrompts: prompts }),

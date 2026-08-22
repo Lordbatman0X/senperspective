@@ -794,9 +794,7 @@ export function AccountDrawer({
 
                           // Default contacts fallback
                           const defaultContacts = [
-                            { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group" },
-                            { email: "member@perspective.sn", name: "Mariama Diallo", role: language === "fr" ? "Analyste Éco" : "Eco Analyst" },
-                            { email: "journalist@perspective.sn", name: language === "fr" ? "Journaliste Sahel" : "Sahel Journalist", role: "Correspondant" }
+                            { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group" }
                           ];
 
                           defaultContacts.forEach(dc => {

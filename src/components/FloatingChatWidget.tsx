@@ -32,9 +32,7 @@ export const FloatingChatWidget: React.FC = () => {
   // Contacts directory
   const contacts = [
     { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P" },
-    { email: "member@perspective.sn", name: "Mariama Diallo", role: language === "fr" ? "Analyste Éco" : "Eco Analyst", avatar: "M" },
-    { email: "kadersdiaz3@gmail.com", name: "Kader Diaz", role: "Directeur Éditorial", avatar: "K" },
-    { email: "journalist@perspective.sn", name: language === "fr" ? "Journaliste Sahel" : "Sahel Journalist", role: "Correspondant", avatar: "J" }
+    { email: "kadersdiaz3@gmail.com", name: "Kader Diaz", role: "Directeur Éditorial", avatar: "K" }
   ];
 
   // Global window event listener to open floating chat from Header / Drawer
@@ -59,9 +57,9 @@ export const FloatingChatWidget: React.FC = () => {
 
   useEffect(() => {
     if (isOpen && !isMinimized) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
-  }, [directMessages, isOpen, isMinimized, selectedUser]);
+  }, [directMessages.length, isOpen, isMinimized, selectedUser]);
 
   useEffect(() => {
     if (isOpen && !isMinimized && userEmail) {

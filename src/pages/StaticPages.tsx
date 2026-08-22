@@ -96,7 +96,7 @@ export function AboutPage() {
           </div>
 
           <p className="text-2xl md:text-3xl font-black tracking-tight uppercase font-serif" style={{ color: accentColor }}>
-            L’actualité. Sans filtre. Sans compromis.
+            {language === 'fr' ? 'L’actualité. Sans filtre. Sans compromis.' : 'News. Unfiltered. Uncompromised.'}
           </p>
 
           <p className="text-base text-zinc-700 dark:text-zinc-300 leading-relaxed">
@@ -156,7 +156,7 @@ export function AboutPage() {
                 {language === 'fr' ? 'Siège & Adresse' : 'Headquarters'}
               </span>
               <p className="font-bold text-zinc-900 dark:text-zinc-100 m-0">
-                Perspective Group — Dakar, Sénégal
+                {language === 'fr' ? 'Perspective Group, Dakar, Sénégal' : 'Perspective Group, Dakar, Senegal'}
               </p>
             </div>
           </div>
@@ -190,7 +190,7 @@ export function ContactPage() {
           </div>
           <div className="flex items-start gap-3 pt-2 border-t border-zinc-200 dark:border-zinc-800">
             <MapPin size={16} className="mt-0.5" style={{ color: accentColor }} />
-            <span>Perspective Group — Dakar, Sénégal</span>
+            <span>{language === 'fr' ? 'Perspective Group, Dakar, Sénégal' : 'Perspective Group, Dakar, Senegal'}</span>
           </div>
         </div>
       </div>

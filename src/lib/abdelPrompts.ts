@@ -14,6 +14,35 @@ export function getAbdelContextualPrompts(
   contextArticle?: Article,
   customAdminPrompts?: { fr?: string[]; en?: string[] }
 ): AbdelPromptContext {
+  // 0. Admin Console (/admin)
+  if (pathname.startsWith("/admin")) {
+    return {
+      sectionLabel: {
+        fr: "Espace Éditorial & Administration",
+        en: "Editorial Desk & Admin Console",
+      },
+      locationType: "category",
+      greeting: {
+        fr: "Bonjour ! Vous êtes sur le Portail d'Administration. Je peux vous assister dans la vérification de la charte éditoriale, la configuration RSS ou l'optimisation des requêtes d'IA.",
+        en: "Hello! You are in the Admin Console. I can assist you with editorial policy verification, RSS automation settings, or AI prompt optimization.",
+      },
+      prompts: {
+        fr: [
+          "Comment fonctionnent le tri automatique et la logique Dual-Engine ?",
+          "Rappel des règles de style et de la charte de modération du journal",
+          "Comment optimiser les automatisations RSS pour les dépêches ?",
+          "Quelles sont les consignes éditoriales pour la Rédaction Perspective ?",
+        ],
+        en: [
+          "How does the automated triage and Dual-Engine AI workflow operate?",
+          "Review the editorial style rules and reader moderation guidelines",
+          "How can we optimize RSS automation settings for news feeds?",
+          "What are the core editorial instructions for Perspective Group?",
+        ],
+      },
+    };
+  }
+
   // 1. In an Article Page (/article/:id or contextArticle is defined)
   if (contextArticle || pathname.startsWith("/article/")) {
     const titleFr = contextArticle?.title?.fr || contextArticle?.title?.en || "cet article";
@@ -23,19 +52,19 @@ export function getAbdelContextualPrompts(
     const category = contextArticle?.category || "Dossier";
 
     const frPrompts = [
-      `Fais-moi une synthèse claire et humaine de « ${shortTitleFr} »`,
-      "Quels sont les points de friction et les non-dits de ce sujet ?",
-      "Qui sont les acteurs clés et quelles sont leurs motivations réelles ?",
+      `Fais-moi une synthèse claire en 3 points de « ${shortTitleFr} »`,
+      "Quels sont les enjeux géopolitiques et économiques de ce sujet ?",
+      "Qui sont les acteurs clés mentionnés et leurs motivations ?",
       "Quel est l'impact concret de cette situation pour les citoyens ?",
       "Explique-moi le contexte historique en termes simples",
-      "Quelles sont les perspectives et scénarios d'évolution selon toi ?"
+      "Quelles sont les perspectives et scénarios d'évolution ?"
     ];
 
     const enPrompts = [
-      `Give me a sharp, human synthesis of "${shortTitleEn}"`,
-      "What are the underlying tensions and hidden dynamics here?",
-      "Who are the key players and what drives their agendas?",
-      "What is the real-world impact of this situation on regular citizens?",
+      `Give me a clear 3-point summary of "${shortTitleEn}"`,
+      "What are the key geopolitical and economic stakes here?",
+      "Who are the key players mentioned and what drives them?",
+      "What is the real-world impact of this situation on citizens?",
       "Explain the historical background in straightforward terms",
       "What are the most likely scenarios and future outlooks?"
     ];
@@ -48,8 +77,8 @@ export function getAbdelContextualPrompts(
       locationType: "article",
       articleContextTitle: { fr: titleFr, en: titleEn },
       greeting: {
-        fr: `Bonjour ! Je vois que vous êtes plongé dans l'enquête **« ${titleFr} »** (${category}). C'est un dossier captivant. Que souhaitez-vous approfondir ensemble ?`,
-        en: `Hello! I see you're reading **"${titleEn}"** (${category}). This is a fascinating story. What would you like to unpack together?`,
+        fr: `Bonjour ! Je vois que vous lisez **« ${titleFr} »** (${category}). C'est une actualité marquante. Que souhaitez-vous approfondir ensemble ?`,
+        en: `Hello! I see you're reading **"${titleEn}"** (${category}). This is a key story. What would you like to unpack together?`,
       },
       prompts: {
         fr: frPrompts,
@@ -354,24 +383,32 @@ export function getAbdelContextualPrompts(
   }
 
   // 6. Homepage (Default / General)
-  const defaultFr = (customAdminPrompts?.fr && customAdminPrompts.fr.length > 0)
-    ? customAdminPrompts.fr
+  const cleanAdminFr = customAdminPrompts?.fr?.filter(
+    p => !p.toLowerCase().includes("article en cours") && !p.toLowerCase().includes("cet article")
+  ) || [];
+
+  const cleanAdminEn = customAdminPrompts?.en?.filter(
+    p => !p.toLowerCase().includes("current article") && !p.toLowerCase().includes("this article")
+  ) || [];
+
+  const defaultFr = cleanAdminFr.length > 0
+    ? cleanAdminFr
     : [
-        "Fais-moi un tour d'horizon express des grandes actualités du jour",
-        "Quels sont les 3 articles à la une les plus marquants cette semaine ?",
-        "Quelles sont les grandes tendances et analyses du journal aujourd'hui ?",
+        "Quelles sont les actualités majeures aujourd'hui sur Perspective ?",
+        "Résumer les faits marquants en Afrique de l'Ouest",
+        "Quels dossiers géopolitiques et économiques suivre actuellement ?",
+        "Recommande-moi une grande enquête ou un décryptage du journal",
         "Explique-moi les grands enjeux du moment de manière accessible",
-        "Recommande-moi un dossier passionnant selon l'actualité",
       ];
 
-  const defaultEn = (customAdminPrompts?.en && customAdminPrompts.en.length > 0)
-    ? customAdminPrompts.en
+  const defaultEn = cleanAdminEn.length > 0
+    ? cleanAdminEn
     : [
-        "Give me a quick executive briefing of today's key headlines",
-        "What are the 3 most essential featured investigations this week?",
-        "What major trends and stories should I pay attention to right now?",
-        "Explain the key geopolitical and economic challenges simply",
-        "Recommend a compelling dossier tailored to today's developments",
+        "What are today's major headlines on Perspective?",
+        "Summarize key West African developments",
+        "Which geopolitical & economic topics should I follow?",
+        "Recommend a major investigation or editorial breakdown",
+        "Explain current regional challenges simply",
       ];
 
   return {

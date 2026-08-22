@@ -65,6 +65,8 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const [abdelInput, setAbdelInput] = useState("");
   const [abdelLoading, setAbdelLoading] = useState(false);
   const abdelEndRef = useRef<HTMLDivElement>(null);
+  const abdelMessagesContainerRef = useRef<HTMLDivElement>(null);
+  const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Contacts: combine real users from Firestore database with friends list
   const userEmail = readerProfile?.email || "visitor@perspective.sn";
@@ -140,12 +142,27 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   );
 
   useEffect(() => {
+    if (!isOpen) return;
     if (activeTab === "abdel") {
-      abdelEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (abdelMessagesContainerRef.current) {
+        abdelMessagesContainerRef.current.scrollTo({
+          top: abdelMessagesContainerRef.current.scrollHeight,
+          behavior: "smooth"
+        });
+      } else {
+        abdelEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
     } else {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (chatMessagesContainerRef.current) {
+        chatMessagesContainerRef.current.scrollTo({
+          top: chatMessagesContainerRef.current.scrollHeight,
+          behavior: "smooth"
+        });
+      } else {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
     }
-  }, [abdelMessages, conversation, activeTab, isOpen]);
+  }, [abdelMessages.length, conversation.length, activeTab, isOpen, selectedContact]);
 
   // Mark unread messages as read when user opens the chat tab or views conversation
   useEffect(() => {
@@ -358,7 +375,11 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                       : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  <Bot className="w-3.5 h-3.5" />
+                  <span className={`w-4 h-4 rounded-full font-mono font-black text-[10px] flex items-center justify-center leading-none transition-colors ${
+                    activeTab === "abdel" ? "bg-white text-[#E85D42]" : "bg-zinc-700 text-zinc-300"
+                  }`}>
+                    A
+                  </span>
                   {t.abdelTab}
                 </button>
                 <button
@@ -432,7 +453,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                 )}
 
                 {/* Messages Container */}
-                <div className="flex-1 p-4 overflow-y-auto space-y-3.5">
+                <div ref={abdelMessagesContainerRef} className="flex-1 p-4 overflow-y-auto space-y-3.5">
                   {abdelMessages.length === 0 ? (
                     <div className="text-center py-4 px-3 space-y-2.5">
                       <div className="w-10 h-10 mx-auto rounded-full bg-[#E85D42] text-white font-mono font-black text-sm flex items-center justify-center shadow-md">
@@ -589,7 +610,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                 </div>
 
                 {/* Messages list */}
-                <div className="flex-1 p-4 overflow-y-auto space-y-3">
+                <div ref={chatMessagesContainerRef} className="flex-1 p-4 overflow-y-auto space-y-3">
                   {conversation.length === 0 ? (
                     <div className="text-center py-12 px-4 text-zinc-400 text-xs">
                       {language === "fr" ? "Aucun message avec ce contact. Envoyez le premier message !" : "No messages with this contact yet. Say hello!"}

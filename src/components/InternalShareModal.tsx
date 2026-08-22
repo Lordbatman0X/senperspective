@@ -187,9 +187,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     // Add editorial team defaults
     const editorialTeam = [
       { email: 'admin@perspective.sn', name: 'Rédaction Perspective (Admin)', role: 'Rédaction' },
-      { email: 'member@perspective.sn', name: 'Mariama Diallo', role: 'Analyste Senior' },
-      { email: 'kadersdiaz3@gmail.com', name: 'Kader Diaz', role: 'Directeur' },
-      { email: 'journalist@perspective.sn', name: 'Mamadou Ndiaye', role: 'Journaliste' }
+      { email: 'kadersdiaz3@gmail.com', name: 'Kader Diaz', role: 'Directeur' }
     ];
 
     editorialTeam.forEach(e => {

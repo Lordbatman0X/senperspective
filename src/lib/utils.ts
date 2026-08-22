@@ -94,7 +94,10 @@ export function getSafeText(val: any, language: 'en' | 'fr' = 'fr'): string {
   if (typeof val === 'string') return val;
   if (typeof val === 'number' || typeof val === 'boolean') return String(val);
   if (typeof val === 'object') {
-    return val[language] || val.fr || val.en || val.name || val.title || val.label || val.tag || val.id || '';
+    if (val[language]) return String(val[language]);
+    const fallbackLang = language === 'fr' ? 'en' : 'fr';
+    if (val[fallbackLang]) return String(val[fallbackLang]);
+    return val.name || val.title || val.label || val.tag || val.id || '';
   }
   return String(val);
 }
@@ -103,7 +106,10 @@ export function formatCategory(cat: any, language: 'en' | 'fr' = 'fr'): string {
   if (!cat) return '';
   if (typeof cat === 'string') return cat;
   if (typeof cat === 'object') {
-    return cat[language] || cat.fr || cat.en || cat.name || cat.id || String(cat);
+    if (cat[language]) return String(cat[language]);
+    const fallbackLang = language === 'fr' ? 'en' : 'fr';
+    if (cat[fallbackLang]) return String(cat[fallbackLang]);
+    return cat.name || cat.id || String(cat);
   }
   return String(cat);
 }

@@ -270,8 +270,8 @@ export function VercelMigrationTab() {
       {/* Guided 3-Step Migration Process */}
       <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 sm:p-8 space-y-8 shadow-sm">
         <div className="border-b border-zinc-200 dark:border-zinc-800 pb-4">
-          <h3 className="text-lg font-bold text-brand-dark dark:text-white flex items-center gap-2">
-            <Layers className="w-5 h-5 text-orange-500" />
+          <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+            <Layers className="w-5 h-5 text-[#E85D42]" />
             <span>Guide de Migration en 3 Étapes</span>
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
@@ -285,18 +285,18 @@ export function VercelMigrationTab() {
           <div className="p-5 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-xs flex items-center justify-center">1</span>
-                <h4 className="font-bold text-sm text-brand-dark dark:text-zinc-100">Créer la DB Vercel</h4>
+                <span className="w-6 h-6 rounded-full bg-[#E85D42] text-white font-mono font-bold text-xs flex items-center justify-center shadow-xs">1</span>
+                <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Créer la DB Vercel</h4>
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
-                Dans l'onglet <strong className="text-brand-dark dark:text-white">Storage</strong> de Vercel (celui affiché sur votre écran), cliquez sur <span className="underline decoration-orange-500">« Create Database »</span> et choisissez <strong>Vercel Postgres</strong> ou <strong>Vercel KV</strong>.
+                Dans l'onglet <strong className="text-zinc-900 dark:text-white">Storage</strong> de Vercel (celui affiché sur votre écran), cliquez sur <span className="underline decoration-[#E85D42]">« Create Database »</span> et choisissez <strong>Vercel Postgres</strong> ou <strong>Vercel KV</strong>.
               </p>
             </div>
             <a
               href="https://vercel.com/dashboard"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 dark:text-orange-400 hover:underline"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#E85D42] dark:text-[#E85D42] hover:underline"
             >
               <span>Ouvrir Vercel Dashboard</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -307,8 +307,8 @@ export function VercelMigrationTab() {
           <div className="p-5 rounded-xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800/80 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-xs flex items-center justify-center">2</span>
-                <h4 className="font-bold text-sm text-brand-dark dark:text-zinc-100">Exporter Firebase</h4>
+                <span className="w-6 h-6 rounded-full bg-[#E85D42] text-white font-mono font-bold text-xs flex items-center justify-center shadow-xs">2</span>
+                <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Exporter Firebase</h4>
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
                 Téléchargez l'intégralité de la base de données cloud sous forme de snapshot JSON sécurisé contenant tous vos contenus.
@@ -317,7 +317,7 @@ export function VercelMigrationTab() {
             <button
               onClick={handleExport}
               disabled={exporting}
-              className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-black dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs py-2.5 px-3 rounded-lg font-bold transition shadow-sm"
+              className="w-full flex items-center justify-center gap-2 bg-zinc-900 hover:bg-black dark:bg-zinc-800 dark:hover:bg-zinc-700 text-white text-xs py-2.5 px-3 rounded-lg font-bold transition shadow-xs cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>{exporting ? 'Exportation...' : 'Exporter Snapshot JSON'}</span>
@@ -325,11 +325,11 @@ export function VercelMigrationTab() {
           </div>
 
           {/* Step 3 */}
-          <div className="p-5 rounded-xl bg-orange-500/5 dark:bg-orange-950/20 border border-orange-500/30 flex flex-col justify-between">
+          <div className="p-5 rounded-xl bg-[#E85D42]/5 dark:bg-[#E85D42]/10 border border-[#E85D42]/30 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-6 h-6 rounded-full bg-orange-600 text-white font-bold text-xs flex items-center justify-center">3</span>
-                <h4 className="font-bold text-sm text-brand-dark dark:text-zinc-100">Injecter dans Vercel</h4>
+                <span className="w-6 h-6 rounded-full bg-[#E85D42] text-white font-mono font-bold text-xs flex items-center justify-center shadow-xs">3</span>
+                <h4 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">Injecter dans Vercel</h4>
               </div>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
                 Migrez automatiquement le snapshot extrait vers les serveurs Vercel Storage en 1 seul clic.

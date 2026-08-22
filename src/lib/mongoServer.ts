@@ -9,7 +9,7 @@ const MONGO_URL = process.env.MONGO_URL || '';
 let isConnecting = false;
 
 export async function connectMongo(): Promise<boolean> {
-  if (mongoose.connection.readyState === 1) {
+  if ((mongoose.connection.readyState as number) === 1) {
     return true;
   }
   if (!MONGO_URL || MONGO_URL.trim() === '') {
@@ -17,13 +17,13 @@ export async function connectMongo(): Promise<boolean> {
   }
 
   // If already connecting, wait briefly up to 1.5 seconds for connection state
-  if (isConnecting || mongoose.connection.readyState === 2) {
+  if (isConnecting || (mongoose.connection.readyState as number) === 2) {
     let waited = 0;
-    while (mongoose.connection.readyState === 2 && waited < 15) {
+    while ((mongoose.connection.readyState as number) === 2 && waited < 15) {
       await new Promise((r) => setTimeout(r, 100));
       waited++;
     }
-    return mongoose.connection.readyState === 1;
+    return (mongoose.connection.readyState as number) === 1;
   }
 
   isConnecting = true;
@@ -34,7 +34,7 @@ export async function connectMongo(): Promise<boolean> {
       bufferCommands: false
     });
     console.log("[MongoDB] Connected successfully to MongoDB database.");
-    return mongoose.connection.readyState === 1;
+    return (mongoose.connection.readyState as number) === 1;
   } catch (err: any) {
     console.warn("[MongoDB] Connection notice (using in-memory store fallback):", err?.message || err);
     return false;

@@ -143,8 +143,10 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [messages.length, isOpen]);
 
   useEffect(() => {
     if (isMobile && isOpen) {

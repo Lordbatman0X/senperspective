@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Zap, Globe, RefreshCw, Plus, Trash2, CheckCircle2, Eye, Edit2, Sparkles, 
   Layers, Bot, ArrowRight, ExternalLink, AlertCircle, FileText, Check, ShieldCheck, Clock,
-  Activity, AlertTriangle, Server, Wifi, Cpu, Play, Link as LinkIcon, GitBranch,
-  LayoutGrid, ListFilter, ArrowDown, ChevronRight, Share2, CheckSquare, Sliders, Info
+  Activity, AlertTriangle, Server, Wifi, Cpu, Play, Link as LinkIcon,
+  LayoutGrid, ListFilter, ArrowDown, ChevronRight, Share2, CheckSquare, Sliders, Info,
+  Newspaper, Compass, BookOpen, Search, Filter, HelpCircle, CheckCircle, Database,
+  Save, RotateCcw, Send, FileCode, Tag, MessageSquare, Award
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { Article } from '../../types';
@@ -24,6 +26,7 @@ export interface FeedHealthRecord {
   lastItemTitle?: string;
   lastFetch: string | null;
   errorMessage?: string | null;
+  isFallbackBridge?: boolean;
 }
 
 export const RSS_CATEGORIES = [
@@ -52,7 +55,7 @@ export async function safeFetchJson(url: string, options?: RequestInit) {
         ok: false, 
         status: res.status, 
         data: null, 
-        error: `Le serveur a retourné une réponse HTML au lieu de JSON (HTTP ${res.status}). Vérifiez les routes API.` 
+        error: `Le serveur a retourné une réponse HTML au lieu de JSON (HTTP ${res.status}).` 
       };
     }
     
@@ -64,7 +67,7 @@ export async function safeFetchJson(url: string, options?: RequestInit) {
         ok: false, 
         status: res.status, 
         data: null, 
-        error: `Structure de réponse JSON invalide reçue de ${url} (HTTP ${res.status}).` 
+        error: `Structure de réponse JSON invalide (HTTP ${res.status}).` 
       };
     }
     
@@ -117,14 +120,11 @@ export const ALL_RELIABLE_RSS_FEEDS = [
   { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
   { id: 'bbc-epl', name: 'BBC Premier League', url: 'https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
   { id: 'bbc-ucl', name: 'BBC UEFA Champions League', url: 'https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
-  { id: 'bbc-uel', name: 'BBC UEFA Europa League', url: 'https://feeds.bbci.co.uk/sport/football/europa-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
   { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
   { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1 (France)', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "L'Arène", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "L'Arène & Sports", active: true },
   { id: 'espn-fc', name: 'ESPN FC Soccer (Google Wire)', url: 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr', category: "L'Arène", pack: 'sports', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: "L'Arène & Sports", active: true },
   { id: 'teranga-lions-gn', name: 'Équipe du Sénégal (Teranga Lions Wire)', url: 'https://news.google.com/rss/search?q=Teranga+Lions', category: "L'Arène", pack: 'sports', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: "L'Arène & Sports", active: true }
 ];
-
-const DEFAULT_RSS_FEEDS = ALL_RELIABLE_RSS_FEEDS.slice(0, 12);
 
 export function normalizeRssFeedUrl(url: string | undefined | null, feedName?: string): string {
   if (!url || typeof url !== 'string') return '';
@@ -144,10 +144,6 @@ export function normalizeRssFeedUrl(url: string | undefined | null, feedName?: s
 
   if (lower.includes('rss.cnn.com')) {
     return 'https://news.google.com/rss/search?q=site:cnn.com+world&hl=fr&gl=SN&ceid=SN:fr';
-  }
-
-  if (lower.includes('nhk.or.jp')) {
-    return 'https://news.google.com/rss/search?q=NHK+World+News&hl=fr&gl=SN&ceid=SN:fr';
   }
 
   if (lower.includes('espn.com/espn/rss') || (lower.includes('espn.com') && lower.includes('rss'))) {
@@ -192,7 +188,6 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
     }
   }
 
-  // Find matching feed definition
   const matchedFeed = rssFeeds.find((f: any) => 
     (f.url && feedUrl && f.url === feedUrl) || 
     (f.url && originalUrl && f.url === originalUrl) ||
@@ -206,7 +201,6 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
     if (!originFlag) originFlag = matchedFeed.originFlag;
   }
 
-  // Fallback origin rules based on domain or name
   if (!originCountry) {
     const lower = (sourceName + " " + sourceDomain + " " + originalUrl).toLowerCase();
     if (lower.includes("senegal") || lower.includes("sénégal") || lower.includes(".sn") || lower.includes("aps") || lower.includes("lesoleil") || lower.includes("seneweb") || lower.includes("senenews") || lower.includes("pressafrik")) {
@@ -230,10 +224,7 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
     } else if (lower.includes("dw") || lower.includes("deutsche")) {
       originCountry = "Allemagne";
       originFlag = "🇩🇪";
-    } else if (lower.includes("cbc")) {
-      originCountry = "Canada";
-      originFlag = "🇨🇦";
-    } else if (lower.includes("cnn") || lower.includes("fox") || lower.includes("npr") || lower.includes("politico") || lower.includes("espn")) {
+    } else if (lower.includes("cnn") || lower.includes("fox") || lower.includes("bloomberg") || lower.includes("espn")) {
       originCountry = "États-Unis";
       originFlag = "🇺🇸";
     } else {
@@ -243,110 +234,343 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
   }
 
   if (!sourceName) {
-    sourceName = "Source RSS Fil d'Actualité";
+    sourceName = "Rédaction Perspective Desk";
   }
 
   return { sourceName, sourceDomain, originalUrl, feedUrl, originCountry, originFlag };
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
-  const { language, articles, addArticle, updateArticle, deleteArticle } = useStore();
+  const { articles, addArticle, updateArticle, deleteArticle, language } = useStore();
   const isFr = language === 'fr';
 
-  // View Mode: 'n8n' workflow canvas vs 'list' detailed list view
-  const [viewMode, setViewMode] = useState<'n8n' | 'list'>('n8n');
+  // Active Newsroom Tab
+  const [activeNewsroomTab, setActiveNewsroomTab] = useState<'drafts' | 'feeds' | 'writer' | 'scheduler' | 'guidelines'>('drafts');
 
-  // State for RSS feeds
+  // RSS Feed Sources State
   const [rssFeeds, setRssFeeds] = useState(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    if (!saved) return DEFAULT_RSS_FEEDS;
-    try {
-      const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) {
-        return parsed.map((f: any) => ({
-          ...f,
-          url: normalizeRssFeedUrl(f.url, f.name)
-        }));
-      }
-    } catch (_) {}
-    return DEFAULT_RSS_FEEDS;
+    return saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
   });
 
-  // Real-time Health Dashboard state
+  // Health Map State
   const [feedHealthMap, setFeedHealthMap] = useState<Record<string, FeedHealthRecord>>(() => {
     const saved = localStorage.getItem('perspective_rss_health');
     return saved ? JSON.parse(saved) : {};
   });
-  const [healthChecking, setHealthChecking] = useState(false);
-  const [testingFeedUrl, setTestingFeedUrl] = useState<string | null>(null);
-  const [lastGlobalScan, setLastGlobalScan] = useState<string | null>(() => {
-    return localStorage.getItem('perspective_rss_last_scan') || null;
+
+  // Dual AI Engine Status
+  const [aiEngineStatus, setAiEngineStatus] = useState<{
+    gemini: { configured: boolean; status: string; models: string[] };
+    openai: { configured: boolean; status: string; models: string[] };
+    failoverActive: boolean;
+  }>({
+    gemini: { configured: true, status: 'ready', models: ['gemini-2.5-flash'] },
+    openai: { configured: true, status: 'ready', models: ['gpt-4o-mini'] },
+    failoverActive: true
   });
 
-  const [newFeedName, setNewFeedName] = useState('');
-  const [newFeedUrl, setNewFeedUrl] = useState('');
-  const [newFeedCategory, setNewFeedCategory] = useState('Économie');
-
-  // Loading & Action states
-  const [processingFeedId, setProcessingFeedId] = useState<string | null>(null);
-  const [runningAllPipeline, setRunningAllPipeline] = useState(false);
-  const [manualPrompt, setManualPrompt] = useState('');
-  const [manualCategory, setManualCategory] = useState('Économie');
-  const [promptLoading, setPromptLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-
-  // Drafts Repository filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [inspectDraft, setInspectDraft] = useState<Article | null>(null);
-  const [purgeLoading, setPurgeLoading] = useState(false);
-
-  // --- AUTOMATED SCHEDULING ENGINE STATE ---
-  const [autoSchedule, setAutoSchedule] = useState<any>({
-    enabled: true,
+  // Scheduler State
+  const [autoSchedule, setAutoSchedule] = useState<{
+    enabled: boolean;
+    intervalMinutes: number;
+    targetPack: string;
+    maxArticlesPerCycle: number;
+    autoPublish: boolean;
+    lastRunAt: string | null;
+    nextRunAt: string | null;
+    status: 'idle' | 'running' | 'error';
+    totalDraftsCreated: number;
+    logs: Array<{ id: string; timestamp: string; type: 'info' | 'success' | 'warning' | 'error'; message: string }>;
+  }>({
+    enabled: false,
     intervalMinutes: 60,
     targetPack: 'all',
     maxArticlesPerCycle: 2,
     autoPublish: false,
     lastRunAt: null,
     nextRunAt: null,
-    totalRuns: 0,
-    totalDraftsCreated: 0,
     status: 'idle',
-    lastLog: '',
+    totalDraftsCreated: 0,
     logs: []
   });
+
+  // UI Interactive States
+  const [healthChecking, setHealthChecking] = useState(false);
+  const [testingFeedUrl, setTestingFeedUrl] = useState<string | null>(null);
+  const [processingFeedId, setProcessingFeedId] = useState<string | null>(null);
+  const [runningAllPipeline, setRunningAllPipeline] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [countdownText, setCountdownText] = useState<string>('--');
+  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
-  // Fetch Schedule Config from Server
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedStyleFilter, setSelectedStyleFilter] = useState<'all' | 'News' | 'Analysis' | 'Deep Dive'>('all');
+  const [selectedEngineFilter, setSelectedEngineFilter] = useState<'all' | 'gemini' | 'openai'>('all');
+  const [inspectDraft, setInspectDraft] = useState<Article | null>(null);
+  const [inspectLanguage, setInspectLanguage] = useState<'fr' | 'en'>('fr');
+
+  // Manual Generator States
+  const [manualPrompt, setManualPrompt] = useState('');
+  const [manualCategory, setManualCategory] = useState('Économie');
+  const [manualStyleType, setManualStyleType] = useState<'News' | 'Analysis' | 'Deep Dive'>('News');
+  const [manualPreferredEngine, setManualPreferredEngine] = useState<'auto' | 'gemini' | 'openai'>('auto');
+  const [promptLoading, setPromptLoading] = useState(false);
+
+  // New Feed Input Form
+  const [newFeedName, setNewFeedName] = useState('');
+  const [newFeedUrl, setNewFeedUrl] = useState('');
+  const [newFeedCategory, setNewFeedCategory] = useState('Politique');
+  const [newFeedPack, setNewFeedPack] = useState('senegal');
+  const [showAddFeedModal, setShowAddFeedModal] = useState(false);
+
+  // Editorial Guidelines & AI Style Studio States
+  const [guidelinesLoading, setGuidelinesLoading] = useState(false);
+  const [savingGuidelines, setSavingGuidelines] = useState(false);
+  const [testingGuidelines, setTestingGuidelines] = useState(false);
+  const [editorialGuidelines, setEditorialGuidelines] = useState<{
+    customDirectives: string;
+    editorialComments: string;
+    forbiddenPhrases: string[];
+    preferredTone: 'analytical' | 'investigative' | 'diplomatic' | 'dynamic' | 'custom';
+    exemplaryExample: {
+      titleFr: string;
+      excerptFr: string;
+      bodyFr: string;
+      titleEn?: string;
+      excerptEn?: string;
+      bodyEn?: string;
+    };
+    updatedAt?: string;
+  }>({
+    customDirectives: '',
+    editorialComments: '',
+    forbiddenPhrases: [],
+    preferredTone: 'analytical',
+    exemplaryExample: {
+      titleFr: '',
+      excerptFr: '',
+      bodyFr: '',
+      titleEn: '',
+      excerptEn: '',
+      bodyEn: ''
+    }
+  });
+
+  const [testPrompt, setTestPrompt] = useState('Projet de ligne de chemin de fer Dakar-Bamako : enjeux de désenclavement et financement régional');
+  const [testResult, setTestResult] = useState<any>(null);
+  const [newForbiddenTag, setNewForbiddenTag] = useState('');
+
+  // Fetch Editorial Guidelines from server
+  const fetchEditorialGuidelines = async () => {
+    setGuidelinesLoading(true);
+    try {
+      const { ok, data } = await safeFetchJson('/api/editorial-guidelines');
+      if (ok && data?.success && data.guidelines) {
+        setEditorialGuidelines(data.guidelines);
+      }
+    } catch (err: any) {
+      console.warn("Failed to fetch guidelines:", err);
+    } finally {
+      setGuidelinesLoading(false);
+    }
+  };
+
+  // Save Editorial Guidelines to server
+  const handleSaveGuidelines = async () => {
+    setSavingGuidelines(true);
+    try {
+      const { ok, data, error } = await safeFetchJson('/api/editorial-guidelines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editorialGuidelines)
+      });
+      if (ok && data?.success) {
+        setEditorialGuidelines(data.guidelines);
+        showStatus(isFr ? 'Charte éditoriale et directives IA enregistrées !' : 'Editorial guidelines and AI style saved!');
+      } else {
+        throw new Error(error || data?.error || 'Failed to save guidelines');
+      }
+    } catch (err: any) {
+      showStatus(err.message, 'error');
+    } finally {
+      setSavingGuidelines(false);
+    }
+  };
+
+  // Reset Guidelines to Defaults
+  const handleResetGuidelines = async () => {
+    if (!window.confirm(isFr ? 'Réinitialiser la charte éditoriale aux paramètres par défaut ?' : 'Reset guidelines to default?')) return;
+    setSavingGuidelines(true);
+    try {
+      const { ok, data, error } = await safeFetchJson('/api/editorial-guidelines/reset', { method: 'POST' });
+      if (ok && data?.success) {
+        setEditorialGuidelines(data.guidelines);
+        showStatus(isFr ? 'Charte éditoriale réinitialisée aux standards par défaut.' : 'Guidelines reset to default.');
+      } else {
+        throw new Error(error || data?.error || 'Reset failed');
+      }
+    } catch (err: any) {
+      showStatus(err.message, 'error');
+    } finally {
+      setSavingGuidelines(false);
+    }
+  };
+
+  // Test Guidelines in Live Studio
+  const handleTestGuidelines = async () => {
+    if (!testPrompt.trim()) return;
+    setTestingGuidelines(true);
+    try {
+      const { ok, data, error } = await safeFetchJson('/api/editorial-guidelines/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          testPrompt,
+          customGuidelines: editorialGuidelines,
+          category: 'Économie',
+          type: 'News'
+        })
+      });
+      if (ok && data?.success) {
+        setTestResult(data);
+        showStatus(isFr ? 'Test de rédaction IA exécuté avec succès !' : 'AI generation test executed successfully!');
+      } else {
+        throw new Error(error || data?.error || 'Test failed');
+      }
+    } catch (err: any) {
+      showStatus(err.message, 'error');
+    } finally {
+      setTestingGuidelines(false);
+    }
+  };
+
+  // Add Forbidden Phrase
+  const handleAddForbiddenPhrase = () => {
+    const trimmed = newForbiddenTag.trim().toLowerCase();
+    if (!trimmed) return;
+    if (editorialGuidelines.forbiddenPhrases.includes(trimmed)) {
+      setNewForbiddenTag('');
+      return;
+    }
+    setEditorialGuidelines({
+      ...editorialGuidelines,
+      forbiddenPhrases: [...editorialGuidelines.forbiddenPhrases, trimmed]
+    });
+    setNewForbiddenTag('');
+  };
+
+  // Remove Forbidden Phrase
+  const handleRemoveForbiddenPhrase = (phraseToRemove: string) => {
+    setEditorialGuidelines({
+      ...editorialGuidelines,
+      forbiddenPhrases: editorialGuidelines.forbiddenPhrases.filter(p => p !== phraseToRemove)
+    });
+  };
+
+  // Load Canonical Example
+  const handleLoadCanonicalExample = () => {
+    setEditorialGuidelines({
+      ...editorialGuidelines,
+      exemplaryExample: {
+        titleFr: "Port de Ndayane : Radiographie d'un mégaprojet logistique au cœur de l'ambition maritime ouest-africaine",
+        excerptFr: "À 50 kilomètres au sud de Dakar, les engins de chantier dessinent les contours du futur poumon portuaire de l'Afrique de l'Ouest. Entre souveraineté logistique et retombées économiques, Perspective décrypte les enjeux d'un investissement de plus de 800 millions de dollars.",
+        bodyFr: `## Une ambition logistique aux portes de Dakar\n\nSous le soleil zénithal de la Petite-Côte, le chantier du port en eau profonde de Ndayane s'impose comme le plus vaste projet d'infrastructures de la décennie au Sénégal. Conçu pour désengorger le Port Autonome de Dakar, ce complexe vise à accueillir les plus grands navires porte-conteneurs du commerce mondial.\n\n> « Ndayane n'est pas seulement un port commercial, c'est le levier stratégique qui repositionne la presqu'île du Cap-Vert au centre des flux Atlantique-Sahel. »\n\n## Impact économique et souveraineté sous-régionale\n\nL'engorgement récurrent des quais dakarois imposait une alternative industrielle d'envergure. En connectant Ndayane aux grands corridors de transport de l'UEMOA, les autorités sénégalaises entendent réduire de 30% les délais de transit des marchandises vers le Mali et la sous-région.\n\n## Ce qu'il faut surveiller\n\nLa livraison de la première phase opérationnelle est scrutée par les acteurs de la logistique internationale. Les prochains mois seront décisifs pour finaliser les raccordements autoroutiers et ferroviaires.`
+      }
+    });
+    showStatus(isFr ? "Exemple canonique (Port de Ndayane) chargé !" : "Canonical example loaded!");
+  };
+
+  // Apply Preset Guidelines
+  const applyPreset = (presetKey: 'dakar' | 'geopolitics' | 'investigative' | 'wire') => {
+    if (presetKey === 'dakar') {
+      setEditorialGuidelines({
+        ...editorialGuidelines,
+        preferredTone: 'analytical',
+        customDirectives: `1. PRIVILÉGIER LE STORYTELLING INCARNÉ : Ouvrir les articles par une scène vivante, une situation humaine concrète ou une citation clé captée à Dakar ou dans les capitales régionales.
+2. ANCRAGE SÉNÉGALAIS ET SOUS-RÉGIONAL : Toujours expliciter les impacts stratégiques pour le Sénégal (Dakar, Thiès, Saint-Louis, Casamance) et le bloc UEMOA/CEDEAO.
+3. STRUCTURE JOURNALISTIQUE RIGOUREUSE : Utiliser des sous-titres analytiques (##), des citations attribuées (> ), des listes à puces si nécessaire et un bloc final sur les échéances à surveiller.
+4. RÈGLE D'OR BILINGUE : Assurer une qualité littéraire égale en français et en anglais, sans calque syntaxique ni traduction automatique mot à mot.`
+      });
+    } else if (presetKey === 'geopolitics') {
+      setEditorialGuidelines({
+        ...editorialGuidelines,
+        preferredTone: 'analytical',
+        customDirectives: `1. FOCUS MACROÉCONOMIE & GÉOPOLITIQUE : Analyser les événements sous l'angle des équilibres financiers, des décisions de la BCEAO, des accords de libre-échange (ZLECAf) et des politiques de dette publique.
+2. DÉCRYPTAGE INSTITUTIONNEL : Mettre en lumière le rôle des organisations régionales (UEMOA, CEDEAO, Banque Mondiale, BAD) et des chancelleries diplomatiques.
+3. CHIFFRES & DONNÉES CLÉS : Inclure systématiquement des montants précis en FCFA, EUR ou USD et des pourcentages de croissance pour étayer chaque analyse.
+4. PERPETUAL HYPOTHESIS TESTING : Proposer 2 scénarios prospectifs en fin d'article (court terme et moyen terme).`
+      });
+    } else if (presetKey === 'investigative') {
+      setEditorialGuidelines({
+        ...editorialGuidelines,
+        preferredTone: 'investigative',
+        customDirectives: `1. NARRATION IMMERSIVE & INCIPIT VIVANT : Captiver le lecteur dès les trois premières lignes avec un détail visuel ou sonore capté sur le terrain.
+2. PAROLE AUX ACTEURS DE TERRAIN : Intégrer des propos rapportés d'acteurs de la société civile, de commerçants, d'entrepreneurs ou d'experts locaux.
+3. DÉCONSTRUCTION DES RUMURS & FACT-CHECKING : Distinguer avec clarté les annonces politiques officielles des réalités mesurées sur le terrain.
+4. PROVENANCE BILINGUE : Raconter l'histoire avec la même profondeur poétique et journalistique en français et en anglais.`
+      });
+    } else if (presetKey === 'wire') {
+      setEditorialGuidelines({
+        ...editorialGuidelines,
+        preferredTone: 'dynamic',
+        customDirectives: `1. VÉLOCITÉ ET CONCISION SUR-MESURE : Traiter la dépêche d'actualité en 350-450 mots percutants. Allez droit aux faits.
+2. LA RÈGLE DES 5W : Qui, Quoi, Où, Quand, Pourquoi dès les 20 premières secondes de lecture.
+3. ZÉRO CLICHÉ NI REMPLISSAGE : Aucune phrase creuse ou généralité. Chaque mot doit apporter une information mesurable.
+4. TITRE INCISIF : Titre informatif sans sensationnalisme.`
+      });
+    }
+    showStatus(isFr ? `Preset "${presetKey.toUpperCase()}" appliqué !` : `Preset "${presetKey.toUpperCase()}" applied!`);
+  };
+
+  // Fetch AI engine status on mount
+  const fetchAiEngineStatus = async () => {
+    try {
+      const { ok, data } = await safeFetchJson('/api/ai-engine/status');
+      if (ok && data?.success) {
+        setAiEngineStatus({
+          gemini: data.gemini,
+          openai: data.openai,
+          failoverActive: data.failoverActive
+        });
+      }
+    } catch (e) {
+      console.warn("Could not retrieve AI engine status:", e);
+    }
+  };
+
+  // Fetch Scheduler Configuration
   const fetchScheduleConfig = async () => {
     try {
       const { ok, data } = await safeFetchJson('/api/rss-automation/config');
-      if (ok && data?.success && data?.config) {
+      if (ok && data?.success && data.config) {
         setAutoSchedule(data.config);
       }
-    } catch (e) {
-      console.warn("Schedule config fetch error:", e);
+    } catch (err) {
+      console.warn("Could not fetch automation schedule:", err);
     }
   };
 
   useEffect(() => {
+    fetchAiEngineStatus();
     fetchScheduleConfig();
+    fetchEditorialGuidelines();
     const interval = setInterval(fetchScheduleConfig, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Real-time countdown calculation
+  // Update Countdown Timer
   useEffect(() => {
     const updateCountdown = () => {
       if (!autoSchedule.enabled || !autoSchedule.nextRunAt) {
-        setCountdownText(isFr ? 'Pause' : 'Paused');
+        setCountdownText(isFr ? 'En Pause' : 'Paused');
         return;
       }
+      const nextTime = new Date(autoSchedule.nextRunAt).getTime();
       const now = Date.now();
-      const target = new Date(autoSchedule.nextRunAt).getTime();
-      const diffSec = Math.floor((target - now) / 1000);
+      const diffSec = Math.max(0, Math.floor((nextTime - now) / 1000));
 
       if (diffSec <= 0) {
         setCountdownText(isFr ? 'En cours...' : 'Running...');
@@ -362,53 +586,6 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     return () => clearInterval(timer);
   }, [autoSchedule.enabled, autoSchedule.nextRunAt, isFr]);
 
-  const handleSaveScheduleConfig = async (updatedFields: Partial<any>) => {
-    setScheduleLoading(true);
-    try {
-      const payload = {
-        enabled: updatedFields.enabled ?? autoSchedule.enabled,
-        intervalMinutes: updatedFields.intervalMinutes ?? autoSchedule.intervalMinutes,
-        targetPack: updatedFields.targetPack ?? autoSchedule.targetPack,
-        maxArticlesPerCycle: updatedFields.maxArticlesPerCycle ?? autoSchedule.maxArticlesPerCycle,
-        autoPublish: updatedFields.autoPublish ?? autoSchedule.autoPublish
-      };
-
-      const { ok, data, error } = await safeFetchJson('/api/rss-automation/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (ok && data?.success) {
-        setAutoSchedule(data.config);
-        showStatus(isFr ? 'Planning d\'automatisation mis à jour !' : 'Automation schedule updated!');
-      } else {
-        throw new Error(error || data?.error || 'Failed to save schedule');
-      }
-    } catch (err: any) {
-      showStatus(err.message, 'error');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  const handleTriggerScheduleNow = async () => {
-    setScheduleLoading(true);
-    try {
-      const { ok, data, error } = await safeFetchJson('/api/rss-automation/trigger-now', { method: 'POST' });
-      if (ok && data?.success) {
-        showStatus(isFr ? 'Cycle d\'ingestion automatique lancé en arrière-plan !' : 'Automated drafting cycle initiated!');
-        fetchScheduleConfig();
-      } else {
-        throw new Error(error || data?.error || 'Trigger failed');
-      }
-    } catch (err: any) {
-      showStatus(err.message, 'error');
-    } finally {
-      setScheduleLoading(false);
-    }
-  };
-
-  // Helper to show temporary toasts
   const showStatus = (text: string, type: 'success' | 'error' = 'success') => {
     setStatusMsg({ text, type });
     setTimeout(() => setStatusMsg(null), 5000);
@@ -419,31 +596,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     localStorage.setItem('perspective_rss_feeds', JSON.stringify(rssFeeds));
   }, [rssFeeds]);
 
-  // Action: Load preset pack of feeds
-  const handleLoadPresetPack = (packKey: string) => {
-    let feedsToLoad: any[] = [];
-    if (packKey === 'all') {
-      feedsToLoad = ALL_RELIABLE_RSS_FEEDS;
-    } else {
-      feedsToLoad = ALL_RELIABLE_RSS_FEEDS.filter(f => f.pack === packKey);
-    }
-
-    setRssFeeds((prevFeeds: any[]) => {
-      const existingUrls = new Set(prevFeeds.map((f: any) => f.url));
-      const newFeeds = feedsToLoad.filter(f => !existingUrls.has(f.url));
-      const updated = [...prevFeeds, ...newFeeds];
-      localStorage.setItem('perspective_rss_feeds', JSON.stringify(updated));
-      return updated;
-    });
-
-    showStatus(
-      isFr 
-        ? `Pack chargé ! (${feedsToLoad.length} sources d'actualité intégrées au monitoring)`
-        : `Pack loaded! (${feedsToLoad.length} wire sources added)`
-    );
-  };
-
-  // Run real-time health check
+  // Run Health Check
   const runHealthCheck = async (specificUrl?: string) => {
     if (specificUrl) {
       setTestingFeedUrl(specificUrl);
@@ -472,27 +625,22 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
           return next;
         });
 
-        const scanTime = new Date().toISOString();
-        setLastGlobalScan(scanTime);
-        localStorage.setItem('perspective_rss_last_scan', scanTime);
-
         if (!specificUrl) {
           showStatus(
             isFr 
-              ? `Diagnostic n8n terminé : ${data.healthyCount}/${data.totalFeeds} flux opérationnels.` 
-              : `n8n Health Diagnostic complete: ${data.healthyCount}/${data.totalFeeds} feeds operational.`
+              ? `Diagnostic terminé : ${data.healthyCount}/${data.totalFeeds} flux opérationnels.` 
+              : `Diagnostic complete: ${data.healthyCount}/${data.totalFeeds} wire sources operational.`
           );
         } else {
           const single = data.results[0];
           showStatus(
             isFr
-              ? `Diagnostic ${single?.name || 'Flux'} : Statut ${single?.status === 'healthy' ? '200 OK' : single?.status}.`
+              ? `Diagnostic ${single?.name || 'Flux'} : Statut ${single?.status === 'healthy' ? 'Opérationnel' : single?.status}.`
               : `Diagnostic ${single?.name || 'Feed'}: Status ${single?.status}.`
           );
         }
       }
     } catch (err: any) {
-      console.error('Health check error:', err);
       showStatus(err.message || 'Health check error', 'error');
     } finally {
       setHealthChecking(false);
@@ -500,24 +648,33 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     }
   };
 
-  // Run health check automatically on initial component mount
   useEffect(() => {
     runHealthCheck();
   }, []);
 
-  // Draft articles: filter stored articles where isPublished === false
-  const draftArticles = (articles || []).filter(a => !a.isPublished);
+  // Action: Load preset pack of feeds
+  const handleLoadPresetPack = (packKey: string) => {
+    let feedsToLoad: any[] = [];
+    if (packKey === 'all') {
+      feedsToLoad = ALL_RELIABLE_RSS_FEEDS;
+    } else {
+      feedsToLoad = ALL_RELIABLE_RSS_FEEDS.filter(f => f.pack === packKey);
+    }
 
-  // Filter drafts by category and search
-  const filteredDrafts = draftArticles.filter(draft => {
-    const matchesCat = selectedCategory === 'all' || draft.category === selectedCategory;
-    const titleText = (draft.title?.fr || draft.title?.en || '').toLowerCase();
-    const bodyText = (draft.body?.fr || draft.body?.en || '').toLowerCase();
-    const sourceText = (draft.sourceName || '').toLowerCase();
-    const q = searchQuery.toLowerCase();
-    const matchesSearch = !q || titleText.includes(q) || bodyText.includes(q) || sourceText.includes(q);
-    return matchesCat && matchesSearch;
-  });
+    setRssFeeds((prevFeeds: any[]) => {
+      const existingUrls = new Set(prevFeeds.map((f: any) => f.url));
+      const newFeeds = feedsToLoad.filter(f => !existingUrls.has(f.url));
+      const updated = [...prevFeeds, ...newFeeds];
+      localStorage.setItem('perspective_rss_feeds', JSON.stringify(updated));
+      return updated;
+    });
+
+    showStatus(
+      isFr 
+        ? `Pack activé (${feedsToLoad.length} sources d'actualité intégrées au desk).`
+        : `Pack activated (${feedsToLoad.length} wire sources added).`
+    );
+  };
 
   // Action: Add new RSS feed source
   const handleAddFeed = (e: React.FormEvent) => {
@@ -527,11 +684,12 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     const id = newFeedUrl.replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-10) || Date.now().toString();
     const name = newFeedName.trim() || newFeedUrl.replace(/^https?:\/\//, '').split('/')[0];
 
-    const updated = [...rssFeeds, { id, name, url: newFeedUrl, category: newFeedCategory, active: true }];
+    const updated = [...rssFeeds, { id, name, url: newFeedUrl, category: newFeedCategory, pack: newFeedPack, active: true }];
     setRssFeeds(updated);
     setNewFeedName('');
     setNewFeedUrl('');
-    showStatus(isFr ? 'Nouveau flux RSS enregistré !' : 'New RSS feed registered!');
+    setShowAddFeedModal(false);
+    showStatus(isFr ? 'Nouvelle agence / source ajoutée au desk !' : 'New wire agency added to newsroom!');
     runHealthCheck(newFeedUrl);
   };
 
@@ -539,11 +697,11 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   const handleRemoveFeed = (id: string) => {
     const updated = rssFeeds.filter((f: any) => f.id !== id);
     setRssFeeds(updated);
-    showStatus(isFr ? 'Flux RSS retiré.' : 'RSS feed removed.');
+    showStatus(isFr ? 'Source retirée du monitoring.' : 'Feed removed from monitoring.');
   };
 
-  // Action: Trigger Ingestion & AI Generation for a single RSS feed
-  const handleProcessFeed = async (feedUrl: string, feedId: string, feedCategory?: string) => {
+  // Action: Trigger Ingestion & Dual-Engine Generation for a single feed
+  const handleProcessFeed = async (feedUrl: string, feedId: string, feedCategory?: string, styleType: 'News' | 'Analysis' | 'Deep Dive' = 'News') => {
     setProcessingFeedId(feedId);
     try {
       const feedObj = rssFeeds.find((f: any) => f.id === feedId || f.url === feedUrl);
@@ -552,7 +710,14 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       const { ok, data, error } = await safeFetchJson('/api/rss/fetch-and-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedUrl, category: cat, maxItems: 3, autoPublish: false })
+        body: JSON.stringify({ 
+          feedUrl, 
+          category: cat, 
+          maxItems: 2, 
+          autoPublish: false,
+          preferredEngine: 'auto',
+          type: styleType
+        })
       });
 
       if (!ok || !data?.success) {
@@ -565,48 +730,20 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         });
       }
 
-      setFeedHealthMap(prev => {
-        const existing = prev[feedUrl] || { url: feedUrl, statusCode: 200, itemCount: 0, latencyMs: 0, lastFetch: null };
-        const updated: FeedHealthRecord = {
-          ...existing,
-          status: 'healthy',
-          statusCode: 200,
-          itemCount: Array.isArray(data.articles) ? data.articles.length : existing.itemCount,
-          lastFetch: new Date().toISOString(),
-          errorMessage: null
-        };
-        const next = { ...prev, [feedUrl]: updated };
-        localStorage.setItem('perspective_rss_health', JSON.stringify(next));
-        return next;
-      });
-
       if (onRefreshArticles) onRefreshArticles();
       showStatus(
         isFr 
-          ? `${data.generatedCount || 0} dépêche(s) transformée(s) en brouillons Perspective (${cat}) !` 
-          : `${data.generatedCount || 0} draft(s) generated in Perspective style (${cat})!`
+          ? `${data.generatedCount || 0} dépêche(s) rédigée(s) en style ${styleType} avec narration structurée !` 
+          : `${data.generatedCount || 0} story draft(s) created in ${styleType} format!`
       );
     } catch (err: any) {
-      setFeedHealthMap(prev => {
-        const existing = prev[feedUrl] || { url: feedUrl, statusCode: 500, itemCount: 0, latencyMs: 0, lastFetch: null };
-        const updated: FeedHealthRecord = {
-          ...existing,
-          status: 'error',
-          statusCode: 500,
-          lastFetch: new Date().toISOString(),
-          errorMessage: err.message || 'Ingestion failed'
-        };
-        const next = { ...prev, [feedUrl]: updated };
-        localStorage.setItem('perspective_rss_health', JSON.stringify(next));
-        return next;
-      });
       showStatus(err.message || 'Error processing RSS feed', 'error');
     } finally {
       setProcessingFeedId(null);
     }
   };
 
-  // Action: Trigger Full Pipeline execution across all active feeds
+  // Action: Trigger Full Pipeline across all active feeds
   const handleRunFullPipeline = async () => {
     setRunningAllPipeline(true);
     let totalGenerated = 0;
@@ -617,7 +754,14 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
             const { ok, data } = await safeFetchJson('/api/rss/fetch-and-generate', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ feedUrl: feed.url, category: feed.category || 'Économie', maxItems: 2, autoPublish: false })
+              body: JSON.stringify({ 
+                feedUrl: feed.url, 
+                category: feed.category || 'Économie', 
+                maxItems: 1, 
+                autoPublish: false,
+                preferredEngine: 'auto',
+                type: 'News'
+              })
             });
             if (ok && data?.success && Array.isArray(data.articles)) {
               data.articles.forEach((art: Article) => addArticle(art));
@@ -631,8 +775,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       if (onRefreshArticles) onRefreshArticles();
       showStatus(
         isFr 
-          ? `Pipeline n8n complété : ${totalGenerated} article(s) généré(s) avec attribution.` 
-          : `n8n Pipeline complete: ${totalGenerated} draft(s) created with attribution.`
+          ? `Veille globale complétée : ${totalGenerated} articles rédigés par l'IA double-moteur.` 
+          : `Global scan complete: ${totalGenerated} drafts generated via Dual-Engine AI.`
       );
     } catch (err: any) {
       showStatus(err.message || 'Pipeline execution failed', 'error');
@@ -642,17 +786,23 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     }
   };
 
-  // Action: Generate article from custom prompt / lead
+  // Action: Manual Generate from custom prompt
   const handleGenerateFromPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualPrompt) return;
+    if (!manualPrompt.trim()) return;
 
     setPromptLoading(true);
     try {
       const { ok, data, error } = await safeFetchJson('/api/generate-rss-article', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: manualPrompt, category: manualCategory, autoPublish: false })
+        body: JSON.stringify({ 
+          prompt: manualPrompt, 
+          category: manualCategory, 
+          type: manualStyleType,
+          preferredEngine: manualPreferredEngine,
+          autoPublish: false 
+        })
       });
 
       if (!ok || !data?.success) {
@@ -667,8 +817,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       setManualPrompt('');
       showStatus(
         isFr 
-          ? 'Brouillon rédigé par Gemini AI et enregistré dans la file d\'attente !' 
-          : 'Article drafted by Gemini AI and saved to review queue!'
+          ? `Article narratif généré (${data.engineUsed || 'IA Dual'}) et ajouté à la file des brouillons !` 
+          : `Article story created via ${data.engineUsed || 'Dual AI'} and placed in draft queue!`
       );
     } catch (err: any) {
       showStatus(err.message || 'Error generating article', 'error');
@@ -696,8 +846,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
       showStatus(
         isFr 
-          ? `Article "${draft.title.fr}" publié en direct !` 
-          : `Article "${draft.title.fr || draft.title.en}" published live!`
+          ? `Article "${draft.title.fr || draft.title.en}" publié en direct sur le portail !` 
+          : `Article "${draft.title.en || draft.title.fr}" published live!`
       );
     } catch (err: any) {
       showStatus(err.message || 'Error publishing draft', 'error');
@@ -706,7 +856,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
   // Action: Publish all drafts
   const handlePublishAllDrafts = async () => {
-    if (!window.confirm(isFr ? "Publier tous les brouillons en direct ?" : "Publish all drafts live?")) return;
+    if (!window.confirm(isFr ? "Publier tous les brouillons validés en direct ?" : "Publish all verified drafts live?")) return;
 
     let successCount = 0;
     for (const draft of draftArticles) {
@@ -717,33 +867,92 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         console.error("Failed to publish draft:", draft.id);
       }
     }
-    showStatus(isFr ? `${successCount} brouillons publiés en direct.` : `${successCount} drafts published live.`);
+    showStatus(isFr ? `${successCount} articles publiés en direct.` : `${successCount} drafts published live.`);
   };
 
   // Action: Purge all drafts
   const handlePurgeDrafts = () => {
-    if (!window.confirm(isFr ? "Voulez-vous supprimer TOUS les brouillons de la file ?" : "Purge ALL draft articles from review queue?")) return;
-    setPurgeLoading(true);
+    if (!window.confirm(isFr ? "Supprimer TOUS les brouillons en attente de validation ?" : "Purge ALL pending drafts?")) return;
     draftArticles.forEach(d => deleteArticle(d.id));
-    setPurgeLoading(false);
     showStatus(isFr ? 'File des brouillons purgée.' : 'Draft queue purged.');
   };
 
-  // Metrics calculation
+  const handleSaveScheduleConfig = async (updatedFields: Partial<any>) => {
+    setScheduleLoading(true);
+    try {
+      const payload = {
+        enabled: updatedFields.enabled ?? autoSchedule.enabled,
+        intervalMinutes: updatedFields.intervalMinutes ?? autoSchedule.intervalMinutes,
+        targetPack: updatedFields.targetPack ?? autoSchedule.targetPack,
+        maxArticlesPerCycle: updatedFields.maxArticlesPerCycle ?? autoSchedule.maxArticlesPerCycle,
+        autoPublish: updatedFields.autoPublish ?? autoSchedule.autoPublish
+      };
+
+      const { ok, data, error } = await safeFetchJson('/api/rss-automation/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (ok && data?.success) {
+        setAutoSchedule(data.config);
+        showStatus(isFr ? 'Planning de rédaction automatique mis à jour !' : 'Newsroom auto-schedule updated!');
+      } else {
+        throw new Error(error || data?.error || 'Failed to save schedule');
+      }
+    } catch (err: any) {
+      showStatus(err.message, 'error');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const handleTriggerScheduleNow = async () => {
+    setScheduleLoading(true);
+    try {
+      const { ok, data, error } = await safeFetchJson('/api/rss-automation/trigger-now', { method: 'POST' });
+      if (ok && data?.success) {
+        showStatus(isFr ? 'Cycle de rédaction automatisé lancé en arrière-plan !' : 'Automated drafting cycle started in background!');
+        fetchScheduleConfig();
+      } else {
+        throw new Error(error || data?.error || 'Trigger failed');
+      }
+    } catch (err: any) {
+      showStatus(err.message, 'error');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  // Drafts filtering
+  const draftArticles = (articles || []).filter(a => !a.isPublished);
+  const filteredDrafts = draftArticles.filter(draft => {
+    const matchesCat = selectedCategory === 'all' || draft.category === selectedCategory;
+    const matchesStyle = selectedStyleFilter === 'all' || (draft.type || 'News') === selectedStyleFilter;
+    const matchesEngine = selectedEngineFilter === 'all' || 
+      (selectedEngineFilter === 'gemini' && (draft as any).engineUsed?.toLowerCase().includes('gemini')) ||
+      (selectedEngineFilter === 'openai' && (draft as any).engineUsed?.toLowerCase().includes('openai'));
+    
+    const titleText = (draft.title?.fr || draft.title?.en || '').toLowerCase();
+    const bodyText = (draft.body?.fr || draft.body?.en || '').toLowerCase();
+    const sourceText = (draft.sourceName || '').toLowerCase();
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = !q || titleText.includes(q) || bodyText.includes(q) || sourceText.includes(q);
+
+    return matchesCat && matchesStyle && matchesEngine && matchesSearch;
+  });
+
+  // Metrics
   const activeFeeds = rssFeeds.filter((f: any) => f.active !== false);
   const totalActiveFeeds = activeFeeds.length;
   const healthList = activeFeeds.map((f: any) => feedHealthMap[f.url]).filter(Boolean);
   const healthyCount = healthList.filter(h => h.status === 'healthy').length;
-  const degradedCount = healthList.filter(h => h.status === 'degraded').length;
-  const errorCount = healthList.filter(h => h.status === 'error').length;
   const latencies = healthList.map(h => h.latencyMs).filter(l => typeof l === 'number' && l > 0);
   const avgLatency = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
-  const totalItemsDetected = healthList.reduce((acc, curr) => acc + (curr.itemCount || 0), 0);
   const publishedArticlesCount = (articles || []).filter(a => a.isPublished).length;
 
   return (
-    <div className="space-y-8 text-zinc-100 font-sans">
-      {/* Toast Notification Alert */}
+    <div className="space-y-6 text-zinc-100 font-sans" id="newsroom-hub-root">
+      {/* Toast Notification */}
       {statusMsg && (
         <div className={`fixed top-5 right-5 z-50 px-5 py-3 rounded-2xl shadow-2xl border text-xs font-bold uppercase tracking-wider flex items-center gap-3 backdrop-blur-md transition-all ${
           statusMsg.type === 'success' 
@@ -755,1076 +964,1541 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         </div>
       )}
 
-      {/* Main Top Header with n8n Canvas Controller */}
-      <div className="bg-zinc-900/95 border border-zinc-800 rounded-2xl p-6 shadow-2xl space-y-6">
+      {/* Top Operations Header: Digital Newsroom Desk */}
+      <div className="bg-zinc-900/95 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
           <div className="flex items-center gap-3.5">
-            <div className="p-3 bg-gradient-to-br from-orange-500/20 via-amber-500/10 to-red-500/20 border border-orange-500/30 rounded-2xl text-orange-400 shadow-inner">
-              <GitBranch size={26} className="text-orange-400" />
+            <div className="p-3.5 bg-gradient-to-br from-orange-500/20 via-amber-500/10 to-emerald-500/20 border border-orange-500/30 rounded-2xl text-orange-400 shadow-inner">
+              <Newspaper size={28} className="text-orange-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2.5">
                 <h2 className="text-lg font-black uppercase tracking-wider text-white flex items-center gap-2">
-                  <span>{isFr ? 'Automation RSS Perspective' : 'Perspective RSS Automation Engine'}</span>
-                  <span className="text-[10px] font-mono font-bold bg-orange-500/20 text-orange-400 px-2.5 py-0.5 rounded-full border border-orange-500/30">
-                    n8n Workflow Canvas
-                  </span>
+                  <span>{isFr ? 'Salle de Rédaction & Hub d\'Automatisation' : 'Newsroom Editorial Desk & Wire Hub'}</span>
                 </h2>
+                <span className="text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Dual-Engine AI Active
+                </span>
               </div>
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
                 {isFr 
-                  ? 'Flux d\'infrastructures interconnectés : Capture RSS en temps réel → Traitement IA Gemini 2.5 → Attributions de Source → File de Publication.'
-                  : 'Interconnected workflow pipeline: Real-time RSS Capture → Gemini 2.5 AI Processing → Source Attribution → Draft Queue.'}
+                  ? 'Orchestrateur éditorial bilingue : Ingestion des dépêches internationales & locales, narration journalistique (Storytelling) assistée par Gemini 2.5 & OpenAI GPT-4o avec bascule automatique.'
+                  : 'Bilingual newsroom orchestrator: Live wire ingestion, investigative storytelling powered by Gemini 2.5 & OpenAI GPT-4o with automatic failover.'}
               </p>
             </div>
           </div>
 
-          {/* Action Toolbar */}
+          {/* Quick Operations Bar */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            {/* View Mode Switcher */}
-            <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800">
-              <button
-                onClick={() => setViewMode('n8n')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === 'n8n' 
-                    ? 'bg-orange-600 text-white shadow' 
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <GitBranch size={13} />
-                {isFr ? 'Carte n8n' : 'n8n Map'}
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                  viewMode === 'list' 
-                    ? 'bg-orange-600 text-white shadow' 
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                <ListFilter size={13} />
-                {isFr ? 'Liste Détaillée' : 'Detailed List'}
-              </button>
-            </div>
-
-            {/* Run Full Pipeline Button */}
             <button
               onClick={handleRunFullPipeline}
               disabled={runningAllPipeline}
-              className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-orange-950/40 flex items-center gap-2 cursor-pointer border border-orange-400/20"
+              className="px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-orange-950/40 flex items-center gap-2 cursor-pointer border border-orange-400/20"
             >
               <Play size={14} className={runningAllPipeline ? 'animate-spin' : 'fill-current'} />
-              {runningAllPipeline ? (isFr ? 'Pipeline en cours...' : 'Running Pipeline...') : (isFr ? 'Exécuter Tout le Pipeline' : 'Run Full Pipeline')}
+              {runningAllPipeline ? (isFr ? 'Veille globale en cours...' : 'Scanning wires...') : (isFr ? 'Scanner & Rédiger' : 'Scan Wires & Draft')}
             </button>
 
-            {/* Refresh Diagnostics */}
             <button
               onClick={() => runHealthCheck()}
               disabled={healthChecking}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl border border-zinc-700 transition-colors cursor-pointer"
-              title={isFr ? "Rafraîchir le statut de santé" : "Refresh status"}
+              className="p-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl border border-zinc-700 transition-colors cursor-pointer"
+              title={isFr ? "Actualiser l'état des flux" : "Refresh feed health"}
             >
-              <RefreshCw size={15} className={healthChecking ? "animate-spin text-orange-400" : ""} />
+              <RefreshCw size={16} className={healthChecking ? "animate-spin text-orange-400" : ""} />
             </button>
           </div>
         </div>
 
-        {/* Global Pipeline Health Metrics Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="bg-zinc-950/90 border border-zinc-800 p-3.5 rounded-xl flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400">
+        {/* Live Metrics & Engine Footprint */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
               <ShieldCheck size={18} />
             </div>
             <div>
-              <div className="text-xs font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Santé Sources' : 'Source Health'}</div>
+              <div className="text-[11px] font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Agences Opérationnelles' : 'Live Wire Feeds'}</div>
               <div className="text-sm font-black text-white font-mono mt-0.5">
-                {healthyCount}/{totalActiveFeeds} <span className="text-emerald-400 text-xs font-semibold">({totalActiveFeeds > 0 ? Math.round((healthyCount/totalActiveFeeds)*100) : 0}%)</span>
+                {healthyCount}/{totalActiveFeeds} <span className="text-emerald-400 text-xs font-medium">({totalActiveFeeds > 0 ? Math.round((healthyCount/totalActiveFeeds)*100) : 0}%)</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-zinc-950/90 border border-zinc-800 p-3.5 rounded-xl flex items-center gap-3">
-            <div className="p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-400">
-              <Wifi size={18} />
+          <div className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl flex items-center gap-3">
+            <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+              <Cpu size={18} />
             </div>
             <div>
-              <div className="text-xs font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Latence Moyenne' : 'Avg Latency'}</div>
-              <div className="text-sm font-black text-white font-mono mt-0.5">
-                {avgLatency > 0 ? `${avgLatency} ms` : '--'}
+              <div className="text-[11px] font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Moteur Rédactionnel' : 'AI Engines'}</div>
+              <div className="text-xs font-bold text-white mt-0.5 flex items-center gap-1.5">
+                <span className="text-orange-400">Gemini 2.5</span>
+                <span className="text-zinc-500">⇄</span>
+                <span className="text-emerald-400">GPT-4o</span>
               </div>
             </div>
           </div>
 
-          <div className="bg-zinc-950/90 border border-zinc-800 p-3.5 rounded-xl flex items-center gap-3">
-            <div className="p-2 bg-orange-500/10 border border-orange-500/20 rounded-lg text-orange-400">
+          <div className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400">
               <Layers size={18} />
             </div>
             <div>
-              <div className="text-xs font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Brouillons en Attente' : 'Pending Drafts'}</div>
+              <div className="text-[11px] font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Brouillons à Valider' : 'Pending Drafts'}</div>
               <div className="text-sm font-black text-amber-400 font-mono mt-0.5">
-                {draftArticles.length} {isFr ? 'brouillons' : 'drafts'}
+                {draftArticles.length} {isFr ? 'en attente' : 'pending'}
               </div>
             </div>
           </div>
 
-          <div className="bg-zinc-950/90 border border-zinc-800 p-3.5 rounded-xl flex items-center gap-3">
-            <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
+          <div className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl flex items-center gap-3">
+            <div className="p-2.5 bg-purple-500/10 border border-purple-500/20 rounded-xl text-purple-400">
               <CheckCircle2 size={18} />
             </div>
             <div>
-              <div className="text-xs font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Articles Publiés' : 'Live Articles'}</div>
+              <div className="text-[11px] font-mono text-zinc-400 uppercase font-bold">{isFr ? 'Articles Publiés' : 'Live Published'}</div>
               <div className="text-sm font-black text-emerald-400 font-mono mt-0.5">
                 {publishedArticlesCount} {isFr ? 'en ligne' : 'live'}
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* AUTOMATED SCHEDULING ENGINE (CHOOSEN TIMING & FREQUENCIES) */}
-      <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-orange-500/30 rounded-3xl p-6 shadow-2xl space-y-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-2xl">
-              <Clock size={22} className={autoSchedule.status === 'running' ? 'animate-spin' : ''} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-black text-white uppercase tracking-wider font-mono">
-                  {isFr ? 'Horloge & Planification Automatique des Brouillons' : 'Automated Drafting Schedule & Timings'}
-                </h3>
-                <span className={`px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full uppercase border ${
-                  autoSchedule.enabled 
-                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
-                }`}>
-                  {autoSchedule.enabled ? (isFr ? 'Planification Active' : 'Schedule Active') : (isFr ? 'En Pause' : 'Paused')}
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400 mt-1">
-                {isFr 
-                  ? 'Générez automatiquement des brouillons adaptés aux standards de Perspective selon la fréquence choisie.'
-                  : 'Automatically generate Perspective-standard article drafts at your chosen timing intervals.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleSaveScheduleConfig({ enabled: !autoSchedule.enabled })}
-              disabled={scheduleLoading}
-              className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border ${
-                autoSchedule.enabled
-                  ? 'bg-amber-950/60 text-amber-300 border-amber-500/40 hover:bg-amber-900/80'
-                  : 'bg-emerald-600 text-white border-emerald-500 shadow-lg hover:bg-emerald-500'
-              }`}
-            >
-              <Bot size={14} />
-              {autoSchedule.enabled 
-                ? (isFr ? 'Mettre en Pause' : 'Pause Scheduler')
-                : (isFr ? 'Activer le Robot' : 'Activate Scheduler')}
-            </button>
-
-            <button
-              onClick={handleTriggerScheduleNow}
-              disabled={scheduleLoading || autoSchedule.status === 'running'}
-              className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-mono font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center gap-2 cursor-pointer border border-orange-400/30"
-            >
-              <Play size={13} className={autoSchedule.status === 'running' ? 'animate-spin' : ''} />
-              {autoSchedule.status === 'running'
-                ? (isFr ? 'Cycle en cours...' : 'Cycle running...')
-                : (isFr ? 'Lancer un Cycle Maintenant' : 'Run Cycle Now')}
-            </button>
-          </div>
-        </div>
-
-        {/* Configuration Controls Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Timing Interval Selector */}
-          <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
-            <label className="text-[11px] font-mono uppercase font-bold text-orange-400 flex items-center gap-1.5">
-              <Clock size={13} />
-              {isFr ? 'Fréquence d\'Ingestion' : 'Ingestion Frequency'}
-            </label>
-            <select
-              value={autoSchedule.intervalMinutes}
-              onChange={(e) => handleSaveScheduleConfig({ intervalMinutes: Number(e.target.value) })}
-              disabled={scheduleLoading}
-              className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 focus:border-orange-500 outline-none cursor-pointer"
-            >
-              <option value={15}>⏱️ {isFr ? 'Toutes les 15 minutes (Fil de l\'Eau)' : 'Every 15 minutes (Real-time)'}</option>
-              <option value={30}>⏱️ {isFr ? 'Toutes les 30 minutes (Haute Fréquence)' : 'Every 30 minutes (High Frequency)'}</option>
-              <option value={60}>⏱️ {isFr ? 'Toutes les 1 heure (Standard Recommandé)' : 'Every 1 hour (Standard)'}</option>
-              <option value={180}>⏱️ {isFr ? 'Toutes les 3 heures (Veille Périodique)' : 'Every 3 hours (Periodical)'}</option>
-              <option value={360}>⏱️ {isFr ? 'Toutes les 6 heures (Demi-Journée)' : 'Every 6 hours (Half-Day)'}</option>
-              <option value={720}>⏱️ {isFr ? 'Toutes les 12 heures (Bi-Quotidien)' : 'Every 12 hours (Twice Daily)'}</option>
-              <option value={1440}>⏱️ {isFr ? 'Toutes les 24 heures (Revue Quotidienne)' : 'Every 24 hours (Daily)'}</option>
-            </select>
-            <p className="text-[10px] text-zinc-500 font-mono">
-              {isFr ? 'Intervalle programmable d\'exécution automatique.' : 'Programmable timing interval for auto drafting.'}
-            </p>
-          </div>
-
-          {/* Target Feed Pack Selector */}
-          <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
-            <label className="text-[11px] font-mono uppercase font-bold text-amber-400 flex items-center gap-1.5">
-              <Globe size={13} />
-              {isFr ? 'Pack de Flux Cible' : 'Target Feed Pack'}
-            </label>
-            <select
-              value={autoSchedule.targetPack}
-              onChange={(e) => handleSaveScheduleConfig({ targetPack: e.target.value })}
-              disabled={scheduleLoading}
-              className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 focus:border-amber-500 outline-none cursor-pointer"
-            >
-              <option value="all">🌍 {isFr ? 'Tous les Flux Actifs' : 'All Active Feeds'}</option>
-              <option value="senegal">🇸🇳 {isFr ? 'Presse & Médias Sénégal' : 'Senegal Media Pack'}</option>
-              <option value="africa">🌍 {isFr ? 'Afrique & Régional' : 'Africa Regional Pack'}</option>
-              <option value="world">🌐 {isFr ? 'International & World Press' : 'World Press Pack'}</option>
-              <option value="sports">⚽ {isFr ? 'L\'Arène & Football' : 'Sports & Football Wire'}</option>
-              <option value="maritime">⛵ {isFr ? 'Météo & Maritime' : 'Maritime & Transport'}</option>
-            </select>
-            <p className="text-[10px] text-zinc-500 font-mono">
-              {isFr ? 'Ciblez un pack d\'actualité spécifique par cycle.' : 'Focus on a specific wire source pack per cycle.'}
-            </p>
-          </div>
-
-          {/* Volume per Cycle */}
-          <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
-            <label className="text-[11px] font-mono uppercase font-bold text-emerald-400 flex items-center gap-1.5">
-              <Layers size={13} />
-              {isFr ? 'Volume / Flux / Cycle' : 'Volume / Feed / Cycle'}
-            </label>
-            <select
-              value={autoSchedule.maxArticlesPerCycle}
-              onChange={(e) => handleSaveScheduleConfig({ maxArticlesPerCycle: Number(e.target.value) })}
-              disabled={scheduleLoading}
-              className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 focus:border-emerald-500 outline-none cursor-pointer"
-            >
-              <option value={1}>1 {isFr ? 'Article par flux' : 'Article per feed'}</option>
-              <option value={2}>2 {isFr ? 'Articles par flux (Recommandé)' : 'Articles per feed (Recommended)'}</option>
-              <option value={3}>3 {isFr ? 'Articles par flux' : 'Articles per feed'}</option>
-              <option value={5}>5 {isFr ? 'Articles par flux (Intensif)' : 'Articles per feed (Intensive)'}</option>
-            </select>
-            <p className="text-[10px] text-zinc-500 font-mono">
-              {isFr ? 'Nombre d\'articles rédigés par source à chaque passe.' : 'Articles created per feed per cycle.'}
-            </p>
-          </div>
-
-          {/* Status & Next Execution Countdown */}
-          <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2 flex flex-col justify-between">
-            <div>
-              <div className="text-[11px] font-mono uppercase font-bold text-zinc-400 flex items-center justify-between">
-                <span>{isFr ? 'Prochaine Ingestion' : 'Next Ingestion'}</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              </div>
-              <div className="text-xl font-black font-mono text-emerald-400 mt-1">
-                {countdownText}
-              </div>
-            </div>
-            <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between border-t border-zinc-800/80 pt-2">
-              <span>{isFr ? 'Total Générés' : 'Total Drafted'}:</span>
-              <span className="text-white font-bold">{autoSchedule.totalDraftsCreated || 0}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Execution Logs Terminal View */}
-        {autoSchedule.logs && autoSchedule.logs.length > 0 && (
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-2">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-              <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-zinc-400">
-                <Activity size={14} className="text-orange-400" />
-                <span>{isFr ? 'Journal des Exécutions Automatiques' : 'Live Execution Logs'}</span>
-              </div>
-              <button
-                onClick={async () => {
-                  await fetch('/api/rss-automation/logs', { method: 'DELETE' });
-                  fetchScheduleConfig();
-                }}
-                className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
-              >
-                {isFr ? 'Effacer le journal' : 'Clear log'}
-              </button>
-            </div>
-            <div className="max-h-36 overflow-y-auto space-y-1.5 font-mono text-xs pr-2">
-              {autoSchedule.logs.map((log: any) => (
-                <div key={log.id} className="flex items-start gap-2 text-[11px] leading-relaxed">
-                  <span className="text-zinc-600 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                  <span className={
-                    log.type === 'success' ? 'text-emerald-400' :
-                    log.type === 'error' ? 'text-red-400 font-bold' :
-                    log.type === 'warning' ? 'text-amber-400' : 'text-zinc-300'
-                  }>
-                    {log.message}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* VIEW MODE 1: n8n Workflow Interactive Node Canvas View */}
-      {viewMode === 'n8n' && (
-        <div className="bg-zinc-950/90 border border-zinc-800/90 rounded-3xl p-6 shadow-2xl space-y-8 relative overflow-hidden bg-[radial-gradient(#27272a_1px,transparent_1px)] [background-size:16px_16px]">
-          {/* Node Map Title */}
-          <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-            <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-widest text-zinc-400">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-              {isFr ? 'n8n Visual Execution Pipeline Graph' : 'n8n Visual Execution Pipeline Graph'}
-            </div>
-            <span className="text-[10px] font-mono text-zinc-500">
-              {isFr ? '4 Nœuds Interconnectés' : '4 Interconnected Nodes'}
+        {/* Clean Newsroom Tab Navigation Bar */}
+        <div className="flex items-center gap-2 border-t border-zinc-800/80 pt-4 overflow-x-auto">
+          <button
+            onClick={() => setActiveNewsroomTab('drafts')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeNewsroomTab === 'drafts'
+                ? 'bg-orange-600 text-white shadow-lg shadow-orange-950/50 border border-orange-500/30'
+                : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+            }`}
+          >
+            <Newspaper size={15} />
+            <span>{isFr ? 'File des Dépêches & Brouillons' : 'Editorial Staging & Drafts'}</span>
+            <span className="ml-1 px-2 py-0.5 text-[10px] font-mono rounded-full bg-black/40 text-white">
+              {draftArticles.length}
             </span>
-          </div>
+          </button>
 
-          {/* n8n Nodes Flow Architecture */}
-          <div className="space-y-8">
-            
-            {/* NODE 1: Trigger / RSS Ingestion Sources Node */}
-            <div className="bg-zinc-900 border-2 border-orange-500/40 rounded-2xl p-5 shadow-2xl relative space-y-4">
-              {/* Output Connector Port */}
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-orange-500 border-2 border-zinc-900 rounded-full flex items-center justify-center text-zinc-950 font-bold z-10 shadow-lg">
-                ↓
-              </div>
+          <button
+            onClick={() => setActiveNewsroomTab('feeds')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeNewsroomTab === 'feeds'
+                ? 'bg-orange-600 text-white shadow-lg shadow-orange-950/50 border border-orange-500/30'
+                : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+            }`}
+          >
+            <Globe size={15} />
+            <span>{isFr ? 'Agences de Presse & Flux Wire' : 'Press Agencies & Wire Feeds'}</span>
+            <span className="ml-1 px-2 py-0.5 text-[10px] font-mono rounded-full bg-black/40 text-white">
+              {rssFeeds.length}
+            </span>
+          </button>
 
-              {/* Node Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-500/20 text-orange-400 rounded-xl border border-orange-500/30">
-                    <Globe size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono uppercase font-bold bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded border border-orange-500/30">
-                        NODE 01 • TRIGGER
-                      </span>
-                      <h3 className="text-sm font-extrabold uppercase text-white tracking-wide">
-                        {isFr ? 'Capture des Dépêches RSS (Sources Médias)' : 'RSS Wire Ingestion Trigger'}
-                      </h3>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      {isFr 
-                        ? 'Monitoring continu des agences de presse réelles d\'Afrique de l\'Ouest' 
-                        : 'Continuous monitoring of validated West African news wires'}
-                    </p>
-                  </div>
-                </div>
+          <button
+            onClick={() => setActiveNewsroomTab('writer')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeNewsroomTab === 'writer'
+                ? 'bg-orange-600 text-white shadow-lg shadow-orange-950/50 border border-orange-500/30'
+                : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+            }`}
+          >
+            <Sparkles size={15} />
+            <span>{isFr ? 'Atelier Storytelling IA' : 'AI Storytelling Writer'}</span>
+          </button>
 
-                <button
-                  onClick={() => runHealthCheck()}
-                  className="px-3 py-1.5 bg-zinc-800 hover:bg-orange-600 text-zinc-200 hover:text-white text-xs font-bold uppercase rounded-lg transition-all flex items-center gap-1.5 border border-zinc-700 cursor-pointer shrink-0"
-                >
-                  <RefreshCw size={12} className={healthChecking ? "animate-spin" : ""} />
-                  {isFr ? 'Tester les Flux' : 'Ping Feeds'}
-                </button>
-              </div>
+          <button
+            onClick={() => setActiveNewsroomTab('scheduler')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeNewsroomTab === 'scheduler'
+                ? 'bg-orange-600 text-white shadow-lg shadow-orange-950/50 border border-orange-500/30'
+                : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+            }`}
+          >
+            <Clock size={15} />
+            <span>{isFr ? 'Planificateur Automatique' : 'Auto-Dispatcher'}</span>
+            <span className={`ml-1 w-2 h-2 rounded-full ${autoSchedule.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-600'}`} />
+          </button>
 
-              {/* Preset Pack Quick Load Bar */}
-              <div className="bg-zinc-950/90 p-3.5 rounded-xl border border-zinc-800/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 bg-orange-500/20 text-orange-400 rounded-lg border border-orange-500/30">
-                    <Zap size={14} />
-                  </span>
-                  <div>
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                      {isFr ? 'Importation Rapide de Packs de Flux Réels' : 'Quick Load Wire Preset Packs'}
-                    </h4>
-                    <p className="text-[10px] text-zinc-400">
-                      {isFr ? 'Cliquez pour importer des ensembles complets de flux d\'actualités réels' : 'Click to auto-import curated reliable feed packs'}
-                    </p>
-                  </div>
-                </div>
+          <button
+            onClick={() => setActiveNewsroomTab('guidelines')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer ${
+              activeNewsroomTab === 'guidelines'
+                ? 'bg-orange-600 text-white shadow-lg shadow-orange-950/50 border border-orange-500/30'
+                : 'bg-zinc-950 text-zinc-400 hover:text-zinc-200 border border-zinc-800'
+            }`}
+          >
+            <BookOpen size={15} />
+            <span>{isFr ? 'Charte Édit. & Directives IA' : 'AI Style Guide & Guidelines'}</span>
+            <span className="ml-1 w-2 h-2 rounded-full bg-amber-400" />
+          </button>
+        </div>
+      </div>
 
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
-                  <button
-                    onClick={() => handleLoadPresetPack('all')}
-                    className="px-3 py-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white rounded-lg font-mono text-[10px] font-extrabold uppercase tracking-wider whitespace-nowrap cursor-pointer shadow-md transition-all flex items-center gap-1 border border-orange-400/30"
-                  >
-                    <span>⚡</span>
-                    <span>{isFr ? 'Charger les 45+ Flux' : 'Load All 45+ Feeds'}</span>
-                  </button>
-                  <button
-                    onClick={() => handleLoadPresetPack('senegal')}
-                    className="px-2.5 py-1.5 bg-zinc-800 hover:bg-orange-600 text-zinc-200 hover:text-white rounded-lg font-mono text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer transition-all border border-zinc-700"
-                  >
-                    🇸🇳 {isFr ? 'Sénégal (8)' : 'Senegal (8)'}
-                  </button>
-                  <button
-                    onClick={() => handleLoadPresetPack('africa')}
-                    className="px-2.5 py-1.5 bg-zinc-800 hover:bg-orange-600 text-zinc-200 hover:text-white rounded-lg font-mono text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer transition-all border border-zinc-700"
-                  >
-                    🌍 {isFr ? 'Afrique (12)' : 'Africa (12)'}
-                  </button>
-                  <button
-                    onClick={() => handleLoadPresetPack('world')}
-                    className="px-2.5 py-1.5 bg-zinc-800 hover:bg-orange-600 text-zinc-200 hover:text-white rounded-lg font-mono text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer transition-all border border-zinc-700"
-                  >
-                    🌐 {isFr ? 'Monde (17)' : 'World (17)'}
-                  </button>
-                  <button
-                    onClick={() => handleLoadPresetPack('sports')}
-                    className="px-2.5 py-1.5 bg-zinc-800 hover:bg-orange-600 text-zinc-200 hover:text-white rounded-lg font-mono text-[10px] font-bold uppercase tracking-wider whitespace-nowrap cursor-pointer transition-all border border-zinc-700"
-                  >
-                    🏆 {isFr ? "L'Arène/Sports (14)" : 'Sports/Arena (14)'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Notice Banner for Non-RSS Publishers */}
-              <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-200/90 flex items-start gap-2.5">
-                <Info size={16} className="text-amber-400 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <span className="font-bold uppercase font-mono tracking-wider text-[10px] text-amber-400 block">
-                    {isFr ? 'Avis Technique — Traitement des Médias sans flux direct RSS (ex: Sud Quotidien, Le Quotidien, RTS, AP, The Economist)' : 'Technical Note — Handling Non-RSS Publishers'}
-                  </span>
-                  <p className="text-[11px] leading-relaxed text-amber-200/80">
-                    {isFr 
-                      ? 'Les médias ne fournissant pas de flux XML direct sont automatiquement relayés via les passerelles Google News XML Wire de Perspective. Le système extrait les dépêches brutes en temps réel, conserve la citation d\'origine et attribue fidèlement les crédits à la source journalistique.' 
-                      : 'Publishers without native XML feeds are automatically bridged via Perspective Google News RSS XML gateways, capturing original headlines and attributing exact publisher sources.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Sources Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {rssFeeds.map((feed: any) => {
-                  const health: FeedHealthRecord = feedHealthMap[feed.url] || {
-                    url: feed.url,
-                    name: feed.name,
-                    status: 'unchecked',
-                    statusCode: 0,
-                    itemCount: 0,
-                    latencyMs: 0,
-                    lastFetch: null,
-                    errorMessage: null
-                  };
-
-                  const isTesting = testingFeedUrl === feed.url;
-                  const isIngesting = processingFeedId === feed.id;
-
-                  return (
-                    <div 
-                      key={feed.id} 
-                      className={`p-3.5 rounded-xl border transition-all ${
-                        health.status === 'healthy' ? 'bg-zinc-950 border-emerald-500/30 hover:border-emerald-500/60' :
-                        health.status === 'degraded' ? 'bg-amber-950/20 border-amber-500/40' :
-                        health.status === 'error' ? 'bg-red-950/20 border-red-500/50' :
-                        'bg-zinc-950 border-zinc-800'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {health.status === 'healthy' && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                200 OK
-                              </span>
-                            )}
-                            {health.status === 'error' && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/30">
-                                Error
-                              </span>
-                            )}
-                            <h4 className="text-xs font-bold text-white truncate">{feed.name}</h4>
-                          </div>
-                          
-                          <p className="text-[10px] font-mono text-zinc-400 truncate mt-1">{feed.url}</p>
-                          
-                          <div className="flex items-center gap-2 mt-2 text-[10px] font-mono text-zinc-500 flex-wrap">
-                            <span>{health.latencyMs > 0 ? `${health.latencyMs}ms` : '--'}</span>
-                            <span>•</span>
-                            <span>{health.itemCount} {isFr ? 'dépêches' : 'items'}</span>
-                            <span>•</span>
-                            <span className="text-orange-400 flex items-center gap-1">
-                              <Clock size={10} />
-                              {health.lastFetch ? new Date(health.lastFetch).toLocaleTimeString() : 'Non testé'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => handleProcessFeed(feed.url, feed.id)}
-                          disabled={isIngesting}
-                          className="px-2.5 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:bg-zinc-800 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all shadow shrink-0 flex items-center gap-1 cursor-pointer"
-                          title={isFr ? "Ingérer ce flux" : "Ingest feed"}
-                        >
-                          <Sparkles size={11} className={isIngesting ? "animate-spin" : ""} />
-                          {isIngesting ? '...' : (isFr ? 'Ingérer' : 'Ingest')}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* FLOW CONNECTOR CABLE 1 -> 2 */}
-            <div className="flex flex-col items-center justify-center my-2">
-              <div className="h-8 w-0.5 bg-gradient-to-b from-orange-500 via-amber-500 to-purple-500 animate-pulse" />
-              <div className="px-3 py-1 bg-zinc-900 border border-zinc-700 rounded-full text-[10px] font-mono font-bold text-zinc-300 shadow flex items-center gap-1.5">
-                <Zap size={12} className="text-orange-400" />
-                <span>Payload XML RSS → Inférence IA Gemini</span>
-              </div>
-              <div className="h-8 w-0.5 bg-gradient-to-b from-purple-500 to-purple-400 animate-pulse" />
-            </div>
-
-            {/* NODE 2: Gemini AI Processor Node */}
-            <div className="bg-zinc-900 border-2 border-purple-500/40 rounded-2xl p-5 shadow-2xl relative space-y-4">
-              {/* Output Connector Port */}
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-purple-500 border-2 border-zinc-900 rounded-full flex items-center justify-center text-zinc-950 font-bold z-10 shadow-lg">
-                ↓
-              </div>
-
-              {/* Node Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-purple-500/20 text-purple-400 rounded-xl border border-purple-500/30">
-                    <Bot size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono uppercase font-bold bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded border border-purple-500/30">
-                        NODE 02 • AI TRANSFORMER
-                      </span>
-                      <h3 className="text-sm font-extrabold uppercase text-white tracking-wide">
-                        {isFr ? 'Moteur Rédactionnel Gemini 2.5 Flash' : 'Gemini 2.5 Flash AI Editorial Writer'}
-                      </h3>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      {isFr 
-                        ? 'Structuration bilingue (FR/EN), Briefs Perspective, Chronologies & Attribution de Source' 
-                        : 'Bilingual structuring (FR/EN), Perspective Briefs, Timelines & Source Attribution'}
-                    </p>
-                  </div>
-                </div>
-
-                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 shrink-0">
-                  ✓ Gemini API Active
-                </span>
-              </div>
-
-              {/* On-Demand Lead / Topic Input Box Inside Node 2 */}
-              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-3">
-                <label className="block text-xs font-mono font-bold uppercase text-purple-400 flex items-center gap-1.5">
-                  <Sparkles size={13} />
-                  {isFr ? 'Génération sur Dépêche / Sujet Spécifique :' : 'Draft Specific Lead / Topic:'}
-                </label>
-                <form onSubmit={handleGenerateFromPrompt} className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                  <input
-                    type="text"
-                    placeholder={isFr ? "Entrez un titre, dépêche ou sujet d'actualité..." : "Enter headline, wire summary, or topic..."}
-                    value={manualPrompt}
-                    onChange={e => setManualPrompt(e.target.value)}
-                    className="md:col-span-3 bg-zinc-900 border border-zinc-700 text-zinc-100 px-3.5 py-2 rounded-xl text-xs focus:outline-none focus:border-purple-500"
-                    required
-                  />
-                  <select
-                    value={manualCategory}
-                    onChange={e => setManualCategory(e.target.value)}
-                    className="bg-zinc-900 border border-zinc-700 text-zinc-100 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-purple-500"
-                  >
-                    {RSS_CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="submit"
-                    disabled={promptLoading}
-                    className="py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-800 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-                  >
-                    <Bot size={13} className={promptLoading ? "animate-spin" : ""} />
-                    {promptLoading ? '...' : (isFr ? 'Rédiger IA' : 'Draft AI')}
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            {/* FLOW CONNECTOR CABLE 2 -> 3 */}
-            <div className="flex flex-col items-center justify-center my-2">
-              <div className="h-8 w-0.5 bg-gradient-to-b from-purple-500 via-pink-500 to-amber-500 animate-pulse" />
-              <div className="px-3 py-1 bg-zinc-900 border border-zinc-700 rounded-full text-[10px] font-mono font-bold text-zinc-300 shadow flex items-center gap-1.5">
-                <FileText size={12} className="text-amber-400" />
-                <span>JSON Structuré → File des Brouillons avec Attribution</span>
-              </div>
-              <div className="h-8 w-0.5 bg-gradient-to-b from-amber-500 to-amber-400 animate-pulse" />
-            </div>
-
-            {/* NODE 3: Draft Review & Attribution Queue Node */}
-            <div className="bg-zinc-900 border-2 border-amber-500/40 rounded-2xl p-5 shadow-2xl relative space-y-4">
-              {/* Output Connector Port */}
-              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-amber-500 border-2 border-zinc-900 rounded-full flex items-center justify-center text-zinc-950 font-bold z-10 shadow-lg">
-                ↓
-              </div>
-
-              {/* Node Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono uppercase font-bold bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded border border-amber-500/30">
-                        NODE 03 • REVIEW QUEUE
-                      </span>
-                      <h3 className="text-sm font-extrabold uppercase text-white tracking-wide">
-                        {isFr ? 'File de Révision des Brouillons & Source Badges' : 'Drafts Review Queue & Source Badges'}
-                      </h3>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      {isFr ? 'Validation des attributions de source et relecture éditoriale avant publication' : 'Source attribution verification and editorial review before going live'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="bg-amber-500/20 text-amber-300 text-xs font-mono font-bold px-3 py-1 rounded-full border border-amber-500/30">
-                    {draftArticles.length} {isFr ? 'brouillons' : 'drafts'}
-                  </span>
-                  {draftArticles.length > 0 && (
-                    <button
-                      onClick={handlePublishAllDrafts}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-lg transition-all shadow flex items-center gap-1 cursor-pointer"
-                    >
-                      <Check size={13} />
-                      {isFr ? 'Tout Publier' : 'Publish All'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Filter Bar */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+      {/* =========================================================================
+          TAB 1: EDITORIAL STAGING & DRAFTS QUEUE
+         ========================================================================= */}
+      {activeNewsroomTab === 'drafts' && (
+        <div className="space-y-6">
+          {/* Filter and Search Bar */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-1 max-w-md">
+              <div className="relative w-full">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input
                   type="text"
-                  placeholder={isFr ? "Filtrer par titre ou source (ex: APS, Le Soleil)..." : "Filter by title or source..."}
+                  placeholder={isFr ? "Rechercher par titre, source ou mot-clé..." : "Search by headline, source or keyword..."}
                   value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-72 bg-zinc-900 border border-zinc-700 text-zinc-100 px-3 py-1.5 rounded-lg text-xs focus:outline-none focus:border-amber-500"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs pl-9 pr-3.5 py-2.5 rounded-xl outline-none focus:border-orange-500 transition-colors"
                 />
-
-                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-                  {['all', ...RSS_CATEGORIES].map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold uppercase transition-all cursor-pointer whitespace-nowrap ${
-                        selectedCategory === cat ? 'bg-amber-600 text-white' : 'bg-zinc-900 text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      {cat === 'all' ? (isFr ? 'Toutes' : 'All') : cat}
-                    </button>
-                  ))}
-                </div>
               </div>
+            </div>
 
-              {/* Draft Cards Grid inside Node 3 with Prominent Source Attribution */}
-              {filteredDrafts.length === 0 ? (
-                <div className="text-center py-10 bg-zinc-950/60 border border-dashed border-zinc-800 rounded-xl p-6">
-                  <Bot size={32} className="text-zinc-600 mx-auto mb-2" />
-                  <p className="text-xs text-zinc-400 font-mono">
-                    {isFr ? 'Aucun brouillon en attente dans ce nœud. Cliquez sur "Ingérer" sur Node 01.' : 'No drafts in Node 03 queue. Click "Ingest" on Node 01.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {filteredDrafts.map((draft, idx) => {
-                    const srcInfo = getArticleSourceInfo(draft, rssFeeds);
+            {/* Category, Style & Engine Filters */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs font-mono px-3 py-2 rounded-xl outline-none focus:border-orange-500"
+              >
+                <option value="all">{isFr ? 'Toutes Rubriques' : 'All Categories'}</option>
+                {RSS_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
 
-                    return (
-                      <div 
-                        key={`${draft.id}-${idx}`} 
-                        className="bg-zinc-950 border border-zinc-800/90 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:border-amber-500/40 transition-all shadow"
-                      >
-                        <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                          <img
-                            src={draft.featuredImage || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=300&q=80"}
-                            alt="Cover"
-                            className="w-20 h-20 rounded-xl object-cover border border-zinc-800 shrink-0"
-                          />
+              <select
+                value={selectedStyleFilter}
+                onChange={(e) => setSelectedStyleFilter(e.target.value as any)}
+                className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs font-mono px-3 py-2 rounded-xl outline-none focus:border-orange-500"
+              >
+                <option value="all">{isFr ? 'Tous Formats' : 'All Story Formats'}</option>
+                <option value="News">⚡ News Récit (~400 mots)</option>
+                <option value="Analysis">🔍 Analyse Stratégique (~1000 mots)</option>
+                <option value="Deep Dive">📜 Grand Angle / Dossier (1200+ mots)</option>
+              </select>
 
-                          <div className="min-w-0 flex-1 space-y-1">
-                            {/* PROMINENT SOURCE VERIFICATION & ORIGIN BADGE */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                                <Globe size={11} className="text-blue-400" />
-                                <span>Source : {srcInfo.sourceName}</span>
-                              </span>
+              <select
+                value={selectedEngineFilter}
+                onChange={(e) => setSelectedEngineFilter(e.target.value as any)}
+                className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs font-mono px-3 py-2 rounded-xl outline-none focus:border-orange-500"
+              >
+                <option value="all">{isFr ? 'Tous Moteurs IA' : 'All AI Engines'}</option>
+                <option value="gemini">Gemini 2.5 Flash</option>
+                <option value="openai">OpenAI GPT-4o</option>
+              </select>
 
-                              {srcInfo.originCountry && (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                                  <span className="text-xs">{srcInfo.originFlag}</span>
-                                  <span>Origine : {srcInfo.originCountry}</span>
-                                </span>
-                              )}
+              {draftArticles.length > 0 && (
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={handlePublishAllDrafts}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <CheckCircle size={14} />
+                    <span>{isFr ? 'Tout Publier' : 'Publish All'}</span>
+                  </button>
 
-                              {srcInfo.sourceDomain && (
-                                <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                                  {srcInfo.sourceDomain}
-                                </span>
-                              )}
-
-                              {srcInfo.originalUrl && (
-                                <a 
-                                  href={srcInfo.originalUrl} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  className="inline-flex items-center gap-1 text-[10px] font-mono text-orange-400 hover:underline"
-                                  title="Consulter l'article original sur le site source"
-                                >
-                                  <span>Dépêche Originale</span>
-                                  <ExternalLink size={10} />
-                                </a>
-                              )}
-
-                              <span className="bg-amber-500/10 text-amber-400 text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded border border-amber-500/20">
-                                {draft.category}
-                              </span>
-                            </div>
-
-                            <h4 className="text-xs font-bold text-white line-clamp-1">
-                              {draft.title?.fr || draft.title?.en}
-                            </h4>
-
-                            <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
-                              {draft.excerpt?.fr || draft.excerpt?.en}
-                            </p>
-
-                            <div className="flex items-center gap-2 text-[9px] font-mono text-zinc-500 flex-wrap pt-0.5">
-                              {draft.perspectiveBrief && <span className="text-emerald-400">✓ Brief Perspective</span>}
-                              {draft.timeline?.length ? <span className="text-blue-400">✓ Chronologie</span> : null}
-                              {draft.keyActors?.length ? <span className="text-purple-400">✓ Acteurs</span> : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                          <button
-                            onClick={() => setInspectDraft(draft)}
-                            className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer border border-zinc-800"
-                            title={isFr ? "Aperçu & Source" : "Inspect & Source"}
-                          >
-                            <Eye size={15} />
-                          </button>
-
-                          {onEditArticle && (
-                            <button
-                              onClick={() => onEditArticle(draft)}
-                              className="p-2 bg-zinc-900 hover:bg-orange-600 text-zinc-300 hover:text-white rounded-xl transition-all cursor-pointer border border-zinc-800"
-                              title={isFr ? "Éditer" : "Edit"}
-                            >
-                              <Edit2 size={15} />
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => handlePublishDraft(draft)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow flex items-center gap-1 cursor-pointer"
-                          >
-                            <Check size={13} />
-                            {isFr ? 'Publier' : 'Publish'}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              deleteArticle(draft.id);
-                              showStatus(isFr ? 'Brouillon supprimé.' : 'Draft deleted.');
-                            }}
-                            className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <button
+                    onClick={handlePurgeDrafts}
+                    className="p-2 bg-zinc-950 hover:bg-red-950/60 text-zinc-400 hover:text-red-400 border border-zinc-800 rounded-xl transition-all cursor-pointer"
+                    title={isFr ? "Purger la file des brouillons" : "Purge draft queue"}
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               )}
             </div>
-
-            {/* FLOW CONNECTOR CABLE 3 -> 4 */}
-            <div className="flex flex-col items-center justify-center my-2">
-              <div className="h-8 w-0.5 bg-gradient-to-b from-amber-500 via-emerald-500 to-emerald-400 animate-pulse" />
-              <div className="px-3 py-1 bg-zinc-900 border border-zinc-700 rounded-full text-[10px] font-mono font-bold text-zinc-300 shadow flex items-center gap-1.5">
-                <CheckCircle2 size={12} className="text-emerald-400" />
-                <span>Publication Live → Base de Données Cloud & Web Portal</span>
-              </div>
-              <div className="h-8 w-0.5 bg-gradient-to-b from-emerald-400 to-emerald-500 animate-pulse" />
-            </div>
-
-            {/* NODE 4: Live Distribution Node */}
-            <div className="bg-zinc-900 border-2 border-emerald-500/40 rounded-2xl p-5 shadow-2xl space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/30">
-                    <Server size={20} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono uppercase font-bold bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">
-                        NODE 04 • PUBLICATION TARGET
-                      </span>
-                      <h3 className="text-sm font-extrabold uppercase text-white tracking-wide">
-                        {isFr ? 'Plateforme Perspective Live' : 'Live Perspective Platform'}
-                      </h3>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 mt-0.5">
-                      {isFr ? 'Distribution publique des articles authentifiés et traduits' : 'Public distribution of authenticated bilingual articles'}
-                    </p>
-                  </div>
-                </div>
-
-                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                  {publishedArticlesCount} {isFr ? 'Articles Publiés' : 'Live Articles'}
-                </span>
-              </div>
-            </div>
-
           </div>
+
+          {/* Drafts Grid */}
+          {filteredDrafts.length === 0 ? (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-3xl p-12 text-center space-y-4">
+              <div className="w-14 h-14 bg-zinc-800/80 rounded-2xl flex items-center justify-center mx-auto text-zinc-500">
+                <Newspaper size={28} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold uppercase tracking-wider text-zinc-200">
+                  {isFr ? 'Aucun brouillon en attente de validation' : 'No pending drafts in review queue'}
+                </h4>
+                <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                  {isFr 
+                    ? 'Lancez un scan de dépêches depuis l\'onglet Agences ou utilisez l\'Atelier Storytelling IA pour rédiger un article d\'actualité.'
+                    : 'Run a wire scan from the Press Agencies tab or use the AI Storytelling Writer to draft an article.'}
+                </p>
+              </div>
+              <button
+                onClick={handleRunFullPipeline}
+                disabled={runningAllPipeline}
+                className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg inline-flex items-center gap-2 cursor-pointer"
+              >
+                <Play size={14} />
+                <span>{isFr ? 'Scanner les flux maintenant' : 'Scan feeds now'}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredDrafts.map((draft) => {
+                const src = getArticleSourceInfo(draft, rssFeeds);
+                const engineFootprint = (draft as any).engineUsed || 'Dual-Engine Auto';
+                const isFailover = (draft as any).failoverTriggered;
+                const hasBrief = !!draft.perspectiveBrief;
+                const hasTimeline = Array.isArray(draft.timeline) && draft.timeline.length > 0;
+                const hasActors = Array.isArray(draft.keyActors) && draft.keyActors.length > 0;
+                const hasForces = !!draft.structuralForces;
+
+                return (
+                  <div 
+                    key={draft.id}
+                    className="bg-zinc-900/90 border border-zinc-800/90 hover:border-orange-500/50 rounded-2xl p-5 shadow-xl transition-all flex flex-col justify-between space-y-4 group"
+                  >
+                    <div className="space-y-3">
+                      {/* Top Badges & Source Origin */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 border border-zinc-800 text-[11px] font-mono font-bold text-zinc-200">
+                            <span>{src.originFlag}</span>
+                            <span className="truncate max-w-[130px]">{src.sourceName}</span>
+                          </span>
+
+                          <span className="px-2.5 py-1 rounded-lg bg-orange-500/10 text-orange-400 text-[10px] font-mono font-bold uppercase border border-orange-500/20">
+                            {draft.category}
+                          </span>
+
+                          <span className="px-2 py-1 rounded-lg bg-blue-500/10 text-blue-400 text-[10px] font-mono font-bold uppercase border border-blue-500/20">
+                            {draft.type === 'Deep Dive' ? '📜 Grand Angle' : draft.type === 'Analysis' ? '🔍 Analyse' : '⚡ News Récit'}
+                          </span>
+                        </div>
+
+                        {/* AI Engine Footprint Badge */}
+                        <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded border ${
+                          isFailover
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        }`}>
+                          {engineFootprint} {isFailover ? '⚠️ (Failover)' : ''}
+                        </span>
+                      </div>
+
+                      {/* Title Headline (Bilingual Display) */}
+                      <div>
+                        <h4 className="text-sm font-extrabold text-white leading-snug group-hover:text-orange-400 transition-colors">
+                          {draft.title?.fr || draft.title?.en}
+                        </h4>
+                        {draft.title?.en && draft.title?.fr && (
+                          <p className="text-[11px] text-zinc-400 font-mono mt-1 line-clamp-1">
+                            🇬🇧 {draft.title.en}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Excerpt Lead */}
+                      <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">
+                        {draft.excerpt?.fr || draft.excerpt?.en}
+                      </p>
+
+                      {/* Coherence & Structural Health Badges */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-800/80 text-[10px] font-mono">
+                        <span className="text-zinc-500 uppercase font-bold mr-1">{isFr ? 'Cohérence' : 'Structure'}:</span>
+                        <span className={`px-2 py-0.5 rounded ${hasBrief ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-500'}`}>
+                          {hasBrief ? '✓ 3 Briefs' : '✕ Brief'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded ${hasTimeline ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-zinc-800 text-zinc-500'}`}>
+                          {hasTimeline ? '✓ Chronologie' : '✕ Chrono'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded ${hasActors ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-zinc-800 text-zinc-500'}`}>
+                          {hasActors ? '✓ Acteurs' : '✕ Acteurs'}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded ${hasForces ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-zinc-800 text-zinc-500'}`}>
+                          {hasForces ? '✓ Forces P.E.S.I' : '✕ Forces'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Buttons */}
+                    <div className="flex items-center justify-between gap-2 pt-3 border-t border-zinc-800/80">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setInspectDraft(draft);
+                            setInspectLanguage('fr');
+                          }}
+                          className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-zinc-800 transition-all cursor-pointer"
+                          title={isFr ? "Examiner la cohérence éditoriale" : "Inspect editorial structure"}
+                        >
+                          <Eye size={13} />
+                          <span>{isFr ? 'Examiner' : 'Inspect'}</span>
+                        </button>
+
+                        {onEditArticle && (
+                          <button
+                            onClick={() => onEditArticle(draft)}
+                            className="p-2 bg-zinc-950 hover:bg-orange-600 text-zinc-300 hover:text-white rounded-xl text-xs border border-zinc-800 transition-all cursor-pointer"
+                            title={isFr ? "Ouvrir dans l'éditeur complet" : "Open in main editor"}
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handlePublishDraft(draft)}
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow flex items-center gap-1 cursor-pointer"
+                        >
+                          <Check size={13} />
+                          <span>{isFr ? 'Publier' : 'Publish'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            deleteArticle(draft.id);
+                            showStatus(isFr ? 'Brouillon retiré.' : 'Draft removed.');
+                          }}
+                          className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                          title={isFr ? "Supprimer" : "Delete"}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* VIEW MODE 2: Standard Detailed List View */}
-      {viewMode === 'list' && (
+      {/* =========================================================================
+          TAB 2: PRESS AGENCIES & WIRE FEEDS MONITORING
+         ========================================================================= */}
+      {activeNewsroomTab === 'feeds' && (
         <div className="space-y-6">
-          {/* Section: Manage RSS Feed URLs */}
-          <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-xl space-y-6">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-              <div className="flex items-center gap-2">
-                <Globe className="text-orange-500" size={18} />
-                <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-100">
-                  {isFr ? 'Sources RSS Surveillées' : 'Monitored RSS Sources'}
+          {/* Preset Packs & Feed Management Bar */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-xl">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+              <div>
+                <h3 className="text-sm font-extrabold uppercase tracking-wider text-white flex items-center gap-2">
+                  <Globe size={16} className="text-orange-400" />
+                  <span>{isFr ? 'Packs d\'Agences de Presse Partenaires' : 'Partner Press Agency Packs'}</span>
                 </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  {isFr ? 'Activez des bouquets de veille thématiques et régionaux en un clic.' : 'One-click activation of curated regional and topical wire packs.'}
+                </p>
               </div>
+
+              <button
+                onClick={() => setShowAddFeedModal(true)}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>{isFr ? 'Ajouter une Source RSS' : 'Add Wire Source'}</span>
+              </button>
             </div>
 
-            {/* Add Feed Form */}
-            <form onSubmit={handleAddFeed} className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800">
-              <div>
-                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                  {isFr ? 'Nom de la Source' : 'Source Name'}
-                </label>
-                <input
-                  type="text"
-                  placeholder="ex: APS Sénégal"
-                  value={newFeedName}
-                  onChange={e => setNewFeedName(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-orange-500"
-                />
-              </div>
+            {/* Pack Selector Pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => handleLoadPresetPack('senegal')}
+                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>🇸🇳</span>
+                <span>{isFr ? 'Presse Sénégal (APS, Le Soleil, Seneweb...)' : 'Senegal Press Wire'}</span>
+              </button>
 
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                  {isFr ? 'URL du Flux RSS' : 'RSS Feed URL'} *
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://aps.sn/feed/"
-                  value={newFeedUrl}
-                  onChange={e => setNewFeedUrl(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-orange-500"
-                  required
-                />
-              </div>
+              <button
+                onClick={() => handleLoadPresetPack('africa')}
+                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>🌍</span>
+                <span>{isFr ? 'Afrique & CEDEAO (RFI Afrique, Jeune Afrique...)' : 'Africa & ECOWAS Wire'}</span>
+              </button>
 
+              <button
+                onClick={() => handleLoadPresetPack('world')}
+                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>🌐</span>
+                <span>{isFr ? 'Agences Mondiales (Reuters, BBC, Bloomberg...)' : 'Global Wires'}</span>
+              </button>
+
+              <button
+                onClick={() => handleLoadPresetPack('sports')}
+                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <span>⚽</span>
+                <span>{isFr ? 'Sports & Football (RMC Sport, Sky Sports...)' : 'Sports & Football Wire'}</span>
+              </button>
+
+              <button
+                onClick={() => handleLoadPresetPack('all')}
+                className="px-3 py-1.5 bg-orange-600/20 text-orange-300 border border-orange-500/40 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ml-auto"
+              >
+                <Zap size={13} />
+                <span>{isFr ? 'Charger Tous les Packs' : 'Load All Packs'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Feed Sources Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {rssFeeds.map((feed: any) => {
+              const health = feedHealthMap[feed.url];
+              const isHealthy = health?.status === 'healthy';
+              const isTesting = testingFeedUrl === feed.url;
+              const isProcessing = processingFeedId === feed.id;
+
+              return (
+                <div 
+                  key={feed.id}
+                  className="bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-3 transition-all"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono font-bold bg-zinc-950 text-zinc-300 px-2 py-0.5 rounded border border-zinc-800 flex items-center gap-1">
+                        <span>{feed.originFlag || '🌐'}</span>
+                        <span>{feed.category || 'Actualités'}</span>
+                      </span>
+
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                        isHealthy 
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                          : health?.status === 'degraded'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : health?.status === 'error'
+                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          : 'bg-zinc-800 text-zinc-400'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isHealthy ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                        <span>{health ? `${health.latencyMs || 0} ms` : 'Non testé'}</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-xs font-bold text-white leading-snug">{feed.name}</h4>
+                      <p className="text-[10px] font-mono text-zinc-500 truncate mt-0.5">{feed.url}</p>
+                    </div>
+
+                    {health?.lastItemTitle && (
+                      <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-800/80">
+                        <span className="text-[9px] font-mono uppercase text-zinc-500 block mb-0.5">{isFr ? 'Dernière dépêche' : 'Latest headline'} :</span>
+                        <p className="text-[11px] text-zinc-300 line-clamp-1 italic">"{health.lastItemTitle}"</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions per feed */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800/80">
+                    <button
+                      onClick={() => runHealthCheck(feed.url)}
+                      disabled={isTesting}
+                      className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-950 rounded-lg border border-zinc-800 transition-colors cursor-pointer"
+                      title={isFr ? "Tester la connexion" : "Test ping"}
+                    >
+                      <RefreshCw size={13} className={isTesting ? "animate-spin text-orange-400" : ""} />
+                    </button>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleProcessFeed(feed.url, feed.id, feed.category, 'News')}
+                        disabled={isProcessing}
+                        className="px-2.5 py-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                      >
+                        <Zap size={11} className={isProcessing ? "animate-spin" : ""} />
+                        <span>{isProcessing ? '...' : (isFr ? 'Rédiger' : 'Draft')}</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleRemoveFeed(feed.id)}
+                        className="p-1.5 text-zinc-500 hover:text-red-400 transition-colors cursor-pointer"
+                        title={isFr ? "Supprimer" : "Remove"}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Modal for adding new feed */}
+          {showAddFeedModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
+                    <Plus size={16} className="text-orange-400" />
+                    <span>{isFr ? 'Ajouter une Nouvelle Agence / Flux' : 'Add New Wire Source'}</span>
+                  </h3>
+                  <button onClick={() => setShowAddFeedModal(false)} className="text-zinc-400 hover:text-white">✕</button>
+                </div>
+
+                <form onSubmit={handleAddFeed} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono font-bold uppercase text-zinc-400 mb-1">
+                      {isFr ? 'Nom de la Source' : 'Agency / Source Name'}
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: APS Sénégal ou RFI International"
+                      value={newFeedName}
+                      onChange={e => setNewFeedName(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-700 text-white px-3.5 py-2 rounded-xl text-xs outline-none focus:border-orange-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-mono font-bold uppercase text-zinc-400 mb-1">
+                      {isFr ? 'URL du Flux RSS' : 'RSS Feed URL'} *
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://aps.sn/feed/ ou URL XML"
+                      value={newFeedUrl}
+                      onChange={e => setNewFeedUrl(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-700 text-white px-3.5 py-2 rounded-xl text-xs outline-none focus:border-orange-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-mono font-bold uppercase text-zinc-400 mb-1">
+                        {isFr ? 'Rubrique' : 'Category'}
+                      </label>
+                      <select
+                        value={newFeedCategory}
+                        onChange={e => setNewFeedCategory(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-700 text-white px-3 py-2 rounded-xl text-xs outline-none focus:border-orange-500"
+                      >
+                        {RSS_CATEGORIES.map(cat => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-mono font-bold uppercase text-zinc-400 mb-1">
+                        {isFr ? 'Pack Régional' : 'Region Pack'}
+                      </label>
+                      <select
+                        value={newFeedPack}
+                        onChange={e => setNewFeedPack(e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-700 text-white px-3 py-2 rounded-xl text-xs outline-none focus:border-orange-500"
+                      >
+                        <option value="senegal">🇸🇳 Sénégal</option>
+                        <option value="africa">🌍 Afrique & CEDEAO</option>
+                        <option value="world">🌐 International</option>
+                        <option value="sports">⚽ Sports</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-3 border-t border-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddFeedModal(false)}
+                      className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold"
+                    >
+                      {isFr ? 'Annuler' : 'Cancel'}
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold uppercase rounded-xl transition-all shadow"
+                    >
+                      {isFr ? 'Enregistrer la Source' : 'Save Source'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB 3: AI STORYTELLING NEWSROOM WRITER
+         ========================================================================= */}
+      {activeNewsroomTab === 'writer' && (
+        <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-6">
+          <div className="border-b border-zinc-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-orange-500/20 text-orange-400 rounded-2xl border border-orange-500/30">
+                <Sparkles size={24} />
+              </div>
               <div>
-                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                  {isFr ? 'Rubrique' : 'Category'}
+                <h3 className="text-base font-black uppercase tracking-wider text-white">
+                  {isFr ? 'Atelier Storytelling & Rédaction Double Moteur' : 'Dual-Engine Storytelling & Newsroom Writer'}
+                </h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  {isFr 
+                    ? 'Rédigez des articles immersifs en français et anglais à partir d\'une dépêche brute, d\'un fait d\'actualité ou d\'un sujet stratégique.'
+                    : 'Transform raw wire copy, breaking news leads or investigative topics into rich bilingual storytelling articles.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleGenerateFromPrompt} className="space-y-5">
+            <div>
+              <label className="block text-xs font-mono font-bold uppercase text-zinc-300 mb-2 flex items-center justify-between">
+                <span>{isFr ? 'Sujet d\'actualité, Dépêche brute ou Piste d\'enquête' : 'Topic, Raw Wire Copy or Breaking News Lead'}</span>
+                <span className="text-[10px] text-orange-400 font-mono">Bilingue FR + EN garanti</span>
+              </label>
+              <textarea
+                value={manualPrompt}
+                onChange={e => setManualPrompt(e.target.value)}
+                placeholder={isFr 
+                  ? "ex: Le Sénégal inaugure son nouveau terminal portuaire à Ndayane pour fluidifier le commerce ouest-africain avec la CEDEAO..."
+                  : "e.g., Senegal inaugurates the new deepwater port in Ndayane to accelerate West African trade dynamics..."}
+                rows={4}
+                className="w-full bg-zinc-950 border border-zinc-700 text-white p-4 rounded-2xl text-xs leading-relaxed outline-none focus:border-orange-500 transition-colors"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Storytelling Format Selector */}
+              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2">
+                <label className="text-xs font-mono font-bold uppercase text-orange-400 block">
+                  {isFr ? 'Format & Profondeur de Récit' : 'Storytelling Depth'}
                 </label>
                 <select
-                  value={newFeedCategory}
-                  onChange={e => setNewFeedCategory(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-orange-500"
+                  value={manualStyleType}
+                  onChange={e => setManualStyleType(e.target.value as any)}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-orange-500"
+                >
+                  <option value="News">⚡ News Récit (350 - 550 mots)</option>
+                  <option value="Analysis">🔍 Analyse Stratégique (800 - 1200 mots)</option>
+                  <option value="Deep Dive">📜 Grand Angle / Dossier (1200+ mots)</option>
+                </select>
+                <p className="text-[10px] text-zinc-500 font-mono">
+                  {manualStyleType === 'News' && (isFr ? 'Récit concis, faits majeurs, citations institutionnelles.' : 'Concise narrative, major facts, key quotes.')}
+                  {manualStyleType === 'Analysis' && (isFr ? 'Enjeux régionaux, forces socio-économiques, échiquier.' : 'Regional stakes, socio-economic dynamics.')}
+                  {manualStyleType === 'Deep Dive' && (isFr ? 'Perspective historique, radiographie structurelle complète.' : 'Historical context, full structural radiography.')}
+                </p>
+              </div>
+
+              {/* AI Engine Preference */}
+              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2">
+                <label className="text-xs font-mono font-bold uppercase text-emerald-400 block">
+                  {isFr ? 'Moteur IA Privilégié' : 'Preferred AI Engine'}
+                </label>
+                <select
+                  value={manualPreferredEngine}
+                  onChange={e => setManualPreferredEngine(e.target.value as any)}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-emerald-500"
+                >
+                  <option value="auto">🤖 Dual-Engine Auto (Gemini ⇄ OpenAI Failover)</option>
+                  <option value="gemini">⚡ Gemini 2.5 Flash Principal</option>
+                  <option value="openai">🧠 OpenAI GPT-4o-mini Principal</option>
+                </select>
+                <p className="text-[10px] text-zinc-500 font-mono">
+                  {isFr ? 'Bascule automatique en cas de quota dépassé ou de latence.' : 'Automatic switch when quota or rate-limit is hit.'}
+                </p>
+              </div>
+
+              {/* Category */}
+              <div className="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 space-y-2">
+                <label className="text-xs font-mono font-bold uppercase text-blue-400 block">
+                  {isFr ? 'Rubrique Éditoriale' : 'Target Category'}
+                </label>
+                <select
+                  value={manualCategory}
+                  onChange={e => setManualCategory(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-blue-500"
                 >
                   {RSS_CATEGORIES.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
+                <p className="text-[10px] text-zinc-500 font-mono">
+                  {isFr ? 'Classification thématique sur le portail Perspective.' : 'Thematic routing on Perspective portal.'}
+                </p>
               </div>
+            </div>
 
-              <div className="flex items-end">
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={promptLoading || !manualPrompt.trim()}
+                className="px-6 py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 disabled:opacity-50 text-white text-xs font-bold uppercase tracking-wider rounded-2xl transition-all shadow-xl shadow-orange-950/40 flex items-center gap-2 cursor-pointer"
+              >
+                <Sparkles size={16} className={promptLoading ? 'animate-spin' : ''} />
+                <span>{promptLoading ? (isFr ? 'Rédaction IA en cours...' : 'AI Storyteller Writing...') : (isFr ? 'Générer l\'Article Récit' : 'Generate Story Article')}</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB 4: AUTO-SCHEDULER & EXECUTION LOGS
+         ========================================================================= */}
+      {activeNewsroomTab === 'scheduler' && (
+        <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 border border-orange-500/30 rounded-3xl p-6 shadow-2xl space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-2xl">
+                <Clock size={24} className={autoSchedule.status === 'running' ? 'animate-spin' : ''} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-black text-white uppercase tracking-wider font-mono">
+                    {isFr ? 'Dispatcher & Planificateur Automatique' : 'Automated Newsroom Dispatcher'}
+                  </h3>
+                  <span className={`px-2.5 py-0.5 text-[10px] font-mono font-bold rounded-full uppercase border ${
+                    autoSchedule.enabled 
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                      : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}>
+                    {autoSchedule.enabled ? (isFr ? 'En Veille Active' : 'Active') : (isFr ? 'En Pause' : 'Paused')}
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  {isFr 
+                    ? 'Automatisez la création de brouillons rédigés aux normes Perspective selon votre fréquence préférée.'
+                    : 'Automatically generate Perspective-standard story drafts at your chosen timing intervals.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleSaveScheduleConfig({ enabled: !autoSchedule.enabled })}
+                disabled={scheduleLoading}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border ${
+                  autoSchedule.enabled
+                    ? 'bg-amber-950/60 text-amber-300 border-amber-500/40 hover:bg-amber-900/80'
+                    : 'bg-emerald-600 text-white border-emerald-500 shadow-lg hover:bg-emerald-500'
+                }`}
+              >
+                <Bot size={14} />
+                {autoSchedule.enabled 
+                  ? (isFr ? 'Mettre en Pause' : 'Pause Scheduler')
+                  : (isFr ? 'Activer le Robot' : 'Activate Scheduler')}
+              </button>
+
+              <button
+                onClick={handleTriggerScheduleNow}
+                disabled={scheduleLoading || autoSchedule.status === 'running'}
+                className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-mono font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center gap-2 cursor-pointer border border-orange-400/30"
+              >
+                <Play size={13} className={autoSchedule.status === 'running' ? 'animate-spin' : ''} />
+                {autoSchedule.status === 'running'
+                  ? (isFr ? 'Cycle en cours...' : 'Cycle running...')
+                  : (isFr ? 'Lancer un Cycle Maintenant' : 'Run Cycle Now')}
+              </button>
+            </div>
+          </div>
+
+          {/* Controls Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
+              <label className="text-[11px] font-mono uppercase font-bold text-orange-400 flex items-center gap-1.5">
+                <Clock size={13} />
+                {isFr ? 'Cadence d\'Ingestion' : 'Ingestion Cadence'}
+              </label>
+              <select
+                value={autoSchedule.intervalMinutes}
+                onChange={(e) => handleSaveScheduleConfig({ intervalMinutes: Number(e.target.value) })}
+                disabled={scheduleLoading}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-orange-500 cursor-pointer"
+              >
+                <option value={15}>⏱️ {isFr ? 'Toutes les 15 min (Fil direct)' : 'Every 15 min'}</option>
+                <option value={30}>⏱️ {isFr ? 'Toutes les 30 min (Haute cadence)' : 'Every 30 min'}</option>
+                <option value={60}>⏱️ {isFr ? 'Toutes les 1h (Standard recommandé)' : 'Every 1 hour'}</option>
+                <option value={180}>⏱️ {isFr ? 'Toutes les 3h (Veille périodique)' : 'Every 3 hours'}</option>
+                <option value={360}>⏱️ {isFr ? 'Toutes les 6h (Demi-journée)' : 'Every 6 hours'}</option>
+                <option value={720}>⏱️ {isFr ? 'Toutes les 12h (Bi-quotidien)' : 'Every 12 hours'}</option>
+                <option value={1440}>⏱️ {isFr ? 'Toutes les 24h (Quotidien)' : 'Every 24 hours'}</option>
+              </select>
+            </div>
+
+            <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
+              <label className="text-[11px] font-mono uppercase font-bold text-amber-400 flex items-center gap-1.5">
+                <Globe size={13} />
+                {isFr ? 'Pack de Flux Cible' : 'Target Wire Pack'}
+              </label>
+              <select
+                value={autoSchedule.targetPack}
+                onChange={(e) => handleSaveScheduleConfig({ targetPack: e.target.value })}
+                disabled={scheduleLoading}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-amber-500 cursor-pointer"
+              >
+                <option value="all">🌍 {isFr ? 'Tous les Flux Actifs' : 'All Active Feeds'}</option>
+                <option value="senegal">🇸🇳 {isFr ? 'Presse & Médias Sénégal' : 'Senegal Media Pack'}</option>
+                <option value="africa">🌍 {isFr ? 'Afrique & CEDEAO' : 'Africa Regional Pack'}</option>
+                <option value="world">🌐 {isFr ? 'Agences Mondiales' : 'World Press Pack'}</option>
+                <option value="sports">⚽ {isFr ? 'Sports & Football' : 'Sports Pack'}</option>
+              </select>
+            </div>
+
+            <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
+              <label className="text-[11px] font-mono uppercase font-bold text-emerald-400 flex items-center gap-1.5">
+                <Layers size={13} />
+                {isFr ? 'Volume / Source / Cycle' : 'Articles / Feed / Cycle'}
+              </label>
+              <select
+                value={autoSchedule.maxArticlesPerCycle}
+                onChange={(e) => handleSaveScheduleConfig({ maxArticlesPerCycle: Number(e.target.value) })}
+                disabled={scheduleLoading}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                <option value={1}>1 {isFr ? 'Article par source' : 'Article per feed'}</option>
+                <option value={2}>2 {isFr ? 'Articles par source (Recommandé)' : 'Articles per feed'}</option>
+                <option value={3}>3 {isFr ? 'Articles par source' : 'Articles per feed'}</option>
+              </select>
+            </div>
+
+            <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2 flex flex-col justify-between">
+              <div>
+                <div className="text-[11px] font-mono uppercase font-bold text-zinc-400 flex items-center justify-between">
+                  <span>{isFr ? 'Prochain Déclenchement' : 'Next Ingestion'}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                </div>
+                <div className="text-xl font-black font-mono text-emerald-400 mt-1">
+                  {countdownText}
+                </div>
+              </div>
+              <div className="text-[10px] font-mono text-zinc-500 flex items-center justify-between border-t border-zinc-800 pt-2">
+                <span>{isFr ? 'Total Rédigés' : 'Total Drafted'}:</span>
+                <span className="text-white font-bold">{autoSchedule.totalDraftsCreated || 0}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Terminal Execution Logs */}
+          {autoSchedule.logs && autoSchedule.logs.length > 0 && (
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase text-zinc-400">
+                  <Activity size={14} className="text-orange-400" />
+                  <span>{isFr ? 'Journal des Exécutions Récentes' : 'Recent Execution Logs'}</span>
+                </div>
                 <button
-                  type="submit"
-                  className="w-full py-2 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                  onClick={async () => {
+                    await fetch('/api/rss-automation/logs', { method: 'DELETE' });
+                    fetchScheduleConfig();
+                  }}
+                  className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
                 >
-                  <Plus size={14} />
-                  {isFr ? 'Ajouter' : 'Add Feed'}
+                  {isFr ? 'Effacer' : 'Clear'}
                 </button>
               </div>
-            </form>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {rssFeeds.map((feed: any) => (
-                <div key={feed.id} className="bg-zinc-950 border border-zinc-800 p-4 rounded-xl flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-xs font-bold text-zinc-200 truncate">{feed.name}</h4>
-                    <p className="text-[10px] font-mono text-zinc-500 truncate mt-0.5">{feed.url}</p>
+              <div className="max-h-40 overflow-y-auto space-y-1.5 font-mono text-xs pr-2">
+                {autoSchedule.logs.map((log: any) => (
+                  <div key={log.id} className="flex items-start gap-2 text-[11px] leading-relaxed">
+                    <span className="text-zinc-600 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                    <span className={
+                      log.type === 'success' ? 'text-emerald-400' :
+                      log.type === 'error' ? 'text-red-400 font-bold' :
+                      log.type === 'warning' ? 'text-amber-400' : 'text-zinc-300'
+                    }>
+                      {log.message}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      onClick={() => handleProcessFeed(feed.url, feed.id)}
-                      disabled={processingFeedId === feed.id}
-                      className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all"
-                    >
-                      {processingFeedId === feed.id ? '...' : 'Ingérer'}
-                    </button>
-                    <button onClick={() => handleRemoveFeed(feed.id)} className="p-1.5 text-zinc-500 hover:text-red-400">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB 5: EDITORIAL CHARTER, DIRECTIVES & AI STYLE STUDIO
+         ========================================================================= */}
+      {activeNewsroomTab === 'guidelines' && (
+        <div className="space-y-8">
+          {/* Top Banner & Quick Presets */}
+          <div className="bg-gradient-to-r from-zinc-900 via-amber-950/30 to-zinc-900 border border-amber-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+              <div className="space-y-2 max-w-2xl">
+                <div className="flex items-center gap-2">
+                  <span className="bg-amber-500/20 text-amber-300 text-xs font-mono font-bold px-3 py-1 rounded-full border border-amber-500/30 flex items-center gap-1.5">
+                    <Award size={14} />
+                    {isFr ? 'Charte Éditoriale & Studio Moteur IA' : 'Editorial Charter & AI Prompt Studio'}
+                  </span>
+                  {editorialGuidelines.updatedAt && (
+                    <span className="text-[11px] font-mono text-zinc-400">
+                      Modifié le {new Date(editorialGuidelines.updatedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-xl font-black text-white tracking-tight">
+                  {isFr ? 'Directives Sur-Mesure & Calibrage du Ton Journalistique' : 'Custom Writing Guidelines & Journalistic Tone Studio'}
+                </h2>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  {isFr
+                    ? 'Définissez la ligne éditoriale de Perspective Group. Vos consignes, mots interdits et exemples de référence sont injectés directement dans le prompt système du moteur de rédaction IA dual-engine (Gemini / OpenAI).'
+                    : 'Set Perspective Group\'s editorial guidelines. Directives, forbidden phrases, and canonical examples are injected into the master system prompt for dual-engine generation.'}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleResetGuidelines}
+                  disabled={savingGuidelines}
+                  className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-mono font-bold rounded-xl border border-zinc-700 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw size={14} />
+                  <span>{isFr ? 'Réinitialiser' : 'Reset Defaults'}</span>
+                </button>
+
+                <button
+                  onClick={handleSaveGuidelines}
+                  disabled={savingGuidelines}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-amber-950/50 flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {savingGuidelines ? (
+                    <Cpu size={15} className="animate-spin" />
+                  ) : (
+                    <Save size={15} />
+                  )}
+                  <span>{isFr ? 'Enregistrer la Charte' : 'Save Guidelines'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Presets Bar */}
+            <div className="mt-6 pt-5 border-t border-amber-500/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <span className="text-xs font-mono text-amber-200/80 font-semibold flex items-center gap-1.5">
+                <Sliders size={14} className="text-amber-400" />
+                {isFr ? 'Presets de Ligne Éditoriale Rapides :' : 'Quick Style Presets:'}
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => applyPreset('dakar')}
+                  className="px-3 py-1.5 bg-zinc-950/80 hover:bg-amber-900/40 text-amber-200 text-xs font-mono rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  🇸🇳 West-Africa Storytelling
+                </button>
+                <button
+                  onClick={() => applyPreset('geopolitics')}
+                  className="px-3 py-1.5 bg-zinc-950/80 hover:bg-amber-900/40 text-amber-200 text-xs font-mono rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  🌍 Géopolitique & Macro
+                </button>
+                <button
+                  onClick={() => applyPreset('investigative')}
+                  className="px-3 py-1.5 bg-zinc-950/80 hover:bg-amber-900/40 text-amber-200 text-xs font-mono rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  🔍 Grand Enquête & Terrain
+                </button>
+                <button
+                  onClick={() => applyPreset('wire')}
+                  className="px-3 py-1.5 bg-zinc-950/80 hover:bg-amber-900/40 text-amber-200 text-xs font-mono rounded-lg border border-amber-500/30 transition-all cursor-pointer"
+                >
+                  ⚡ Dépêche Incisive
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Form Sections Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            {/* Section 1: Tone & Custom Writing Directives */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-lg">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <FileCode size={16} className="text-amber-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                    {isFr ? '1. Directives Rédactionnelles & Style' : '1. Writing Rules & Style Directives'}
+                  </h3>
+                </div>
+                <select
+                  value={editorialGuidelines.preferredTone}
+                  onChange={(e) => setEditorialGuidelines({ ...editorialGuidelines, preferredTone: e.target.value as any })}
+                  className="bg-zinc-950 border border-zinc-800 text-amber-400 text-xs font-mono px-3 py-1.5 rounded-xl outline-none focus:border-amber-500"
+                >
+                  <option value="analytical">Tone: Analytique & Rigoureux</option>
+                  <option value="investigative">Tone: Immersif & Enquête</option>
+                  <option value="diplomatic">Tone: Diplomatique & Factuel</option>
+                  <option value="dynamic">Tone: Dynamique & Percutant</option>
+                  <option value="custom">Tone: Sur-mesure</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-2">
+                  {isFr ? 'Consignes Spécifiques & Directives de Rédaction (Master Directives) :' : 'Master Directives & Instructions:'}
+                </label>
+                <textarea
+                  rows={8}
+                  value={editorialGuidelines.customDirectives}
+                  onChange={(e) => setEditorialGuidelines({ ...editorialGuidelines, customDirectives: e.target.value })}
+                  placeholder={isFr ? "Exemple :\n1. Toujours contextualiser l'impact économique sur le Sénégal et l'UEMOA.\n2. Ouvrir chaque article par une citation marquante ou une scène incarnée.\n3. Structurer avec des sous-titres analytiques (##)..." : "Enter guidelines here..."}
+                  className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs p-3.5 rounded-xl font-mono leading-relaxed outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Section 2: Editor Feedback & Banned Clichés */}
+            <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-lg">
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={16} className="text-orange-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                    {isFr ? '2. Notes de Correction & Mots Interdits' : '2. Quality Feedback & Banned Words'}
+                  </h3>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 mb-2">
+                  {isFr ? 'Remarques du Rédacteur en Chef (Corrections à respecter) :' : 'Chief Editor Feedback Notes:'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={editorialGuidelines.editorialComments}
+                  onChange={(e) => setEditorialGuidelines({ ...editorialGuidelines, editorialComments: e.target.value })}
+                  placeholder={isFr ? "Ex: Soigner particulièrement les chapeaux. Éviter d'utiliser des adjectifs hyperboliques..." : "Feedback notes..."}
+                  className="w-full bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs p-3 rounded-xl font-mono leading-relaxed outline-none focus:border-amber-500 transition-colors"
+                />
+              </div>
+
+              {/* Forbidden Phrases Tags */}
+              <div className="space-y-2">
+                <label className="block text-xs font-mono text-zinc-400">
+                  {isFr ? 'Expressions Proscrites & Clichés Bannis (Zero-Cliché Policy) :' : 'Banned Words & Rejected Clichés:'}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newForbiddenTag}
+                    onChange={(e) => setNewForbiddenTag(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddForbiddenPhrase())}
+                    placeholder={isFr ? "Ajouter un mot/cliché interdit (ex: game-changer)..." : "Add banned phrase..."}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500 font-mono"
+                  />
+                  <button
+                    onClick={handleAddForbiddenPhrase}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0"
+                  >
+                    + {isFr ? 'Ajouter' : 'Add'}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-2 max-h-28 overflow-y-auto">
+                  {editorialGuidelines.forbiddenPhrases.map((phrase) => (
+                    <span
+                      key={phrase}
+                      className="bg-red-950/60 text-red-300 text-xs font-mono px-2.5 py-1 rounded-lg border border-red-800/50 flex items-center gap-1.5 group"
+                    >
+                      <span>"{phrase}"</span>
+                      <button
+                        onClick={() => handleRemoveForbiddenPhrase(phrase)}
+                        className="text-red-400 hover:text-white cursor-pointer ml-1"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {editorialGuidelines.forbiddenPhrases.length === 0 && (
+                    <span className="text-zinc-500 text-xs italic font-mono">
+                      {isFr ? 'Aucune expression proscrite.' : 'No banned phrases specified.'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Section 3: Gold Standard Exemplary Reference Article */}
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-5 space-y-4 shadow-lg">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Award size={16} className="text-amber-400" />
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                  {isFr ? '3. Article de Référence "Gold Standard" (Exemple Canonique)' : '3. Gold-Standard Canonical Reference Example'}
+                </h3>
+              </div>
+              <button
+                onClick={handleLoadCanonicalExample}
+                className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 text-amber-300 text-xs font-mono font-bold rounded-xl border border-amber-500/30 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Tag size={13} />
+                <span>{isFr ? 'Charger exemple (Port de Ndayane)' : 'Load Example'}</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-400 font-mono">
+              {isFr
+                ? 'Cet exemple canonique guide l\'IA sur la structure exacte des titres, chapeaux et corps d\'articles attendus sur Perspective.'
+                : 'This canonical example serves as a reference for headline styling, excerpts, and body structures.'}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                    {isFr ? 'Titre de Référence (FR) :' : 'Reference Title (FR):'}
+                  </label>
+                  <input
+                    type="text"
+                    value={editorialGuidelines.exemplaryExample?.titleFr || ''}
+                    onChange={(e) => setEditorialGuidelines({
+                      ...editorialGuidelines,
+                      exemplaryExample: { ...editorialGuidelines.exemplaryExample, titleFr: e.target.value }
+                    })}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                    {isFr ? 'Chapeau / Extrait (FR) :' : 'Reference Excerpt (FR):'}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editorialGuidelines.exemplaryExample?.excerptFr || ''}
+                    onChange={(e) => setEditorialGuidelines({
+                      ...editorialGuidelines,
+                      exemplaryExample: { ...editorialGuidelines.exemplaryExample, excerptFr: e.target.value }
+                    })}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs p-2.5 rounded-xl outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-mono text-zinc-400 mb-1">
+                  {isFr ? 'Extrait du Corps (Markdown FR) :' : 'Reference Body Sample (FR):'}
+                </label>
+                <textarea
+                  rows={5}
+                  value={editorialGuidelines.exemplaryExample?.bodyFr || ''}
+                  onChange={(e) => setEditorialGuidelines({
+                    ...editorialGuidelines,
+                    exemplaryExample: { ...editorialGuidelines.exemplaryExample, bodyFr: e.target.value }
+                  })}
+                  className="w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-xs p-2.5 rounded-xl outline-none focus:border-amber-500 font-mono leading-relaxed"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Live AI Writing Test Studio */}
+          <div className="bg-zinc-950 border border-amber-500/40 rounded-3xl p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Play size={16} className="text-amber-400" />
+                <h3 className="text-sm font-black text-white uppercase tracking-wider font-mono">
+                  {isFr ? '4. Studio de Test IA en Direct (Live Generation Sandbox)' : '4. Live AI Sandbox Testing'}
+                </h3>
+              </div>
+              <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                Dual-Engine Active
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-xs font-mono text-zinc-300">
+                {isFr ? 'Sujet / Prompt d\'actualité pour tester vos directives :' : 'Topic or headline prompt to test guidelines:'}
+              </label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  value={testPrompt}
+                  onChange={(e) => setTestPrompt(e.target.value)}
+                  placeholder={isFr ? "Entrez un sujet d'actualité..." : "Enter a news topic..."}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 text-white text-xs px-4 py-3 rounded-xl outline-none focus:border-amber-500 font-mono"
+                />
+                <button
+                  onClick={handleTestGuidelines}
+                  disabled={testingGuidelines || !testPrompt.trim()}
+                  className="px-6 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {testingGuidelines ? (
+                    <>
+                      <Cpu size={16} className="animate-spin" />
+                      <span>{isFr ? 'Génération IA...' : 'Generating...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} />
+                      <span>{isFr ? 'Tester le Rendu' : 'Run Test'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Test Result Output Box */}
+            {testResult && testResult.article && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 space-y-4 text-xs font-sans mt-4 animate-fadeIn">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-2">
+                    <CheckCircle size={15} />
+                    {isFr ? 'Résultat de la Rédaction IA (Généré)' : 'Generated AI Test Article'}
+                  </span>
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    Moteur : <strong className="text-white">{testResult.engineUsed || 'Dual Engine'}</strong>
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-base font-black text-white leading-tight">
+                    {testResult.article.title?.fr || testResult.article.title?.en}
+                  </h4>
+                  <p className="text-zinc-300 italic bg-zinc-950 p-3 rounded-xl border border-zinc-800 leading-relaxed">
+                    {testResult.article.excerpt?.fr || testResult.article.excerpt?.en}
+                  </p>
+                </div>
+
+                {testResult.article.perspectiveBrief && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-zinc-300 font-mono text-[11px] bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                    <div>
+                      <strong className="text-amber-400 block mb-1">📌 Ce qu'il s'est passé :</strong>
+                      {testResult.article.perspectiveBrief.whatHappened?.fr || testResult.article.perspectiveBrief.whatHappened?.en}
+                    </div>
+                    <div>
+                      <strong className="text-amber-400 block mb-1">⚡ Pourquoi cela compte :</strong>
+                      {testResult.article.perspectiveBrief.whyItMatters?.fr || testResult.article.perspectiveBrief.whyItMatters?.en}
+                    </div>
+                    <div>
+                      <strong className="text-amber-400 block mb-1">🔍 À surveiller :</strong>
+                      {testResult.article.perspectiveBrief.whatToWatchNext?.fr || testResult.article.perspectiveBrief.whatToWatchNext?.en}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 max-h-60 overflow-y-auto leading-relaxed text-zinc-300 whitespace-pre-line font-mono text-[11px]">
+                  {testResult.article.body?.fr || testResult.article.body?.en}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* DRAFT INSPECTION MODAL WITH ENHANCED SOURCE ATTRIBUTION BOX */}
+      {/* =========================================================================
+          DRAFT COHERENCE & EDITORIAL INSPECTION DRAWER / MODAL
+         ========================================================================= */}
       {inspectDraft && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-3xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl relative text-zinc-100 font-sans">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 shadow-2xl relative text-zinc-100 font-sans">
             
-            {/* Modal Header */}
+            {/* Header with Language Switcher */}
             <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-              <div className="flex items-center gap-2">
-                <span className="bg-red-500/20 text-red-400 text-xs font-mono font-bold px-2.5 py-1 rounded-full border border-red-500/30">
-                  BROUILLON IA / DRAFT
-                </span>
-                <span className="bg-orange-500/10 text-orange-400 text-xs font-mono font-bold px-2.5 py-1 rounded-full border border-orange-500/20">
+              <div className="flex items-center gap-2.5">
+                <span className="bg-orange-500/20 text-orange-400 text-xs font-mono font-bold px-3 py-1 rounded-full border border-orange-500/30">
                   {inspectDraft.category}
+                </span>
+                <span className="bg-blue-500/20 text-blue-400 text-xs font-mono font-bold px-3 py-1 rounded-full border border-blue-500/30">
+                  {inspectDraft.type === 'Deep Dive' ? '📜 Grand Angle' : inspectDraft.type === 'Analysis' ? '🔍 Analyse Stratégique' : '⚡ News Récit'}
+                </span>
+                <span className="text-xs font-mono text-zinc-400">
+                  ⏱️ {inspectDraft.readingTime || 4} min lecture
                 </span>
               </div>
 
-              <button
-                onClick={() => setInspectDraft(null)}
-                className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold cursor-pointer"
-              >
-                ✕ {isFr ? 'Fermer' : 'Close'}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Language Switcher for Preview */}
+                <div className="flex items-center bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+                  <button
+                    onClick={() => setInspectLanguage('fr')}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      inspectLanguage === 'fr' ? 'bg-orange-600 text-white' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    🇫🇷 Français
+                  </button>
+                  <button
+                    onClick={() => setInspectLanguage('en')}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                      inspectLanguage === 'en' ? 'bg-orange-600 text-white' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    🇬🇧 English
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setInspectDraft(null)}
+                  className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            {/* DEDICATED SOURCE ATTRIBUTION HEADER BOX */}
+            {/* Source Origin & AI Traceability Header */}
             {(() => {
               const src = getArticleSourceInfo(inspectDraft, rssFeeds);
+              const engineFootprint = (inspectDraft as any).engineUsed || 'Dual-Engine Auto';
+              const isFailover = (inspectDraft as any).failoverTriggered;
+
               return (
-                <div className="bg-zinc-950 border-2 border-blue-500/40 p-4 rounded-2xl space-y-2 shadow-inner">
+                <div className="bg-zinc-950 border border-blue-500/30 p-4 rounded-2xl space-y-2 shadow-inner">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold uppercase text-blue-400 flex items-center gap-1.5">
                       <Globe size={14} />
                       {isFr ? 'Attribution & Origine de la Source' : 'Source Attribution & Origin'}
                     </span>
                     <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                      ✓ Authentifié par Ingestion RSS
+                      Moteur: {engineFootprint} {isFailover ? '⚠️ (Failover basculé)' : '✓'}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                     <div>
-                      <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Nom du Média Source' : 'Source Media Name'} :</span>
+                      <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Agence / Média' : 'Agency / Media'} :</span>
                       <strong className="text-white text-sm">{src.sourceName}</strong>
                     </div>
 
                     <div>
-                      <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Origine Géographique' : 'Geographic Origin'} :</span>
+                      <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Zone Géographique' : 'Geographic Zone'} :</span>
                       <span className="inline-flex items-center gap-1 text-amber-300 font-bold">
                         <span>{src.originFlag}</span>
                         <span>{src.originCountry}</span>
                       </span>
                     </div>
 
-                    {src.sourceDomain && (
-                      <div>
-                        <span className="text-zinc-500 font-mono text-[10px] uppercase block">{isFr ? 'Domaine Officiel' : 'Official Domain'} :</span>
-                        <span className="font-mono text-orange-400">{src.sourceDomain}</span>
+                    {src.originalUrl && (
+                      <div className="flex items-end">
+                        <a 
+                          href={src.originalUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="px-3 py-1 bg-zinc-900 hover:bg-orange-600 text-zinc-300 hover:text-white text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all border border-zinc-800"
+                        >
+                          <span>{isFr ? 'Consulter la source' : 'View wire source'}</span>
+                          <ExternalLink size={12} />
+                        </a>
                       </div>
                     )}
                   </div>
-
-                  {src.originalUrl && (
-                    <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-                      <span className="text-zinc-400 text-[11px]">Consulter la dépêche originale :</span>
-                      <a 
-                        href={src.originalUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="px-3 py-1 bg-orange-600 hover:bg-orange-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-all"
-                      >
-                        <span>Article Source</span>
-                        <ExternalLink size={12} />
-                      </a>
-                    </div>
-                  )}
                 </div>
               );
             })()}
 
-            {/* Title & Cover */}
-            <div>
+            {/* Headline & Abstract */}
+            <div className="space-y-2">
               <h3 className="text-xl font-black text-white leading-tight">
-                {inspectDraft.title?.fr || inspectDraft.title?.en}
+                {inspectLanguage === 'fr' 
+                  ? (inspectDraft.title?.fr || inspectDraft.title?.en) 
+                  : (inspectDraft.title?.en || inspectDraft.title?.fr)}
               </h3>
-              {inspectDraft.title?.en && (
-                <p className="text-xs text-orange-400 font-mono mt-1">
-                  EN: {inspectDraft.title.en}
-                </p>
-              )}
+              <p className="text-xs text-zinc-300 leading-relaxed italic bg-zinc-950 p-3 rounded-xl border border-zinc-800">
+                {inspectLanguage === 'fr' 
+                  ? (inspectDraft.excerpt?.fr || inspectDraft.excerpt?.en) 
+                  : (inspectDraft.excerpt?.en || inspectDraft.excerpt?.fr)}
+              </p>
             </div>
 
-            {inspectDraft.featuredImage && (
-              <img
-                src={inspectDraft.featuredImage}
-                alt="Cover"
-                className="w-full h-48 object-cover rounded-2xl border border-zinc-800"
-              />
-            )}
-
-            {/* Perspective Brief */}
+            {/* Perspective 3 Briefs */}
             {inspectDraft.perspectiveBrief && (
-              <div className="bg-zinc-950 border border-orange-500/30 p-4 rounded-2xl space-y-2">
+              <div className="bg-zinc-950 border border-orange-500/30 p-4 rounded-2xl space-y-3">
                 <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
                   <Sparkles size={14} />
-                  Brief Perspective
+                  <span>Brief Perspective (Ce qu'il faut retenir)</span>
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-zinc-300">
-                  <div>
-                    <strong className="text-zinc-100 block mb-1">Ce qu'il s'est passé :</strong>
-                    <p>{inspectDraft.perspectiveBrief.whatHappened?.fr || inspectDraft.perspectiveBrief.whatHappened?.en}</p>
+                  <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800">
+                    <strong className="text-white block mb-1 text-[11px]">📌 Ce qu'il s'est passé :</strong>
+                    <p className="leading-relaxed">
+                      {inspectLanguage === 'fr' 
+                        ? (inspectDraft.perspectiveBrief.whatHappened?.fr || inspectDraft.perspectiveBrief.whatHappened?.en) 
+                        : (inspectDraft.perspectiveBrief.whatHappened?.en || inspectDraft.perspectiveBrief.whatHappened?.fr)}
+                    </p>
                   </div>
-                  <div>
-                    <strong className="text-zinc-100 block mb-1">Pourquoi cela compte :</strong>
-                    <p>{inspectDraft.perspectiveBrief.whyItMatters?.fr || inspectDraft.perspectiveBrief.whyItMatters?.en}</p>
+                  <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800">
+                    <strong className="text-white block mb-1 text-[11px]">⚡ Pourquoi cela compte :</strong>
+                    <p className="leading-relaxed">
+                      {inspectLanguage === 'fr' 
+                        ? (inspectDraft.perspectiveBrief.whyItMatters?.fr || inspectDraft.perspectiveBrief.whyItMatters?.en) 
+                        : (inspectDraft.perspectiveBrief.whyItMatters?.en || inspectDraft.perspectiveBrief.whyItMatters?.fr)}
+                    </p>
                   </div>
-                  <div>
-                    <strong className="text-zinc-100 block mb-1">À surveiller ensuite :</strong>
-                    <p>{inspectDraft.perspectiveBrief.whatToWatchNext?.fr || inspectDraft.perspectiveBrief.whatToWatchNext?.en}</p>
+                  <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800">
+                    <strong className="text-white block mb-1 text-[11px]">🔍 À surveiller ensuite :</strong>
+                    <p className="leading-relaxed">
+                      {inspectLanguage === 'fr' 
+                        ? (inspectDraft.perspectiveBrief.whatToWatchNext?.fr || inspectDraft.perspectiveBrief.whatToWatchNext?.en) 
+                        : (inspectDraft.perspectiveBrief.whatToWatchNext?.en || inspectDraft.perspectiveBrief.whatToWatchNext?.fr)}
+                    </p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Body preview */}
-            <div className="bg-zinc-950 border border-zinc-800 p-4 rounded-2xl text-xs text-zinc-300 leading-relaxed whitespace-pre-line max-h-60 overflow-y-auto">
-              <strong className="text-zinc-100 block mb-2 font-mono uppercase text-[10px] tracking-wider">Contenu (Markdown) :</strong>
-              {inspectDraft.body?.fr || inspectDraft.body?.en}
+            {/* Timeline Milestones if available */}
+            {Array.isArray(inspectDraft.timeline) && inspectDraft.timeline.length > 0 && (
+              <div className="bg-zinc-950 border border-blue-500/30 p-4 rounded-2xl space-y-2">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">
+                  Chronologie des Événements
+                </h4>
+                <div className="space-y-2">
+                  {inspectDraft.timeline.map((t, idx) => (
+                    <div key={idx} className="flex items-start gap-3 text-xs">
+                      <span className="font-mono text-orange-400 font-bold shrink-0">{t.date}</span>
+                      <span className="text-zinc-300">
+                        {inspectLanguage === 'fr' ? (t.description?.fr || t.description?.en) : (t.description?.en || t.description?.fr)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Key Actors if available */}
+            {Array.isArray(inspectDraft.keyActors) && inspectDraft.keyActors.length > 0 && (
+              <div className="bg-zinc-950 border border-purple-500/30 p-4 rounded-2xl space-y-2">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-purple-400">
+                  Acteurs Clés & Positionnement
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  {inspectDraft.keyActors.map((actor, idx) => (
+                    <div key={idx} className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
+                      <div className="font-bold text-white">{actor.name} <span className="text-zinc-400 font-normal">({actor.role})</span></div>
+                      <div className="text-zinc-300 mt-1 text-[11px]">
+                        {inspectLanguage === 'fr' ? (actor.significance?.fr || actor.significance?.en) : (actor.significance?.en || actor.significance?.fr)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Markdown Body preview */}
+            <div className="bg-zinc-950 border border-zinc-800 p-5 rounded-2xl text-xs text-zinc-300 leading-relaxed whitespace-pre-line max-h-72 overflow-y-auto space-y-2">
+              <strong className="text-zinc-100 block mb-2 font-mono uppercase text-[10px] tracking-wider border-b border-zinc-800 pb-2">
+                Corps de l'article ({inspectLanguage === 'fr' ? 'Version Française' : 'English Version'}) :
+              </strong>
+              {inspectLanguage === 'fr' 
+                ? (inspectDraft.body?.fr || inspectDraft.body?.en) 
+                : (inspectDraft.body?.en || inspectDraft.body?.fr)}
             </div>
 
-            {/* Modal Footer Actions */}
-            <div className="flex justify-end gap-2 border-t border-zinc-800 pt-4">
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4">
+              {onEditArticle && (
+                <button
+                  onClick={() => {
+                    onEditArticle(inspectDraft);
+                    setInspectDraft(null);
+                  }}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                >
+                  {isFr ? 'Modifier dans l\'éditeur principal' : 'Open in full editor'}
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   handlePublishDraft(inspectDraft);
                 }}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
               >
                 <Check size={14} />
-                {isFr ? 'Publier en Direct' : 'Publish Live'}
+                <span>{isFr ? 'Publier en Direct' : 'Publish Live'}</span>
               </button>
             </div>
 
