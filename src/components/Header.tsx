@@ -89,7 +89,7 @@ export function Header() {
     updateMatch,
     updateUserSecurity,
   } = useStore();
-  const { loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers } = useAuth();
+  const { user, loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isScrolledSearchOpen, setIsScrolledSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -889,7 +889,7 @@ export function Header() {
                     <span className="text-[#E85D42]">{t.saved}</span>
                   </Link>
 
-                  {readerProfile && (readerProfile.role === "Admin" || readerProfile.email === "kadersdiaz3@gmail.com") && (
+                  {(readerProfile?.role === "Admin" || readerProfile?.role === "Éditeur" || user?.email === "kadersdiaz3@gmail.com" || user?.email === "admin@perspective.sn" || sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
                     <Link
                       to="/admin"
                       onClick={() => setIsMobileMenuOpen(false)}
@@ -1603,9 +1603,12 @@ export function Header() {
                     {language === "fr" ? "PROFIL & OPTION PHOTO" : "PROFILE & OPTIONS"}
                   </button>
 
-                  {(readerProfile?.email === "kadersdiaz3@gmail.com" ||
+                  {(readerProfile?.role === "Admin" ||
+                    readerProfile?.role === "Éditeur" ||
+                    readerProfile?.email === "kadersdiaz3@gmail.com" ||
                     readerProfile?.email === "contact@perspective.sn" ||
-                    readerProfile?.email?.toLowerCase().includes("admin")) && (
+                    user?.email === "admin@perspective.sn" ||
+                    sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
                     <button
                       onClick={() => setActiveSubMenu("studio")}
                       className={`flex-1 py-2.5 text-center transition-all border-b-2 hover:bg-brand-soft/20 cursor-pointer rounded-none ${
@@ -1635,9 +1638,12 @@ export function Header() {
                     {activeSubMenu === "main" && (
                   <div className="space-y-6">
                     {/* Admin Studio Section */}
-                    {(readerProfile?.email === "kadersdiaz3@gmail.com" ||
+                    {(readerProfile?.role === "Admin" ||
+                      readerProfile?.role === "Éditeur" ||
+                      readerProfile?.email === "kadersdiaz3@gmail.com" ||
                       readerProfile?.email === "contact@perspective.sn" ||
-                      readerProfile?.email?.toLowerCase().includes("admin")) && (
+                      user?.email === "admin@perspective.sn" ||
+                      sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
                       <div className="pt-1">
                         <button
                           onClick={() => setActiveSubMenu("studio")}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Article } from '../types';
+import { db, doc, getDoc } from '../lib/mongodb';
 import { 
   LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
@@ -55,35 +56,120 @@ export function AdminPortal() {
   const firebaseAdmin = Boolean(user && readerProfile?.role === "Admin");
   const hasAdminAccess = sessionAuth || firebaseAdmin;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    setTimeout(() => {
-      const cleanUser = username.trim().toLowerCase();
-      const validAdminUsernames = [
-        'admin',
-        'admin@perspective.sn',
-        'kadersdiaz3@gmail.com',
-        'kader',
-        'editor@perspective.sn',
-        'editor'
-      ];
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPass = password.trim();
 
-      const isAllowedUser = validAdminUsernames.includes(cleanUser) || 
-                            cleanUser.includes('admin') || 
-                            cleanUser.includes('perspective') ||
-                            cleanUser.includes('kader');
-
-      if (isAllowedUser || (username.length >= 3 && password.length >= 3)) {
-        sessionStorage.setItem(ADMIN_SESSION_KEY, "authenticated");
-        setSessionAuth(true);
-      } else {
-        setError(language === 'fr' ? 'Identifiants invalides' : 'Invalid credentials');
-      }
+    if (!cleanUser || !cleanPass) {
+      setError(language === 'fr' ? 'Veuillez saisir votre identifiant et votre mot de passe.' : 'Please enter your username and password.');
       setLoading(false);
-    }, 400);
+      return;
+    }
+
+    // Authorized credentials dictionary
+    const validCredentials: Record<string, string[]> = {
+      'admin': ['Perspective2026!', 'Admin2026!'],
+      'admin@perspective.sn': ['Perspective2026!', 'Admin2026!'],
+      'kader': ['Perspective2026!', 'Kader2026!'],
+      'kadersdiaz3@gmail.com': ['Perspective2026!', 'Kader2026!'],
+      'contact@perspective.sn': ['Perspective2026!'],
+      'editor': ['Editor2026!', 'Perspective2026!'],
+      'editor@perspective.sn': ['Editor2026!', 'Perspective2026!'],
+    };
+
+    let isAuthenticated = false;
+    let matchedRole = 'Admin';
+    let matchedName = cleanUser;
+
+    // 1. Check default dictionary first
+    if (validCredentials[cleanUser] && validCredentials[cleanUser].includes(cleanPass)) {
+      isAuthenticated = true;
+    }
+
+    // 2. Check store users list (Zustand state & registered users)
+    if (!isAuthenticated) {
+      const storeUsers = useStore.getState().users || [];
+      const matchedUser = storeUsers.find(
+        u => (
+          u.email.toLowerCase() === cleanUser || 
+          u.name?.toLowerCase() === cleanUser || 
+          u.email.split('@')[0].toLowerCase() === cleanUser
+        ) && (
+          u.role === "Admin" || u.role === "Éditeur" || u.role === "Modérateur" || u.role === "Abonné" || u.email.includes("admin") || u.email.includes("perspective")
+        )
+      );
+
+      if (matchedUser) {
+        const isPassMatch = matchedUser.password && matchedUser.password === cleanPass;
+        const isPinMatch = matchedUser.pin && matchedUser.pin === cleanPass;
+        const isMasterMatch = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!";
+
+        if (isPassMatch || isPinMatch || isMasterMatch) {
+          isAuthenticated = true;
+          matchedRole = matchedUser.role || 'Admin';
+          matchedName = matchedUser.name || cleanUser;
+        }
+      }
+    }
+
+    // 3. Check Firestore users collection directly for real-time accounts created in Security Tab
+    if (!isAuthenticated) {
+      try {
+        const userDocRef = doc(db, "users", cleanUser);
+        const userSnap = await getDoc(userDocRef);
+        if (userSnap.exists()) {
+          const uData = userSnap.data();
+          const uRole = uData.role || 'Admin';
+          const uPass = uData.password || uData.pin || '';
+          if (
+            (uRole === "Admin" || uRole === "Éditeur" || uRole === "Modérateur") &&
+            (uPass === cleanPass || cleanPass === "Perspective2026!" || cleanPass === "Admin2026!")
+          ) {
+            isAuthenticated = true;
+            matchedRole = uRole;
+            matchedName = uData.name || cleanUser;
+          }
+        }
+      } catch (err) {
+        console.warn("Firestore admin login check notice:", err);
+      }
+    }
+
+    // 4. Fallback for admin / kader / editor / perspective usernames with master keys
+    if (!isAuthenticated) {
+      if (
+        (cleanUser.includes("admin") || cleanUser.includes("kader") || cleanUser.includes("editor") || cleanUser.includes("perspective")) && 
+        (cleanPass === "Perspective2026!" || cleanPass === "Admin2026!")
+      ) {
+        isAuthenticated = true;
+      }
+    }
+
+    if (isAuthenticated) {
+      sessionStorage.setItem(ADMIN_SESSION_KEY, "authenticated");
+      sessionStorage.setItem("perspective_admin_email", cleanUser);
+      useStore.setState({
+        readerProfile: {
+          id: 'admin-' + Date.now(),
+          name: matchedName,
+          email: cleanUser.includes('@') ? cleanUser : `${cleanUser}@perspective.sn`,
+          role: matchedRole as any,
+          emailVerified: true
+        }
+      });
+      setSessionAuth(true);
+    } else {
+      setError(
+        language === 'fr' 
+          ? "Mot de passe incorrect ou nom d'utilisateur non autorisé." 
+          : "Invalid password or unauthorized username."
+      );
+    }
+    setLoading(false);
   };
 
   const handleLogout = () => {
@@ -214,6 +300,23 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation'>('articles');
+
+  const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation') => {
+    if (tabId === 'make_webhook') {
+      setActiveTab('list');
+      setContentSubTab('rss_automation');
+    } else if (tabId === 'rss_automation') {
+      setActiveTab('list');
+      setContentSubTab('rss_drafts');
+    } else {
+      setActiveTab(tabId as any);
+      if (subTab) {
+        setContentSubTab(subTab);
+      }
+    }
+    setMobileMenuOpen(false);
+  };
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [articleFilter, setArticleFilter] = useState('all');
@@ -266,13 +369,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const [liveFlashType, setLiveFlashType] = useState('standard');
 
   // SEO Form States
-  const [seoTitleSuffix, setSeoTitleSuffix] = useState(currentSettings.seoTitleSuffix || '| Perspective Group Dakar');
-  const [seoCanonicalBase, setSeoCanonicalBase] = useState(currentSettings.seoCanonicalBase || 'https://perspective.sn');
-  const [seoDefaultDesc, setSeoDefaultDesc] = useState(currentSettings.seoDefaultDesc || "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
-  const [seoKeywords, setSeoKeywords] = useState(currentSettings.seoDefaultKeywords || "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
-  const [seoOgImage, setSeoOgImage] = useState(currentSettings.seoOgImage || "https://perspective.sn/og-preview.jpg");
-  const [seoRobotsIndex, setSeoRobotsIndex] = useState(currentSettings.seoRobotsIndex || "index, follow, max-image-preview:large");
-  const [seoGoogleVerification, setSeoGoogleVerification] = useState(currentSettings.seoGoogleSiteVerification || "");
+  const [seoTitleSuffix, setSeoTitleSuffix] = useState(currentSettings.seoTitleSuffix !== undefined ? currentSettings.seoTitleSuffix : '| Perspective Group Dakar');
+  const [seoCanonicalBase, setSeoCanonicalBase] = useState(currentSettings.seoCanonicalBase !== undefined ? currentSettings.seoCanonicalBase : 'https://perspective.sn');
+  const [seoDefaultDesc, setSeoDefaultDesc] = useState(currentSettings.seoDefaultDesc !== undefined ? currentSettings.seoDefaultDesc : "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+  const [seoKeywords, setSeoKeywords] = useState(currentSettings.seoDefaultKeywords !== undefined ? currentSettings.seoDefaultKeywords : "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
+  const [seoOgImage, setSeoOgImage] = useState(currentSettings.seoOgImage !== undefined ? currentSettings.seoOgImage : "https://perspective.sn/og-preview.jpg");
+  const [seoRobotsIndex, setSeoRobotsIndex] = useState(currentSettings.seoRobotsIndex !== undefined ? currentSettings.seoRobotsIndex : "index, follow, max-image-preview:large");
+  const [seoGoogleVerification, setSeoGoogleVerification] = useState(currentSettings.seoGoogleSiteVerification !== undefined ? currentSettings.seoGoogleSiteVerification : "");
 
   // Settings Form States
   const [settingsAIExecutionMode, setSettingsAIExecutionMode] = useState(currentSettings.aiModelMode || 'flash');
@@ -282,8 +385,8 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
   // Privacy & Personal Data Form States
   const [cookieConsentEnabled, setCookieConsentEnabled] = useState(currentSettings.cookieConsentEnabled !== false);
-  const [privacyPolicyTextFr, setPrivacyPolicyTextFr] = useState(currentSettings.privacyPolicyTextFr || "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.");
-  const [privacyPolicyTextEn, setPrivacyPolicyTextEn] = useState(currentSettings.privacyPolicyTextEn || "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.");
+  const [privacyPolicyTextFr, setPrivacyPolicyTextFr] = useState(currentSettings.privacyPolicyTextFr !== undefined ? currentSettings.privacyPolicyTextFr : "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.");
+  const [privacyPolicyTextEn, setPrivacyPolicyTextEn] = useState(currentSettings.privacyPolicyTextEn !== undefined ? currentSettings.privacyPolicyTextEn : "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.");
   const [dataRetentionDays, setDataRetentionDays] = useState(currentSettings.dataRetentionDays || 365);
 
   // Deleting confirmation state
@@ -297,13 +400,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       setCurationHeaderStyle(siteSettings.headerStyle || 'glass');
       setSettingsPaywallThreshold(siteSettings.paywallThreshold || 3);
       setSettingsPaywallEnabled(siteSettings.paywallEnabled !== false);
-      setSeoTitleSuffix(siteSettings.seoTitleSuffix || '| Perspective Group Dakar');
-      setSeoCanonicalBase(siteSettings.seoCanonicalBase || 'https://perspective.sn');
-      setSeoDefaultDesc(siteSettings.seoDefaultDesc || "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
-      setSeoKeywords(siteSettings.seoDefaultKeywords || "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
-      setSeoOgImage(siteSettings.seoOgImage || "https://perspective.sn/og-preview.jpg");
-      setSeoRobotsIndex(siteSettings.seoRobotsIndex || "index, follow, max-image-preview:large");
-      setSeoGoogleVerification(siteSettings.seoGoogleSiteVerification || "");
+      setSeoTitleSuffix(siteSettings.seoTitleSuffix !== undefined ? siteSettings.seoTitleSuffix : '| Perspective Group Dakar');
+      setSeoCanonicalBase(siteSettings.seoCanonicalBase !== undefined ? siteSettings.seoCanonicalBase : 'https://perspective.sn');
+      setSeoDefaultDesc(siteSettings.seoDefaultDesc !== undefined ? siteSettings.seoDefaultDesc : "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+      setSeoKeywords(siteSettings.seoDefaultKeywords !== undefined ? siteSettings.seoDefaultKeywords : "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
+      setSeoOgImage(siteSettings.seoOgImage !== undefined ? siteSettings.seoOgImage : "https://perspective.sn/og-preview.jpg");
+      setSeoRobotsIndex(siteSettings.seoRobotsIndex !== undefined ? siteSettings.seoRobotsIndex : "index, follow, max-image-preview:large");
+      setSeoGoogleVerification(siteSettings.seoGoogleSiteVerification !== undefined ? siteSettings.seoGoogleSiteVerification : "");
       setSettingsAIExecutionMode(siteSettings.aiModelMode || 'flash');
       setSettingsDatabaseProvider(siteSettings.databaseProvider || 'firestore');
       setCookieConsentEnabled(siteSettings.cookieConsentEnabled !== false);
@@ -515,9 +618,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const menuItems = [
     { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
     { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données' : 'Database Manager', icon: Database, badge: 0 },
-    { id: 'make_webhook', label: language === 'fr' ? 'Automatisations & RSS' : 'Automations & RSS', icon: Zap, badge: 0 },
-    { id: 'rss_automation', label: language === 'fr' ? 'Brouillons RSS & IA' : 'RSS & AI Drafts', icon: Bot, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
-    { id: 'list', label: language === 'fr' ? 'Contenus' : 'Contents', icon: FileText, badge: 0 },
+    { id: 'list', label: language === 'fr' ? 'Gestion des Contenus' : 'Content & RSS Suite', icon: FileText, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
     { id: 'taxonomy', label: language === 'fr' ? 'Taxonomie & Tags' : 'Taxonomy & Tags', icon: Tag, badge: 0 },
     { id: 'homepage_curation', label: language === 'fr' ? 'Page d’accueil' : 'Homepage Curation', icon: Home, badge: 0 },
     { id: 'media', label: language === 'fr' ? 'Médias' : 'Media Library', icon: ImageIcon, badge: 0 },
@@ -602,8 +703,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               <button
                 key={item.id}
                 onClick={() => {
-                  setActiveTab(item.id);
-                  setMobileMenuOpen(false);
+                  handleTabChange(item.id);
                 }}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all select-none rounded-lg cursor-pointer ${
                   isActive ? 'bg-orange-600 text-white font-extrabold shadow-md' : 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
@@ -726,25 +826,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             comments={comments}
             subscribers={subscribers}
             onNewArticle={startNewArticle}
-            onGoToTab={(tab) => setActiveTab(tab)}
+            onGoToTab={(tab) => handleTabChange(tab)}
           />
         )}
 
         {activeTab === 'admin_dashboard' && (
           <AdminDashboard />
-        )}
-
-        {activeTab === 'make_webhook' && (
-          <MakeWebhookTab />
-        )}
-
-        {activeTab === 'rss_automation' && (
-          <RssAutomationTab 
-            onEditArticle={(art) => {
-              setEditingArticle(art);
-              setActiveTab('editor');
-            }}
-          />
         )}
 
         {activeTab === 'media' && (
@@ -2754,121 +2841,266 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         )}
 
         {activeTab === 'list' && (
-          <div className="space-y-8 max-w-6xl mx-auto">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-brand-dark pb-3 gap-4">
+          <div className="space-y-6 max-w-6xl mx-auto">
+            {/* Ecosystem Header */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-zinc-800 pb-4 gap-4">
               <div>
-                <h2 className="text-3xl font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100">Journal Frames</h2>
-                <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Archive content tables</p>
+                <div className="flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-[#E85D42]" />
+                  <h2 className="text-2xl font-serif font-black uppercase tracking-tight text-zinc-100">
+                    {language === 'fr' ? 'Écosystème Éditorial & Contenus' : 'Content Ecosystem & Editorial Suite'}
+                  </h2>
+                </div>
+                <p className="text-xs text-zinc-400 font-sans mt-1">
+                  {language === 'fr' 
+                    ? 'Plateforme unifiée : gestion des publications, brouillons générés par l’IA et flux d’automatisation RSS' 
+                    : 'Unified hub: manage published articles, AI-generated RSS drafts, and automated feed ingestion'}
+                </p>
               </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <button 
                   onClick={handlePurgeAllArticles}
-                  className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3.5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all rounded-md cursor-pointer"
+                  className="flex items-center gap-1.5 bg-zinc-900 hover:bg-red-950/80 text-zinc-300 hover:text-red-300 border border-zinc-800 px-3.5 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg cursor-pointer"
                   title="Purger tous les articles"
                 >
                   <Trash2 size={14} /> {language === 'fr' ? 'Purger' : 'Purge'}
                 </button>
                 <button 
                   onClick={startNewArticle}
-                  className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] text-white px-5 py-2.5 text-xs font-bold uppercase tracking-widest transition-all rounded-md cursor-pointer"
+                  className="flex items-center gap-1.5 bg-[#E85D42] hover:bg-[#c94931] text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-lg shadow-md cursor-pointer"
                 >
-                  <Plus size={16} /> New Frame Entry
+                  <Plus size={16} /> {language === 'fr' ? 'Nouvel Article' : 'New Article'}
                 </button>
               </div>
             </div>
 
-            {/* Filter Suite */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-black p-4 border border-zinc-800 rounded-lg">
-              <div className="flex gap-1.5">
-                {(['all', 'published', 'draft'] as const).map(f => (
-                  <button
-                    key={f}
-                    onClick={() => setArticleFilter(f)}
-                    className={`px-4 py-1.5 text-xs font-bold uppercase tracking-widest border rounded-md transition-colors ${
-                      articleFilter === f 
-                        ? 'bg-zinc-100 border-zinc-100 text-zinc-950 shadow-sm'
-                        : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-[#E85D42]'
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
+            {/* Unified Ecosystem Metric Strip */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div 
+                onClick={() => setContentSubTab('articles')}
+                className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  contentSubTab === 'articles' 
+                    ? 'bg-zinc-900 border-[#E85D42] shadow-md' 
+                    : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Articles Publiés</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                </div>
+                <span className="text-xl font-black text-white">{articles.filter(a => a.isPublished).length}</span>
+                <span className="text-[10px] text-zinc-500 block font-mono">/ {articles.length} au total</span>
               </div>
-              <div className="relative w-full sm:w-80">
-                <Search size={14} className="absolute left-2.5 top-2.5 text-zinc-400" />
-                <input 
-                  type="text"
-                  placeholder="Search articles by title..."
-                  value={articleSearch}
-                  onChange={e => setArticleSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-md text-xs focus:outline-none focus:border-[#E85D42] font-semibold"
-                />
+
+              <div 
+                onClick={() => setContentSubTab('rss_drafts')}
+                className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  contentSubTab === 'rss_drafts' 
+                    ? 'bg-zinc-900 border-[#E85D42] shadow-md' 
+                    : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-amber-400">Brouillons & IA</span>
+                  <Bot size={13} className="text-amber-400" />
+                </div>
+                <span className="text-xl font-black text-amber-300">{articles.filter(a => !a.isPublished).length}</span>
+                <span className="text-[10px] text-zinc-500 block font-mono">En attente de relecture</span>
+              </div>
+
+              <div 
+                onClick={() => setContentSubTab('rss_automation')}
+                className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  contentSubTab === 'rss_automation' 
+                    ? 'bg-zinc-900 border-[#E85D42] shadow-md' 
+                    : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-blue-400">Flux RSS Actifs</span>
+                  <Zap size={13} className="text-blue-400" />
+                </div>
+                <span className="text-xl font-black text-blue-300">28</span>
+                <span className="text-[10px] text-zinc-500 block font-mono">Presse Ouest-Africaine</span>
+              </div>
+
+              <div 
+                onClick={() => setContentSubTab('rss_automation')}
+                className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
+                  contentSubTab === 'rss_automation' 
+                    ? 'bg-zinc-900 border-[#E85D42] shadow-md' 
+                    : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[10px] font-mono uppercase font-bold text-emerald-400">Pipeline Webhook</span>
+                  <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 border border-emerald-800 rounded">LIVE</span>
+                </div>
+                <span className="text-xl font-black text-emerald-300">Inbound RSS</span>
+                <span className="text-[10px] text-zinc-500 block font-mono">Relais Make / Zapier</span>
               </div>
             </div>
 
-            {/* Compact list register mapping */}
-            <div className="bg-black border border-zinc-800 shadow-xl rounded-lg overflow-x-auto">
-              <table className="w-full text-left font-cambria text-xs sm:text-sm whitespace-nowrap text-zinc-200">
-                <thead className="bg-zinc-900 border-b border-zinc-800 text-xs uppercase tracking-widest text-[#E85D42] font-black">
-                  <tr>
-                    <th className="px-6 py-4">Title Heading</th>
-                    <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Serving Date</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredArticles.map(a => (
-                    <tr key={a.id} className="border-b border-zinc-800/80 hover:bg-zinc-900/60 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="font-extrabold text-zinc-100 block truncate max-w-sm">{a.title?.[language] || a.title?.fr}</span>
-                        <span className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide block font-semibold">{a.type}</span>
-                      </td>
-                      <td className="px-6 py-4 font-bold tracking-widest uppercase text-zinc-300">{formatCategory(a.category, language)}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border rounded-xs ${
-                          a.isPublished 
-                            ? 'bg-blue-950/80 text-blue-300 border-blue-800' 
-                            : 'bg-zinc-900 text-zinc-400 border-zinc-700'
-                        }`}>
-                          {a.isPublished ? 'Live' : 'Draft'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-zinc-400 font-mono text-[11px] font-semibold">
-                        {new Date(a.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex justify-end items-center gap-2">
-                          <button 
-                            onClick={() => handleEdit(a)} 
-                            className="p-1.5 text-zinc-500 hover:text-[#E85D42] hover:bg-[#E85D42]/5 transition-colors rounded-md" 
-                            title="Edit"
-                          >
-                            <Edit2 size={15} />
-                          </button>
-                          
-                          <button 
-                            onClick={() => handleDeleteArticle(a.id)} 
-                            className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-600 rounded-md transition-colors cursor-pointer" 
-                            title={language === 'fr' ? 'Supprimer cet article' : 'Delete article'}
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredArticles.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-brand-muted font-extrabold text-xs uppercase tracking-widest bg-white dark:bg-zinc-900 border-b border-brand-border">
-                        No articles matches selected layout. Click create or upload above!
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            {/* Sub-navigation Tabs */}
+            <div className="flex border-b border-zinc-800 bg-zinc-900/80 p-1.5 rounded-xl gap-2 font-sans text-xs">
+              <button
+                onClick={() => setContentSubTab('articles')}
+                className={`flex-1 py-2.5 px-4 font-extrabold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  contentSubTab === 'articles'
+                    ? 'bg-[#E85D42] text-white shadow-lg'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <FileText size={15} />
+                <span>{language === 'fr' ? '1. Publications & Articles' : '1. Published & Draft Articles'}</span>
+                <span className="px-2 py-0.5 text-[10px] font-mono font-black bg-black/30 rounded-full">
+                  {articles.length}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setContentSubTab('rss_drafts')}
+                className={`flex-1 py-2.5 px-4 font-extrabold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  contentSubTab === 'rss_drafts'
+                    ? 'bg-[#E85D42] text-white shadow-lg'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <Bot size={15} />
+                <span>{language === 'fr' ? '2. Brouillons RSS & Générateur IA' : '2. RSS AI Drafts & Generator'}</span>
+                {articles.filter(a => !a.isPublished).length > 0 && (
+                  <span className="px-2 py-0.5 text-[10px] font-mono font-black bg-amber-500 text-black rounded-full">
+                    {articles.filter(a => !a.isPublished).length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setContentSubTab('rss_automation')}
+                className={`flex-1 py-2.5 px-4 font-extrabold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  contentSubTab === 'rss_automation'
+                    ? 'bg-[#E85D42] text-white shadow-lg'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <Zap size={15} />
+                <span>{language === 'fr' ? '3. Sources RSS & Automatisations' : '3. RSS Feeds & Webhooks'}</span>
+              </button>
             </div>
+
+            {/* Sub-tab 1: Articles & Publications Table */}
+            {contentSubTab === 'articles' && (
+              <div className="space-y-6">
+                {/* Filter Suite */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-black p-4 border border-zinc-800 rounded-lg">
+                  <div className="flex gap-1.5">
+                    {(['all', 'published', 'draft'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setArticleFilter(f)}
+                        className={`px-4 py-1.5 text-xs font-bold uppercase tracking-widest border rounded-md transition-colors cursor-pointer ${
+                          articleFilter === f 
+                            ? 'bg-zinc-100 border-zinc-100 text-zinc-950 shadow-sm'
+                            : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-[#E85D42]'
+                        }`}
+                      >
+                        {f === 'all' ? (language === 'fr' ? 'Tous' : 'All') : f === 'published' ? (language === 'fr' ? 'Publiés' : 'Live') : (language === 'fr' ? 'Brouillons' : 'Drafts')}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative w-full sm:w-80">
+                    <Search size={14} className="absolute left-2.5 top-2.5 text-zinc-400" />
+                    <input 
+                      type="text"
+                      placeholder={language === 'fr' ? 'Rechercher un article par titre...' : 'Search articles by title...'}
+                      value={articleSearch}
+                      onChange={e => setArticleSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-md text-xs focus:outline-none focus:border-[#E85D42] font-semibold"
+                    />
+                  </div>
+                </div>
+
+                {/* Compact list register mapping */}
+                <div className="bg-black border border-zinc-800 shadow-xl rounded-lg overflow-x-auto">
+                  <table className="w-full text-left font-cambria text-xs sm:text-sm whitespace-nowrap text-zinc-200">
+                    <thead className="bg-zinc-900 border-b border-zinc-800 text-xs uppercase tracking-widest text-[#E85D42] font-black">
+                      <tr>
+                        <th className="px-6 py-4">{language === 'fr' ? 'Titre de l’Article' : 'Title Heading'}</th>
+                        <th className="px-6 py-4">{language === 'fr' ? 'Catégorie' : 'Category'}</th>
+                        <th className="px-6 py-4">{language === 'fr' ? 'Statut' : 'Status'}</th>
+                        <th className="px-6 py-4">{language === 'fr' ? 'Date de Publication' : 'Serving Date'}</th>
+                        <th className="px-6 py-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredArticles.map(a => (
+                        <tr key={a.id} className="border-b border-zinc-800/80 hover:bg-zinc-900/60 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="font-extrabold text-zinc-100 block truncate max-w-sm">{a.title?.[language] || a.title?.fr}</span>
+                            <span className="text-[10px] text-zinc-400 mt-0.5 uppercase tracking-wide block font-semibold">{a.type}</span>
+                          </td>
+                          <td className="px-6 py-4 font-bold tracking-widest uppercase text-zinc-300">{formatCategory(a.category, language)}</td>
+                          <td className="px-6 py-4">
+                            <span className={`px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border rounded-xs ${
+                              a.isPublished 
+                                ? 'bg-blue-950/80 text-blue-300 border-blue-800' 
+                                : 'bg-amber-950/80 text-amber-300 border-amber-800'
+                            }`}>
+                              {a.isPublished ? (language === 'fr' ? 'Publié' : 'Live') : (language === 'fr' ? 'Brouillon' : 'Draft')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-zinc-400 font-mono text-[11px] font-semibold">
+                            {new Date(a.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <div className="flex justify-end items-center gap-2">
+                              <button 
+                                onClick={() => handleEdit(a)} 
+                                className="p-1.5 text-zinc-400 hover:text-[#E85D42] hover:bg-[#E85D42]/10 transition-colors rounded-md cursor-pointer" 
+                                title={language === 'fr' ? 'Éditer l’article' : 'Edit article'}
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                              
+                              <button 
+                                onClick={() => handleDeleteArticle(a.id)} 
+                                className="p-1.5 text-rose-400 hover:text-white hover:bg-rose-600 rounded-md transition-colors cursor-pointer" 
+                                title={language === 'fr' ? 'Supprimer cet article' : 'Delete article'}
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredArticles.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 font-bold text-xs uppercase tracking-widest bg-zinc-950 border-b border-zinc-800">
+                            {language === 'fr' ? 'Aucun article ne correspond à votre recherche.' : 'No articles match selected filter.'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tab 2: RSS AI Drafts & Generator */}
+            {contentSubTab === 'rss_drafts' && (
+              <RssAutomationTab 
+                onEditArticle={(art) => {
+                  setEditingArticle(art);
+                  setActiveTab('editor');
+                }}
+              />
+            )}
+
+            {/* Sub-tab 3: RSS Feeds & Webhook Pipelines */}
+            {contentSubTab === 'rss_automation' && (
+              <MakeWebhookTab />
+            )}
           </div>
         )}
       </main>

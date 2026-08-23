@@ -26,11 +26,11 @@ export function useSEO({ title, description, keywords, canonical, ogImage }: SEO
     document.title = fullTitle;
 
     // Fallbacks from siteSettings
-    const effectiveDesc = description || siteSettings?.seoDefaultDesc || "Perspective Group — Journal d'analyse, d'investigation et de réflexion indépendant basé à Dakar. L'actualité. Sans Filtre. Sans Compromis.";
-    const effectiveKeywords = keywords || siteSettings?.seoDefaultKeywords || "Sénégal, Dakar, Perspective Group, L'Arène, lutte sénégalaise, politique, géopolitique, économie, afrique";
-    const effectiveCanonical = canonical || (siteSettings?.seoCanonicalBase ? `${siteSettings.seoCanonicalBase}${window.location.pathname}` : window.location.href);
-    const effectiveOgImage = ogImage || siteSettings?.seoOgImage || "https://perspective.sn/og-preview.jpg";
-    const robotsContent = siteSettings?.seoRobotsIndex || "index, follow, max-image-preview:large, max-snippet:-1";
+    const effectiveDesc = description ?? siteSettings?.seoDefaultDesc ?? "Perspective Group — Journal d'analyse, d'investigation et de réflexion indépendant basé à Dakar. L'actualité. Sans Filtre. Sans Compromis.";
+    const effectiveKeywords = keywords ?? siteSettings?.seoDefaultKeywords ?? "Sénégal, Dakar, Perspective Group, L'Arène, lutte sénégalaise, politique, géopolitique, économie, afrique";
+    const effectiveCanonical = canonical ?? (siteSettings?.seoCanonicalBase ? `${siteSettings.seoCanonicalBase}${window.location.pathname}` : window.location.href);
+    const effectiveOgImage = ogImage ?? siteSettings?.seoOgImage ?? "https://perspective.sn/og-preview.jpg";
+    const robotsContent = siteSettings?.seoRobotsIndex ?? "index, follow, max-image-preview:large, max-snippet:-1";
 
     // Helper to create or update meta/link tags
     const setMetaTag = (nameAttr: 'name' | 'property', nameVal: string, contentVal: string) => {

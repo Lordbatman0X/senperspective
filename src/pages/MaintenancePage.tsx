@@ -29,14 +29,6 @@ export function MaintenancePage() {
             <p className="text-[10px] uppercase tracking-widest text-zinc-400 font-sans">Journal d'Information & Analyses</p>
           </div>
         </div>
-
-        <Link
-          to="/admin"
-          className="flex items-center gap-2 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-semibold uppercase tracking-wider text-zinc-200 transition-colors shadow-sm"
-        >
-          <Lock className="w-3.5 h-3.5 text-brand-primary" />
-          <span>{language === 'fr' ? "Espace Admin" : "Admin Portal"}</span>
-        </Link>
       </header>
 
       {/* Main Content */}
@@ -87,16 +79,7 @@ export function MaintenancePage() {
           </div>
         </div>
 
-        {/* Admin Call to Action */}
-        <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link
-            to="/admin"
-            className="inline-flex items-center gap-2 px-6 py-3 bg-brand-primary hover:bg-brand-primary/90 text-white font-bold text-sm tracking-wider uppercase transition-all shadow-lg"
-          >
-            <span>{language === 'fr' ? "Connexion Équipe Éditioriale" : "Editorial Team Login"}</span>
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
+
       </main>
 
       {/* Footer */}

@@ -43,7 +43,7 @@ export function TaxonomyTab() {
     { id: 'elections', fr: 'Élections', en: 'Elections' }
   ];
 
-  const keywords: string[] = siteSettings.keywords || [
+  const keywords: string[] = siteSettings.keywords !== undefined ? siteSettings.keywords : [
     'Sénégal', 'Dakar', 'Perspective Group', 'L\'Arène', 'politique', 'géopolitique', 'économie', 'afrique', 'investigation', 'décryptage'
   ];
 

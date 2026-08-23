@@ -91,6 +91,14 @@ export function ArticleEditorTab({
   const [adImageUrlState, setAdImageUrlState] = useState('');
   const [adLinkState, setAdLinkState] = useState('');
 
+  // AI Article Rewriter State
+  const [showAiRewriteModal, setShowAiRewriteModal] = useState(false);
+  const [isRewritingWithAi, setIsRewritingWithAi] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'openai'>('gemini');
+  const [aiTargetType, setAiTargetType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
+  const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
+
   useEffect(() => {
     if (article) {
       setSlug(article.slug || article.id);
@@ -394,6 +402,127 @@ export function ArticleEditorTab({
     }
   };
 
+  const handleAiRewrite = async () => {
+    setIsRewritingWithAi(true);
+    setAiStatusMsg(null);
+
+    try {
+      const currentDraftPayload = {
+        id: article?.id || slug || 'art-draft-' + Date.now(),
+        category,
+        type: aiTargetType || type,
+        title: { fr: titleFr, en: titleEn },
+        excerpt: { fr: excerptFr, en: excerptEn },
+        body: { fr: bodyFr, en: bodyEn },
+        perspectiveBrief: {
+          whatHappened: { fr: whatHappenedFr, en: whatHappenedEn },
+          whyItMatters: { fr: whyItMattersFr, en: whyItMattersEn },
+          whatToWatchNext: { fr: whatToWatchNextFr, en: whatToWatchNextEn },
+        },
+        keyActors,
+        timeline,
+        structuralForces: {
+          political: { fr: forcePolFr, en: forcePolEn },
+          economic: { fr: forceEcoFr, en: forceEcoEn },
+          social: { fr: forceSocFr, en: forceSocEn },
+          international: { fr: forceIntFr, en: forceIntEn },
+        },
+        tags
+      };
+
+      const res = await fetch('/api/ai/rewrite-article', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          article: currentDraftPayload,
+          prompt: aiPrompt,
+          category,
+          type: aiTargetType || type,
+          preferredEngine: aiPreferredEngine
+        })
+      });
+
+      const data = await res.json();
+      if (!data.success || !data.article) {
+        throw new Error(data.error || 'Erreur lors de la réécriture.');
+      }
+
+      const rewritten = data.article;
+
+      // Apply rewritten fields
+      if (rewritten.title) {
+        if (rewritten.title.fr) setTitleFr(stripHtmlTags(rewritten.title.fr));
+        if (rewritten.title.en) setTitleEn(stripHtmlTags(rewritten.title.en));
+      }
+      if (rewritten.excerpt) {
+        if (rewritten.excerpt.fr) setExcerptFr(stripHtmlTags(rewritten.excerpt.fr));
+        if (rewritten.excerpt.en) setExcerptEn(stripHtmlTags(rewritten.excerpt.en));
+      }
+      if (rewritten.body) {
+        if (rewritten.body.fr) setBodyFr(stripHtmlTags(rewritten.body.fr));
+        if (rewritten.body.en) setBodyEn(stripHtmlTags(rewritten.body.en));
+      }
+
+      if (rewritten.category) setCategory(rewritten.category);
+      if (rewritten.type) setType(rewritten.type);
+
+      const pb = rewritten.perspectiveBrief;
+      if (pb) {
+        if (pb.whatHappened) {
+          setWhatHappenedFr(pb.whatHappened.fr || '');
+          setWhatHappenedEn(pb.whatHappened.en || '');
+        }
+        if (pb.whyItMatters) {
+          setWhyItMattersFr(pb.whyItMatters.fr || '');
+          setWhyItMattersEn(pb.whyItMatters.en || '');
+        }
+        if (pb.whatToWatchNext) {
+          setWhatToWatchNextFr(pb.whatToWatchNext.fr || '');
+          setWhatToWatchNextEn(pb.whatToWatchNext.en || '');
+        }
+      }
+
+      if (Array.isArray(rewritten.keyActors) && rewritten.keyActors.length > 0) {
+        setKeyActors(rewritten.keyActors);
+      }
+
+      if (Array.isArray(rewritten.timeline) && rewritten.timeline.length > 0) {
+        setTimeline(rewritten.timeline);
+      }
+
+      const sf = rewritten.structuralForces;
+      if (sf) {
+        if (sf.political) {
+          setForcePolFr(sf.political.fr || '');
+          setForcePolEn(sf.political.en || '');
+        }
+        if (sf.economic) {
+          setForceEcoFr(sf.economic.fr || '');
+          setForceEcoEn(sf.economic.en || '');
+        }
+        if (sf.social) {
+          setForceSocFr(sf.social.fr || '');
+          setForceSocEn(sf.social.en || '');
+        }
+        if (sf.international) {
+          setForceIntFr(sf.international.fr || '');
+          setForceIntEn(sf.international.en || '');
+        }
+      }
+
+      if (Array.isArray(rewritten.tags) && rewritten.tags.length > 0) {
+        setTags(rewritten.tags);
+      }
+
+      setAiStatusMsg(`✨ Réécriture réussie via ${data.engineUsed || 'IA Dual-Engine'}${data.failoverTriggered ? ' (Basculement actif)' : ''} ! Les champs de l'éditeur ont été mis à jour.`);
+    } catch (err: any) {
+      console.error('AI Rewrite error:', err);
+      alert('Erreur réécriture IA: ' + (err.message || 'Problème de connexion au serveur IA.'));
+    } finally {
+      setIsRewritingWithAi(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Editorial Menu Bar */}
@@ -425,6 +554,16 @@ export function ArticleEditorTab({
               <Trash2 size={14} /> {language === 'fr' ? 'Supprimer' : 'Delete'}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setShowAiRewriteModal(true)}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black px-3.5 py-2 text-xs uppercase rounded-md shadow-md transition-all cursor-pointer border border-amber-400/30"
+            title="Réécrire et sublimer l'article avec Gemini ou OpenAI"
+          >
+            <Sparkles size={14} className="text-amber-200 animate-pulse" />
+            <span>{language === 'fr' ? 'Réécrire par IA' : 'AI Rewrite'}</span>
+          </button>
 
           <label className="flex items-center gap-1.5 bg-zinc-950 text-zinc-100 border border-zinc-700/80 px-3 py-2 text-xs font-bold uppercase cursor-pointer hover:border-[#E85D42] rounded-md transition-all">
             <Upload size={14} className="text-[#E85D42]" /> {language === 'fr' ? 'Fichier .md/.json' : 'MD/JSON Import'}
@@ -1408,6 +1547,204 @@ export function ArticleEditorTab({
           </div>
         )}
       </div>
+
+      {/* AI Article Rewrite & Polish Modal */}
+      {showAiRewriteModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-700/80 rounded-xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative my-8">
+            <button
+              onClick={() => {
+                setShowAiRewriteModal(false);
+                setAiStatusMsg(null);
+              }}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-3 border-b border-zinc-800 pb-4">
+              <div className="p-2.5 bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-lg text-amber-400">
+                <Sparkles size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white uppercase tracking-wider">
+                  {language === 'fr' ? "Réécriture & Sublimation Éditoriale par l'IA" : "AI Article Rewrite & Polish"}
+                </h3>
+                <p className="text-xs text-zinc-400">
+                  {language === 'fr' 
+                    ? "Sublimez votre brouillon avec Gemini ou OpenAI en respectant la charte Perspective"
+                    : "Polish your draft using Gemini or OpenAI following Perspective editorial standards"}
+                </p>
+              </div>
+            </div>
+
+            {aiStatusMsg && (
+              <div className="p-3 bg-emerald-950/60 border border-emerald-500/40 rounded-lg text-emerald-300 text-xs font-medium flex items-center justify-between">
+                <span>{aiStatusMsg}</span>
+                <button 
+                  onClick={() => setAiStatusMsg(null)}
+                  className="text-emerald-400 hover:text-emerald-200 text-xs font-bold underline cursor-pointer ml-2"
+                >
+                  Fermer
+                </button>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              {/* Engine Selector */}
+              <div>
+                <label className="block text-xs font-extrabold text-zinc-300 uppercase tracking-wider mb-1.5">
+                  Moteur IA Privilégié (Dual-Engine)
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('gemini')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'gemini'
+                        ? 'bg-amber-600/20 border-amber-500 text-amber-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">Gemini 2.5</span>
+                    <span className="text-[10px] opacity-75">Ultra-Rapide & Structuré</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('openai')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'openai'
+                        ? 'bg-emerald-600/20 border-emerald-500 text-emerald-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">OpenAI GPT-4o</span>
+                    <span className="text-[10px] opacity-75">Haute Précision Linguistique</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('auto')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'auto'
+                        ? 'bg-sky-600/20 border-sky-500 text-sky-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">Auto Dual-Engine</span>
+                    <span className="text-[10px] opacity-75">Basculement Automatique</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Format Target */}
+              <div>
+                <label className="block text-xs font-extrabold text-zinc-300 uppercase tracking-wider mb-1.5">
+                  Format Éditorial Cible
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'News', label: 'Flash News', desc: 'Récit fluide 2-3 paragraphes' },
+                    { id: 'Analysis', label: 'Analyse', desc: 'Décryptage standard' },
+                    { id: 'Deep Dive', label: 'Grand Angle', desc: 'Intertitres, citations & grille' },
+                    { id: 'Explainer', label: 'Explainer', desc: 'Pédagogique & synthétique' }
+                  ].map(fmt => (
+                    <button
+                      key={fmt.id}
+                      type="button"
+                      onClick={() => setAiTargetType(fmt.id as any)}
+                      className={`p-2 rounded-lg text-left border transition-all cursor-pointer ${
+                        aiTargetType === fmt.id
+                          ? 'bg-orange-600/20 border-orange-500 text-orange-300'
+                          : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <div className="text-xs font-bold">{fmt.label}</div>
+                      <div className="text-[9px] opacity-70 mt-0.5">{fmt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Prompt presets */}
+              <div>
+                <label className="block text-xs font-extrabold text-zinc-300 uppercase tracking-wider mb-1.5">
+                  Directives Rapides de Réécriture
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[
+                    "Perfectionner le bilinguisme FR/EN (Style Financial Times pour l'anglais)",
+                    "Appliquer la charte zéro-cliché et renforcer l'ancrage géographique",
+                    "Enrichir la perspective brief (Ce qu'il s'est passé, Enjeux, À surveiller)",
+                    "Transformer en dossier Grand Angle avec citations et forces structurelles"
+                  ].map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setAiPrompt(preset)}
+                      className="px-2.5 py-1 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-md text-[11px] font-medium transition-colors cursor-pointer text-left"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
+
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Instructions spécifiques pour l'IA (ex: Insister sur les retombées économiques au Sénégal, corriger le style, affiner les acteurs clés...)"
+                  rows={3}
+                  className="w-full bg-zinc-950 border border-zinc-800 focus:border-[#E85D42] text-zinc-100 p-3 rounded-lg text-xs outline-none transition-colors"
+                />
+              </div>
+
+              {/* Guidelines Active Indicator */}
+              <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-lg text-[11px] text-zinc-400 space-y-1">
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold uppercase tracking-wider">
+                  <Check size={12} />
+                  <span>Directives Éditoriales Master Intégrées</span>
+                </div>
+                <p>
+                  Toutes les règles administratives configurées (Mots Bannis Zéro-Cliché, Directives de Rédaction, et Exemple Référence) seront automatiquement appliquées par la réécriture.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-zinc-800 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAiRewriteModal(false);
+                  setAiStatusMsg(null);
+                }}
+                className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer"
+              >
+                Fermer
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAiRewrite}
+                disabled={isRewritingWithAi}
+                className="px-5 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-lg text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg transition-all cursor-pointer"
+              >
+                {isRewritingWithAi ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Réécriture IA en cours...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    <span>Lancer la Réécriture IA</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -10,13 +10,36 @@ import { trackConversion } from './lib/telemetry';
 
 const idbStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
-    return (await get(name)) || null;
+    try {
+      return (await get(name)) || null;
+    } catch (err) {
+      console.warn("IndexedDB getItem fallback notice:", err);
+      try {
+        return localStorage.getItem(name);
+      } catch (_) {
+        return null;
+      }
+    }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    await idbSet(name, value);
+    try {
+      await idbSet(name, value);
+    } catch (err) {
+      console.warn("IndexedDB setItem fallback notice:", err);
+      try {
+        localStorage.setItem(name, value);
+      } catch (_) {}
+    }
   },
   removeItem: async (name: string): Promise<void> => {
-    await del(name);
+    try {
+      await del(name);
+    } catch (err) {
+      console.warn("IndexedDB removeItem fallback notice:", err);
+      try {
+        localStorage.removeItem(name);
+      } catch (_) {}
+    }
   },
 };
 

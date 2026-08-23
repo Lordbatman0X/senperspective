@@ -1148,9 +1148,7 @@ app.use((req, res, next) => {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4);
 
-    const isPublished = bodyData.isPublished === false || bodyData.isPublished === "false" || bodyData.isPublished === "draft"
-      ? false
-      : true;
+    const isPublished = bodyData.isPublished === true || bodyData.isPublished === "true" || bodyData.isPublished === "published";
 
     const isFeatured = bodyData.isFeatured === true || bodyData.isFeatured === "true" || bodyData.featured === true;
     const isTrending = bodyData.isTrending === true || bodyData.isTrending === "true" || bodyData.trending === true;
@@ -1340,15 +1338,14 @@ app.use((req, res, next) => {
           try {
             const draftArt = await processSingleItemToPerspectiveDraft(item, feed.category);
             if (draftArt) {
-              if (rssAutomationConfig.autoPublish) {
-                draftArt.status = "Published";
-              }
+              draftArt.status = "Draft";
+              draftArt.isPublished = false;
               rssDraftsRepository.unshift(draftArt);
               await saveRssDrafts();
               await syncArticleToFirestore(draftArt);
               cycleCreatedCount++;
               rssAutomationConfig.totalDraftsCreated++;
-              addAutomationLog(`Created draft: "${draftArt.title.fr}" (${draftArt.category})`, "success");
+              addAutomationLog(`Created unpublished draft: "${draftArt.title.fr}" (${draftArt.category}) - Awaiting Admin Approval`, "success");
             }
           } catch (e: any) {
             addAutomationLog(`Failed processing item from ${feed.name}: ${e.message}`, "error");
@@ -1489,7 +1486,7 @@ app.use((req, res, next) => {
       if (typeof maxArticlesPerCycle === "number" && maxArticlesPerCycle >= 1) {
         rssAutomationConfig.maxArticlesPerCycle = maxArticlesPerCycle;
       }
-      if (typeof autoPublish === "boolean") rssAutomationConfig.autoPublish = autoPublish;
+      rssAutomationConfig.autoPublish = false; // Always force unpublished drafts for admin authorization
 
       if (rssAutomationConfig.enabled) {
         rssAutomationConfig.status = "idle";
@@ -1723,6 +1720,33 @@ app.use((req, res, next) => {
     }
   });
 
+  // Rewrite / Polish Article Draft using Gemini or OpenAI following Master Editorial Guidelines (POST /api/ai/rewrite-article)
+  app.post("/api/ai/rewrite-article", async (req, res) => {
+    try {
+      const { article, prompt, category, type = "Analysis", preferredEngine = "auto" } = req.body;
+
+      const genResult = await orchestrateDualEngineArticleGeneration({
+        rssItem: article,
+        prompt: prompt || "Réécrire et perfectionner cet article en appliquant strictement les directives éditoriales Master Perspective (ton analytique, zéro-cliché, bilinguisme Financial Times, structure adaptée).",
+        category: category || article?.category || "Économie",
+        type: (type as ArticleStyleType) || article?.type || "Analysis",
+        preferredEngine: preferredEngine || "auto"
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: `Article réécrit avec succès via ${genResult.engineUsed} ${genResult.failoverTriggered ? '(Failover actif)' : ''}`,
+        engineUsed: genResult.engineUsed,
+        failoverTriggered: genResult.failoverTriggered,
+        failoverReason: genResult.failoverReason,
+        article: genResult.article
+      });
+    } catch (err: any) {
+      console.error("AI Article Rewrite Error:", err);
+      return res.status(500).json({ success: false, error: err.message || "Erreur lors de la réécriture IA" });
+    }
+  });
+
   // Automated RSS Fetch & AI Batch Generation Endpoint (POST /api/rss/fetch-and-generate)
   app.post("/api/rss/fetch-and-generate", async (req, res) => {
     try {
@@ -1830,7 +1854,7 @@ app.use((req, res, next) => {
             keyActors: enriched.keyActors || [],
             structuralForces: enriched.structuralForces || null,
             relatedArticleIds: [],
-            isPublished: autoPublish,
+            isPublished: false,
             isFeatured: false,
             views: 0,
             sourceName: srcName,
@@ -2614,9 +2638,9 @@ Context Details: ${JSON.stringify(locationInfo)}`;
     next(err);
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    (async () => {
+  // Vite middleware for development vs static files for production
+  async function startServer() {
+    if (process.env.NODE_ENV !== "production") {
       try {
         const { createServer: createViteServer } = await import("vite");
         const vite = await createViteServer({
@@ -2627,19 +2651,21 @@ Context Details: ${JSON.stringify(locationInfo)}`;
       } catch (err) {
         console.error("Vite middleware error:", err);
       }
-    })();
-  } else if (!process.env.VERCEL) {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
+    } else {
+      const distPath = path.join(process.cwd(), 'dist');
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+    }
 
-  if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   }
+
+  startServer().catch((err) => {
+    console.error("Failed to start server:", err);
+  });
 
 export default app;
