@@ -286,7 +286,7 @@ IF [DEEP_DIVE]:
 
 UNIVERSAL GUIDELINES:
 - Embodied Storytelling: Always open the article with a vivid scene, a concrete human situation, or a geographic anchor (e.g., "In Dakar's tech hubs...", "On the sands of the Arena...", "At the National Theatre...", "In the hallways of the Assembly...").
-- Bilingual Output: All final output MUST be perfectly bilingual (French and English). The English version must read like a top-tier international publication (idiomatic, polished, engaging).
+- Bilingual Output: All final output MUST be perfectly bilingual. You MUST provide BOTH a French and an English version for the title, excerpt, body, and all structural fields.
 - Zero-Cliché Policy: NEVER use the following banned words: "game-changer", "pleine mutation", "monde en perpétuelle évolution", "plonger au cœur de", "il convient de noter que", "forces vives", "tournant historique".`;
 
   // Inject Admin Custom Guidelines

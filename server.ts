@@ -1077,10 +1077,10 @@ app.use((req, res, next) => {
       try {
         const genResult = await orchestrateDualEngineArticleGeneration({
           rssItem: bodyData,
-          prompt: `${rawTitle}\n${rawBody}`,
+          prompt: rssAutomationConfig.customPrompt ? `${rssAutomationConfig.customPrompt}\n\n${rawTitle}\n${rawBody}` : `${rawTitle}\n${rawBody}`,
           category: bodyData.category || "Politique",
           type: (bodyData.type as ArticleStyleType) || "News",
-          preferredEngine: "auto"
+          preferredEngine: rssAutomationConfig.preferredEngine || "auto"
         });
 
         if (genResult && genResult.article) {

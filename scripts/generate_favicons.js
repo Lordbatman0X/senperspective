@@ -10,8 +10,7 @@ const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512
       <stop offset="100%" stop-color="#E85D42"/>
     </linearGradient>
   </defs>
-  <!-- Big Orange 'P' path filling the frame without background box -->
-  <path fill="url(#pGrad)" fill-rule="evenodd" d="M 40 20 H 310 C 410 20 470 70 470 155 C 470 240 410 290 310 290 H 180 V 492 H 40 Z M 180 100 V 210 H 290 C 340 210 370 185 370 155 C 370 125 340 100 290 100 Z" />
+  <text x="50%" y="50%" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="340" fill="url(#pGrad)" text-anchor="middle" dominant-baseline="central" letter-spacing="-0.045em">P</text>
 </svg>`;
 
 async function main() {

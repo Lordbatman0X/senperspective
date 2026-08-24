@@ -459,8 +459,8 @@ export function ArticleEditorTab({
         if (rewritten.excerpt.en) setExcerptEn(stripHtmlTags(rewritten.excerpt.en));
       }
       if (rewritten.body) {
-        if (rewritten.body.fr) setBodyFr(stripHtmlTags(rewritten.body.fr));
-        if (rewritten.body.en) setBodyEn(stripHtmlTags(rewritten.body.en));
+        if (rewritten.body.fr) setBodyFr(rewritten.body.fr);
+        if (rewritten.body.en) setBodyEn(rewritten.body.en);
       }
 
       if (rewritten.category) setCategory(rewritten.category);
@@ -515,6 +515,7 @@ export function ArticleEditorTab({
       }
 
       setAiStatusMsg(`✨ Réécriture réussie via ${data.engineUsed || 'IA Dual-Engine'}${data.failoverTriggered ? ' (Basculement actif)' : ''} ! Les champs de l'éditeur ont été mis à jour.`);
+      setTimeout(() => setShowAiRewriteModal(false), 2000);
     } catch (err: any) {
       console.error('AI Rewrite error:', err);
       alert('Erreur réécriture IA: ' + (err.message || 'Problème de connexion au serveur IA.'));
