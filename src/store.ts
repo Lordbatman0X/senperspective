@@ -538,7 +538,7 @@ export const useStore = create<AppState>()(
           position: 'in-article',
           active: true,
           tag: 'EXCLUSIVE REPORTS',
-          description: 'Abonnez-vous à nos rapports de synthèse géopolitiques confidentiels de l\'Afrique de l\'Ouest.',
+          description: 'Abonnez-vous à nos rapports de synthèse et grands décryptages exclusifs du journal Perspective.',
           ctaText: 'Rejoindre le Club',
           impressions: 4510,
           clicks: 98
@@ -1199,13 +1199,13 @@ export const useStore = create<AppState>()(
         aiModelMode: 'flash',
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
-        seoDefaultDesc: "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.",
+        seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
         databaseProvider: 'firestore',
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
-        footerDescFr: "Perspective Group. Média d'analyse et de réflexion. Notre promesse : L'actualité. Sans Filtre. Sans Compromis. Politique, géopolitique, économie, société, culture ou sport : toutes les actualités sont traitées avec la même profondeur.",
-        footerDescEn: "Perspective Group. Media for analysis and reflection. Our promise: News. Unfiltered. Uncompromised. Politics, geopolitics, economy, society, culture, or sports: all news is treated with equal depth.",
+        footerDescFr: "Perspective Group. Grand journal d'information et de réflexion indépendant. Notre promesse : L'actualité. Sans Filtre. Sans Compromis. Politique, Économie, Société, Tech, Culture, Sports, Santé ou International : toutes les rubriques sont traitées avec la même exigence journalistique.",
+        footerDescEn: "Perspective Group. Major independent news and reflection journal. Our promise: News. Unfiltered. Uncompromised. Politics, Economy, Society, Tech, Culture, Sports, Health, or World news: every section is covered with equal journalistic depth.",
         boukariCorpUnitLabelFr: "Unité Opérationnelle de",
         boukariCorpUnitLabelEn: "An Operational Unit of",
         boukariCorpName: "Boukari Corporation",
@@ -1300,7 +1300,7 @@ export const useStore = create<AppState>()(
           { id: 'elections', fr: 'Élections', en: 'Elections' }
         ],
         keywords: [
-          'Sénégal', 'Dakar', 'Perspective Group', 'L\'Arène', 'politique', 'géopolitique', 'économie', 'afrique', 'investigation', 'décryptage'
+          'Sénégal', 'Dakar', 'Perspective Group', 'L\'Arène', 'politique', 'économie', 'tech', 'culture', 'sports', 'santé', 'société', 'international', 'afrique', 'investigation', 'décryptage'
         ]
       },
       updateSiteSettings: async (settings) => {

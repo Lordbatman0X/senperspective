@@ -1,6 +1,6 @@
 {
   "name": "Perspective Group",
-  "description": "Plateforme d'information, d'analyse et d'actualités du groupe de presse Perspective.",
+  "description": "Grand journal d'information, de décryptage et d'analyse indépendant : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
   "requestFramePermissions": [
     "geolocation"
   ],

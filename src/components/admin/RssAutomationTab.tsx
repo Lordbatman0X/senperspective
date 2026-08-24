@@ -556,10 +556,10 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       setEditorialGuidelines({
         ...editorialGuidelines,
         preferredTone: 'analytical',
-        customDirectives: `1. FOCUS MACROÉCONOMIE & GÉOPOLITIQUE : Analyser les événements sous l'angle des équilibres financiers, des décisions de la BCEAO, des accords de libre-échange (ZLECAf) et des politiques de dette publique.
-2. DÉCRYPTAGE INSTITUTIONNEL : Mettre en lumière le rôle des organisations régionales (UEMOA, CEDEAO, Banque Mondiale, BAD) et des chancelleries diplomatiques.
-3. CHIFFRES & DONNÉES CLÉS : Inclure systématiquement des montants précis en FCFA, EUR ou USD et des pourcentages de croissance pour étayer chaque analyse.
-4. PERPETUAL HYPOTHESIS TESTING : Proposer 2 scénarios prospectifs en fin d'article (court terme et moyen terme).`
+        customDirectives: `1. ADAPTATION PAR RUBRIQUE : Identifier la rubrique réelle (Politique, Économie, Tech, Sports, Culture, Santé, Société) et adopter le ton, le vocabulaire et la structure spécifiques à ce secteur.
+2. ÉTAYAGE FACTUEL & DONNÉES CLÉS : Inclure systématiquement des faits vérifiés, chiffres précis, citations ou données pour étayer chaque analyse.
+3. SOUS-TITRES SPÉCIFIQUES DE RUBRIQUE : Remplacer les sous-titres génériques par des sous-titres évocateurs propres au secteur (ex: "Code & Souveraineté" pour la Tech, "Tactique & Arène" pour le Sport, "Patrimoine & Vision" pour la Culture).
+4. PERSPECTIVES : Proposer en conclusion les enjeux clés à surveiller pour le secteur concerné.`
       });
     } else if (presetKey === 'investigative') {
       setEditorialGuidelines({
@@ -2051,7 +2051,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                   onClick={() => applyPreset('geopolitics')}
                   className="px-3 py-1.5 bg-zinc-950/80 hover:bg-amber-900/40 text-amber-200 text-xs font-mono rounded-lg border border-amber-500/30 transition-all cursor-pointer"
                 >
-                  🌍 Géopolitique & Macro
+                  🌐 Grand Format Multi-Rubriques
                 </button>
                 <button
                   onClick={() => applyPreset('investigative')}

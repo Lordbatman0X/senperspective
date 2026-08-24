@@ -329,10 +329,10 @@ export function HomePage() {
   };
   
   useSEO({
-    title: language === 'fr' ? 'The Perspective Group | Journal d’Afrique de l’Ouest' : 'The Perspective Group | West African Journal',
+    title: language === 'fr' ? 'The Perspective Group | Grand Journal d’Information' : 'The Perspective Group | Independent News & Journal',
     description: language === 'fr' 
-      ? "Journal d’analyse géopolitique, socio-économique et d’actualités ouest-africaines basé à Dakar." 
-      : "West African geopolitical, socio-economic analysis and breaking news journal based in Dakar.",
+      ? "Grand journal d’information, de décryptage et d’analyse basé à Dakar : Politique, Économie, Société, Tech, Culture, Sports, Santé et International." 
+      : "Major independent news, analysis, and investigation journal based in Dakar covering Politics, Economics, Tech, Culture, Sports, Health, and World news.",
   });
 
   const currentSettings: any = useStore((s) => s.siteSettings) || {
@@ -403,7 +403,7 @@ export function HomePage() {
     {
       id: "h-ad-3",
       title: language === 'fr' ? "The Perspective : Notre Edition Club des Lecteurs" : "The Perspective: Readers' Club Weekly Edition",
-      desc: language === 'fr' ? "Abonnez-vous à nos rapports de synthèse géopolitiques confidentiels de l'Afrique de l'Ouest." : "Subscribe to our confidential geopolitical synthesis reports focused on West Africa.",
+      desc: language === 'fr' ? "Abonnez-vous à nos rapports de synthèse et grands décryptages exclusifs du journal Perspective." : "Subscribe to our exclusive synthesis reports and in-depth investigations.",
       cta: language === 'fr' ? "Rejoindre le Club" : "Access Club Reports",
       tag: "EXCLUSIVE REPORTS",
       bgClass: "bg-amber-50/40 border-amber-200/50 dark:bg-zinc-900/60 dark:border-zinc-800",
