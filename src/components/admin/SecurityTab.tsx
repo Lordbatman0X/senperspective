@@ -149,6 +149,17 @@ export function SecurityTab() {
       // 1. Update in Local Zustand Store
       updateUserPassword(targetEmail, newPasswordValue);
 
+      // Save to localStorage as immediate offline/instant fallback
+      try {
+        const storedPasses = JSON.parse(localStorage.getItem('perspective_admin_passwords') || '{}');
+        storedPasses[targetEmail] = newPasswordValue;
+        if (targetEmail.includes('@')) {
+          const usernameKey = targetEmail.split('@')[0];
+          storedPasses[usernameKey] = newPasswordValue;
+        }
+        localStorage.setItem('perspective_admin_passwords', JSON.stringify(storedPasses));
+      } catch (e) {}
+
       // 2. Update in Firestore users collection
       await setDoc(doc(db, "users", targetEmail), {
         email: targetEmail,

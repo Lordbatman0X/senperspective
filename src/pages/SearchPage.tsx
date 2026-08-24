@@ -83,13 +83,13 @@ export function SearchPage() {
                   style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
                 />
               </Link>
-              <div className="p-5 flex flex-col flex-grow bg-brand-white">
+              <div className="p-5 flex flex-col flex-grow bg-brand-white dark:bg-zinc-900 text-brand-dark dark:text-zinc-100">
                 <Link to={`/article/${article.slug}`} className="flex-grow">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-brand-primary mb-2">{formatCategory(article.category, language)}</div>
-                  <h3 className="font-bold text-lg text-brand-dark mb-2 leading-tight group-hover:text-brand-primary transition-colors">
+                  <h3 className="font-bold text-lg text-brand-dark dark:text-zinc-100 mb-2 leading-tight group-hover:text-brand-primary transition-colors">
                     {article.title?.[language] || 'Untitled'}
                   </h3>
-                  <p className="text-sm text-brand-muted line-clamp-2">
+                  <p className="text-sm text-brand-muted dark:text-zinc-400 line-clamp-2">
                     {article.excerpt?.[language] || ''}
                   </p>
                 </Link>

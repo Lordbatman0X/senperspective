@@ -32,6 +32,7 @@ export interface FirestoreUser {
   name: string;
   avatarUrl: string;
   role: string;
+  isOnline?: boolean;
   coverPhotoUrl?: string;
   streak?: number;
   readingTime?: number;

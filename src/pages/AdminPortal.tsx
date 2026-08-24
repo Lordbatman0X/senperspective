@@ -85,8 +85,22 @@ export function AdminPortal() {
     let matchedRole = 'Admin';
     let matchedName = cleanUser;
 
-    // 1. Check default dictionary first
-    if (validCredentials[cleanUser] && validCredentials[cleanUser].includes(cleanPass)) {
+    // 0. Check localStorage updated passwords first
+    try {
+      const storedPasses = JSON.parse(localStorage.getItem('perspective_admin_passwords') || '{}');
+      if (storedPasses[cleanUser] === cleanPass) {
+        isAuthenticated = true;
+      }
+      if (!isAuthenticated && !cleanUser.includes('@')) {
+        const fullEmailKey = `${cleanUser}@perspective.sn`;
+        if (storedPasses[fullEmailKey] === cleanPass) {
+          isAuthenticated = true;
+        }
+      }
+    } catch (e) {}
+
+    // 1. Check default dictionary
+    if (!isAuthenticated && validCredentials[cleanUser] && validCredentials[cleanUser].includes(cleanPass)) {
       isAuthenticated = true;
     }
 
@@ -97,9 +111,8 @@ export function AdminPortal() {
         u => (
           u.email.toLowerCase() === cleanUser || 
           u.name?.toLowerCase() === cleanUser || 
-          u.email.split('@')[0].toLowerCase() === cleanUser
-        ) && (
-          u.role === "Admin" || u.role === "Éditeur" || u.role === "Modérateur" || u.role === "Abonné" || u.email.includes("admin") || u.email.includes("perspective")
+          u.email.split('@')[0].toLowerCase() === cleanUser ||
+          (u.email.toLowerCase() === `${cleanUser}@perspective.sn`)
         )
       );
 
@@ -119,19 +132,25 @@ export function AdminPortal() {
     // 3. Check Firestore users collection directly for real-time accounts created in Security Tab
     if (!isAuthenticated) {
       try {
-        const userDocRef = doc(db, "users", cleanUser);
-        const userSnap = await getDoc(userDocRef);
-        if (userSnap.exists()) {
-          const uData = userSnap.data();
-          const uRole = uData.role || 'Admin';
-          const uPass = uData.password || uData.pin || '';
-          if (
-            (uRole === "Admin" || uRole === "Éditeur" || uRole === "Modérateur") &&
-            (uPass === cleanPass || cleanPass === "Perspective2026!" || cleanPass === "Admin2026!")
-          ) {
-            isAuthenticated = true;
-            matchedRole = uRole;
-            matchedName = uData.name || cleanUser;
+        const checkKeys = [cleanUser];
+        if (!cleanUser.includes('@')) {
+          checkKeys.push(`${cleanUser}@perspective.sn`);
+        }
+        for (const docKey of checkKeys) {
+          const userDocRef = doc(db, "users", docKey);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            const uRole = uData.role || 'Admin';
+            const uPass = uData.password || uData.pin || '';
+            if (
+              uPass === cleanPass || cleanPass === "Perspective2026!" || cleanPass === "Admin2026!"
+            ) {
+              isAuthenticated = true;
+              matchedRole = uRole;
+              matchedName = uData.name || cleanUser;
+              break;
+            }
           }
         }
       } catch (err) {
@@ -392,9 +411,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   // Deleting confirmation state
   const [deletingArticleId, setDeletingArticleId] = useState<string | null>(null);
 
+  // Track SEO form initialization
+  const isSeoInitializedRef = React.useRef(false);
+
   // Sync states when siteSettings changes
   useEffect(() => {
-    if (siteSettings) {
+    if (siteSettings && !isSeoInitializedRef.current) {
+      isSeoInitializedRef.current = true;
       setCurationSiteName(siteSettings.siteName || 'Perspective');
       setCurationAccentColor(siteSettings.accentColor || '#E85D42');
       setCurationHeaderStyle(siteSettings.headerStyle || 'glass');

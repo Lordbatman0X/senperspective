@@ -40,7 +40,7 @@ export const DiscussionPage: React.FC = () => {
   const myEmailLower = userEmail.toLowerCase().trim();
 
   // Construct contacts list from real users database + friends list + default contacts
-  const contactMap = new Map<string, { email: string; name: string; role: string; avatar: string; status: string }>();
+  const contactMap = new Map<string, { email: string; name: string; role: string; avatar: string; isOnline: boolean }>();
 
   // Registered Firestore users
   allUsers.forEach(u => {
@@ -51,7 +51,7 @@ export const DiscussionPage: React.FC = () => {
         name: u.name || emailLow.split("@")[0],
         role: u.role || "Member",
         avatar: (u.name || "U").charAt(0).toUpperCase(),
-        status: language === "fr" ? "En ligne" : "Online"
+        isOnline: Boolean(u.isOnline)
       });
     }
   });
@@ -65,14 +65,14 @@ export const DiscussionPage: React.FC = () => {
         name: f.name || emailLow.split("@")[0],
         role: f.role || "Member",
         avatar: (f.name || "U").charAt(0).toUpperCase(),
-        status: language === "fr" ? "Ami" : "Friend"
+        isOnline: Boolean((f as any).isOnline)
       });
     }
   });
 
-  // Default Editorial / Support contacts
+  // Default Editorial / Support contacts (Admin Rédaction is online)
   const defaultContacts = [
-    { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", status: "En ligne" }
+    { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", isOnline: true }
   ];
 
   defaultContacts.forEach(dc => {
@@ -85,6 +85,7 @@ export const DiscussionPage: React.FC = () => {
   const contacts = Array.from(contactMap.values());
 
   const [activeContactEmail, setActiveContactEmail] = useState<string>(contacts[0]?.email || "contact@perspective.sn");
+  const [mobileTab, setMobileTab] = useState<'list' | 'chat'>('list');
   const [searchQuery, setSearchQuery] = useState("");
   const [inputText, setInputText] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState("");
@@ -98,7 +99,7 @@ export const DiscussionPage: React.FC = () => {
   }, [allUsers, friends]);
 
   const activeContact = contacts.find(c => c.email.toLowerCase() === activeContactEmail.toLowerCase()) || contacts[0] || {
-    email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", status: language === "fr" ? "En ligne" : "Online"
+    email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", isOnline: true
   };
 
   const conversation = (directMessages || []).filter(
@@ -180,8 +181,8 @@ export const DiscussionPage: React.FC = () => {
 
       {/* Main Grid Layout */}
       <div className="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 md:grid-cols-12 bg-zinc-950 border-x border-zinc-900 overflow-hidden min-h-[600px]">
-        {/* Left Contacts Sidebar */}
-        <div className="md:col-span-4 border-r border-zinc-800/80 bg-zinc-900/60 flex flex-col">
+        {/* Left Contacts Sidebar (Visible on desktop or when mobileTab is 'list') */}
+        <div className={`md:col-span-4 border-r border-zinc-800/80 bg-zinc-900/60 flex flex-col ${mobileTab === 'chat' ? 'hidden md:flex' : 'flex'}`}>
           <div className="p-4 border-b border-zinc-800/80 space-y-3">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
@@ -211,14 +212,19 @@ export const DiscussionPage: React.FC = () => {
               return (
                 <button
                   key={c.email}
-                  onClick={() => setActiveContactEmail(c.email)}
+                  onClick={() => {
+                    setActiveContactEmail(c.email);
+                    setMobileTab('chat');
+                  }}
                   className={`w-full p-3.5 text-left transition-all cursor-pointer flex items-center gap-3 ${isSelected ? "bg-zinc-800/90 border-l-4 border-[#E85D42]" : "hover:bg-zinc-800/40"}`}
                 >
                   <div className="relative shrink-0">
                     <div className="w-10 h-10 rounded-full bg-[#E85D42] text-white font-black text-sm font-mono flex items-center justify-center shadow-md">
                       {c.avatar}
                     </div>
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-zinc-950" />
+                    {c.isOnline && (
+                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-zinc-950" />
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -235,7 +241,7 @@ export const DiscussionPage: React.FC = () => {
                   </div>
 
                   {contactUnread > 0 && (
-                    <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-sm">
+                    <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 shadow-sm animate-pulse">
                       {contactUnread}
                     </span>
                   )}
@@ -245,40 +251,33 @@ export const DiscussionPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Active Discussion Area */}
-        <div className="md:col-span-8 flex flex-col bg-[#0b0b0d]">
+        {/* Right Active Discussion Area (Visible on desktop or when mobileTab is 'chat') */}
+        <div className={`md:col-span-8 flex flex-col bg-[#0b0b0d] ${mobileTab === 'list' ? 'hidden md:flex' : 'flex'}`}>
           {/* Active Contact Header */}
           <div className="p-4 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
+              {/* Back button on mobile */}
+              <button
+                onClick={() => setMobileTab('list')}
+                className="md:hidden p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 cursor-pointer"
+                title="Back to contacts"
+              >
+                ←
+              </button>
               <div className="w-10 h-10 rounded-full bg-[#E85D42] text-white font-black text-sm font-mono flex items-center justify-center shadow-md">
                 {activeContact.avatar}
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <span>{activeContact.name}</span>
-                  <span className="text-[10px] font-mono font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                    {activeContact.status}
-                  </span>
+                  {activeContact.isOnline && (
+                    <span className="text-[10px] font-mono font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      {language === "fr" ? "En ligne" : "Online"}
+                    </span>
+                  )}
                 </h3>
                 <p className="text-xs text-zinc-400 font-mono">{activeContact.role} • {activeContact.email}</p>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => alert(language === 'fr' ? 'Appel vocal chiffré en cours d\'initialisation...' : 'Encrypted voice call initializing...')}
-                className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer"
-                title="Voice Call"
-              >
-                <Phone size={16} />
-              </button>
-              <button 
-                onClick={() => alert(language === 'fr' ? 'Visioconférence sécurisée en cours...' : 'Secured video meeting...')}
-                className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded-lg transition-colors cursor-pointer"
-                title="Video Meeting"
-              >
-                <Video size={16} />
-              </button>
             </div>
           </div>
 

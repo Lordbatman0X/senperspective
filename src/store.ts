@@ -109,15 +109,18 @@ export interface ReaderProfile {
 }
 
 export interface UserAccount {
+  id?: string;
   email: string;
   name: string;
-  avatarUrl: string;
+  avatarUrl?: string;
   role: string;
+  isOnline?: boolean;
   authType: 'password' | 'pin';
   password?: string;
   pin?: string;
   emailVerified?: boolean;
   mfaEnabled?: boolean;
+  registeredAt?: string;
 }
 
 export interface UserInteraction {
@@ -1345,10 +1348,22 @@ export const useStore = create<AppState>()(
       updateUserPassword: (email, password) => {
         const normalized = email.toLowerCase().trim();
         const users = get().users || [];
-        const updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, password } : u);
+        const exists = users.some(u => u.email.toLowerCase() === normalized);
+        let updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, password } : u);
+        if (!exists) {
+          updatedUsers.push({
+            id: 'admin-' + Date.now(),
+            email: normalized,
+            name: normalized.split('@')[0],
+            role: 'Admin',
+            password: password,
+            authType: 'password',
+            registeredAt: new Date().toISOString()
+          });
+        }
         set({ users: updatedUsers });
         try {
-          setDoc(doc(db, "users", normalized), { password }, { merge: true }).catch(err => console.error("Error updating user password in Firestore:", err));
+          setDoc(doc(db, "users", normalized), { password, email: normalized, role: 'Admin' }, { merge: true }).catch(err => console.error("Error updating user password in Firestore:", err));
         } catch (e) { console.error(e); }
       },
       updateUserPin: (email, pin) => {
