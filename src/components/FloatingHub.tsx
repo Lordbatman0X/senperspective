@@ -72,7 +72,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const userEmail = readerProfile?.email || "visitor@perspective.sn";
   const myEmailLower = userEmail.toLowerCase().trim();
 
-  const contactMap = new Map<string, { name: string; email: string; avatar?: string; role?: string }>();
+  const contactMap = new Map<string, { name: string; email: string; avatar?: string; role?: string; isOnline?: boolean }>();
 
   // Add all registered users from Firestore except current user
   allUsers.forEach(u => {
@@ -82,7 +82,8 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
         name: u.name || emailLow.split("@")[0],
         email: u.email,
         avatar: (u.name || "U").charAt(0).toUpperCase(),
-        role: u.role || "Member"
+        role: u.role || "Member",
+        isOnline: Boolean(u.isOnline)
       });
     }
   });
@@ -592,6 +593,9 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                           >
                             <div className="relative w-7 h-7 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center font-bold text-xs text-[#E85D42] shrink-0">
                               {c.avatar}
+                              {c.isOnline && (
+                                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-zinc-950 animate-pulse" title={language === "fr" ? "En ligne" : "Online"} />
+                              )}
                               {contactUnread > 0 && (
                                 <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-xs">
                                   {contactUnread}

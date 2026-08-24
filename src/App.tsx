@@ -13,12 +13,14 @@ import { DiscussionPage } from './pages/DiscussionPage';
 import { AuthPage } from './pages/AuthPage';
 import { Layout } from './components/Layout';
 import { AuthProvider } from './contexts/AuthContext';
+import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 
 function App() {
   return (
     <Router>
       <AuthProvider>
+        <NotificationToastHost />
         <Layout>
           <Routes>
             <Route path="/" element={<HomePage />} />

@@ -26,6 +26,7 @@ import { sampleArticles } from "../data";
 import { Article } from "../types";
 import { stripHtmlTags } from "../lib/utils";
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
+import { triggerInAppToast } from "../lib/notificationSound";
 
 export interface FirestoreUser {
   email: string;
@@ -33,6 +34,7 @@ export interface FirestoreUser {
   avatarUrl: string;
   role: string;
   isOnline?: boolean;
+  lastActiveAt?: string;
   coverPhotoUrl?: string;
   streak?: number;
   readingTime?: number;
@@ -73,6 +75,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [allUsers, setAllUsers] = useState<FirestoreUser[]>([]);
   const { setReaderProfile } = useStore();
 
+  const knownMsgIdsRef = React.useRef<Set<string> | null>(null);
+  const knownArtIdsRef = React.useRef<Set<string> | null>(null);
+
+  // Dynamic Online Presence heartbeat in Firestore
+  useEffect(() => {
+    if (!user || !user.email) return;
+
+    const currentUserEmail = user.email.toLowerCase().trim();
+
+    const updatePresence = async (online: boolean) => {
+      try {
+        const userDocRef = doc(db, "users", currentUserEmail);
+        await setDoc(userDocRef, {
+          isOnline: online,
+          lastActiveAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn("[Presence] Failed updating presence in Firestore:", err);
+      }
+    };
+
+    updatePresence(true);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        updatePresence(true);
+      }
+    }, 45000);
+
+    const handleVis = () => updatePresence(document.visibilityState === 'visible');
+    const handleOnline = () => updatePresence(true);
+    const handleOffline = () => updatePresence(false);
+    const handleUnload = () => updatePresence(false);
+
+    document.addEventListener('visibilitychange', handleVis);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('beforeunload', handleUnload);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVis);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeunload', handleUnload);
+      updatePresence(false);
+    };
+  }, [user?.email]);
+
   // Sync / listen to registered users from Firestore (starts from scratch without mock accounts)
   useEffect(() => {
     const cleanOldMockData = async () => {
@@ -104,11 +155,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const usersList: FirestoreUser[] = [];
       snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
+        const email = data.email || docSnap.id;
+        const lastActiveTime = data.lastActiveAt ? new Date(data.lastActiveAt).getTime() : 0;
+        // User is online if explicitly set to true OR active in the last 3 minutes
+        const isOnlineCalculated = Boolean(data.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 3 * 60 * 1000));
+
         usersList.push({
-          email: data.email || docSnap.id,
+          email: email,
           name: data.name || "Anonymous",
           avatarUrl: data.avatarUrl || "preset-male",
           role: data.role || "Member",
+          isOnline: isOnlineCalculated,
+          lastActiveAt: data.lastActiveAt || undefined,
           coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: data.streak !== undefined ? data.streak : 1,
           readingTime: data.readingTime !== undefined ? data.readingTime : 0,
@@ -148,6 +206,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Sort messages chronologically by timestamp
       messagesList.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      // Trigger notification for newly arrived unread direct messages
+      if (knownMsgIdsRef.current === null) {
+        knownMsgIdsRef.current = new Set(messagesList.map(m => m.id));
+      } else {
+        const currentUserEmail = user?.email?.toLowerCase().trim() || useStore.getState().readerProfile?.email?.toLowerCase().trim() || '';
+        messagesList.forEach(m => {
+          if (!knownMsgIdsRef.current?.has(m.id)) {
+            knownMsgIdsRef.current?.add(m.id);
+            if (!m.read && currentUserEmail && m.receiver?.toLowerCase().trim() === currentUserEmail && m.sender?.toLowerCase().trim() !== currentUserEmail) {
+              triggerInAppToast({
+                type: 'message',
+                title: `Message de ${m.sender === 'admin@perspective.sn' ? 'Rédaction Perspective' : m.sender}`,
+                body: m.text,
+                actionUrl: '/discussion'
+              });
+            }
+          }
+        });
+      }
       
       // Update the Zustand store
       useStore.setState({ directMessages: messagesList });
@@ -316,6 +394,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         // Sort by date newest first
         deduplicatedArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+        // Check for new published articles
+        if (knownArtIdsRef.current === null) {
+          knownArtIdsRef.current = new Set(deduplicatedArticles.map(a => a.id));
+        } else {
+          deduplicatedArticles.forEach(a => {
+            if (!knownArtIdsRef.current?.has(a.id)) {
+              knownArtIdsRef.current?.add(a.id);
+              if (a.isPublished !== false) {
+                const titleText = typeof a.title === 'string' ? a.title : (a.title?.fr || a.title?.en || 'Nouvelle publication');
+                triggerInAppToast({
+                  type: 'publication',
+                  title: 'Flash Info — Nouvelle Publication',
+                  body: titleText,
+                  actionUrl: `/article/${a.slug}`
+                });
+              }
+            }
+          });
+        }
+
         useStore.setState({ articles: deduplicatedArticles });
       }
     }, (error) => {
@@ -697,6 +796,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logoutUser = async () => {
+    if (user && user.email) {
+      try {
+        await setDoc(doc(db, "users", user.email.toLowerCase().trim()), {
+          isOnline: false,
+          lastActiveAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Failed updating logout status in Firestore:", err);
+      }
+    }
     await signOut(auth);
     setReaderProfile(null);
   };
