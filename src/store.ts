@@ -1432,7 +1432,8 @@ export const useStore = create<AppState>()(
               email: 'kadersdiaz3@gmail.com',
               name: 'Kader Diaz',
               avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&fit=crop',
-              role: 'Administrateur',
+              role: 'Admin',
+              password: 'Swiz1324',
               authType: 'password',
               emailVerified: true,
               mfaEnabled: true

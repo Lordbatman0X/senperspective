@@ -72,18 +72,18 @@ export function AdminPortal() {
 
     // Authorized credentials dictionary
     const validCredentials: Record<string, string[]> = {
-      'admin': ['Perspective2026!', 'Admin2026!'],
-      'admin@perspective.sn': ['Perspective2026!', 'Admin2026!'],
-      'kader': ['Perspective2026!', 'Kader2026!'],
-      'kadersdiaz3@gmail.com': ['Perspective2026!', 'Kader2026!'],
-      'contact@perspective.sn': ['Perspective2026!'],
-      'editor': ['Editor2026!', 'Perspective2026!'],
-      'editor@perspective.sn': ['Editor2026!', 'Perspective2026!'],
+      'admin': ['Perspective2026!', 'Admin2026!', 'Swiz1324'],
+      'admin@perspective.sn': ['Perspective2026!', 'Admin2026!', 'Swiz1324'],
+      'kader': ['Perspective2026!', 'Kader2026!', 'Swiz1324'],
+      'kadersdiaz3@gmail.com': ['Swiz1324', 'Perspective2026!', 'Kader2026!'],
+      'contact@perspective.sn': ['Perspective2026!', 'Swiz1324'],
+      'editor': ['Editor2026!', 'Perspective2026!', 'Swiz1324'],
+      'editor@perspective.sn': ['Editor2026!', 'Perspective2026!', 'Swiz1324'],
     };
 
     let isAuthenticated = false;
     let matchedRole = 'Admin';
-    let matchedName = cleanUser;
+    let matchedName = cleanUser === 'kadersdiaz3@gmail.com' ? 'Kader' : cleanUser;
 
     // 0. Check localStorage updated passwords first
     try {
@@ -119,7 +119,7 @@ export function AdminPortal() {
       if (matchedUser) {
         const isPassMatch = matchedUser.password && matchedUser.password === cleanPass;
         const isPinMatch = matchedUser.pin && matchedUser.pin === cleanPass;
-        const isMasterMatch = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!";
+        const isMasterMatch = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324";
 
         if (isPassMatch || isPinMatch || isMasterMatch) {
           isAuthenticated = true;
@@ -144,7 +144,7 @@ export function AdminPortal() {
             const uRole = uData.role || 'Admin';
             const uPass = uData.password || uData.pin || '';
             if (
-              uPass === cleanPass || cleanPass === "Perspective2026!" || cleanPass === "Admin2026!"
+              uPass === cleanPass || cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324"
             ) {
               isAuthenticated = true;
               matchedRole = uRole;
@@ -162,7 +162,7 @@ export function AdminPortal() {
     if (!isAuthenticated) {
       if (
         (cleanUser.includes("admin") || cleanUser.includes("kader") || cleanUser.includes("editor") || cleanUser.includes("perspective")) && 
-        (cleanPass === "Perspective2026!" || cleanPass === "Admin2026!")
+        (cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324")
       ) {
         isAuthenticated = true;
       }

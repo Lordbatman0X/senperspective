@@ -95,7 +95,7 @@ export function ArticleEditorTab({
   const [showAiRewriteModal, setShowAiRewriteModal] = useState(false);
   const [isRewritingWithAi, setIsRewritingWithAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'openai'>('gemini');
+  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai'>('groq');
   const [aiTargetType, setAiTargetType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
 
@@ -1596,7 +1596,33 @@ export function ArticleEditorTab({
                 <label className="block text-xs font-extrabold text-zinc-300 uppercase tracking-wider mb-1.5">
                   Moteur IA Privilégié (Dual-Engine)
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('groq')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'groq'
+                        ? 'bg-purple-600/20 border-purple-500 text-purple-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">Groq Llama 3.3</span>
+                    <span className="text-[10px] opacity-75">Vitesse Éclair (70B)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('openrouter')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'openrouter'
+                        ? 'bg-pink-600/20 border-pink-500 text-pink-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">OpenRouter</span>
+                    <span className="text-[10px] opacity-75">Claude / DeepSeek</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setAiPreferredEngine('gemini')}
@@ -1620,7 +1646,7 @@ export function ArticleEditorTab({
                     }`}
                   >
                     <span className="font-mono text-sm">OpenAI GPT-4o</span>
-                    <span className="text-[10px] opacity-75">Haute Précision Linguistique</span>
+                    <span className="text-[10px] opacity-75">Haute Précision</span>
                   </button>
 
                   <button
@@ -1632,8 +1658,8 @@ export function ArticleEditorTab({
                         : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    <span className="font-mono text-sm">Auto Dual-Engine</span>
-                    <span className="text-[10px] opacity-75">Basculement Automatique</span>
+                    <span className="font-mono text-sm">Auto Cascade</span>
+                    <span className="text-[10px] opacity-75">Basculement Auto</span>
                   </button>
                 </div>
               </div>

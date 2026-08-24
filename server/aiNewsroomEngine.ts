@@ -26,7 +26,7 @@ export interface GenerateArticleOptions {
   prompt?: string;
   category?: string;
   type?: ArticleStyleType;
-  preferredEngine?: "auto" | "gemini" | "openai";
+  preferredEngine?: "auto" | "gemini" | "openai" | "groq" | "openrouter";
   feedUrl?: string;
   customGuidelinesOverride?: CustomEditorialGuidelines;
 }
@@ -189,6 +189,42 @@ export function getOpenAIClient(): OpenAI | null {
     openaiInstance = new OpenAI({ apiKey: key });
   }
   return openaiInstance;
+}
+
+// Lazy-initialized Groq Client (using OpenAI SDK compatibility)
+let groqInstance: OpenAI | null = null;
+export function getGroqClient(): OpenAI | null {
+  const key = process.env.GROQ_API_KEY;
+  if (!key || key.trim() === "" || key === "undefined" || key === "null") {
+    return null;
+  }
+  if (!groqInstance) {
+    groqInstance = new OpenAI({
+      apiKey: key,
+      baseURL: "https://api.groq.com/openai/v1"
+    });
+  }
+  return groqInstance;
+}
+
+// Lazy-initialized OpenRouter Client
+let openRouterInstance: OpenAI | null = null;
+export function getOpenRouterClient(): OpenAI | null {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key || key.trim() === "" || key === "undefined" || key === "null") {
+    return null;
+  }
+  if (!openRouterInstance) {
+    openRouterInstance = new OpenAI({
+      apiKey: key,
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": "https://perspective.sn",
+        "X-Title": "Perspective Group"
+      }
+    });
+  }
+  return openRouterInstance;
 }
 
 /**
@@ -422,6 +458,102 @@ export async function generateWithOpenAI(userPrompt: string, systemInstruction: 
 }
 
 /**
+ * Execute Generation via Groq API (High-speed Llama 3 models)
+ */
+export async function generateWithGroq(userPrompt: string, systemInstruction: string): Promise<any> {
+  const groq = getGroqClient();
+  if (!groq) {
+    throw new Error("GROQ_API_KEY is not configured on the server.");
+  }
+
+  const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
+  let lastErr: any = null;
+
+  for (const model of models) {
+    try {
+      const completion = await groq.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.25,
+      });
+
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) {
+        throw new Error(`Empty response from Groq model ${model}`);
+      }
+
+      const parsed = JSON.parse(text);
+      if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
+        return { parsed, modelUsed: `Groq (${model})` };
+      }
+    } catch (err: any) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      if (msg.includes("429") || msg.includes("rate_limit")) {
+        console.warn(`[GROQ ENGINE NOTICE] Rate limit hit on ${model}. Trying next Groq model...`);
+      } else {
+        console.warn(`[GROQ ENGINE NOTICE] Model ${model} notice (${msg.slice(0, 100)}). Trying fallback...`);
+      }
+    }
+  }
+
+  throw lastErr || new Error("All Groq models exhausted or rate-limited.");
+}
+
+/**
+ * Execute Generation via OpenRouter API (Claude 3.5 Sonnet, DeepSeek R1, Llama 3.3, Gemini 2.5)
+ */
+export async function generateWithOpenRouter(userPrompt: string, systemInstruction: string): Promise<any> {
+  const openRouter = getOpenRouterClient();
+  if (!openRouter) {
+    throw new Error("OPENROUTER_API_KEY is not configured on the server.");
+  }
+
+  const models = [
+    "anthropic/claude-3.5-sonnet",
+    "deepseek/deepseek-r1",
+    "meta-llama/llama-3.3-70b-instruct",
+    "google/gemini-2.5-flash",
+    "openai/gpt-4o-mini"
+  ];
+  let lastErr: any = null;
+
+  for (const model of models) {
+    try {
+      const completion = await openRouter.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.25,
+      });
+
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) {
+        throw new Error(`Empty response from OpenRouter model ${model}`);
+      }
+
+      const parsed = JSON.parse(text);
+      if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
+        return { parsed, modelUsed: `OpenRouter (${model})` };
+      }
+    } catch (err: any) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      console.warn(`[OPENROUTER ENGINE NOTICE] Model ${model} notice (${msg.slice(0, 100)}). Trying fallback...`);
+    }
+  }
+
+  throw lastErr || new Error("All OpenRouter models exhausted or unavailable.");
+}
+
+/**
  * Validates and enriches parsed article data ensuring high storytelling coherence and zero blind spots.
  */
 export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallbackCategory = "Économie", articleType: ArticleStyleType = "News"): any {
@@ -583,10 +715,12 @@ Please craft the complete bilingual storytelling article in strict JSON matching
 
   let primary = preferredEngine;
   const geminiAvailable = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "";
+  const groqAvailable = !!process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim() !== "";
+  const openRouterAvailable = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== "";
   const openAiAvailable = !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "";
 
   if (primary === "auto") {
-    primary = geminiAvailable ? "gemini" : (openAiAvailable ? "openai" : "gemini");
+    primary = geminiAvailable ? "gemini" : (groqAvailable ? "groq" : (openRouterAvailable ? "openrouter" : (openAiAvailable ? "openai" : "gemini")));
   }
 
   let failoverTriggered = false;
@@ -594,70 +728,104 @@ Please craft the complete bilingual storytelling article in strict JSON matching
   let rawJson: any = null;
   let engineUsed = "";
 
-  // 1. Try Primary Engine
-  if (primary === "gemini" && geminiAvailable) {
+  // Helper for sequential execution
+  const tryGroq = async (): Promise<boolean> => {
+    if (!groqAvailable) return false;
+    try {
+      const res = await generateWithGroq(userPrompt, systemInstruction);
+      rawJson = res.parsed;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | Groq: ${err?.message || err}`;
+      return false;
+    }
+  };
+
+  const tryGemini = async (): Promise<boolean> => {
+    if (!geminiAvailable) return false;
     try {
       const res = await generateWithGemini(userPrompt, systemInstruction);
       rawJson = res.parsed;
-      engineUsed = res.modelUsed;
-    } catch (geminiErr: any) {
-      const reason = geminiErr?.message || String(geminiErr);
-      console.warn(`[DUAL ENGINE FAILOVER TRIGGERED] Gemini primary notice: ${reason.slice(0, 120)}. Switching to OpenAI...`);
-      failoverTriggered = true;
-      failoverReason = `Gemini Quota/Error: ${reason.slice(0, 80)}`;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | Gemini: ${err?.message || err}`;
+      return false;
+    }
+  };
 
-      if (openAiAvailable) {
-        try {
-          const res = await generateWithOpenAI(userPrompt, systemInstruction);
-          rawJson = res.parsed;
-          engineUsed = `${res.modelUsed} (Failover from Gemini)`;
-        } catch (openAiErr: any) {
-          const oReason = openAiErr?.message || String(openAiErr);
-          console.warn(`[DUAL ENGINE NOTICE] Both Gemini and OpenAI APIs unvailable: ${oReason.slice(0, 120)}`);
-          failoverReason += ` | OpenAI Quota/Error: ${oReason.slice(0, 80)}`;
+  const tryOpenRouter = async (): Promise<boolean> => {
+    if (!openRouterAvailable) return false;
+    try {
+      const res = await generateWithOpenRouter(userPrompt, systemInstruction);
+      rawJson = res.parsed;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | OpenRouter: ${err?.message || err}`;
+      return false;
+    }
+  };
+
+  const tryOpenAI = async (): Promise<boolean> => {
+    if (!openAiAvailable) return false;
+    try {
+      const res = await generateWithOpenAI(userPrompt, systemInstruction);
+      rawJson = res.parsed;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | OpenAI: ${err?.message || err}`;
+      return false;
+    }
+  };
+
+  // 1. Try Selected Primary Engine
+  if (primary === "groq" && groqAvailable) {
+    if (!(await tryGroq())) {
+      failoverTriggered = true;
+      if (!(await tryGemini())) {
+        if (!(await tryOpenRouter())) {
+          await tryOpenAI();
+        }
+      }
+    }
+  } else if (primary === "openrouter" && openRouterAvailable) {
+    if (!(await tryOpenRouter())) {
+      failoverTriggered = true;
+      if (!(await tryGroq())) {
+        if (!(await tryGemini())) {
+          await tryOpenAI();
+        }
+      }
+    }
+  } else if (primary === "gemini" && geminiAvailable) {
+    if (!(await tryGemini())) {
+      failoverTriggered = true;
+      if (!(await tryGroq())) {
+        if (!(await tryOpenRouter())) {
+          await tryOpenAI();
         }
       }
     }
   } else if (primary === "openai" && openAiAvailable) {
-    try {
-      const res = await generateWithOpenAI(userPrompt, systemInstruction);
-      rawJson = res.parsed;
-      engineUsed = res.modelUsed;
-    } catch (openAiErr: any) {
-      const reason = openAiErr?.message || String(openAiErr);
-      console.warn(`[DUAL ENGINE FAILOVER TRIGGERED] OpenAI primary notice: ${reason.slice(0, 120)}. Switching to Gemini...`);
+    if (!(await tryOpenAI())) {
       failoverTriggered = true;
-      failoverReason = `OpenAI Quota/Error: ${reason.slice(0, 80)}`;
-
-      if (geminiAvailable) {
-        try {
-          const res = await generateWithGemini(userPrompt, systemInstruction);
-          rawJson = res.parsed;
-          engineUsed = `${res.modelUsed} (Failover from OpenAI)`;
-        } catch (geminiErr: any) {
-          const gReason = geminiErr?.message || String(geminiErr);
-          console.warn(`[DUAL ENGINE NOTICE] Both OpenAI and Gemini APIs unavailable: ${gReason.slice(0, 120)}`);
-          failoverReason += ` | Gemini Quota/Error: ${gReason.slice(0, 80)}`;
+      if (!(await tryGroq())) {
+        if (!(await tryGemini())) {
+          await tryOpenRouter();
         }
       }
     }
-  } else if (geminiAvailable) {
-    try {
-      const res = await generateWithGemini(userPrompt, systemInstruction);
-      rawJson = res.parsed;
-      engineUsed = res.modelUsed;
-    } catch (e: any) {
-      failoverTriggered = true;
-      failoverReason = `Gemini: ${e?.message || String(e)}`;
-    }
-  } else if (openAiAvailable) {
-    try {
-      const res = await generateWithOpenAI(userPrompt, systemInstruction);
-      rawJson = res.parsed;
-      engineUsed = res.modelUsed;
-    } catch (e: any) {
-      failoverTriggered = true;
-      failoverReason = `OpenAI: ${e?.message || String(e)}`;
+  } else {
+    // Cascade fallback: Gemini -> Groq -> OpenRouter -> OpenAI
+    if (!(await tryGemini())) {
+      if (!(await tryGroq())) {
+        if (!(await tryOpenRouter())) {
+          await tryOpenAI();
+        }
+      }
     }
   }
 

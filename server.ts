@@ -7,7 +7,10 @@ import {
   ArticleStyleType,
   getEditorialGuidelines,
   saveEditorialGuidelines,
-  resetEditorialGuidelinesToDefault
+  resetEditorialGuidelinesToDefault,
+  getGroqClient,
+  getOpenRouterClient,
+  getOpenAIClient
 } from "./server/aiNewsroomEngine";
 import { 
   connectMongo, 
@@ -2313,35 +2316,8 @@ app.use((req, res, next) => {
   app.post("/api/chat", async (req, res) => {
     try {
       const { message, context, language, locationInfo } = req.body;
-      const apiKey = process.env.GEMINI_API_KEY;
-
       const userLang = language === "en" ? "en" : "fr";
 
-      if (!apiKey || apiKey.trim() === "" || apiKey === "undefined" || apiKey === "null") {
-        if (context && context.title) {
-          return res.json({
-            response: userLang === "fr"
-              ? `Ravi d'échanger avec vous sur **« ${context.title} »**.\n\nDans cette enquête signée *${context.author || "la rédaction de Perspective"}*, plusieurs points essentiels ressortent :\n\n- **Le cœur du sujet :** ${context.excerpt || "Ce dossier analyse les mutations profondes et les dynamiques actuelles."}\n- **Les enjeux clés :** Ce sujet touche directement aux équilibres politiques, économiques et sociétaux au Sénégal et dans la sous-région.\n\nN'hésitez pas à me demander des précisions sur les acteurs mentionnés, le contexte historique ou les suites possibles de ce dossier !`
-              : `Great to discuss **"${context.title}"** with you.\n\nIn this investigation by *${context.author || "Perspective's editorial desk"}*, several key points stand out:\n\n- **Core Theme:** ${context.excerpt || "This story breaks down significant regional shifts and current dynamics."}\n- **Key Stakes:** This development directly impacts political, economic, and societal balances in Senegal and the broader region.\n\nFeel free to ask me for more details on key actors, historical background, or potential future scenarios!`
-          });
-        }
-
-        return res.json({
-          response: userLang === "fr"
-            ? `Bonjour ! Je suis **Abdel**, votre compagnon d'analyse et de décryptage au sein du journal *Perspective Group*.\n\nQue vous souhaitiez un briefing sur la une du jour, un regard approfondi sur la politique, l'économie, le sport ou les grands débats de société, je suis à vos côtés. De quoi aimeriez-vous parler aujourd'hui ?`
-            : `Hello! I am **Abdel**, your news companion and editorial analyst at *Perspective Group*.\n\nWhether you'd like an executive briefing on today's headlines, an in-depth perspective on politics, markets, sports, or societal debates, I'm right here with you. What would you like to explore today?`
-        });
-      }
-
-      const ai = new GoogleGenAI({
-        apiKey,
-        httpOptions: {
-          headers: {
-            'User-Agent': 'aistudio-build',
-          }
-        }
-      });
-      
       let systemInstruction = `You are Abdel, a warm, perceptive, and highly articulate editorial companion and senior investigative analyst for "Perspective Group", the premier West African and Senegalese journal of record.
 
 Core Persona & Human Touch:
@@ -2372,36 +2348,131 @@ The reader is currently situated in: "${locationInfo.section || "Front Page"}" (
 Context Details: ${JSON.stringify(locationInfo)}`;
       }
 
-      // Try primary model with automatic fallbacks for rate limits and high demand
-      const modelsToTry = ["gemini-2.5-flash", "gemini-2.5-pro"];
       let responseText = "";
 
-      for (const model of modelsToTry) {
+      // 1. Try Gemini API
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined" && geminiKey !== "null") {
         try {
-          const apiCall = ai.models.generateContent({
-            model,
-            contents: [
-              { role: "user", parts: [{ text: message }] }
-            ],
-            config: {
-              systemInstruction,
-              temperature: 0.3
-            }
+          const ai = new GoogleGenAI({
+            apiKey: geminiKey,
+            httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`Timeout on model ${model}`)), 10000)
-          );
-          const response = await Promise.race([apiCall, timeoutPromise]);
-          if (response.text && response.text.trim()) {
-            responseText = response.text;
-            break;
+          const modelsToTry = ["gemini-2.5-flash", "gemini-2.5-pro"];
+          for (const model of modelsToTry) {
+            try {
+              const apiCall = ai.models.generateContent({
+                model,
+                contents: [{ role: "user", parts: [{ text: message }] }],
+                config: { systemInstruction, temperature: 0.3 }
+              });
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error(`Timeout on model ${model}`)), 8000)
+              );
+              const response = await Promise.race([apiCall, timeoutPromise]);
+              if (response.text && response.text.trim()) {
+                responseText = response.text;
+                break;
+              }
+            } catch (err: any) {
+              console.warn(`[ABDEL GEMINI NOTICE] Model ${model} failed (${err?.message || err}), trying next...`);
+            }
           }
-        } catch (modelErr: any) {
-          console.warn(`[GEMINI API RETRY] Model ${model} encountered error/timeout (${modelErr?.message || modelErr}), trying alternate model...`);
-          await new Promise((resolve) => setTimeout(resolve, 200));
+        } catch (geminiErr: any) {
+          console.warn("[ABDEL GEMINI FAILOVER]", geminiErr?.message || geminiErr);
         }
       }
 
+      // 2. Try Groq API (High Speed Llama 3)
+      if (!responseText) {
+        const groq = getGroqClient();
+        if (groq) {
+          const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+          for (const model of groqModels) {
+            try {
+              const completion = await groq.chat.completions.create({
+                model,
+                messages: [
+                  { role: "system", content: systemInstruction },
+                  { role: "user", content: message }
+                ],
+                temperature: 0.3,
+                max_tokens: 1200
+              });
+              const content = completion.choices[0]?.message?.content?.trim();
+              if (content) {
+                responseText = content;
+                break;
+              }
+            } catch (groqErr: any) {
+              console.warn(`[ABDEL GROQ NOTICE] Model ${model} failed (${groqErr?.message || groqErr}), trying next...`);
+            }
+          }
+        }
+      }
+
+      // 3. Try OpenRouter API (Claude 3.5 Sonnet / DeepSeek R1 / Llama 3.3)
+      if (!responseText) {
+        const openRouter = getOpenRouterClient();
+        if (openRouter) {
+          const openRouterModels = [
+            "anthropic/claude-3.5-sonnet",
+            "deepseek/deepseek-r1",
+            "meta-llama/llama-3.3-70b-instruct",
+            "google/gemini-2.5-flash"
+          ];
+          for (const model of openRouterModels) {
+            try {
+              const completion = await openRouter.chat.completions.create({
+                model,
+                messages: [
+                  { role: "system", content: systemInstruction },
+                  { role: "user", content: message }
+                ],
+                temperature: 0.3,
+                max_tokens: 1200
+              });
+              const content = completion.choices[0]?.message?.content?.trim();
+              if (content) {
+                responseText = content;
+                break;
+              }
+            } catch (openRouterErr: any) {
+              console.warn(`[ABDEL OPENROUTER NOTICE] Model ${model} failed (${openRouterErr?.message || openRouterErr}), trying next...`);
+            }
+          }
+        }
+      }
+
+      // 4. Try OpenAI API (GPT-4o-mini / GPT-4o)
+      if (!responseText) {
+        const openAI = getOpenAIClient();
+        if (openAI) {
+          const openAiModels = ["gpt-4o-mini", "gpt-4o"];
+          for (const model of openAiModels) {
+            try {
+              const completion = await openAI.chat.completions.create({
+                model,
+                messages: [
+                  { role: "system", content: systemInstruction },
+                  { role: "user", content: message }
+                ],
+                temperature: 0.3,
+                max_tokens: 1200
+              });
+              const content = completion.choices[0]?.message?.content?.trim();
+              if (content) {
+                responseText = content;
+                break;
+              }
+            } catch (oaiErr: any) {
+              console.warn(`[ABDEL OPENAI NOTICE] Model ${model} failed (${oaiErr?.message || oaiErr}), trying next...`);
+            }
+          }
+        }
+      }
+
+      // 5. Contextual Editorial Synthesis Fallback (Guarantees zero downtime)
       if (!responseText) {
         if (context && context.title) {
           responseText = userLang === "fr"
@@ -2416,7 +2487,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
 
       return res.json({ response: responseText });
     } catch (error: any) {
-      console.error("Gemini API Error in /api/chat:", error);
+      console.error("API Error in /api/chat:", error);
       const userLang = req.body?.language === "en" ? "en" : "fr";
       const { context } = req.body || {};
       

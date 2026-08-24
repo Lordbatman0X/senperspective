@@ -316,7 +316,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   const [manualPrompt, setManualPrompt] = useState('');
   const [manualCategory, setManualCategory] = useState('Économie');
   const [manualStyleType, setManualStyleType] = useState<'News' | 'Analysis' | 'Deep Dive'>('News');
-  const [manualPreferredEngine, setManualPreferredEngine] = useState<'auto' | 'gemini' | 'openai'>('auto');
+  const [manualPreferredEngine, setManualPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai'>('auto');
   const [promptLoading, setPromptLoading] = useState(false);
 
   // New Feed Input Form
@@ -1750,7 +1750,9 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                   onChange={e => setManualPreferredEngine(e.target.value as any)}
                   className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-emerald-500"
                 >
-                  <option value="auto">🤖 Dual-Engine Auto (Gemini ⇄ OpenAI Failover)</option>
+                  <option value="auto">🤖 Multi-Engine Cascade Auto (Gemini ⇄ Groq ⇄ OpenRouter ⇄ OpenAI)</option>
+                  <option value="groq">🚀 Groq Llama 3.3 70B (Vitesse Éclair)</option>
+                  <option value="openrouter">🌐 OpenRouter (Claude 3.5 / DeepSeek R1)</option>
                   <option value="gemini">⚡ Gemini 2.5 Flash Principal</option>
                   <option value="openai">🧠 OpenAI GPT-4o-mini Principal</option>
                 </select>

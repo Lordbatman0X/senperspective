@@ -6,9 +6,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function stripHtmlTags(input: string | undefined | null): string {
-  if (!input) return '';
-  let str = String(input);
+export function stripHtmlTags(input: any): string {
+  if (input === null || input === undefined) return '';
+  if (typeof input === 'object') {
+    if (typeof input.fr === 'string') return stripHtmlTags(input.fr);
+    if (typeof input.en === 'string') return stripHtmlTags(input.en);
+    if (typeof input.text === 'string') return stripHtmlTags(input.text);
+    if (typeof input.title === 'string') return stripHtmlTags(input.title);
+    return '';
+  }
+  let str = String(input).trim();
+  if (str === '[object Object]' || str === '[Object]' || str === '[object]' || str === 'undefined' || str === 'null') {
+    return '';
+  }
   // Replace break tags and closing paragraph tags with space/newlines
   str = str.replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, '\n\n').replace(/<\/div>/gi, '\n');
   // Strip all HTML tags including <a...>, <font...>, etc.
@@ -27,7 +37,12 @@ export function stripHtmlTags(input: string | undefined | null): string {
     .replace(/&ldquo;/gi, '"')
     .replace(/&mdash;/gi, '—')
     .replace(/&ndash;/gi, '–');
-  return str.trim();
+  
+  const finalStr = str.trim();
+  if (finalStr === '[object Object]' || finalStr === '[Object]' || finalStr === '[object]') {
+    return '';
+  }
+  return finalStr;
 }
 
 export function calculateReadingTime(article: Article, language: 'en' | 'fr' = 'en'): string {
@@ -91,25 +106,35 @@ export function extractYoutubeId(input: string | undefined | null): string {
  */
 export function getSafeText(val: any, language: 'en' | 'fr' = 'fr'): string {
   if (val === null || val === undefined) return '';
-  if (typeof val === 'string') return val;
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed === '[object Object]' || trimmed === '[Object]' || trimmed === '[object]') return '';
+    return val;
+  }
   if (typeof val === 'number' || typeof val === 'boolean') return String(val);
   if (typeof val === 'object') {
-    if (val[language]) return String(val[language]);
+    if (val[language] && typeof val[language] === 'string') return val[language];
     const fallbackLang = language === 'fr' ? 'en' : 'fr';
-    if (val[fallbackLang]) return String(val[fallbackLang]);
-    return val.name || val.title || val.label || val.tag || val.id || '';
+    if (val[fallbackLang] && typeof val[fallbackLang] === 'string') return val[fallbackLang];
+    const stringVal = val.name || val.title || val.label || val.tag || val.id || '';
+    if (typeof stringVal === 'string' && stringVal !== '[object Object]') return stringVal;
+    return '';
   }
-  return String(val);
+  const str = String(val);
+  return (str === '[object Object]' || str === '[Object]') ? '' : str;
 }
 
 export function formatCategory(cat: any, language: 'en' | 'fr' = 'fr'): string {
   if (!cat) return '';
-  if (typeof cat === 'string') return cat;
+  if (typeof cat === 'string') {
+    return (cat === '[object Object]' || cat === '[Object]') ? '' : cat;
+  }
   if (typeof cat === 'object') {
-    if (cat[language]) return String(cat[language]);
+    if (cat[language] && typeof cat[language] === 'string') return cat[language];
     const fallbackLang = language === 'fr' ? 'en' : 'fr';
-    if (cat[fallbackLang]) return String(cat[fallbackLang]);
-    return cat.name || cat.id || String(cat);
+    if (cat[fallbackLang] && typeof cat[fallbackLang] === 'string') return cat[fallbackLang];
+    const res = cat.name || cat.id || '';
+    return typeof res === 'string' && res !== '[object Object]' ? res : '';
   }
   return String(cat);
 }
