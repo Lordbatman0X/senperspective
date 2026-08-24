@@ -1,13 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#E85D42"/>
-      <stop offset="100%" stop-color="#C8432A"/>
+    <linearGradient id="pGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF5533"/>
+      <stop offset="100%" stop-color="#E85D42"/>
     </linearGradient>
   </defs>
-  <!-- Background Badge filling the frame -->
-  <rect x="0" y="0" width="512" height="512" rx="100" fill="url(#bgGrad)"/>
-  
-  <!-- Bold Geometric 'P' Path taking up ~80% of the canvas height -->
-  <path fill="#FFFFFF" d="M 128 80 H 290 C 370 80 424 126 424 206 C 424 286 370 332 290 332 H 216 V 432 H 128 V 80 Z M 216 160 V 252 H 282 C 322 252 342 236 342 206 C 342 176 322 160 282 160 H 216 Z" />
+  <!-- Big Orange 'P' path filling the frame without background box -->
+  <path fill="url(#pGrad)" fill-rule="evenodd" d="M 40 20 H 310 C 410 20 470 70 470 155 C 470 240 410 290 310 290 H 180 V 492 H 40 Z M 180 100 V 210 H 290 C 340 210 370 185 370 155 C 370 125 340 100 290 100 Z" />
 </svg>
