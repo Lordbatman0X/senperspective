@@ -856,6 +856,8 @@ app.use((req, res, next) => {
     targetPack: string; // 'all' | 'senegal' | 'africa' | 'world' | 'sports' | 'maritime'
     maxArticlesPerCycle: number;
     autoPublish: boolean;
+    preferredEngine: 'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai';
+    customPrompt: string;
     lastRunAt: string | null;
     nextRunAt: string | null;
     totalRuns: number;
@@ -871,6 +873,8 @@ app.use((req, res, next) => {
     targetPack: 'all',
     maxArticlesPerCycle: 2,
     autoPublish: false,
+    preferredEngine: 'auto',
+    customPrompt: '',
     lastRunAt: null,
     nextRunAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     totalRuns: 0,
@@ -1244,12 +1248,13 @@ app.use((req, res, next) => {
   app.post("/api/webhooks/make-rss", handleUniversalArticleWebhook);
 
   // Helper to convert single RSS item into complete Perspective structured draft using dual-engine storytelling AI
-  const processSingleItemToPerspectiveDraft = async (item: any, feedCategory?: string, articleType: ArticleStyleType = "News"): Promise<any> => {
+  const processSingleItemToPerspectiveDraft = async (item: any, feedCategory?: string, articleType: ArticleStyleType = "News", preferredEngine: any = "auto", customPrompt: string = ""): Promise<any> => {
     const genResult = await orchestrateDualEngineArticleGeneration({
       rssItem: item,
+      prompt: customPrompt,
       category: feedCategory || "Économie",
       type: articleType,
-      preferredEngine: "auto"
+      preferredEngine: preferredEngine || "auto"
     });
 
     const enriched = genResult.article;
@@ -1339,7 +1344,7 @@ app.use((req, res, next) => {
         const itemsToProcess = feedRes.items.slice(0, rssAutomationConfig.maxArticlesPerCycle);
         for (const item of itemsToProcess) {
           try {
-            const draftArt = await processSingleItemToPerspectiveDraft(item, feed.category);
+            const draftArt = await processSingleItemToPerspectiveDraft(item, feed.category, "News", rssAutomationConfig.preferredEngine, rssAutomationConfig.customPrompt);
             if (draftArt) {
               draftArt.status = "Draft";
               draftArt.isPublished = false;
@@ -1479,7 +1484,7 @@ app.use((req, res, next) => {
 
   app.post("/api/rss-automation/config", (req, res) => {
     try {
-      const { enabled, intervalMinutes, targetPack, maxArticlesPerCycle, autoPublish } = req.body;
+      const { enabled, intervalMinutes, targetPack, maxArticlesPerCycle, autoPublish, preferredEngine, customPrompt } = req.body;
 
       if (typeof enabled === "boolean") rssAutomationConfig.enabled = enabled;
       if (typeof intervalMinutes === "number" && intervalMinutes >= 5) {
@@ -1489,6 +1494,9 @@ app.use((req, res, next) => {
       if (typeof maxArticlesPerCycle === "number" && maxArticlesPerCycle >= 1) {
         rssAutomationConfig.maxArticlesPerCycle = maxArticlesPerCycle;
       }
+      if (typeof preferredEngine === "string") rssAutomationConfig.preferredEngine = preferredEngine as any;
+      if (typeof customPrompt === "string") rssAutomationConfig.customPrompt = customPrompt;
+
       rssAutomationConfig.autoPublish = false; // Always force unpublished drafts for admin authorization
 
       if (rssAutomationConfig.enabled) {

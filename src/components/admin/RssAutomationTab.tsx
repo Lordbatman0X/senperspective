@@ -277,6 +277,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     targetPack: string;
     maxArticlesPerCycle: number;
     autoPublish: boolean;
+    preferredEngine?: string;
+    customPrompt?: string;
     lastRunAt: string | null;
     nextRunAt: string | null;
     status: 'idle' | 'running' | 'error';
@@ -943,7 +945,9 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         intervalMinutes: updatedFields.intervalMinutes ?? autoSchedule.intervalMinutes,
         targetPack: updatedFields.targetPack ?? autoSchedule.targetPack,
         maxArticlesPerCycle: updatedFields.maxArticlesPerCycle ?? autoSchedule.maxArticlesPerCycle,
-        autoPublish: updatedFields.autoPublish ?? autoSchedule.autoPublish
+        autoPublish: updatedFields.autoPublish ?? autoSchedule.autoPublish,
+        preferredEngine: updatedFields.preferredEngine ?? autoSchedule.preferredEngine ?? 'auto',
+        customPrompt: updatedFields.customPrompt ?? autoSchedule.customPrompt ?? ''
       };
 
       const { ok, data, error } = await safeFetchJson('/api/rss-automation/config', {
@@ -1245,6 +1249,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
               >
                 <option value="all">{isFr ? 'Tous Moteurs IA' : 'All AI Engines'}</option>
                 <option value="gemini">Gemini 2.5 Flash</option>
+                <option value="groq">Groq Llama 3.3</option>
+                <option value="openrouter">OpenRouter / Claude</option>
                 <option value="openai">OpenAI GPT-4o</option>
               </select>
 
@@ -1938,6 +1944,44 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                 <span>{isFr ? 'Total Rédigés' : 'Total Drafted'}:</span>
                 <span className="text-white font-bold">{autoSchedule.totalDraftsCreated || 0}</span>
               </div>
+            </div>
+          </div>
+
+          {/* AI Settings for Scheduler */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
+              <label className="text-[11px] font-mono uppercase font-bold text-purple-400 flex items-center gap-1.5">
+                <Sparkles size={13} />
+                {isFr ? 'Moteur IA par défaut' : 'Default AI Engine'}
+              </label>
+              <select
+                value={autoSchedule.preferredEngine || 'auto'}
+                onChange={(e) => handleSaveScheduleConfig({ preferredEngine: e.target.value })}
+                disabled={scheduleLoading}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-purple-500 cursor-pointer"
+              >
+                <option value="auto">🤖 Multi-Engine Cascade Auto (Gemini ⇄ Groq ⇄ OpenRouter ⇄ OpenAI)</option>
+                <option value="groq">🚀 Groq Llama 3.3 70B (Vitesse Éclair)</option>
+                <option value="openrouter">🌐 OpenRouter (Claude 3.5 / DeepSeek R1)</option>
+                <option value="gemini">⚡ Gemini 2.5 Flash Principal</option>
+                <option value="openai">🧠 OpenAI GPT-4o-mini Principal</option>
+              </select>
+            </div>
+
+            <div className="bg-zinc-950/90 border border-zinc-800 p-4 rounded-2xl space-y-2">
+              <label className="text-[11px] font-mono uppercase font-bold text-blue-400 flex items-center gap-1.5">
+                <FileCode size={13} />
+                {isFr ? 'Prompt / Directive Globale' : 'Global Custom Prompt'}
+              </label>
+              <textarea
+                value={autoSchedule.customPrompt || ''}
+                onChange={(e) => setAutoSchedule({ ...autoSchedule, customPrompt: e.target.value })}
+                onBlur={(e) => handleSaveScheduleConfig({ customPrompt: e.target.value })}
+                placeholder={isFr ? "Instructions spécifiques (ex: Ton satirique, focus tech)..." : "Specific instructions (e.g. Satirical tone, focus on tech)..."}
+                disabled={scheduleLoading}
+                rows={2}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white px-3 py-2 rounded-xl text-xs font-mono outline-none focus:border-blue-500 transition-colors resize-none"
+              />
             </div>
           </div>
 
