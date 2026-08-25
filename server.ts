@@ -172,6 +172,42 @@ app.use((req, res, next) => {
   // Persistent Analytics & Consented Audience Storage Files
   const analyticsEventsFile = path.join(baseStorageDir, "analytics-events.json");
   const userConsentsFile = path.join(baseStorageDir, "user-consents.json");
+  const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
+
+  // Helper to get effective API Key (prioritizes dynamic storage, then process.env)
+  function getEffectiveApiKey(provider: string): string | undefined {
+    try {
+      if (fs.existsSync(apiKeysFile)) {
+        const keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
+        if (keys[provider] && keys[provider].trim() !== "") {
+          return keys[provider];
+        }
+      }
+    } catch (err) {
+      console.error(`Error reading apiKeysFile for ${provider}:`, err);
+    }
+    
+    // Fallbacks to process.env
+    switch (provider) {
+      case 'GEMINI': return process.env.GEMINI_API_KEY;
+      case 'OPENAI': return process.env.OPENAI_API_KEY;
+      case 'GROQ': return process.env.GROQ_API_KEY;
+      case 'OPENROUTER': return process.env.OPENROUTER_API_KEY;
+      default: return undefined;
+    }
+  }
+
+  // Helper to save API Key
+  function saveApiKey(provider: string, key: string) {
+    let keys: Record<string, string> = {};
+    try {
+      if (fs.existsSync(apiKeysFile)) {
+        keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
+      }
+    } catch (e) {}
+    keys[provider] = key;
+    fs.writeFileSync(apiKeysFile, JSON.stringify(keys, null, 2), "utf-8");
+  }
   let analyticsEventsRepository: any[] = [];
   let userConsentsRepository: any[] = [];
 
@@ -1464,9 +1500,9 @@ app.use((req, res, next) => {
         healthyCount: results.filter(r => r.status === "healthy").length,
         degradedCount: results.filter(r => r.status === "degraded").length,
         errorCount: results.filter(r => r.status === "error").length,
-        geminiAiStatus: (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "") ? "ready" : "no_key",
-        openAiStatus: (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "") ? "ready" : "no_key",
-        aiDualEngineReady: !!(process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY),
+        geminiAiStatus: (getEffectiveApiKey('GEMINI') && getEffectiveApiKey('GEMINI').trim() !== "") ? "ready" : "no_key",
+        openAiStatus: (getEffectiveApiKey('OPENAI') && getEffectiveApiKey('OPENAI').trim() !== "") ? "ready" : "no_key",
+        aiDualEngineReady: !!(getEffectiveApiKey('GEMINI') || getEffectiveApiKey('OPENAI')),
         results
       });
     } catch (err: any) {
@@ -1579,10 +1615,15 @@ app.use((req, res, next) => {
 
   // AI Engine Status Endpoint (GET /api/ai-engine/status)
   app.get("/api/ai-engine/status", (req, res) => {
-    const geminiConfigured = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "" && process.env.GEMINI_API_KEY !== "undefined";
-    const openAiConfigured = !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "" && process.env.OPENAI_API_KEY !== "undefined";
-    const groqConfigured = !!process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim() !== "" && process.env.GROQ_API_KEY !== "undefined";
-    const openRouterConfigured = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== "" && process.env.OPENROUTER_API_KEY !== "undefined";
+    const geminiKey = getEffectiveApiKey('GEMINI');
+    const openaiKey = getEffectiveApiKey('OPENAI');
+    const groqKey = getEffectiveApiKey('GROQ');
+    const openrouterKey = getEffectiveApiKey('OPENROUTER');
+
+    const geminiConfigured = !!geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined";
+    const openAiConfigured = !!openaiKey && openaiKey.trim() !== "" && openaiKey !== "undefined";
+    const groqConfigured = !!groqKey && groqKey.trim() !== "" && groqKey !== "undefined";
+    const openRouterConfigured = !!openrouterKey && openrouterKey.trim() !== "" && openrouterKey !== "undefined";
 
     return res.json({
       success: true,
@@ -1610,6 +1651,20 @@ app.use((req, res, next) => {
       mode: "multi-orchestrator",
       storytellingEngine: "Perspective Editorial Standards v4"
     });
+  });
+
+  // Set API Key Endpoint
+  app.post("/api/ai-engine/keys", express.json(), (req, res) => {
+    try {
+      const { provider, key } = req.body;
+      if (!provider || typeof key !== 'string') {
+        return res.status(400).json({ success: false, error: "Missing provider or key" });
+      }
+      saveApiKey(provider.toUpperCase(), key);
+      return res.json({ success: true, message: `API Key for ${provider} saved.` });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
   });
 
   // Editorial Guidelines Endpoints (GET, POST, RESET, TEST)
@@ -2372,7 +2427,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
       let responseText = "";
 
       // 1. Try Gemini API
-      const geminiKey = process.env.GEMINI_API_KEY;
+      const geminiKey = getEffectiveApiKey('GEMINI');
       if (geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined" && geminiKey !== "null") {
         try {
           const ai = new GoogleGenAI({
