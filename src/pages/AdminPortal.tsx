@@ -5,7 +5,7 @@ import { db, doc, getDoc } from '../lib/mongodb';
 import { 
   LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
-  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud
+  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud, Server
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
@@ -27,6 +27,7 @@ import { TaxonomyTab } from '../components/admin/TaxonomyTab';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { MakeWebhookTab } from '../components/admin/MakeWebhookTab';
 import { RssAutomationTab } from '../components/admin/RssAutomationTab';
+import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { VercelMigrationTab } from '../components/admin/VercelMigrationTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
@@ -318,7 +319,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation'>('articles');
 
   const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation') => {
@@ -659,6 +660,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     { id: 'seo_distribution', label: language === 'fr' ? 'SEO et distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
     { id: 'abdel_chat_config', label: language === 'fr' ? 'Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
     { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Passwords', icon: ShieldCheck, badge: 0 },
+    { id: 'api_diagnostic', label: language === 'fr' ? 'Diagnostic IA' : 'AI Diagnostic', icon: Server, badge: 0 },
     { id: 'moderation', label: language === 'fr' ? 'Utilisateurs et rôles' : 'Users & Roles', icon: Users, badge: 0 },
     { id: 'settings', label: language === 'fr' ? 'Paramètres' : 'Global Settings', icon: Settings, badge: 0 },
     { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
@@ -904,6 +906,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
         {activeTab === 'security' && (
           <SecurityTab />
+        )}
+
+        {activeTab === 'api_diagnostic' && (
+          <ApiDiagnosticTab />
         )}
 
         {activeTab === 'moderation' && (

@@ -1581,6 +1581,8 @@ app.use((req, res, next) => {
   app.get("/api/ai-engine/status", (req, res) => {
     const geminiConfigured = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "" && process.env.GEMINI_API_KEY !== "undefined";
     const openAiConfigured = !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "" && process.env.OPENAI_API_KEY !== "undefined";
+    const groqConfigured = !!process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim() !== "" && process.env.GROQ_API_KEY !== "undefined";
+    const openRouterConfigured = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== "" && process.env.OPENROUTER_API_KEY !== "undefined";
 
     return res.json({
       success: true,
@@ -1594,9 +1596,19 @@ app.use((req, res, next) => {
         status: openAiConfigured ? "ready" : "unconfigured",
         models: ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
       },
+      groq: {
+        configured: groqConfigured,
+        status: groqConfigured ? "ready" : "unconfigured",
+        models: ["llama-3.3-70b-versatile"]
+      },
+      openrouter: {
+        configured: openRouterConfigured,
+        status: openRouterConfigured ? "ready" : "unconfigured",
+        models: ["anthropic/claude-3-haiku"]
+      },
       failoverActive: true,
-      mode: "dual-orchestrator",
-      storytellingEngine: "Perspective Editorial Standards v3"
+      mode: "multi-orchestrator",
+      storytellingEngine: "Perspective Editorial Standards v4"
     });
   });
 

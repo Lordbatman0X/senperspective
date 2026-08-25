@@ -89,6 +89,11 @@ export interface Article {
   feedUrl?: string;
   originalUrl?: string;
   sourceUrl?: string;
+
+  validationReport?: {
+    passed: boolean;
+    checks: Array<{ label: string; status: 'passed' | 'failed' | 'warning' }>;
+  };
 }
 
 export interface Match {

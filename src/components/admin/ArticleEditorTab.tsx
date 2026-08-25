@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Article, BilingualText, KeyActor, TimelineEvent, PerspectiveBrief, StructuralForces } from '../../types';
 import { useStore } from '../../store';
-import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon } from 'lucide-react';
+import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon, CheckCircle2, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
@@ -598,6 +598,38 @@ export function ArticleEditorTab({
           </button>
         </div>
       </div>
+
+      {/* Validation Report Banner */}
+      {article?.validationReport && (
+        <div className={`p-4 rounded-lg border ${
+          article.validationReport.passed 
+            ? 'bg-emerald-950/20 border-emerald-500/20' 
+            : 'bg-amber-950/20 border-amber-500/20'
+        }`}>
+          <div className="flex items-center gap-2 mb-3">
+            {article.validationReport.passed ? (
+              <CheckCircle2 size={18} className="text-emerald-400" />
+            ) : (
+              <AlertCircle size={18} className="text-amber-400" />
+            )}
+            <h4 className={`text-sm font-bold uppercase tracking-widest ${
+              article.validationReport.passed ? 'text-emerald-400' : 'text-amber-400'
+            }`}>
+              AI Editorial Validation Report
+            </h4>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {article.validationReport.checks?.map((check, idx) => (
+              <div key={idx} className="flex items-center justify-between bg-zinc-950 p-2.5 rounded border border-zinc-800">
+                <span className="text-[10px] text-zinc-300 font-mono uppercase tracking-wider">{check.label}</span>
+                {check.status === 'passed' && <Check size={12} className="text-emerald-400" />}
+                {check.status === 'warning' && <AlertCircle size={12} className="text-amber-400" />}
+                {check.status === 'failed' && <X size={12} className="text-red-400" />}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={`grid grid-cols-1 ${splitView ? 'lg:grid-cols-2' : ''} gap-8`}>
         {/* Left Side: Rich Form Input Pane */}
