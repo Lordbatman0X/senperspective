@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { clear as clearIdb } from 'idb-keyval';
 
 interface Props {
   children: ReactNode;
@@ -28,6 +29,15 @@ export class ErrorBoundary extends Component<Props, State> {
     window.location.reload();
   };
 
+  private handleClearCacheAndReload = async () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      await clearIdb();
+    } catch (_) {}
+    window.location.reload();
+  };
+
   public render() {
     if (this.state.hasError) {
       return (
@@ -45,7 +55,7 @@ export class ErrorBoundary extends Component<Props, State> {
               Une erreur est survenue
             </h1>
             <p className="text-zinc-400 text-xs leading-relaxed mb-6">
-              L&apos;application a rencontré une interruption inattendue. Vous pouvez tenter de recharger la page.
+              L&apos;application a rencontré une interruption inattendue. Vous pouvez tenter de recharger ou réinitialiser le cache local.
             </p>
 
             {this.state.error?.message && (
@@ -56,12 +66,20 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
 
-            <button
-              onClick={this.handleReset}
-              className="w-full bg-[#E85D42] hover:bg-[#D45037] text-white text-xs font-black uppercase tracking-widest py-3 px-4 transition-colors"
-            >
-              Recharger l&apos;application
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={this.handleReset}
+                className="w-full bg-[#E85D42] hover:bg-[#D45037] text-white text-xs font-black uppercase tracking-widest py-3 px-4 transition-colors text-center"
+              >
+                Recharger l&apos;application
+              </button>
+              <button
+                onClick={this.handleClearCacheAndReload}
+                className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-wider py-2 px-4 transition-colors text-center border border-zinc-700"
+              >
+                Vider le cache local &amp; Relancer
+              </button>
+            </div>
           </div>
         </div>
       );

@@ -39,10 +39,10 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         </div>
         <div className="w-full md:w-1/3 flex flex-col p-6 md:p-8 justify-center h-1/2 md:h-full z-10 relative">
            <h2 className="relative text-brand-dark font-black text-xl md:text-2xl leading-[1.1] mb-3 group-hover:text-brand-primary transition-colors line-clamp-3">
-             {article.title?.[language] || article.title?.fr || 'Sans titre'}
+             {getSafeText(article.title, language) || 'Sans titre'}
            </h2>
            <p className="relative text-brand-muted font-medium text-xs md:text-sm line-clamp-3 mb-4 leading-relaxed">
-             {article.excerpt?.[language] || ''}
+             {getSafeText(article.excerpt, language) || ''}
            </p>
            <div className="mt-auto flex justify-between items-center border-t border-zinc-200 dark:border-zinc-800 pt-4 relative">
               <span className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">
@@ -82,10 +82,10 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         <div className="flex-grow">
           <Link to={`/article/${article.slug || article.id}`}>
             <h3 className={`font-black mb-3 leading-tight transition-colors ${large ? 'text-3xl lg:text-4xl text-brand-dark group-hover:text-brand-primary line-clamp-3' : small ? 'text-base text-brand-dark group-hover:text-brand-primary line-clamp-2' : tall ? 'text-[22px] text-[#E85D42] hover:text-[#D45037] line-clamp-3' : 'text-lg text-brand-dark group-hover:text-brand-primary line-clamp-3'}`}>
-              {article.title?.[language] || article.title?.fr || 'Sans titre'}
+              {getSafeText(article.title, language) || 'Sans titre'}
             </h3>
             <p className={`mb-4 ${large ? 'text-brand-muted text-lg line-clamp-3' : small ? 'text-brand-muted text-xs line-clamp-2' : tall ? 'text-zinc-600 dark:text-zinc-300 text-[15px] leading-relaxed line-clamp-4 font-medium' : 'text-brand-muted text-sm line-clamp-3'}`}>
-              {article.excerpt?.[language] || ''}
+              {getSafeText(article.excerpt, language) || ''}
             </p>
           </Link>
         </div>
@@ -132,7 +132,7 @@ function MiniCard({ article }: { article: Article }) {
             {formatCategory(article.category, language)}
           </div>
           <h4 className="font-bold text-xs leading-snug text-brand-muted group-hover:text-[#E85D42] dark:group-hover:text-[#E85D42] transition-colors mb-2 line-clamp-2">
-            {article.title?.[language] || 'Untitled'}
+            {getSafeText(article.title, language) || 'Untitled'}
           </h4>
           <div className="text-[9px] font-bold uppercase tracking-wider text-brand-muted">
             {formatRelativeDate(article.date, language)}
@@ -598,7 +598,7 @@ export function HomePage() {
                         className="font-black text-[11px] leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2 mt-0.5"
                         style={{ color: theme === 'dark' ? undefined : '#000000' }}
                       >
-                        {article.title?.[language] || 'Untitled'}
+                        {getSafeText(article.title, language) || 'Untitled'}
                       </h4>
                     </div>
                     <span 
@@ -724,7 +724,7 @@ export function HomePage() {
                         className="font-black text-xs leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2 mt-0.5"
                         style={{ color: theme === 'dark' ? undefined : '#000000' }}
                       >
-                        {article.title?.[language] || 'Untitled'}
+                        {getSafeText(article.title, language) || 'Untitled'}
                       </h4>
                     </div>
                   </Link>
