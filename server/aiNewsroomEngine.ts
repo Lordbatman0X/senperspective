@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import fs from "fs";
@@ -39,61 +40,165 @@ export async function loadKeysFromMongo() {
 }
 
 export async function saveApiKey(provider: string, key: string) {
+  const normProvider = (provider || '').trim().toUpperCase();
+  const cleanKey = (key || '').replace(/^["']|["']$/g, '').trim();
+
   let keys: Record<string, string> = {};
   try {
     if (fs.existsSync(apiKeysFile)) {
       keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
     }
   } catch (e) {}
-  keys[provider] = key;
+  keys[normProvider] = cleanKey;
   try {
     fs.writeFileSync(apiKeysFile, JSON.stringify(keys, null, 2), "utf-8");
   } catch (e) {}
 
-  cachedMongoKeys[provider] = key;
+  cachedMongoKeys[normProvider] = cleanKey;
   try {
     await saveDocument("system_config", "api_keys", cachedMongoKeys, false);
-    console.log(`[MongoDB Sync Success] Saved API key for ${provider} to MongoDB`);
+    console.log(`[MongoDB Sync Success] Saved API key for ${normProvider} to MongoDB`);
   } catch (err) {
-    console.error(`[MongoDB Sync Error] Failed to save API key for ${provider}:`, err);
+    console.error(`[MongoDB Sync Error] Failed to save API key for ${normProvider}:`, err);
   }
 }
 
+/**
+ * Clean & normalize API keys, stripping accidental quotes and whitespace
+ */
+function cleanKeyVal(val?: string | null): string | undefined {
+  if (!val || typeof val !== "string") return undefined;
+  const trimmed = val.replace(/^["']|["']$/g, '').trim();
+  if (trimmed === "" || trimmed === "undefined" || trimmed === "null" || trimmed === "YOUR_API_KEY") {
+    return undefined;
+  }
+  return trimmed;
+}
+
+/**
+ * Universal Key Resolver:
+ * Resolves API keys from Request Context, MongoDB, JSON Disk Cache, and Railway/System process.env
+ */
 export function getEffectiveApiKey(provider: string): string | undefined {
+  const p = (provider || '').trim().toUpperCase();
+
+  // 1. Request Store Overrides (from client HTTP Headers)
   try {
     const overrides = apiKeyStore.getStore();
-    if (overrides && overrides[provider] && overrides[provider].trim() !== "" && overrides[provider] !== "undefined") {
-      return overrides[provider];
+    if (overrides) {
+      const match = overrides[p] || overrides[provider] || overrides[provider.toLowerCase()];
+      const cleaned = cleanKeyVal(match);
+      if (cleaned) return cleaned;
     }
   } catch (err) {
-    console.error(`Error reading apiKeyStore for ${provider}:`, err);
+    console.error(`Error reading apiKeyStore for ${p}:`, err);
   }
 
-  // Prioritize MongoDB cached keys
-  const mongoKey = cachedMongoKeys[provider];
-  if (mongoKey && mongoKey.trim() !== "" && mongoKey !== "undefined") {
-    return mongoKey;
-  }
+  // 2. MongoDB Cached Keys
+  const mongoMatch = cachedMongoKeys[p] || cachedMongoKeys[provider] || cachedMongoKeys[provider.toLowerCase()];
+  const cleanMongo = cleanKeyVal(mongoMatch);
+  if (cleanMongo) return cleanMongo;
 
+  // 3. Local JSON Storage File
   try {
     if (fs.existsSync(apiKeysFile)) {
       const keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
-      if (keys[provider] && keys[provider].trim() !== "" && keys[provider] !== "undefined") {
-        return keys[provider];
-      }
+      const fileMatch = keys[p] || keys[provider] || keys[provider.toLowerCase()];
+      const cleanFile = cleanKeyVal(fileMatch);
+      if (cleanFile) return cleanFile;
     }
   } catch (err) {
-    console.error(`Error reading apiKeysFile for ${provider}:`, err);
+    console.error(`Error reading apiKeysFile for ${p}:`, err);
   }
   
-  // Fallbacks to process.env
-  switch (provider) {
-    case 'GEMINI': return process.env.GEMINI_API_KEY;
-    case 'OPENAI': return process.env.OPENAI_API_KEY;
-    case 'GROQ': return process.env.GROQ_API_KEY;
-    case 'OPENROUTER': return process.env.OPENROUTER_API_KEY;
-    default: return undefined;
+  // 4. Comprehensive Environment Variables (Railway, Cloud Run, Docker, Vercel, .env)
+  if (p === 'GEMINI' || p === 'GOOGLE') {
+    const geminiEnv = cleanKeyVal(
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY ||
+      process.env.GEMINI_KEY ||
+      process.env.VITE_GEMINI_API_KEY ||
+      process.env.VITE_GOOGLE_API_KEY ||
+      process.env.RAILWAY_GEMINI_API_KEY ||
+      process.env.AI_GEMINI_KEY
+    );
+    if (geminiEnv) return geminiEnv;
   }
+
+  if (p === 'OPENAI') {
+    const openAiEnv = cleanKeyVal(
+      process.env.OPENAI_API_KEY ||
+      process.env.OPENAI_KEY ||
+      process.env.OPEN_AI_KEY ||
+      process.env.OPEN_AI_API_KEY ||
+      process.env.VITE_OPENAI_API_KEY ||
+      process.env.RAILWAY_OPENAI_API_KEY
+    );
+    if (openAiEnv) return openAiEnv;
+  }
+
+  if (p === 'GROQ') {
+    const groqEnv = cleanKeyVal(
+      process.env.GROQ_API_KEY ||
+      process.env.GROQ_KEY ||
+      process.env.VITE_GROQ_API_KEY ||
+      process.env.RAILWAY_GROQ_API_KEY
+    );
+    if (groqEnv) return groqEnv;
+  }
+
+  if (p === 'OPENROUTER') {
+    const openRouterEnv = cleanKeyVal(
+      process.env.OPENROUTER_API_KEY ||
+      process.env.OPENROUTER_KEY ||
+      process.env.OPEN_ROUTER_KEY ||
+      process.env.OPEN_ROUTER_API_KEY ||
+      process.env.VITE_OPENROUTER_API_KEY ||
+      process.env.RAILWAY_OPENROUTER_API_KEY
+    );
+    if (openRouterEnv) return openRouterEnv;
+  }
+
+  if (p === 'ANTHROPIC' || p === 'CLAUDE') {
+    const anthropicEnv = cleanKeyVal(
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.CLAUDE_API_KEY ||
+      process.env.VITE_ANTHROPIC_API_KEY
+    );
+    if (anthropicEnv) return anthropicEnv;
+  }
+
+  if (p === 'DEEPSEEK') {
+    const deepseekEnv = cleanKeyVal(
+      process.env.DEEPSEEK_API_KEY ||
+      process.env.VITE_DEEPSEEK_API_KEY
+    );
+    if (deepseekEnv) return deepseekEnv;
+  }
+
+  // 5. Dynamic Case-Insensitive Fuzzy Env Search
+  for (const envKey of Object.keys(process.env)) {
+    const upperEnv = envKey.toUpperCase();
+    if (p === 'GEMINI' && (upperEnv.includes('GEMINI') || upperEnv.includes('GOOGLE_API_KEY') || upperEnv.includes('GOOGLE_GENAI'))) {
+      const val = cleanKeyVal(process.env[envKey]);
+      if (val) return val;
+    }
+    if (p === 'OPENAI' && (upperEnv.includes('OPENAI') || upperEnv.includes('OPEN_AI'))) {
+      const val = cleanKeyVal(process.env[envKey]);
+      if (val) return val;
+    }
+    if (p === 'GROQ' && upperEnv.includes('GROQ')) {
+      const val = cleanKeyVal(process.env[envKey]);
+      if (val) return val;
+    }
+    if (p === 'OPENROUTER' && (upperEnv.includes('OPENROUTER') || upperEnv.includes('OPEN_ROUTER'))) {
+      const val = cleanKeyVal(process.env[envKey]);
+      if (val) return val;
+    }
+  }
+
+  return undefined;
 }
 
 export type ArticleStyleType = "News" | "Analysis" | "Deep Dive" | "Explainer" | "Opinion";
@@ -437,11 +542,20 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
   }
 
   // Current production model cascade for fast inference and strict JSON response
-  const models = ["gemini-3.7-flash", "gemini-3.1-pro-preview"];
+  const models = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-flash",
+    "gemini-3.7-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-pro",
+    "gemini-3.1-pro-preview"
+  ];
   let lastErr: any = null;
 
   for (const model of models) {
     try {
+      console.log(`[GEMINI ENGINE] Attempting generation with model ${model}...`);
       const apiCall = ai.models.generateContent({
         model,
         contents: [{ role: "user", parts: [{ text: userPrompt }] }],
@@ -465,6 +579,7 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
 
       const parsed = JSON.parse(text);
       if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
+        console.log(`[GEMINI ENGINE SUCCESS] Generated with ${model}!`);
         return { parsed, modelUsed: `Gemini (${model})` };
       }
     } catch (err: any) {

@@ -265,7 +265,14 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // RSS Feed Sources State
   const [rssFeeds, setRssFeeds] = useState(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    return saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const parsed = saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const uniqueIds = new Set<string>();
+    return parsed.filter((f: any) => {
+      if (!f || !f.id) return false;
+      if (uniqueIds.has(f.id)) return false;
+      uniqueIds.add(f.id);
+      return true;
+    });
   });
 
   // Health Map State
@@ -1440,7 +1447,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
           {/* Feed Sources Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rssFeeds.map((feed: any) => {
+            {rssFeeds.map((feed: any, index: number) => {
               const health = feedHealthMap[feed.url];
               const isHealthy = health?.status === 'healthy';
               const isTesting = testingFeedUrl === feed.url;
@@ -1448,7 +1455,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
               return (
                 <div 
-                  key={feed.id}
+                  key={`${feed.id}-${index}`}
                   className="bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-3 transition-all"
                 >
                   <div className="space-y-2">

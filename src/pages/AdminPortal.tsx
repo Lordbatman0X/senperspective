@@ -3143,7 +3143,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
             {/* Sub-tab 3: Decoupled RSS Feed Management */}
             {contentSubTab === 'rss_automation' && (
-              <RssFeedManagementTab />
+              <RssFeedManagementTab 
+                onEditArticle={(art) => {
+                  setEditingArticle(art);
+                  setActiveTab('editor');
+                }}
+              />
             )}
 
             {/* Sub-tab 4: Decoupled AI Diagnostics */}

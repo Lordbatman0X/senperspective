@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Zap, Copy, Check, Send, Sparkles, Globe, Terminal, FileCode2, 
   CheckCircle2, AlertCircle, RefreshCw, ExternalLink, ShieldCheck, 
-  Layers, BookOpen, Bot, Trash2, Clock, Search, Plus, Play, ShieldAlert, Wifi, Sliders
+  Layers, BookOpen, Bot, Trash2, Clock, Search, Plus, Play, ShieldAlert, Wifi, Sliders,
+  ListStart, FileText, CheckCircle, Edit3, X, ChevronRight, Newspaper, ArrowRight, Eye
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { safeFetchJson } from '../../lib/apiUtils';
@@ -10,6 +11,7 @@ import { ALL_RELIABLE_RSS_FEEDS, ensureValidUrl, normalizeRssFeedUrl } from './R
 
 interface RssFeedManagementTabProps {
   onRefreshArticles?: () => void;
+  onEditArticle?: (article: any) => void;
 }
 
 interface FeedHealthRecord {
@@ -19,14 +21,21 @@ interface FeedHealthRecord {
   itemCount: number;
 }
 
-export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTabProps) {
-  const { language } = useStore();
+export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFeedManagementTabProps) {
+  const { language, addArticle } = useStore();
   const isFr = language === 'fr';
 
   // State for Feeds list
   const [rssFeeds, setRssFeeds] = useState<any[]>(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    return saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const parsed = saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const uniqueIds = new Set<string>();
+    return parsed.filter((f: any) => {
+      if (!f || !f.id) return false;
+      if (uniqueIds.has(f.id)) return false;
+      uniqueIds.add(f.id);
+      return true;
+    });
   });
 
   // Health Map State
@@ -67,9 +76,20 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
   const [healthChecking, setHealthChecking] = useState(false);
   const [testingFeedUrl, setTestingFeedUrl] = useState<string | null>(null);
   const [processingFeedId, setProcessingFeedId] = useState<string | null>(null);
+  const [quickDraftingFeedId, setQuickDraftingFeedId] = useState<string | null>(null);
   const [runningAllPipeline, setRunningAllPipeline] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  // Single-Article Inspector & Generator states (Option to generate 1 by 1)
+  const [inspectFeed, setInspectFeed] = useState<any | null>(null);
+  const [feedItems, setFeedItems] = useState<any[]>([]);
+  const [loadingFeedItems, setLoadingFeedItems] = useState(false);
+  const [feedItemsError, setFeedItemsError] = useState<string | null>(null);
+  const [generatingItemKey, setGeneratingItemKey] = useState<string | null>(null);
+  const [generatedResults, setGeneratedResults] = useState<Record<string, any>>({});
+  const [itemConfig, setItemConfig] = useState<Record<string, { category: string; type: string; engine: string; customPrompt: string }>>({});
+  const [feedItemSearch, setFeedItemSearch] = useState('');
 
   // Filters for feed monitor
   const [searchQuery, setSearchQuery] = useState('');
@@ -115,6 +135,108 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
     setTimeout(() => setStatusMsg(null), 6000);
   };
 
+  // Inspect wire feed items for 1-by-1 generation
+  const handleInspectFeed = async (feed: any) => {
+    setInspectFeed(feed);
+    setFeedItems([]);
+    setFeedItemsError(null);
+    setLoadingFeedItems(true);
+    setFeedItemSearch('');
+
+    try {
+      const { ok, data, error } = await safeFetchJson('/api/rss/preview-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feedUrl: feed.url, feedName: feed.name })
+      });
+
+      if (ok && data?.success && Array.isArray(data.items)) {
+        setFeedItems(data.items);
+      } else {
+        throw new Error(error || data?.error || (isFr ? 'Impossible de récupérer les articles du flux.' : 'Failed to fetch wire articles.'));
+      }
+    } catch (err: any) {
+      setFeedItemsError(err?.message || (isFr ? 'Erreur de connexion au flux RSS' : 'Error connecting to wire feed'));
+    } finally {
+      setLoadingFeedItems(false);
+    }
+  };
+
+  // Generate a single article from a specific RSS item
+  const handleGenerateSingleItem = async (item: any, index: number) => {
+    const itemKey = `${inspectFeed?.id || 'feed'}-${index}-${(item.title || '').slice(0, 25)}`;
+    const cfg = itemConfig[itemKey] || {
+      category: inspectFeed?.category || 'Économie',
+      type: 'News',
+      engine: 'auto',
+      customPrompt: ''
+    };
+
+    setGeneratingItemKey(itemKey);
+    try {
+      showStatus(isFr ? `Rédaction IA en cours pour : "${item.title?.slice(0, 45)}..."` : `AI writing story: "${item.title?.slice(0, 45)}..."`);
+
+      const { ok, data, error } = await safeFetchJson('/api/rss/generate-single', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rssItem: item,
+          feedUrl: inspectFeed?.url,
+          feedName: inspectFeed?.name,
+          category: cfg.category,
+          type: cfg.type,
+          preferredEngine: cfg.engine,
+          customPrompt: cfg.customPrompt,
+          autoPublish: false
+        })
+      });
+
+      if (ok && data?.success && data.article) {
+        setGeneratedResults(prev => ({ ...prev, [itemKey]: data.article }));
+        addArticle(data.article);
+        if (onRefreshArticles) onRefreshArticles();
+        showStatus(isFr ? `Article rédigé avec succès via ${data.engineUsed || 'l\'IA'} !` : `Article successfully scripted via ${data.engineUsed || 'AI'}!`);
+      } else {
+        throw new Error(error || data?.error || 'Échec de la rédaction');
+      }
+    } catch (err: any) {
+      showStatus(err?.message || 'Erreur lors de la génération', 'error');
+    } finally {
+      setGeneratingItemKey(null);
+    }
+  };
+
+  // Quick 1-article generator from feed table row
+  const handleQuickGenerateOneFromFeed = async (feedObj: any) => {
+    setQuickDraftingFeedId(feedObj.id);
+    try {
+      showStatus(isFr ? `Génération d'1 article unique depuis "${feedObj.name}"...` : `Drafting 1 single story from "${feedObj.name}"...`);
+
+      const { ok, data, error } = await safeFetchJson('/api/rss/fetch-and-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedUrl: feedObj.url,
+          feedName: feedObj.name,
+          category: feedObj.category || 'Économie',
+          maxItems: 1,
+          autoPublish: false,
+          preferredEngine: 'auto'
+        })
+      });
+
+      if (ok && data?.success) {
+        showStatus(isFr ? `1 article rédigé avec succès depuis "${feedObj.name}" !` : `1 story successfully scripted from "${feedObj.name}"!`);
+        if (onRefreshArticles) onRefreshArticles();
+      } else {
+        throw new Error(error || data?.error || 'Erreur lors de la génération');
+      }
+    } catch (err: any) {
+      showStatus(err?.message || 'Erreur lors de la génération', 'error');
+    } finally {
+      setQuickDraftingFeedId(null);
+    }
+  };
   // Add custom feed source
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
@@ -498,7 +620,19 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                 className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 disabled:opacity-50 text-xs font-mono font-bold uppercase rounded-xl border border-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <RefreshCw size={14} className={healthChecking ? 'animate-spin' : ''} />
-                <span>{healthChecking ? (isFr ? 'Audit en cours...' : 'Auditing...') : (isFr ? 'Tester la Santé de la Régie' : 'Test Active Health')}</span>
+                <span>{healthChecking ? (isFr ? 'Audit en cours...' : 'Auditing...') : (isFr ? 'Tester la Santé' : 'Audit Health')}</span>
+              </button>
+
+              {/* NEW: Dedicated Button to trigger 1-by-1 RSS generation */}
+              <button
+                onClick={() => {
+                  const firstActive = rssFeeds.find(f => f.active) || rssFeeds[0];
+                  if (firstActive) handleInspectFeed(firstActive);
+                }}
+                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-orange-400 hover:text-orange-300 text-xs font-mono font-bold uppercase rounded-xl border border-orange-500/40 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <ListStart size={14} />
+                <span>{isFr ? 'Rédiger 1 par 1 (Studio RSS)' : 'Write 1-by-1 (RSS Studio)'}</span>
               </button>
 
               <button
@@ -507,7 +641,7 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                 className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
               >
                 <Play size={14} className={runningAllPipeline ? 'animate-spin' : ''} />
-                <span>{runningAllPipeline ? (isFr ? 'Pipeline Actif...' : 'Pipeline Scanning...') : (isFr ? 'Déclencher Scan Général' : 'Run Full Batch Scan')}</span>
+                <span>{runningAllPipeline ? (isFr ? 'Pipeline Actif...' : 'Pipeline Scanning...') : (isFr ? 'Scan Global' : 'Batch Scan')}</span>
               </button>
 
               <button
@@ -515,7 +649,7 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                 className="px-4 py-2 bg-[#E85D42] hover:bg-[#d45037] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Plus size={14} />
-                <span>{isFr ? 'Ajouter un Flux' : 'Add Custom Feed'}</span>
+                <span>{isFr ? 'Ajouter un Flux' : 'Add Feed'}</span>
               </button>
             </div>
           </div>
@@ -594,10 +728,10 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                 </tr>
               </thead>
               <tbody>
-                {filteredFeeds.map(feed => {
+                {filteredFeeds.map((feed, index) => {
                   const health = feedHealthMap[feed.url];
                   return (
-                    <tr key={feed.id} className="border-b border-zinc-800/60 hover:bg-zinc-900/40 transition-colors">
+                    <tr key={`${feed.id}-${index}`} className="border-b border-zinc-800/60 hover:bg-zinc-900/40 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <span className="text-base">{feed.originFlag}</span>
@@ -639,6 +773,27 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end items-center gap-2">
+                          {/* NEW: Button to open articles 1-by-1 inspector for this feed */}
+                          <button
+                            onClick={() => handleInspectFeed(feed)}
+                            className="px-2.5 py-1.5 bg-orange-600/10 hover:bg-orange-600/20 text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/60 rounded-lg transition-all font-bold text-[10px] flex items-center gap-1.5 cursor-pointer"
+                            title={isFr ? "Explorer les articles et rédiger 1 par 1" : "Inspect articles and generate 1-by-1"}
+                          >
+                            <ListStart size={12} />
+                            <span>{isFr ? 'Articles (1 par 1)' : 'Stories (1-by-1)'}</span>
+                          </button>
+
+                          {/* Quick 1-story generator */}
+                          <button
+                            onClick={() => handleQuickGenerateOneFromFeed(feed)}
+                            disabled={quickDraftingFeedId === feed.id}
+                            className="px-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 rounded-lg transition-all font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            title={isFr ? "Rédiger le dernier article immédiatement" : "Draft latest story immediately"}
+                          >
+                            <Sparkles size={11} className={quickDraftingFeedId === feed.id ? 'animate-spin' : ''} />
+                            <span>{quickDraftingFeedId === feed.id ? '...' : (isFr ? '1 Art.' : '1 Story')}</span>
+                          </button>
+
                           <button
                             onClick={() => handleCheckFeedHealth(feed)}
                             disabled={testingFeedUrl === feed.url}
@@ -653,8 +808,8 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                             disabled={processingFeedId === feed.id}
                             className="px-2.5 py-1.5 bg-zinc-950 hover:bg-orange-950/20 text-orange-400 hover:text-orange-300 border border-zinc-800 hover:border-orange-900 rounded-lg transition-all font-bold text-[10px] flex items-center gap-1 cursor-pointer disabled:opacity-50"
                           >
-                            <Sparkles size={11} className={processingFeedId === feed.id ? 'animate-spin' : ''} />
-                            <span>{processingFeedId === feed.id ? (isFr ? 'IA Actif...' : 'AI Ingesting...') : (isFr ? 'Lancer IA' : 'Trigger AI')}</span>
+                            <Play size={11} className={processingFeedId === feed.id ? 'animate-spin' : ''} />
+                            <span>{processingFeedId === feed.id ? (isFr ? 'IA...' : 'AI...') : (isFr ? 'Auto (2 art.)' : 'Auto (2 art.)')}</span>
                           </button>
 
                           <button
@@ -1017,6 +1172,354 @@ export function RssFeedManagementTab({ onRefreshArticles }: RssFeedManagementTab
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== SINGLE-ARTICLE RSS STUDIO MODAL (Generate 1-by-1) ==================== */}
+      {inspectFeed && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 bg-zinc-900/90 border-b border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-orange-600/20 border border-orange-500/30 flex items-center justify-center text-orange-400 font-black">
+                  <ListStart size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-white text-base tracking-wide flex items-center gap-1.5">
+                      <span>{inspectFeed.originFlag || '📰'}</span>
+                      <span>{inspectFeed.name}</span>
+                    </h3>
+                    <span className="px-2 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded font-mono text-[10px] font-bold">
+                      {isFr ? 'Génération 1 par 1' : '1-by-1 Studio'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 truncate max-w-md font-mono mt-0.5">
+                    {inspectFeed.url}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Switch feed selector */}
+                <select
+                  value={inspectFeed.id}
+                  onChange={(e) => {
+                    const found = rssFeeds.find(f => f.id === e.target.value);
+                    if (found) handleInspectFeed(found);
+                  }}
+                  className="bg-zinc-950 border border-zinc-800 text-zinc-200 text-xs rounded-xl px-3 py-2 outline-none font-mono focus:border-orange-500"
+                >
+                  {rssFeeds.map((f, i) => (
+                    <option key={`${f.id}-${i}`} value={f.id}>
+                      {f.originFlag} {f.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() => handleInspectFeed(inspectFeed)}
+                  disabled={loadingFeedItems}
+                  className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-xl border border-zinc-700 transition-colors cursor-pointer"
+                  title={isFr ? 'Recharger le flux' : 'Reload feed'}
+                >
+                  <RefreshCw size={14} className={loadingFeedItems ? 'animate-spin text-orange-400' : ''} />
+                </button>
+
+                <button
+                  onClick={() => setInspectFeed(null)}
+                  className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-header with search and info */}
+            <div className="px-5 py-3 bg-zinc-900/40 border-b border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-zinc-400 w-full sm:w-auto">
+                <span className="font-mono text-zinc-500">
+                  {loadingFeedItems ? (isFr ? 'Scan du flux RSS...' : 'Reading RSS feed...') : `${feedItems.length} ${isFr ? 'articles disponibles' : 'stories found'}`}
+                </span>
+              </div>
+
+              <div className="relative w-full sm:w-72">
+                <Search size={13} className="absolute left-3 top-2.5 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder={isFr ? "Filtrer les titres du flux..." : "Filter feed items..."}
+                  value={feedItemSearch}
+                  onChange={(e) => setFeedItemSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-orange-500 font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Modal Body: Feed Items List */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {loadingFeedItems ? (
+                <div className="py-16 text-center space-y-3">
+                  <RefreshCw size={32} className="animate-spin text-orange-500 mx-auto" />
+                  <p className="text-sm text-zinc-300 font-bold">
+                    {isFr ? 'Connexion à l\'agence de presse et extraction des dépêches...' : 'Connecting to wire feed and retrieving articles...'}
+                  </p>
+                  <p className="text-xs text-zinc-500 font-mono">{inspectFeed.url}</p>
+                </div>
+              ) : feedItemsError ? (
+                <div className="p-6 bg-red-950/20 border border-red-900/50 rounded-2xl text-center space-y-3">
+                  <AlertCircle size={28} className="text-red-400 mx-auto" />
+                  <p className="text-sm font-bold text-red-300">{feedItemsError}</p>
+                  <button
+                    onClick={() => handleInspectFeed(inspectFeed)}
+                    className="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 text-red-200 text-xs font-bold rounded-xl border border-red-800 cursor-pointer"
+                  >
+                    {isFr ? 'Réessayer la connexion' : 'Retry connection'}
+                  </button>
+                </div>
+              ) : feedItems.length === 0 ? (
+                <div className="py-12 text-center text-zinc-500 text-sm">
+                  {isFr ? 'Aucun article trouvé dans ce flux pour le moment.' : 'No articles found in this feed currently.'}
+                </div>
+              ) : (
+                feedItems
+                  .filter(item => {
+                    if (!feedItemSearch) return true;
+                    const q = feedItemSearch.toLowerCase();
+                    return (item.title || '').toLowerCase().includes(q) || (item.snippet || '').toLowerCase().includes(q);
+                  })
+                  .map((item, idx) => {
+                    const itemKey = `${inspectFeed.id}-${idx}-${(item.title || '').slice(0, 25)}`;
+                    const isGenerating = generatingItemKey === itemKey;
+                    const generatedArticle = generatedResults[itemKey];
+                    const cfg = itemConfig[itemKey] || {
+                      category: inspectFeed.category || 'Économie',
+                      type: 'News',
+                      engine: 'auto',
+                      customPrompt: ''
+                    };
+
+                    const updateCfg = (updates: Partial<typeof cfg>) => {
+                      setItemConfig(prev => ({
+                        ...prev,
+                        [itemKey]: { ...cfg, ...updates }
+                      }));
+                    };
+
+                    return (
+                      <div
+                        key={itemKey}
+                        className={`p-5 rounded-2xl border transition-all ${
+                          generatedArticle
+                            ? 'bg-emerald-950/10 border-emerald-800/40 shadow-lg shadow-emerald-950/10'
+                            : 'bg-zinc-900/50 border-zinc-800/80 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                          {/* Item Content Preview */}
+                          <div className="space-y-2 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-2 py-0.5 bg-zinc-800 text-orange-400 rounded font-mono text-[10px] font-bold">
+                                #{idx + 1}
+                              </span>
+                              {item.pubDate && (
+                                <span className="text-[11px] text-zinc-500 flex items-center gap-1 font-mono">
+                                  <Clock size={11} />
+                                  {new Date(item.pubDate).toLocaleDateString()} {new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {item.author && (
+                                <span className="text-[11px] text-zinc-500 font-mono">
+                                  • {item.author}
+                                </span>
+                              )}
+                            </div>
+
+                            <h4 className="text-sm sm:text-base font-bold text-white leading-snug">
+                              {item.title}
+                            </h4>
+
+                            {item.snippet && (
+                              <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                                {item.snippet}
+                              </p>
+                            )}
+
+                            {item.link && (
+                              <a
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] text-orange-400/80 hover:text-orange-400 hover:underline font-mono"
+                              >
+                                <ExternalLink size={10} />
+                                <span>{isFr ? 'Consulter la source originale' : 'View original source'}</span>
+                              </a>
+                            )}
+                          </div>
+
+                          {/* 1-by-1 Tuning Controls & Trigger */}
+                          <div className="bg-black/60 p-4 border border-zinc-800/80 rounded-xl space-y-3 lg:w-80 flex-shrink-0">
+                            <div className="text-[10px] font-mono font-bold uppercase text-zinc-400 tracking-wider">
+                              {isFr ? 'Options de Rédaction IA' : 'AI Story Configuration'}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[9px] font-mono text-zinc-500 uppercase block mb-1">
+                                  {isFr ? 'Rubrique' : 'Category'}
+                                </label>
+                                <select
+                                  value={cfg.category}
+                                  onChange={(e) => updateCfg({ category: e.target.value })}
+                                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-1.5 font-mono outline-none focus:border-orange-500"
+                                >
+                                  {['Politique', 'Économie', 'Société', 'Sports', 'International', 'Tech & Innovation', 'Culture', 'Dossiers'].map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="text-[9px] font-mono text-zinc-500 uppercase block mb-1">
+                                  {isFr ? 'Format' : 'Style'}
+                                </label>
+                                <select
+                                  value={cfg.type}
+                                  onChange={(e) => updateCfg({ type: e.target.value })}
+                                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-1.5 font-mono outline-none focus:border-orange-500"
+                                >
+                                  <option value="News">{isFr ? 'Actualité (News)' : 'News'}</option>
+                                  <option value="Analysis">{isFr ? 'Analyse de fond' : 'Analysis'}</option>
+                                  <option value="Deep Dive">{isFr ? 'Grand Dossier' : 'Deep Dive'}</option>
+                                  <option value="Explainer">{isFr ? 'Décryptage' : 'Explainer'}</option>
+                                  <option value="Opinion">{isFr ? 'Tribune' : 'Opinion'}</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] font-mono text-zinc-500 uppercase block mb-1">
+                                {isFr ? 'Moteur IA' : 'AI Engine'}
+                              </label>
+                              <select
+                                value={cfg.engine}
+                                onChange={(e) => updateCfg({ engine: e.target.value })}
+                                className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-1.5 font-mono outline-none focus:border-orange-500"
+                              >
+                                <option value="auto">⚡ Auto-Orchestrator (Railway / Env)</option>
+                                <option value="gemini">✨ Gemini 2.0 Flash / Pro</option>
+                                <option value="groq">⚡ Groq (Llama 3.3 70B Fast)</option>
+                                <option value="openrouter">🌐 OpenRouter (Multi-Model)</option>
+                                <option value="openai">🤖 OpenAI (GPT-4o)</option>
+                              </select>
+                            </div>
+
+                            {/* Trigger Button */}
+                            <button
+                              onClick={() => handleGenerateSingleItem(item, idx)}
+                              disabled={isGenerating}
+                              className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md ${
+                                generatedArticle
+                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                                  : 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white'
+                              } disabled:opacity-50`}
+                            >
+                              {isGenerating ? (
+                                <>
+                                  <RefreshCw size={13} className="animate-spin" />
+                                  <span>{isFr ? 'Rédaction IA en cours...' : 'Writing Article...'}</span>
+                                </>
+                              ) : generatedArticle ? (
+                                <>
+                                  <RefreshCw size={13} />
+                                  <span>{isFr ? 'Regénérer cet article' : 'Re-generate Article'}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles size={13} />
+                                  <span>{isFr ? '⚡ Rédiger cet article (1 par 1)' : '⚡ Generate This Story'}</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Generated Result Card Preview */}
+                        {generatedArticle && (
+                          <div className="mt-4 pt-4 border-t border-emerald-800/30 bg-emerald-950/20 p-4 rounded-xl space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                                <span className="font-mono text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                                  {isFr ? 'Article Rédigé avec succès' : 'Story Drafted Successfully'}
+                                </span>
+                                {generatedArticle.aiGenerated && (
+                                  <span className="px-2 py-0.5 bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 rounded font-mono text-[9px] font-bold">
+                                    {generatedArticle.aiModelUsed || 'AI Orchestrated'}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {onEditArticle && (
+                                  <button
+                                    onClick={() => {
+                                      onEditArticle(generatedArticle);
+                                      setInspectFeed(null);
+                                    }}
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow"
+                                  >
+                                    <Edit3 size={13} />
+                                    <span>{isFr ? "Ouvrir dans l'Éditeur" : 'Open in Editor'}</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <h5 className="font-bold text-white text-sm">
+                                🇫🇷 {generatedArticle.title?.fr || generatedArticle.title}
+                              </h5>
+                              {generatedArticle.title?.en && (
+                                <p className="text-xs text-zinc-400 italic">
+                                  🇬🇧 {generatedArticle.title.en}
+                                </p>
+                              )}
+                            </div>
+
+                            {generatedArticle.excerpt?.fr && (
+                              <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">
+                                {generatedArticle.excerpt.fr}
+                              </p>
+                            )}
+
+                            <div className="flex items-center gap-3 text-[10px] text-zinc-400 font-mono">
+                              <span>⏱️ {generatedArticle.readingTime || 4} min read</span>
+                              <span>📁 {generatedArticle.category}</span>
+                              <span>✍️ {generatedArticle.author}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-zinc-900 border-t border-zinc-800 flex justify-between items-center text-xs text-zinc-400">
+              <span className="font-mono">
+                {isFr ? 'Sélectionnez un article pour le rédiger individuellement via votre IA configurée.' : 'Select an article to script it individually via your configured AI.'}
+              </span>
+              <button
+                onClick={() => setInspectFeed(null)}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl cursor-pointer"
+              >
+                {isFr ? 'Fermer le Studio' : 'Close Studio'}
+              </button>
+            </div>
           </div>
         </div>
       )}

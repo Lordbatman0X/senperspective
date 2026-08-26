@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -53,10 +54,12 @@ app.use((req, res, next) => {
 // Intercept all requests to bind client-provided API keys in request context
 app.use((req, res, next) => {
   const overrides: Record<string, string> = {};
-  if (req.headers["x-gemini-key"]) overrides["GEMINI"] = req.headers["x-gemini-key"] as string;
-  if (req.headers["x-openai-key"]) overrides["OPENAI"] = req.headers["x-openai-key"] as string;
-  if (req.headers["x-groq-key"]) overrides["GROQ"] = req.headers["x-groq-key"] as string;
-  if (req.headers["x-openrouter-key"]) overrides["OPENROUTER"] = req.headers["x-openrouter-key"] as string;
+  if (req.headers["x-gemini-key"]) overrides["GEMINI"] = (req.headers["x-gemini-key"] as string).trim();
+  if (req.headers["x-openai-key"]) overrides["OPENAI"] = (req.headers["x-openai-key"] as string).trim();
+  if (req.headers["x-groq-key"]) overrides["GROQ"] = (req.headers["x-groq-key"] as string).trim();
+  if (req.headers["x-openrouter-key"]) overrides["OPENROUTER"] = (req.headers["x-openrouter-key"] as string).trim();
+  if (req.headers["x-anthropic-key"]) overrides["ANTHROPIC"] = (req.headers["x-anthropic-key"] as string).trim();
+  if (req.headers["x-deepseek-key"]) overrides["DEEPSEEK"] = (req.headers["x-deepseek-key"] as string).trim();
 
   if (Object.keys(overrides).length > 0) {
     apiKeyStore.run(overrides, () => {
@@ -1624,7 +1627,7 @@ app.use((req, res, next) => {
       gemini: {
         configured: geminiConfigured,
         status: geminiConfigured ? "ready" : "unconfigured",
-        models: ["gemini-3.7-flash", "gemini-3.1-pro-preview"]
+        models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.7-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-3.1-pro-preview"]
       },
       openai: {
         configured: openAiConfigured,
@@ -1634,12 +1637,12 @@ app.use((req, res, next) => {
       groq: {
         configured: groqConfigured,
         status: groqConfigured ? "ready" : "unconfigured",
-        models: ["llama-3.3-70b-versatile"]
+        models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
       },
       openrouter: {
         configured: openRouterConfigured,
         status: openRouterConfigured ? "ready" : "unconfigured",
-        models: ["anthropic/claude-3-haiku"]
+        models: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-chat", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash", "openai/gpt-4o-mini"]
       },
       failoverActive: true,
       mode: "multi-orchestrator",
@@ -1816,6 +1819,120 @@ app.use((req, res, next) => {
     } catch (err: any) {
       console.error("AI Article Rewrite Error:", err);
       return res.status(500).json({ success: false, error: err.message || "Erreur lors de la réécriture IA" });
+    }
+  });
+
+  // Preview live RSS items from a feed without saving (POST/GET /api/rss/preview-items)
+  app.all("/api/rss/preview-items", async (req, res) => {
+    try {
+      const feedUrl = req.body?.feedUrl || req.body?.url || req.query?.url || req.query?.feedUrl;
+      const feedName = req.body?.feedName || req.query?.feedName || req.body?.name || req.query?.name;
+
+      if (!feedUrl || typeof feedUrl !== "string") {
+        return res.status(400).json({ success: false, error: "Missing 'feedUrl' parameter." });
+      }
+
+      console.log(`[RSS PREVIEW] Fetching live items for preview from: ${feedUrl}`);
+      const fetchResult = await fetchRssFeedResilient(feedUrl, typeof feedName === 'string' ? feedName : undefined);
+
+      return res.json({
+        success: true,
+        feedUrl,
+        feedName: feedName || "RSS Feed",
+        itemCount: fetchResult.items.length,
+        items: fetchResult.items,
+        isFallbackBridge: fetchResult.isFallbackBridge,
+        statusCode: fetchResult.statusCode
+      });
+    } catch (err: any) {
+      console.error("[RSS PREVIEW ERROR]", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to preview RSS feed" });
+    }
+  });
+
+  // Generate a single article from a specific RSS item (POST /api/rss/generate-single)
+  app.post("/api/rss/generate-single", async (req, res) => {
+    try {
+      const { rssItem, feedUrl, feedName, category = "Économie", type = "News", preferredEngine = "auto", autoPublish = false, customPrompt } = req.body;
+
+      if (!rssItem || (typeof rssItem !== "object" && typeof rssItem !== "string")) {
+        return res.status(400).json({ success: false, error: "Missing 'rssItem' parameter." });
+      }
+
+      console.log(`[NEWSROOM ENGINE] Generating 1 single article from RSS item: ${typeof rssItem === 'object' ? rssItem.title : rssItem} (Engine: ${preferredEngine}, Category: ${category}, Style: ${type})`);
+
+      const genResult = await orchestrateDualEngineArticleGeneration({
+        rssItem,
+        prompt: customPrompt,
+        category: category || "Économie",
+        type: (type as ArticleStyleType) || "News",
+        preferredEngine: preferredEngine || "auto"
+      });
+
+      const enriched = genResult.article;
+      const isPub = autoPublish === true;
+
+      let cleanOrigLink = typeof rssItem === "object" ? (rssItem.sourceUrl || rssItem.link || rssItem.url || "") : "";
+      let srcDomain = "";
+      let srcName = typeof rssItem === "object" ? (rssItem.sourceName || feedName || "") : (feedName || "");
+      try {
+        if (cleanOrigLink) {
+          const pUrl = new URL(cleanOrigLink);
+          srcDomain = pUrl.hostname.replace(/^www\./, "");
+        }
+      } catch (e) {
+        srcDomain = "";
+      }
+
+      const originMeta = getFeedOriginMetadata(cleanOrigLink || feedUrl || category || "", srcName);
+
+      const newArticle: any = {
+        id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 6),
+        slug: enriched.slug || `art-${Date.now()}`,
+        category: enriched.category || category || "Économie",
+        type: enriched.type || type || "News",
+        title: enriched.title,
+        excerpt: enriched.excerpt,
+        body: enriched.body,
+        featuredImage: enriched.featuredImage || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+        author: enriched.author || "Rédaction Perspective",
+        date: new Date().toISOString(),
+        readingTime: enriched.readingTime || 4,
+        tags: enriched.tags || ["RSS", "Sénégal", "Perspective"],
+        perspectiveBrief: enriched.perspectiveBrief || null,
+        timeline: enriched.timeline || [],
+        keyActors: enriched.keyActors || [],
+        structuralForces: enriched.structuralForces || null,
+        relatedArticleIds: [],
+        isPublished: isPub,
+        isFeatured: false,
+        views: 0,
+        sourceName: srcName || "Rédaction Perspective Desk",
+        sourceDomain: srcDomain,
+        sourceCountry: originMeta.country,
+        sourceFlag: originMeta.flag,
+        sourceRegion: originMeta.region,
+        originalUrl: cleanOrigLink || feedUrl || "",
+        engineUsed: genResult.engineUsed,
+        failoverTriggered: genResult.failoverTriggered,
+        failoverReason: genResult.failoverReason
+      };
+
+      rssDraftsRepository.unshift(newArticle);
+      await saveRssDrafts();
+      await syncArticleToFirestore(newArticle);
+
+      return res.status(201).json({
+        success: true,
+        message: `Article unique généré avec succès via ${genResult.engineUsed} !`,
+        permalink: `/article/${newArticle.slug}`,
+        engineUsed: genResult.engineUsed,
+        failoverTriggered: genResult.failoverTriggered,
+        article: newArticle
+      });
+    } catch (err: any) {
+      console.error("[RSS GENERATE SINGLE ERROR]", err);
+      return res.status(500).json({ success: false, error: err.message || "Failed to generate single RSS article" });
     }
   });
 
