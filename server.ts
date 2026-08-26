@@ -18,6 +18,11 @@ import {
   loadKeysFromMongo
 } from "./server/aiNewsroomEngine";
 import { 
+  generateArticleImageWithAI, 
+  getCategoryDefaultEditorialImage,
+  DEFAULT_EDITORIAL_IMAGE 
+} from "./server/aiImageGenerator";
+import { 
   connectMongo, 
   getCollectionDocs, 
   getDocument, 
@@ -765,14 +770,49 @@ app.use((req, res, next) => {
       // Clean title from accidental leftover tags
       title = title.replace(/<[^>]*>/g, "").trim();
 
-      // Media / Thumbnail image extraction
+      // Comprehensive Media / Thumbnail / Image extraction for RSS 2.0, Atom, RDF & HTML bodies
       let imageUrl = "";
-      const mediaMatch = itemXml.match(/<media:content[^>]*url=["']([^"']+)["']/i) ||
-                         itemXml.match(/<media:thumbnail[^>]*url=["']([^"']+)["']/i) ||
-                         itemXml.match(/<enclosure[^>]*url=["']([^"']+)["']/i) ||
-                         itemXml.match(/<img[^>]*src=["']([^"']+)["']/i);
-      if (mediaMatch && mediaMatch[1]) {
-        imageUrl = mediaMatch[1].trim();
+      
+      const isValidRssImg = (u: string) => {
+        if (!u || typeof u !== "string") return false;
+        const s = u.trim().toLowerCase();
+        if (!s.startsWith("http://") && !s.startsWith("https://") && !s.startsWith("data:image/")) return false;
+        if (s.includes("feedburner.com/~r/") || s.includes("pixel.wp.com") || s.includes("1x1") || s.includes("doubleclick") || s.includes("/emoji/")) return false;
+        return true;
+      };
+
+      const cleanRssImg = (u: string) => u.replace(/&amp;/g, "&").trim();
+
+      // 1. media:content & media:thumbnail
+      const mediaContentMatch = itemXml.match(/<media:content[^>]*url=["']([^"']+)["']/i);
+      const mediaThumbMatch = itemXml.match(/<media:thumbnail[^>]*url=["']([^"']+)["']/i);
+      const enclosureMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']+)["']/i);
+      const itunesImgMatch = itemXml.match(/<itunes:image[^>]*href=["']([^"']+)["']/i) || itemXml.match(/<itunes:image[^>]*url=["']([^"']+)["']/i);
+      const atomImgTag = itemXml.match(/<image[^>]*>\s*<url>([^<]+)<\/url>/i) || itemXml.match(/<image>([^<]+)<\/image>/i);
+      const wpImgMatch = itemXml.match(/<(?:wp:attachment_url|featuredImage|featured_image|post-thumbnail|thumbnail)[^>]*>([^<]+)<\//i);
+      const linkEnclosureMatch = itemXml.match(/<link[^>]*rel=["']enclosure["'][^>]*href=["']([^"']+)["']/i);
+
+      if (mediaContentMatch && isValidRssImg(mediaContentMatch[1])) {
+        imageUrl = cleanRssImg(mediaContentMatch[1]);
+      } else if (mediaThumbMatch && isValidRssImg(mediaThumbMatch[1])) {
+        imageUrl = cleanRssImg(mediaThumbMatch[1]);
+      } else if (enclosureMatch && isValidRssImg(enclosureMatch[1])) {
+        imageUrl = cleanRssImg(enclosureMatch[1]);
+      } else if (itunesImgMatch && isValidRssImg(itunesImgMatch[1])) {
+        imageUrl = cleanRssImg(itunesImgMatch[1]);
+      } else if (wpImgMatch && isValidRssImg(wpImgMatch[1])) {
+        imageUrl = cleanRssImg(wpImgMatch[1]);
+      } else if (atomImgTag && isValidRssImg(atomImgTag[1])) {
+        imageUrl = cleanRssImg(atomImgTag[1]);
+      } else if (linkEnclosureMatch && isValidRssImg(linkEnclosureMatch[1])) {
+        imageUrl = cleanRssImg(linkEnclosureMatch[1]);
+      } else {
+        // Fallback: search for <img> inside itemXml, description, or content
+        const combinedHtml = `${itemXml} ${description || ""}`;
+        const imgTagMatch = combinedHtml.match(/<img[^>]+src=["'](https?:\/\/[^"'\s>]+)["']/i);
+        if (imgTagMatch && isValidRssImg(imgTagMatch[1])) {
+          imageUrl = cleanRssImg(imgTagMatch[1]);
+        }
       }
 
       if (title || cleanDesc) {
@@ -1313,16 +1353,27 @@ app.use((req, res, next) => {
     const isFeatured = bodyData.isFeatured === true || bodyData.isFeatured === "true" || bodyData.featured === true;
     const isTrending = bodyData.isTrending === true || bodyData.isTrending === "true" || bodyData.trending === true;
 
-    const unsplashList = [
-      "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=1200",
-      "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&q=80&w=1200",
-      "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&q=80&w=1200",
-      "https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?auto=format&fit=crop&q=80&w=1200",
-      "https://images.unsplash.com/photo-1572949645841-094f3a9c4c94?auto=format&fit=crop&q=80&w=1200"
-    ];
-    const selectedImg = (bodyData.imageUrl || bodyData.featuredImage || bodyData.image) && (bodyData.imageUrl || bodyData.featuredImage || bodyData.image)?.startsWith("http")
-      ? (bodyData.imageUrl || bodyData.featuredImage || bodyData.image)
-      : unsplashList[Math.floor(Math.random() * unsplashList.length)];
+    // Image resolution: Use extracted RSS image if available; otherwise generate with AI from context
+    let selectedImg = (bodyData.imageUrl || bodyData.featuredImage || bodyData.image || "").trim();
+    const isCustomValidImg = selectedImg && 
+      (selectedImg.startsWith("http://") || selectedImg.startsWith("https://") || selectedImg.startsWith("data:image/")) && 
+      !selectedImg.includes("photo-1504711434969-e33886168f5c");
+
+    if (!isCustomValidImg) {
+      try {
+        console.log(`[RSS INGESTION IMAGE] Generating AI image for incoming article: "${titleFr || rawTitle}"...`);
+        const aiImgResult = await generateArticleImageWithAI({
+          title: titleFr || titleEn || rawTitle,
+          excerpt: excerptFr || excerptEn || rawExcerpt,
+          category: bodyData.category || "Politique",
+          tags: Array.isArray(bodyData.tags) ? bodyData.tags : []
+        });
+        selectedImg = aiImgResult.imageUrl;
+      } catch (imgErr) {
+        console.warn("[RSS INGESTION IMAGE ERROR] AI generation failed, using contextual curated visual:", imgErr);
+        selectedImg = getCategoryDefaultEditorialImage(bodyData.category || "Politique", titleFr || rawTitle);
+      }
+    }
 
     let authorVal = "Rédaction Perspective";
     if (typeof bodyData.author === "string" && bodyData.author.trim() !== "") {
@@ -1427,6 +1478,27 @@ app.use((req, res, next) => {
 
     const originMeta = getFeedOriginMetadata(cleanOrigLink || feedCategory || "", srcName);
 
+    // Image resolution: RSS wire image or AI-generated context visual
+    let draftImage = (item.imageUrl || item.featuredImage || item.image || enriched.featuredImage || "").trim();
+    const isCustomValidDraftImg = draftImage && 
+      (draftImage.startsWith("http://") || draftImage.startsWith("https://") || draftImage.startsWith("data:image/")) && 
+      !draftImage.includes("photo-1504711434969-e33886168f5c");
+
+    if (!isCustomValidDraftImg) {
+      try {
+        console.log(`[RSS DRAFT IMAGE] Generating AI image for draft: "${cleanTitle}"...`);
+        const aiImgResult = await generateArticleImageWithAI({
+          title: cleanTitle,
+          excerpt: enriched.excerpt?.fr || enriched.excerpt?.en,
+          category: feedCategory || enriched.category || "Économie",
+          tags: enriched.tags || []
+        });
+        draftImage = aiImgResult.imageUrl;
+      } catch (err) {
+        draftImage = getCategoryDefaultEditorialImage(feedCategory || enriched.category, cleanTitle);
+      }
+    }
+
     const draftArticle: any = {
       id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9) + "-" + Math.floor(Math.random() * 1000000),
       slug: enriched.slug,
@@ -1437,7 +1509,8 @@ app.use((req, res, next) => {
       body: enriched.body,
       author: enriched.author || "Rédaction Perspective",
       publishedAt: new Date().toISOString(),
-      featuredImage: enriched.featuredImage || item.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+      featuredImage: draftImage,
+      imageUrl: draftImage,
       isFeatured: false,
       isBreaking: false,
       readTime: `${enriched.readingTime || 4} min`,
@@ -1942,6 +2015,73 @@ app.use((req, res, next) => {
     }
   });
 
+  // Dedicated AI Article Image Generation API (POST /api/ai/generate-article-image)
+  app.post("/api/ai/generate-article-image", async (req, res) => {
+    try {
+      const { title, excerpt, category, tags, styleHint } = req.body || {};
+      if (!title || typeof title !== "string") {
+        return res.status(400).json({ success: false, error: "Missing 'title' parameter." });
+      }
+
+      console.log(`[API AI IMAGE] Generating image for title: "${title}" (Category: ${category || 'Économie'})`);
+      const result = await generateArticleImageWithAI({
+        title,
+        excerpt,
+        category: category || "Économie",
+        tags: Array.isArray(tags) ? tags : [],
+        styleHint
+      });
+
+      return res.json({
+        success: true,
+        imageUrl: result.imageUrl,
+        source: result.source,
+        modelUsed: result.modelUsed,
+        promptUsed: result.promptUsed
+      });
+    } catch (err: any) {
+      console.error("[API AI IMAGE ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to generate AI image" });
+    }
+  });
+
+  // Regenerate Image for Existing Article in Firestore/Memory/Mongo (POST /api/articles/:id/generate-image)
+  app.post("/api/articles/:id/generate-image", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const article = rssDraftsRepository.find(a => a.id === id);
+      const title = req.body?.title || (article ? (article.title?.fr || article.title?.en || article.title) : "");
+      const excerpt = req.body?.excerpt || (article ? (article.excerpt?.fr || article.excerpt?.en || article.excerpt) : "");
+      const category = req.body?.category || (article ? article.category : "Économie");
+
+      if (!title) {
+        return res.status(400).json({ success: false, error: "Article title is required to generate visual." });
+      }
+
+      const imgResult = await generateArticleImageWithAI({ title, excerpt, category });
+
+      if (article) {
+        article.featuredImage = imgResult.imageUrl;
+        article.imageUrl = imgResult.imageUrl;
+        await saveRssDrafts();
+        await syncArticleToFirestore(article);
+      } else {
+        await syncArticleToFirestore({ id, featuredImage: imgResult.imageUrl, imageUrl: imgResult.imageUrl });
+      }
+
+      return res.json({
+        success: true,
+        articleId: id,
+        imageUrl: imgResult.imageUrl,
+        source: imgResult.source,
+        modelUsed: imgResult.modelUsed
+      });
+    } catch (err: any) {
+      console.error("[REGENERATE ARTICLE IMAGE ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Failed to regenerate article image" });
+    }
+  });
+
   // Preview live RSS items from a feed without saving (POST/GET /api/rss/preview-items)
   app.all("/api/rss/preview-items", async (req, res) => {
     try {
@@ -2006,6 +2146,27 @@ app.use((req, res, next) => {
 
       const originMeta = getFeedOriginMetadata(cleanOrigLink || feedUrl || category || "", srcName);
 
+      // Image resolution: Use extracted RSS image if available, else AI-generated image
+      let singleArtImage = (typeof rssItem === "object" ? (rssItem.imageUrl || rssItem.featuredImage || rssItem.image) : "") || enriched.featuredImage || "";
+      const isValidSingleImg = singleArtImage && 
+        (singleArtImage.startsWith("http://") || singleArtImage.startsWith("https://") || singleArtImage.startsWith("data:image/")) && 
+        !singleArtImage.includes("photo-1504711434969-e33886168f5c");
+
+      if (!isValidSingleImg) {
+        try {
+          console.log(`[RSS GENERATE SINGLE IMAGE] Generating AI image for: "${enriched.title?.fr || 'Article'}"...`);
+          const aiGenImg = await generateArticleImageWithAI({
+            title: enriched.title?.fr || enriched.title?.en || (typeof rssItem === "object" ? rssItem.title : "Actualité"),
+            excerpt: enriched.excerpt?.fr || enriched.excerpt?.en,
+            category: enriched.category || category || "Économie",
+            tags: enriched.tags || []
+          });
+          singleArtImage = aiGenImg.imageUrl;
+        } catch (imgErr) {
+          singleArtImage = getCategoryDefaultEditorialImage(enriched.category || category, enriched.title?.fr || "");
+        }
+      }
+
       const newArticle: any = {
         id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 6),
         slug: enriched.slug || `art-${Date.now()}`,
@@ -2014,7 +2175,8 @@ app.use((req, res, next) => {
         title: enriched.title,
         excerpt: enriched.excerpt,
         body: enriched.body,
-        featuredImage: enriched.featuredImage || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+        featuredImage: singleArtImage,
+        imageUrl: singleArtImage,
         author: enriched.author || "Rédaction Perspective",
         date: new Date().toISOString(),
         readingTime: enriched.readingTime || 4,
@@ -2145,6 +2307,27 @@ app.use((req, res, next) => {
 
           const originMeta = getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName);
 
+          // Image resolution: RSS image or AI context generated image
+          let batchItemImage = (item.imageUrl || item.featuredImage || item.image || enriched.featuredImage || "").trim();
+          const isValidBatchImg = batchItemImage && 
+            (batchItemImage.startsWith("http://") || batchItemImage.startsWith("https://") || batchItemImage.startsWith("data:image/")) && 
+            !batchItemImage.includes("photo-1504711434969-e33886168f5c");
+
+          if (!isValidBatchImg) {
+            try {
+              console.log(`[RSS BATCH IMAGE] Generating AI image for: "${enriched.title?.fr || item.title}"...`);
+              const aiBatchImg = await generateArticleImageWithAI({
+                title: enriched.title?.fr || enriched.title?.en || item.title || "Actualité",
+                excerpt: enriched.excerpt?.fr || enriched.excerpt?.en,
+                category: feedCategory || enriched.category || "Économie",
+                tags: enriched.tags || []
+              });
+              batchItemImage = aiBatchImg.imageUrl;
+            } catch (err) {
+              batchItemImage = getCategoryDefaultEditorialImage(feedCategory || enriched.category, enriched.title?.fr || item.title);
+            }
+          }
+
           const draftArticle: any = {
             id: "art-rss-" + Date.now().toString() + "-" + Math.random().toString(36).substring(2, 9) + "-" + Math.floor(Math.random() * 1000000),
             slug: enriched.slug,
@@ -2153,7 +2336,8 @@ app.use((req, res, next) => {
             title: enriched.title,
             excerpt: enriched.excerpt,
             body: enriched.body,
-            featuredImage: enriched.featuredImage || item.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+            featuredImage: batchItemImage,
+            imageUrl: batchItemImage,
             author: enriched.author || "Rédaction Perspective",
             date: new Date().toISOString(),
             readingTime: enriched.readingTime || 4,

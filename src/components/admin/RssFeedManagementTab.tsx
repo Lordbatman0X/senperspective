@@ -1519,6 +1519,15 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                               <span className="px-2 py-0.5 bg-zinc-800 text-orange-400 rounded font-mono text-[10px] font-bold">
                                 #{idx + 1}
                               </span>
+                              {item.imageUrl ? (
+                                <span className="px-2 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800/60 rounded font-mono text-[10px] font-bold flex items-center gap-1">
+                                  📸 {isFr ? 'Image Source Détectée' : 'Source Image Detected'}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-amber-950/60 text-amber-300 border border-amber-800/60 rounded font-mono text-[10px] font-bold flex items-center gap-1">
+                                  ✨ {isFr ? 'Illustration IA Prévue' : 'AI Context Visual'}
+                                </span>
+                              )}
                               {item.pubDate && (
                                 <span className="text-[11px] text-zinc-500 flex items-center gap-1 font-mono">
                                   <Clock size={11} />
@@ -1531,6 +1540,21 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                                 </span>
                               )}
                             </div>
+
+                            {/* Optional Extracted Wire Thumbnail */}
+                            {item.imageUrl && (
+                              <div className="my-2 max-w-sm rounded-lg overflow-hidden border border-zinc-800 bg-black/40">
+                                <img 
+                                  src={item.imageUrl} 
+                                  alt={item.title || 'Wire visual'} 
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-32 object-cover"
+                                  onError={(e) => {
+                                    (e.target as HTMLElement).style.display = 'none';
+                                  }}
+                                />
+                              </div>
+                            )}
 
                             <h4 className="text-sm sm:text-base font-bold text-white leading-snug">
                               {item.title}

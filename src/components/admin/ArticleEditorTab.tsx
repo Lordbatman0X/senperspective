@@ -98,6 +98,42 @@ export function ArticleEditorTab({
   const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai'>('groq');
   const [aiTargetType, setAiTargetType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
+  const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
+
+  const handleGenerateAiCoverImage = async () => {
+    const activeTitle = titleFr || titleEn || '';
+    const activeExcerpt = excerptFr || excerptEn || '';
+    if (!activeTitle.trim()) {
+      alert(language === 'fr' ? 'Veuillez renseigner le titre de l\'article pour guider la génération de l\'image.' : 'Please enter an article title to guide AI image generation.');
+      return;
+    }
+
+    setIsGeneratingAiImage(true);
+    try {
+      const res = await fetch('/api/ai/generate-article-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: activeTitle,
+          excerpt: activeExcerpt,
+          category: category || 'Économie',
+          tags: tags || []
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data?.imageUrl) {
+        setImageUrl(data.imageUrl);
+      } else {
+        throw new Error(data?.error || 'Échec de génération');
+      }
+    } catch (err: any) {
+      console.error('Image AI Gen Error:', err);
+      alert((language === 'fr' ? 'Erreur de génération d\'image IA : ' : 'AI Image generation failed: ') + (err.message || ''));
+    } finally {
+      setIsGeneratingAiImage(false);
+    }
+  };
 
   useEffect(() => {
     if (article) {
@@ -1039,12 +1075,33 @@ export function ArticleEditorTab({
                   >
                     <ImageIcon size={15} />
                   </button>
+
+                  {/* Generate with AI Button */}
+                  <button
+                    type="button"
+                    onClick={handleGenerateAiCoverImage}
+                    disabled={isGeneratingAiImage}
+                    className="flex items-center gap-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white px-3 py-2 text-xs font-bold uppercase rounded-md cursor-pointer transition-all shadow-md shrink-0 disabled:opacity-50"
+                    title={language === 'fr' ? "Générer une illustration éditoriale via IA (Gemini / DALL-E)" : "Generate editorial visual using AI"}
+                  >
+                    {isGeneratingAiImage ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-white" />
+                        <span>{language === 'fr' ? 'Génération...' : 'Generating...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} className="text-amber-200" />
+                        <span>{language === 'fr' ? 'Générer IA' : 'AI Generate'}</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 {/* Cover Image Preview Thumbnail */}
                 {imageUrl && (
                   <div className="mt-3 relative w-36 h-24 border border-zinc-700 rounded-md overflow-hidden bg-black/50 group">
-                    <img src={imageUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                    <img src={imageUrl} alt="Cover Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                     <button 
                       type="button" 
                       onClick={() => setImageUrl('')}

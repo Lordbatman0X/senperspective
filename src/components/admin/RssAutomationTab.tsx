@@ -1284,6 +1284,24 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                         </span>
                       </div>
 
+                      {/* Cover Visual Preview */}
+                      {(draft.featuredImage || draft.imageUrl) && (
+                        <div className="relative w-full h-36 rounded-xl overflow-hidden bg-black/60 border border-zinc-800">
+                          <img 
+                            src={draft.featuredImage || draft.imageUrl} 
+                            alt={draft.title?.fr || 'Draft visual'} 
+                            referrerPolicy="no-referrer"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                          <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-black/70 backdrop-blur-sm text-[9px] font-mono text-zinc-300 border border-white/10">
+                            {draft.imageUrl?.startsWith('data:') ? '✨ Image IA (Base64)' : draft.imageUrl?.includes('unsplash') ? '🖼️ Visual Éditorial' : '📸 Dépêche'}
+                          </div>
+                        </div>
+                      )}
+
                       {/* Title Headline (Bilingual Display) */}
                       <div>
                         <h4 className="text-sm font-extrabold text-white leading-snug group-hover:text-orange-400 transition-colors">
