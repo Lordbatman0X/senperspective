@@ -621,7 +621,7 @@ app.use((req, res, next) => {
     const items: any[] = [];
     if (!xmlStr || typeof xmlStr !== "string") return items;
 
-    // Clean CDATA wrappers
+    // Clean CDATA wrappers throughout XML
     const cleanXml = xmlStr.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1");
     const itemMatches = cleanXml.match(/<(item|entry)[\s\S]*?<\/\1>/gi) || [];
 
@@ -638,12 +638,36 @@ app.use((req, res, next) => {
       };
 
       let rawTitle = getTagVal(["title"]);
-      let title = decodeXmlEntities(rawTitle);
+      let title = decodeXmlEntities(rawTitle).trim();
       const description = getTagVal(["description", "summary", "content:encoded", "content"]);
-      const cleanDesc = decodeXmlEntities(description);
-      const pubDate = getTagVal(["pubDate", "updated", "published", "dc:date"]);
-      const author = decodeXmlEntities(getTagVal(["dc:creator", "author", "creator", "publisher"]));
-      const category = decodeXmlEntities(getTagVal(["category"]));
+      const cleanDesc = decodeXmlEntities(description).trim();
+      const rawPubDate = getTagVal(["pubDate", "updated", "published", "dc:date"]);
+      const author = decodeXmlEntities(getTagVal(["dc:creator", "author", "creator", "publisher"])).trim();
+      const category = decodeXmlEntities(getTagVal(["category"])).trim();
+
+      // Normalize pubDate to timestamp and ISO string
+      let timestamp = Date.now();
+      let isoDate = new Date().toISOString();
+      if (rawPubDate) {
+        const parsedTime = Date.parse(rawPubDate);
+        if (!isNaN(parsedTime) && parsedTime > 0) {
+          timestamp = parsedTime;
+          isoDate = new Date(parsedTime).toISOString();
+        }
+      }
+
+      // Compute relative freshness
+      const diffMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / (60 * 1000)));
+      let freshnessText = "À l'instant";
+      if (diffMinutes < 60) {
+        freshnessText = `Il y a ${Math.max(1, diffMinutes)} min`;
+      } else if (diffMinutes < 1440) {
+        const h = Math.floor(diffMinutes / 60);
+        freshnessText = `Il y a ${h} h`;
+      } else {
+        const d = Math.floor(diffMinutes / 1440);
+        freshnessText = `Il y a ${d} j`;
+      }
 
       // Google News & RSS Source tag extraction
       let sourceName = "";
@@ -651,7 +675,7 @@ app.use((req, res, next) => {
       const sourceMatch = itemXml.match(/<source[^>]*url=["']([^"']+)["'][^>]*>([\s\S]*?)<\/source>/i);
       if (sourceMatch) {
         sourceUrlAttr = sourceMatch[1].trim();
-        sourceName = decodeXmlEntities(sourceMatch[2]);
+        sourceName = decodeXmlEntities(sourceMatch[2]).trim();
       }
 
       // Link extraction (support RSS 2.0 <link>, Atom <link href="...">, and RDF <item rdf:about="...">)
@@ -679,6 +703,9 @@ app.use((req, res, next) => {
         }
       }
 
+      // Clean title from accidental leftover tags
+      title = title.replace(/<[^>]*>/g, "").trim();
+
       // Image extraction
       let imageUrl = "";
       const mediaMatch = itemXml.match(/<media:content[^>]*url=["']([^"']+)["']/i) ||
@@ -690,18 +717,26 @@ app.use((req, res, next) => {
 
       if (title || cleanDesc) {
         items.push({
-          title,
+          title: title || cleanDesc.slice(0, 100),
+          snippet: cleanDesc || title,
           description: cleanDesc || title,
           body: description || cleanDesc || title,
           sourceUrl: link,
-          pubDate,
-          author,
-          category,
+          link,
+          pubDate: rawPubDate || isoDate,
+          isoDate,
+          timestamp,
+          freshnessText,
+          author: author || undefined,
+          category: category || undefined,
           sourceName: sourceName || undefined,
-          imageUrl
+          imageUrl: imageUrl || undefined
         });
       }
     }
+
+    // Sort items so the freshest articles (highest timestamp) are ALWAYS on top
+    items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     return items;
   };
@@ -712,39 +747,48 @@ app.use((req, res, next) => {
 
     if (lower.includes('feeds.reuters.com') || lower.includes('reuters.com/rss')) {
       if (lower.includes('business') || (feedName && feedName.toLowerCase().includes('business'))) {
-        return 'https://news.google.com/rss/search?q=site:reuters.com+business&hl=fr&gl=SN&ceid=SN:fr';
+        return 'https://news.google.com/rss/search?q=site:reuters.com+business+when:3d&hl=fr&gl=SN&ceid=SN:fr';
       }
-      return 'https://news.google.com/rss/search?q=site:reuters.com+world&hl=fr&gl=SN&ceid=SN:fr';
+      return 'https://news.google.com/rss/search?q=site:reuters.com+world+when:3d&hl=fr&gl=SN&ceid=SN:fr';
     }
 
     if (lower.includes('seneweb.com/rss') || lower.includes('seneweb.com/feed')) {
-      return 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr';
+      return 'https://news.google.com/rss/search?q=site:seneweb.com+when:2d&hl=fr&gl=SN&ceid=SN:fr';
     }
 
     if (lower.includes('rss.cnn.com')) {
-      return 'https://news.google.com/rss/search?q=site:cnn.com+world&hl=fr&gl=SN&ceid=SN:fr';
+      return 'https://news.google.com/rss/search?q=site:cnn.com+world+when:3d&hl=fr&gl=SN&ceid=SN:fr';
     }
 
     if (lower.includes('nhk.or.jp')) {
-      return 'https://news.google.com/rss/search?q=NHK+World+News&hl=fr&gl=SN&ceid=SN:fr';
+      return 'https://news.google.com/rss/search?q=NHK+World+News+when:3d&hl=fr&gl=SN&ceid=SN:fr';
     }
 
     if (lower.includes('espn.com/espn/rss') || (lower.includes('espn.com') && lower.includes('rss'))) {
-      return 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr';
+      return 'https://news.google.com/rss/search?q=site:espn.com+soccer+when:3d&hl=fr&gl=SN&ceid=SN:fr';
     }
 
     return rawUrl.trim();
   };
 
-  // Resilient RSS fetcher with automatic Google News query wire bridge fallback
+  // Resilient RSS fetcher with dynamic cache-busting and automatic real-time wire bridge fallback
   const fetchRssFeedResilient = async (rawUrl: string, feedName?: string) => {
-    const url = normalizeRssFeedUrl(rawUrl, feedName);
+    let url = normalizeRssFeedUrl(rawUrl, feedName);
     const startTime = Date.now();
+
+    // Add cache-busting timestamp to WordPress/direct RSS endpoints to bypass proxy caches
+    let requestUrl = url;
+    if (!url.includes('news.google.com')) {
+      const sep = url.includes('?') ? '&' : '?';
+      requestUrl = `${url}${sep}_nocache=${Date.now()}`;
+    }
+
     const headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       "Accept": "application/rss+xml, application/xml, text/xml, application/atom+xml, */*",
       "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Cache-Control": "no-cache"
+      "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+      "Pragma": "no-cache"
     };
 
     let statusCode = 0;
@@ -753,9 +797,9 @@ app.use((req, res, next) => {
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
 
-      const res = await fetch(url, { headers, signal: controller.signal });
+      const res = await fetch(requestUrl, { headers, signal: controller.signal });
       clearTimeout(timeoutId);
       statusCode = res.status;
 
@@ -773,15 +817,15 @@ app.use((req, res, next) => {
       errorMessage = err?.message || "Direct connection failed";
     }
 
-    // Direct fetch failed or returned 0 items -> Fallback to Google News Wire Query Bridge
+    // Direct fetch failed or returned 0 items -> Fallback to Google News Realtime Wire Query Bridge
     let fallbackQuery = feedName || (url.includes("news.google.com") ? "Senegal News" : url.replace(/^https?:\/\//, "").split("/")[0]);
     if (fallbackQuery.toLowerCase().includes("aip.ci") || fallbackQuery.toLowerCase().includes("aip-ci") || fallbackQuery.toLowerCase() === "www.aip.ci") {
       fallbackQuery = "Agence Ivoirienne de Presse";
     }
-    console.info(`[RSS RESILIENCE BRIDGE] Direct fetch for ${url} empty/unavailable (${errorMessage || '0 items'}). Relaying via Google Wire Gateway for "${fallbackQuery}"...`);
+    console.info(`[RSS LIVE WIRE BRIDGE] Direct fetch for ${url} empty/unavailable (${errorMessage || '0 items'}). Relaying via Google Wire Gateway for "${fallbackQuery}"...`);
 
     try {
-      const gnUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(fallbackQuery)}&hl=fr&gl=SN&ceid=SN:fr`;
+      const gnUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(fallbackQuery)}+when:3d&hl=fr&gl=SN&ceid=SN:fr`;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
 
@@ -821,11 +865,14 @@ app.use((req, res, next) => {
   // --- AUTOMATED RSS DRAFTING SCHEDULER SYSTEM ---
   const BACKEND_RSS_FEEDS = [
     // Senegal Wire
-    { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://news.google.com/rss/search?q=site:aps.sn+when:3d&hl=fr&gl=SN&ceid=SN:fr', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'seneweb', name: 'Seneweb Actualités Live Wire', url: 'https://news.google.com/rss/search?q=site:seneweb.com+when:2d&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "Sports", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
-    { id: 'seneweb', name: 'Seneweb Actualités', url: 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'dakaractu', name: 'DakarActu Wire', url: 'https://news.google.com/rss/search?q=site:dakaractu.com+when:2d&hl=fr&gl=SN&ceid=SN:fr', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'senegal-live', name: 'Sénégal Dépêches Live 24/7', url: 'https://news.google.com/rss/search?q=S%C3%A9n%C3%A9gal+when:2d&hl=fr&gl=SN&ceid=SN:fr', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'financialafrik', name: 'Financial Afrik (Économie)', url: 'https://financialafrik.com/feed/', category: 'Économie', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'allafrica-senegal', name: 'AllAfrica Sénégal Wire', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
 
     // Africa Regional Wire
@@ -834,18 +881,20 @@ app.use((req, res, next) => {
     { id: 'bbcafrique', name: 'BBC Afrique (FR)', url: 'https://www.bbc.com/afrique/index.xml', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
     { id: 'france24-afrique-fr', name: 'France 24 Afrique (FR)', url: 'https://www.france24.com/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
     { id: 'africanews', name: 'Africanews Wire', url: 'https://www.africanews.com/feed/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
+    { id: 'afrique-eco-live', name: 'Afrique Économie & UEMOA Live', url: 'https://news.google.com/rss/search?q=Afrique+%C3%89conomie+when:2d&hl=fr&gl=SN&ceid=SN:fr', category: 'Économie', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
     { id: 'allafrica-latest', name: 'AllAfrica Dernières Dépêches', url: 'https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne' },
 
     // World Press Wire
     { id: 'bbc-world', name: 'BBC World News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global' },
     { id: 'aljazeera', name: 'Al Jazeera English', url: 'https://www.aljazeera.com/xml/rss/all.xml', category: 'International', pack: 'world', originCountry: 'Qatar', originFlag: '🇶🇦', originRegion: 'International & Global' },
+    { id: 'reuters-world', name: 'Reuters World (Google Wire)', url: 'https://news.google.com/rss/search?q=site:reuters.com+world+when:2d&hl=fr&gl=SN&ceid=SN:fr', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global' },
     { id: 'france24-fr', name: 'France 24 Monde (FR)', url: 'https://www.france24.com/fr/rss', category: 'International', pack: 'world', originCountry: 'France', originFlag: '🇫🇷', originRegion: 'International & Global' },
     { id: 'guardian-world', name: 'The Guardian World', url: 'https://www.theguardian.com/world/rss', category: 'International', pack: 'world', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: 'International & Global' },
     { id: 'dw-world', name: 'Deutsche Welle (DW)', url: 'https://rss.dw.com/rdf/rss-en-all', category: 'International', pack: 'world', originCountry: 'Allemagne', originFlag: '🇩🇪', originRegion: 'International & Global' },
     { id: 'cbc-top', name: 'CBC News Canada', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories', category: 'International', pack: 'world', originCountry: 'Canada', originFlag: '🇨🇦', originRegion: 'International & Global' },
-    { id: 'foxnews', name: 'Fox News Latest', url: 'https://feeds.foxnews.com/foxnews/latest', category: 'International', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global' },
 
     // Sports Wire
+    { id: 'teranga-lions-gn', name: 'Équipe du Sénégal (Lions de la Teranga)', url: 'https://news.google.com/rss/search?q=Lions+du+Senegal+Football+when:3d&hl=fr&gl=SN&ceid=SN:fr', category: "Sports", pack: 'sports', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: "Sports" },
     { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports" },
     { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports" },
     { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "Sports", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "Sports" }
