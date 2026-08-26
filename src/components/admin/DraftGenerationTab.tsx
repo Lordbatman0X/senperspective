@@ -872,13 +872,20 @@ export function DraftGenerationTab({ onEditArticle, onRefreshArticles }: DraftGe
               {/* Perspective Brief */}
               {inspectDraft.perspectiveBrief && (
                 <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3 font-mono text-xs">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E85D42] flex items-center gap-1.5 border-b border-zinc-800 pb-2">
-                    <Sparkles size={13} />
-                    <span>Brief Perspective (L’Essentiel)</span>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E85D42] flex items-center justify-between border-b border-zinc-800 pb-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles size={13} />
+                      <span>{inspectLanguage === 'fr' ? 'Brief Perspective (L’Essentiel)' : 'Perspective Brief (Key Takeaways)'}</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {inspectLanguage === 'fr' ? 'SYNTHÈSE' : 'CORE SUMMARY'}
+                    </span>
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
-                      <strong className="text-white block mb-1 text-[10px]">📌 CE QU'IL S'EST PASSÉ :</strong>
+                      <strong className="text-[#E85D42] block mb-1 text-[10px] font-bold">
+                        {inspectLanguage === 'fr' ? "📌 CE QUI S'EST PASSÉ :" : "📌 WHAT HAPPENED :"}
+                      </strong>
                       <p className="leading-relaxed text-zinc-300">
                         {inspectLanguage === 'fr' 
                           ? (inspectDraft.perspectiveBrief.whatHappened?.fr || inspectDraft.perspectiveBrief.whatHappened?.en) 
@@ -886,7 +893,9 @@ export function DraftGenerationTab({ onEditArticle, onRefreshArticles }: DraftGe
                       </p>
                     </div>
                     <div className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
-                      <strong className="text-white block mb-1 text-[10px]">⚡ POURQUOI CELA COMPTE :</strong>
+                      <strong className="text-[#E85D42] block mb-1 text-[10px] font-bold">
+                        {inspectLanguage === 'fr' ? "⚡ POURQUOI CELA COMPTE :" : "⚡ WHY IT MATTERS :"}
+                      </strong>
                       <p className="leading-relaxed text-zinc-300">
                         {inspectLanguage === 'fr' 
                           ? (inspectDraft.perspectiveBrief.whyItMatters?.fr || inspectDraft.perspectiveBrief.whyItMatters?.en) 
@@ -894,7 +903,9 @@ export function DraftGenerationTab({ onEditArticle, onRefreshArticles }: DraftGe
                       </p>
                     </div>
                     <div className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
-                      <strong className="text-white block mb-1 text-[10px]">🔍 À SURVEILLER ENSUITE :</strong>
+                      <strong className="text-[#E85D42] block mb-1 text-[10px] font-bold">
+                        {inspectLanguage === 'fr' ? "🔍 À SURVEILLER ENSUITE :" : "🔍 WHAT TO WATCH NEXT :"}
+                      </strong>
                       <p className="leading-relaxed text-zinc-300">
                         {inspectLanguage === 'fr' 
                           ? (inspectDraft.perspectiveBrief.whatToWatchNext?.fr || inspectDraft.perspectiveBrief.whatToWatchNext?.en) 

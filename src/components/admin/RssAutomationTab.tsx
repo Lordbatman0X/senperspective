@@ -2271,30 +2271,41 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
             {/* Perspective 3 Briefs */}
             {inspectDraft.perspectiveBrief && (
-              <div className="bg-zinc-950 border border-orange-500/30 p-4 rounded-2xl space-y-3">
-                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-orange-400 flex items-center gap-1.5">
-                  <Sparkles size={14} />
-                  <span>Brief Perspective (Ce qu'il faut retenir)</span>
+              <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#E85D42] flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles size={14} />
+                    <span>{inspectLanguage === 'fr' ? 'Brief Perspective (L’Essentiel)' : 'Perspective Brief (Key Takeaways)'}</span>
+                  </div>
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {inspectLanguage === 'fr' ? 'SYNTHÈSE' : 'CORE SUMMARY'}
+                  </span>
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-zinc-300">
-                  <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800">
-                    <strong className="text-white block mb-1 text-[11px]">📌 Ce qu'il s'est passé :</strong>
+                  <div className="bg-zinc-900/90 p-3 rounded border border-zinc-800">
+                    <strong className="text-[#E85D42] block mb-1 text-[11px] font-bold">
+                      {inspectLanguage === 'fr' ? "📌 Ce qui s'est passé :" : "📌 What happened :"}
+                    </strong>
                     <p className="leading-relaxed">
                       {inspectLanguage === 'fr' 
                         ? (inspectDraft.perspectiveBrief.whatHappened?.fr || inspectDraft.perspectiveBrief.whatHappened?.en) 
                         : (inspectDraft.perspectiveBrief.whatHappened?.en || inspectDraft.perspectiveBrief.whatHappened?.fr)}
                     </p>
                   </div>
-                  <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800">
-                    <strong className="text-white block mb-1 text-[11px]">⚡ Pourquoi cela compte :</strong>
+                  <div className="bg-zinc-900/90 p-3 rounded border border-zinc-800">
+                    <strong className="text-[#E85D42] block mb-1 text-[11px] font-bold">
+                      {inspectLanguage === 'fr' ? "⚡ Pourquoi cela compte :" : "⚡ Why it matters :"}
+                    </strong>
                     <p className="leading-relaxed">
                       {inspectLanguage === 'fr' 
                         ? (inspectDraft.perspectiveBrief.whyItMatters?.fr || inspectDraft.perspectiveBrief.whyItMatters?.en) 
                         : (inspectDraft.perspectiveBrief.whyItMatters?.en || inspectDraft.perspectiveBrief.whyItMatters?.fr)}
                     </p>
                   </div>
-                  <div className="bg-zinc-900/90 p-3 rounded-xl border border-zinc-800">
-                    <strong className="text-white block mb-1 text-[11px]">🔍 À surveiller ensuite :</strong>
+                  <div className="bg-zinc-900/90 p-3 rounded border border-zinc-800">
+                    <strong className="text-[#E85D42] block mb-1 text-[11px] font-bold">
+                      {inspectLanguage === 'fr' ? "🔍 À surveiller ensuite :" : "🔍 What to watch next :"}
+                    </strong>
                     <p className="leading-relaxed">
                       {inspectLanguage === 'fr' 
                         ? (inspectDraft.perspectiveBrief.whatToWatchNext?.fr || inspectDraft.perspectiveBrief.whatToWatchNext?.en) 

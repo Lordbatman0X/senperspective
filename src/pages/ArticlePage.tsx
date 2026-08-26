@@ -449,10 +449,11 @@ export function ArticlePage() {
   const adLink = article.adLink || globalAd?.targetUrl;
 
   const t = {
-    brief: 'BRIEF',
-    whatHappened: language === 'fr' ? 'Ce qui s\'est passé' : 'What happened',
-    whyItMatters: language === 'fr' ? 'Pourquoi c\'est important' : 'Why it matters',
-    watchNext: language === 'fr' ? 'À surveiller' : 'What to watch next',
+    brief: language === 'fr' ? 'BRIEF PERSPECTIVE' : 'PERSPECTIVE BRIEF',
+    briefSubtitle: language === 'fr' ? "L'ESSENTIEL" : 'KEY TAKEAWAYS',
+    whatHappened: language === 'fr' ? "Ce qui s'est passé" : 'What happened',
+    whyItMatters: language === 'fr' ? "Pourquoi c'est important" : 'Why it matters',
+    watchNext: language === 'fr' ? 'À surveiller ensuite' : 'What to watch next',
     forces: language === 'fr' ? 'Forces Structurelles' : 'Structural Forces',
     actors: language === 'fr' ? 'Acteurs Clés' : 'Key Actors',
     timeline: language === 'fr' ? 'Chronologie' : 'Timeline',
@@ -630,8 +631,11 @@ export function ArticlePage() {
         return (
           <div className="relative z-20 max-w-3xl mx-auto px-4 -mb-16 md:-mb-24 mt-4">
             <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
-              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2">
-                {t.brief}
+              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+                <span>{t.brief}</span>
+                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold tracking-wider">
+                  {t.briefSubtitle}
+                </span>
               </h3>
               <ul className="space-y-4">
                 {whatHappenedText !== '' && (

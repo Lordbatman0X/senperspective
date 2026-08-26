@@ -1592,11 +1592,18 @@ export function ArticleEditorTab({
 
                 return (
                   <div className="border-t-4 border-[#E85D42] bg-zinc-950 p-6 space-y-4 shadow-sm border border-zinc-800 rounded-md">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-1.5">PERSPECTIVE BRIEF FOCUS</h4>
+                    <h4 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-1.5 flex items-center justify-between">
+                      <span>{activeLangTab === 'fr' ? 'BRIEF PERSPECTIVE' : 'PERSPECTIVE BRIEF'}</span>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {activeLangTab === 'fr' ? "L'ESSENTIEL" : "KEY TAKEAWAYS"}
+                      </span>
+                    </h4>
                     
                     {wh !== '' && (
                       <div>
-                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">What Happened</h5>
+                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">
+                          {activeLangTab === 'fr' ? "Ce qui s'est passé" : "What Happened"}
+                        </h5>
                         <p className="text-xs text-zinc-400 mt-1 italic">
                           {wh}
                         </p>
@@ -1604,7 +1611,9 @@ export function ArticleEditorTab({
                     )}
                     {wm !== '' && (
                       <div>
-                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">Why It Matters</h5>
+                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">
+                          {activeLangTab === 'fr' ? "Pourquoi c'est important" : "Why It Matters"}
+                        </h5>
                         <p className="text-xs text-zinc-400 mt-1 italic">
                           {wm}
                         </p>
@@ -1612,7 +1621,9 @@ export function ArticleEditorTab({
                     )}
                     {wn !== '' && (
                       <div>
-                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">What To Watch Next</h5>
+                        <h5 className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-200">
+                          {activeLangTab === 'fr' ? "À surveiller ensuite" : "What To Watch Next"}
+                        </h5>
                         <p className="text-xs text-zinc-400 mt-1 italic">
                           {wn}
                         </p>
