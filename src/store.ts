@@ -201,6 +201,7 @@ interface AppState {
   toggleSavedArticle: (id: string) => void;
   articles: Article[];
   setArticles: (articles: Article[]) => void;
+  syncFromFirestore: () => Promise<void>;
   addArticle: (article: Article) => void;
   updateArticle: (article: Article) => void;
   deleteArticle: (id: string) => void;
@@ -403,6 +404,26 @@ export const useStore = create<AppState>()(
       },
       articles: sampleArticles,
       setArticles: (articles) => set({ articles }),
+      syncFromFirestore: async () => {
+        try {
+          const snapshot = await getDocs(collection(db, "articles"));
+          if (snapshot && !snapshot.empty) {
+            const fetchedArticles: Article[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data) {
+                fetchedArticles.push(data as Article);
+              }
+            });
+            if (fetchedArticles.length > 0) {
+              fetchedArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+              set({ articles: fetchedArticles });
+            }
+          }
+        } catch (err) {
+          console.error("Failed to sync articles from Firestore:", err);
+        }
+      },
       addArticle: async (article) => {
         set({ articles: [article, ...get().articles] });
         try {

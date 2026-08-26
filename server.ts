@@ -10,7 +10,11 @@ import {
   resetEditorialGuidelinesToDefault,
   getGroqClient,
   getOpenRouterClient,
-  getOpenAIClient
+  getOpenAIClient,
+  apiKeyStore,
+  getEffectiveApiKey,
+  saveApiKey,
+  loadKeysFromMongo
 } from "./server/aiNewsroomEngine";
 import { 
   connectMongo, 
@@ -28,7 +32,12 @@ export const app = express();
 const PORT = 3000;
 
 // Connect to MongoDB on server startup
-connectMongo().catch((err) => console.warn("[MongoDB Startup Warning]", err));
+connectMongo()
+  .then(() => {
+    console.log("[MongoDB Setup] Connection established.");
+    return loadKeysFromMongo();
+  })
+  .catch((err) => console.warn("[MongoDB Startup Warning]", err));
 
 // Enable CORS for webhooks and API clients
 app.use((req, res, next) => {
@@ -39,6 +48,23 @@ app.use((req, res, next) => {
     return res.sendStatus(200);
   }
   next();
+});
+
+// Intercept all requests to bind client-provided API keys in request context
+app.use((req, res, next) => {
+  const overrides: Record<string, string> = {};
+  if (req.headers["x-gemini-key"]) overrides["GEMINI"] = req.headers["x-gemini-key"] as string;
+  if (req.headers["x-openai-key"]) overrides["OPENAI"] = req.headers["x-openai-key"] as string;
+  if (req.headers["x-groq-key"]) overrides["GROQ"] = req.headers["x-groq-key"] as string;
+  if (req.headers["x-openrouter-key"]) overrides["OPENROUTER"] = req.headers["x-openrouter-key"] as string;
+
+  if (Object.keys(overrides).length > 0) {
+    apiKeyStore.run(overrides, () => {
+      next();
+    });
+  } else {
+    next();
+  }
 });
 
   app.use(express.json({ limit: "50mb" }));
@@ -173,41 +199,6 @@ app.use((req, res, next) => {
   const analyticsEventsFile = path.join(baseStorageDir, "analytics-events.json");
   const userConsentsFile = path.join(baseStorageDir, "user-consents.json");
   const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
-
-  // Helper to get effective API Key (prioritizes dynamic storage, then process.env)
-  function getEffectiveApiKey(provider: string): string | undefined {
-    try {
-      if (fs.existsSync(apiKeysFile)) {
-        const keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
-        if (keys[provider] && keys[provider].trim() !== "") {
-          return keys[provider];
-        }
-      }
-    } catch (err) {
-      console.error(`Error reading apiKeysFile for ${provider}:`, err);
-    }
-    
-    // Fallbacks to process.env
-    switch (provider) {
-      case 'GEMINI': return process.env.GEMINI_API_KEY;
-      case 'OPENAI': return process.env.OPENAI_API_KEY;
-      case 'GROQ': return process.env.GROQ_API_KEY;
-      case 'OPENROUTER': return process.env.OPENROUTER_API_KEY;
-      default: return undefined;
-    }
-  }
-
-  // Helper to save API Key
-  function saveApiKey(provider: string, key: string) {
-    let keys: Record<string, string> = {};
-    try {
-      if (fs.existsSync(apiKeysFile)) {
-        keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
-      }
-    } catch (e) {}
-    keys[provider] = key;
-    fs.writeFileSync(apiKeysFile, JSON.stringify(keys, null, 2), "utf-8");
-  }
   let analyticsEventsRepository: any[] = [];
   let userConsentsRepository: any[] = [];
 
@@ -780,7 +771,10 @@ app.use((req, res, next) => {
     }
 
     // Direct fetch failed or returned 0 items -> Fallback to Google News Wire Query Bridge
-    const fallbackQuery = feedName || (url.includes("news.google.com") ? "Senegal News" : url.replace(/^https?:\/\//, "").split("/")[0]);
+    let fallbackQuery = feedName || (url.includes("news.google.com") ? "Senegal News" : url.replace(/^https?:\/\//, "").split("/")[0]);
+    if (fallbackQuery.toLowerCase().includes("aip.ci") || fallbackQuery.toLowerCase().includes("aip-ci") || fallbackQuery.toLowerCase() === "www.aip.ci") {
+      fallbackQuery = "Agence Ivoirienne de Presse";
+    }
     console.info(`[RSS RESILIENCE BRIDGE] Direct fetch for ${url} empty/unavailable (${errorMessage || '0 items'}). Relaying via Google Wire Gateway for "${fallbackQuery}"...`);
 
     try {
@@ -1828,13 +1822,13 @@ app.use((req, res, next) => {
   // Automated RSS Fetch & AI Batch Generation Endpoint (POST /api/rss/fetch-and-generate)
   app.post("/api/rss/fetch-and-generate", async (req, res) => {
     try {
-      const { feedUrl, category: feedCategory, maxItems = 3, autoPublish = false, preferredEngine = "auto", type = "News" } = req.body;
+      const { feedUrl, feedName, category: feedCategory, maxItems = 3, autoPublish = false, preferredEngine = "auto", type = "News" } = req.body;
       if (!feedUrl || typeof feedUrl !== "string") {
         return res.status(400).json({ success: false, error: "Missing 'feedUrl' parameter." });
       }
 
-      console.log(`[NEWSROOM ENGINE] Ingesting wire feed: ${feedUrl} (Category: ${feedCategory || 'Auto'}, Type: ${type})`);
-      const fetchResult = await fetchRssFeedResilient(feedUrl);
+      console.log(`[NEWSROOM ENGINE] Ingesting wire feed: ${feedUrl} (${feedName || 'Unnamed'} - Category: ${feedCategory || 'Auto'}, Type: ${type})`);
+      const fetchResult = await fetchRssFeedResilient(feedUrl, feedName);
       
       if (!fetchResult.items || fetchResult.items.length === 0) {
         return res.json({

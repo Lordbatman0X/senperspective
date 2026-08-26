@@ -17,6 +17,12 @@ import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 
 function App() {
+  const syncFromFirestore = useStore(state => state.syncFromFirestore);
+
+  useEffect(() => {
+    syncFromFirestore();
+  }, [syncFromFirestore]);
+
   return (
     <Router>
       <AuthProvider>

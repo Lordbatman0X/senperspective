@@ -39,12 +39,15 @@ export function ApiDiagnosticTab() {
     
     setSavingKey(provider);
     try {
+      // Save to local browser storage first to ensure resilience across stateless deployments
+      localStorage.setItem(`api_key_${provider.toLowerCase()}`, key.trim());
+
       const res = await fetch('/api/ai-engine/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider, key })
       });
-      if (!res.ok) throw new Error('Failed to save key');
+      if (!res.ok) throw new Error('Failed to save key on server');
       
       // Clear input and refresh status
       setKeysInput(prev => ({ ...prev, [inputKeyName]: '' }));
@@ -61,7 +64,7 @@ export function ApiDiagnosticTab() {
   }, []);
 
   const ProviderCard = ({ name, providerId, inputKeyName, providerData, icon: Icon }: { name: string, providerId: string, inputKeyName: keyof typeof keysInput, providerData: any, icon: any }) => {
-    const isReady = providerData?.status === 'ready';
+    const isReady = providerData?.status === 'ready' || !!localStorage.getItem(`api_key_${providerId.toLowerCase()}`);
     return (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:border-zinc-700 transition-colors">
         <div className="absolute top-0 right-0 p-4 opacity-10">

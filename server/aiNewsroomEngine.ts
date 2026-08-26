@@ -2,6 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { AsyncLocalStorage } from "async_hooks";
+
+export const apiKeyStore = new AsyncLocalStorage<Record<string, string>>();
 
 // Helper to safely extract string values from XML or parsed objects
 export function extractString(val: any): string {
@@ -19,7 +22,59 @@ export function extractString(val: any): string {
 const baseStorageDir = process.env.VERCEL ? "/tmp" : process.cwd();
 const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
 
+import { saveDocument, getDocument } from "../src/lib/mongoServer";
+
+export let cachedMongoKeys: Record<string, string> = {};
+
+export async function loadKeysFromMongo() {
+  try {
+    const doc = await getDocument("system_config", "api_keys");
+    if (doc && doc.data) {
+      cachedMongoKeys = doc.data as Record<string, string>;
+      console.log("[MongoDB Setup] Loaded API Keys from database:", Object.keys(cachedMongoKeys));
+    }
+  } catch (err) {
+    console.warn("[MongoDB Setup Warning] Could not load API keys from MongoDB:", err);
+  }
+}
+
+export async function saveApiKey(provider: string, key: string) {
+  let keys: Record<string, string> = {};
+  try {
+    if (fs.existsSync(apiKeysFile)) {
+      keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
+    }
+  } catch (e) {}
+  keys[provider] = key;
+  try {
+    fs.writeFileSync(apiKeysFile, JSON.stringify(keys, null, 2), "utf-8");
+  } catch (e) {}
+
+  cachedMongoKeys[provider] = key;
+  try {
+    await saveDocument("system_config", "api_keys", cachedMongoKeys, false);
+    console.log(`[MongoDB Sync Success] Saved API key for ${provider} to MongoDB`);
+  } catch (err) {
+    console.error(`[MongoDB Sync Error] Failed to save API key for ${provider}:`, err);
+  }
+}
+
 export function getEffectiveApiKey(provider: string): string | undefined {
+  try {
+    const overrides = apiKeyStore.getStore();
+    if (overrides && overrides[provider] && overrides[provider].trim() !== "" && overrides[provider] !== "undefined") {
+      return overrides[provider];
+    }
+  } catch (err) {
+    console.error(`Error reading apiKeyStore for ${provider}:`, err);
+  }
+
+  // Prioritize MongoDB cached keys
+  const mongoKey = cachedMongoKeys[provider];
+  if (mongoKey && mongoKey.trim() !== "" && mongoKey !== "undefined") {
+    return mongoKey;
+  }
+
   try {
     if (fs.existsSync(apiKeysFile)) {
       const keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));

@@ -46,7 +46,22 @@ export const RSS_CATEGORIES = [
 // Helper for safe client API calls preventing JSON parse errors on HTML responses
 export async function safeFetchJson(url: string, options?: RequestInit) {
   try {
-    const res = await fetch(url, options);
+    const mergedOptions = { ...options };
+    const headers = { ...(mergedOptions.headers || {}) } as Record<string, string>;
+
+    const gemini = localStorage.getItem('api_key_gemini');
+    const openai = localStorage.getItem('api_key_openai');
+    const groq = localStorage.getItem('api_key_groq');
+    const openrouter = localStorage.getItem('api_key_openrouter');
+
+    if (gemini) headers['x-gemini-key'] = gemini;
+    if (openai) headers['x-openai-key'] = openai;
+    if (groq) headers['x-groq-key'] = groq;
+    if (openrouter) headers['x-openrouter-key'] = openrouter;
+
+    mergedOptions.headers = headers;
+
+    const res = await fetch(url, mergedOptions);
     const contentType = res.headers.get("content-type") || "";
     const text = await res.text();
     
@@ -241,7 +256,7 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
-  const { articles, addArticle, updateArticle, deleteArticle, language } = useStore();
+  const { articles, addArticle, updateArticle, deleteArticle, syncFromFirestore, language } = useStore();
   const isFr = language === 'fr';
 
   // Active Newsroom Tab
@@ -614,6 +629,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   };
 
   useEffect(() => {
+    syncFromFirestore();
     fetchAiEngineStatus();
     fetchScheduleConfig();
     fetchEditorialGuidelines();
@@ -772,6 +788,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           feedUrl, 
+          feedName: feedObj?.name,
           category: cat, 
           maxItems: 2, 
           autoPublish: false,
@@ -816,6 +833,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ 
                 feedUrl: feed.url, 
+                feedName: feed.name,
                 category: feed.category || 'Économie', 
                 maxItems: 1, 
                 autoPublish: false,

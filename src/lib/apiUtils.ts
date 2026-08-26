@@ -7,7 +7,22 @@ export async function safeFetchJson<T = any>(
   options?: RequestInit
 ): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
   try {
-    const res = await fetch(url, options);
+    const mergedOptions = { ...options };
+    const headers = { ...(mergedOptions.headers || {}) } as Record<string, string>;
+
+    const gemini = localStorage.getItem('api_key_gemini');
+    const openai = localStorage.getItem('api_key_openai');
+    const groq = localStorage.getItem('api_key_groq');
+    const openrouter = localStorage.getItem('api_key_openrouter');
+
+    if (gemini) headers['x-gemini-key'] = gemini;
+    if (openai) headers['x-openai-key'] = openai;
+    if (groq) headers['x-groq-key'] = groq;
+    if (openrouter) headers['x-openrouter-key'] = openrouter;
+
+    mergedOptions.headers = headers;
+
+    const res = await fetch(url, mergedOptions);
     const text = await res.text();
 
     let data: any = null;
