@@ -1261,29 +1261,37 @@ export function ArticlePage() {
           </div>
        )}
 
-      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 mb-16">
+      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 mb-16 px-4">
           {/* Key Actors */}
           {article.keyActors && article.keyActors.length > 0 && (
-            <div>
-              <h3 className="text-xl font-black uppercase tracking-widest mb-6 border-b-2 border-brand-dark pb-2">{t.actors}</h3>
+            <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
+              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+                <span>{t.actors}</span>
+                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
+                  {article.keyActors.length} {language === 'fr' ? 'PROTAGONISTES' : 'FIGURES'}
+                </span>
+              </h3>
               <div className="space-y-4">
                  {article.keyActors.map((actor, i) => (
                   <div 
                     key={i} 
                     onClick={() => setSelectedActor(actor)}
-                    className="glass p-5 hover:border-brand-primary cursor-pointer transition-all duration-300 hover:shadow-md group relative overflow-hidden"
+                    className="p-4 bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-[#E85D42] dark:hover:border-[#E85D42] cursor-pointer transition-all duration-300 group relative overflow-hidden"
                   >
-                    <div className="absolute top-0 right-0 h-full w-1 bg-brand-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                     <div className="flex justify-between items-start gap-2">
                       <div>
-                        <h4 className="font-black text-brand-dark group-hover:text-brand-primary transition-colors mb-1">{actor.name}</h4>
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-brand-primary mb-2">{actor.role}</div>
+                        <h4 className="font-black text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] dark:group-hover:text-[#E85D42] transition-colors mb-0.5">
+                          {actor.name}
+                        </h4>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-2">
+                          {actor.role}
+                        </div>
                       </div>
-                      <span className="text-[9px] font-mono font-bold uppercase text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-1.5 py-0.5 tracking-wider opacity-60 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
+                      <span className="text-[9px] font-mono font-bold uppercase text-[#E85D42] bg-[#E85D42]/10 border border-[#E85D42]/20 px-1.5 py-0.5 tracking-wider opacity-70 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
                         {language === 'fr' ? 'EXPLORER' : 'EXPLORE'} →
                       </span>
                     </div>
-                    <p className="text-sm text-brand-muted leading-relaxed mt-1">
+                    <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed mt-1 font-medium font-sans">
                       {typeof actor.significance === 'object'
                         ? ((actor.significance as any)[language] || (actor.significance as any).fr || (actor.significance as any).en || '')
                         : (actor.significance || '')}
@@ -1296,14 +1304,21 @@ export function ArticlePage() {
 
           {/* Timeline */}
           {article.timeline && article.timeline.length > 0 && (
-            <div>
-              <h3 className="text-xl font-black uppercase tracking-widest mb-8 border-b-2 border-brand-dark pb-2">{t.timeline}</h3>
-              <div className="border-l-2 border-brand-primary pl-6 space-y-8 relative">
+            <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
+              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+                <span>{t.timeline}</span>
+                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
+                  {article.timeline.length} {language === 'fr' ? 'REPÈRES' : 'EVENTS'}
+                </span>
+              </h3>
+              <div className="border-l-2 border-[#E85D42] pl-4 space-y-4 relative ml-2">
                 {article.timeline.map((event, i) => (
                   <div key={i} className="relative">
-                    <div className="absolute w-4 h-4 glass border-2 border-brand-primary bg-brand-white rounded-full -left-[33px] top-0"></div>
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-brand-muted mb-2">{event.date}</div>
-                    <div className="text-sm font-semibold text-brand-dark bg-brand-soft p-3 border border-brand-border">
+                    <div className="absolute w-3 h-3 bg-[#E85D42] rounded-full -left-[23px] top-1 border-2 border-white dark:border-zinc-950"></div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-1 font-mono">
+                      {event.date}
+                    </div>
+                    <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 bg-zinc-50/80 dark:bg-zinc-900/60 p-3 border border-zinc-200/80 dark:border-zinc-800/80 leading-relaxed font-sans">
                       {typeof event.description === 'object'
                         ? ((event.description as any)[language] || (event.description as any).fr || (event.description as any).en || '')
                         : (event.description || '')}
@@ -1314,6 +1329,66 @@ export function ArticlePage() {
             </div>
           )}
       </div>
+
+      {/* Selected Actor Modal Dialog */}
+      <AnimatePresence>
+        {selectedActor && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedActor(null)}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 border-t-4 border-t-[#E85D42] p-6 sm:p-8 max-w-lg w-full shadow-2xl relative"
+            >
+              <button 
+                onClick={() => setSelectedActor(null)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-lg font-bold w-8 h-8 flex items-center justify-center cursor-pointer"
+              >
+                ✕
+              </button>
+
+              <div className="mb-4">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-[#E85D42] block mb-1">
+                  {language === 'fr' ? 'FICHE ACTEUR CLÉ' : 'KEY ACTOR PROFILE'}
+                </span>
+                <h3 className="text-2xl font-black text-zinc-900 dark:text-white">
+                  {selectedActor.name}
+                </h3>
+                <p className="text-xs font-black uppercase tracking-wider text-[#E85D42] mt-1">
+                  {selectedActor.role}
+                </p>
+              </div>
+
+              <div className="bg-zinc-50 dark:bg-zinc-900/80 p-4 border border-zinc-200 dark:border-zinc-800 mb-6">
+                <strong className="block text-[11px] font-black uppercase tracking-widest text-[#E85D42] mb-1.5">
+                  {language === 'fr' ? 'Rôle & Positionnement Stratégique' : 'Strategic Role & Positioning'}
+                </strong>
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 leading-relaxed">
+                  {typeof selectedActor.significance === 'object'
+                    ? ((selectedActor.significance as any)[language] || (selectedActor.significance as any).fr || (selectedActor.significance as any).en || '')
+                    : (selectedActor.significance || '')}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setSelectedActor(null)}
+                  className="px-5 py-2.5 bg-[#E85D42] hover:bg-[#D45037] text-white text-xs font-black uppercase tracking-widest transition-colors cursor-pointer"
+                >
+                  {language === 'fr' ? 'Fermer' : 'Close'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
 

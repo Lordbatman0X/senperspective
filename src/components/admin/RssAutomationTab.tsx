@@ -2307,14 +2307,15 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
             {/* Timeline Milestones if available */}
             {Array.isArray(inspectDraft.timeline) && inspectDraft.timeline.length > 0 && (
-              <div className="bg-zinc-950 border border-blue-500/30 p-4 rounded-2xl space-y-2">
-                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-blue-400">
-                  Chronologie des Événements
+              <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#E85D42] flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <span>Chronologie des Événements</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">{inspectDraft.timeline.length} REPÈRES</span>
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {inspectDraft.timeline.map((t, idx) => (
-                    <div key={idx} className="flex items-start gap-3 text-xs">
-                      <span className="font-mono text-orange-400 font-bold shrink-0">{t.date}</span>
+                    <div key={idx} className="flex items-start gap-3 text-xs bg-zinc-900/60 p-2.5 rounded border border-zinc-800">
+                      <span className="font-mono text-[#E85D42] font-bold shrink-0">{t.date}</span>
                       <span className="text-zinc-300">
                         {inspectLanguage === 'fr' ? (t.description?.fr || t.description?.en) : (t.description?.en || t.description?.fr)}
                       </span>
@@ -2326,15 +2327,19 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
             {/* Key Actors if available */}
             {Array.isArray(inspectDraft.keyActors) && inspectDraft.keyActors.length > 0 && (
-              <div className="bg-zinc-950 border border-purple-500/30 p-4 rounded-2xl space-y-2">
-                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-purple-400">
-                  Acteurs Clés & Positionnement
+              <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3">
+                <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-[#E85D42] flex items-center justify-between border-b border-zinc-800 pb-2">
+                  <span>Acteurs Clés & Positionnement</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">{inspectDraft.keyActors.length} PROTAGONISTES</span>
                 </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                   {inspectDraft.keyActors.map((actor, idx) => (
-                    <div key={idx} className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
-                      <div className="font-bold text-white">{actor.name} <span className="text-zinc-400 font-normal">({actor.role})</span></div>
-                      <div className="text-zinc-300 mt-1 text-[11px]">
+                    <div key={idx} className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
+                      <div className="font-bold text-white flex items-center justify-between">
+                        <span>{actor.name}</span>
+                        <span className="text-[10px] text-[#E85D42] font-mono uppercase">{actor.role}</span>
+                      </div>
+                      <div className="text-zinc-300 mt-1.5 text-[11px] leading-relaxed">
                         {inspectLanguage === 'fr' ? (actor.significance?.fr || actor.significance?.en) : (actor.significance?.en || actor.significance?.fr)}
                       </div>
                     </div>

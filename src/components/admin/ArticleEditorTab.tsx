@@ -1624,14 +1624,19 @@ export function ArticleEditorTab({
 
               {/* Key Actors layout items */}
               {keyActors.length > 0 && (
-                <div className="border-t border-zinc-800 pt-6 space-y-4">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-zinc-200 border-b border-zinc-800 pb-1">KEY ACTORS CONNECTIVITY</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="border-t-4 border-[#E85D42] bg-zinc-950 p-6 space-y-4 shadow-sm border border-zinc-800">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-1.5 flex items-center justify-between">
+                    <span>KEY ACTORS FOCUS</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{keyActors.length} FIGURES</span>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {keyActors.map((actor, i) => (
-                      <div key={i} className="bg-zinc-950 p-4 border border-zinc-800 rounded-md">
-                        <h5 className="font-extrabold text-sm text-[#E85D42]">{actor.name}</h5>
-                        <p className="text-[10px] font-bold text-zinc-400 uppercase">{actor.role}</p>
-                        <p className="text-xs text-zinc-300 mt-2 italic border-t border-zinc-800 pt-2">
+                      <div key={i} className="bg-zinc-900/80 p-3.5 border border-zinc-800">
+                        <div className="flex items-center justify-between">
+                          <h5 className="font-extrabold text-sm text-zinc-100">{actor.name}</h5>
+                          <span className="text-[10px] font-bold text-[#E85D42] uppercase font-mono">{actor.role}</span>
+                        </div>
+                        <p className="text-xs text-zinc-300 mt-2 leading-relaxed">
                           {activeLangTab === 'fr' ? actor.significance?.fr : actor.significance?.en}
                         </p>
                       </div>

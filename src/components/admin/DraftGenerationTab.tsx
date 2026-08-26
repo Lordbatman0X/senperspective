@@ -871,36 +871,79 @@ export function DraftGenerationTab({ onEditArticle, onRefreshArticles }: DraftGe
 
               {/* Perspective Brief */}
               {inspectDraft.perspectiveBrief && (
-                <div className="bg-zinc-950 border border-orange-500/20 p-4 rounded-xl space-y-3 font-mono text-xs">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-orange-400 flex items-center gap-1.5">
+                <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3 font-mono text-xs">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E85D42] flex items-center gap-1.5 border-b border-zinc-800 pb-2">
                     <Sparkles size={13} />
                     <span>Brief Perspective (L’Essentiel)</span>
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="bg-zinc-900 p-3 rounded border border-zinc-850">
+                    <div className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
                       <strong className="text-white block mb-1 text-[10px]">📌 CE QU'IL S'EST PASSÉ :</strong>
-                      <p className="leading-relaxed text-zinc-400">
+                      <p className="leading-relaxed text-zinc-300">
                         {inspectLanguage === 'fr' 
                           ? (inspectDraft.perspectiveBrief.whatHappened?.fr || inspectDraft.perspectiveBrief.whatHappened?.en) 
                           : (inspectDraft.perspectiveBrief.whatHappened?.en || inspectDraft.perspectiveBrief.whatHappened?.fr)}
                       </p>
                     </div>
-                    <div className="bg-zinc-900 p-3 rounded border border-zinc-850">
+                    <div className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
                       <strong className="text-white block mb-1 text-[10px]">⚡ POURQUOI CELA COMPTE :</strong>
-                      <p className="leading-relaxed text-zinc-400">
+                      <p className="leading-relaxed text-zinc-300">
                         {inspectLanguage === 'fr' 
                           ? (inspectDraft.perspectiveBrief.whyItMatters?.fr || inspectDraft.perspectiveBrief.whyItMatters?.en) 
                           : (inspectDraft.perspectiveBrief.whyItMatters?.en || inspectDraft.perspectiveBrief.whyItMatters?.fr)}
                       </p>
                     </div>
-                    <div className="bg-zinc-900 p-3 rounded border border-zinc-850">
+                    <div className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
                       <strong className="text-white block mb-1 text-[10px]">🔍 À SURVEILLER ENSUITE :</strong>
-                      <p className="leading-relaxed text-zinc-400">
+                      <p className="leading-relaxed text-zinc-300">
                         {inspectLanguage === 'fr' 
                           ? (inspectDraft.perspectiveBrief.whatToWatchNext?.fr || inspectDraft.perspectiveBrief.whatToWatchNext?.en) 
                           : (inspectDraft.perspectiveBrief.whatToWatchNext?.en || inspectDraft.perspectiveBrief.whatToWatchNext?.fr)}
                       </p>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline Milestones if available */}
+              {Array.isArray(inspectDraft.timeline) && inspectDraft.timeline.length > 0 && (
+                <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3 font-mono text-xs">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E85D42] flex items-center justify-between border-b border-zinc-800 pb-2">
+                    <span>Chronologie des Événements</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{inspectDraft.timeline.length} REPÈRES</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {inspectDraft.timeline.map((t, idx) => (
+                      <div key={idx} className="flex items-start gap-3 bg-zinc-900/60 p-2.5 rounded border border-zinc-800">
+                        <span className="font-mono text-[#E85D42] font-bold shrink-0">{t.date}</span>
+                        <span className="text-zinc-300">
+                          {inspectLanguage === 'fr' ? (t.description?.fr || t.description?.en) : (t.description?.en || t.description?.fr)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Key Actors if available */}
+              {Array.isArray(inspectDraft.keyActors) && inspectDraft.keyActors.length > 0 && (
+                <div className="bg-zinc-950 border border-zinc-800 border-t-4 border-t-[#E85D42] p-4 space-y-3 font-mono text-xs">
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E85D42] flex items-center justify-between border-b border-zinc-800 pb-2">
+                    <span>Acteurs Clés & Positionnement</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">{inspectDraft.keyActors.length} PROTAGONISTES</span>
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {inspectDraft.keyActors.map((actor, idx) => (
+                      <div key={idx} className="bg-zinc-900/80 p-3 rounded border border-zinc-800">
+                        <div className="font-bold text-white flex items-center justify-between">
+                          <span>{actor.name}</span>
+                          <span className="text-[10px] text-[#E85D42] font-mono uppercase">{actor.role}</span>
+                        </div>
+                        <div className="text-zinc-300 mt-1.5 text-[11px] leading-relaxed">
+                          {inspectLanguage === 'fr' ? (actor.significance?.fr || actor.significance?.en) : (actor.significance?.en || actor.significance?.fr)}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
