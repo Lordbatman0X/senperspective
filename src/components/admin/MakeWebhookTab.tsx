@@ -224,6 +224,24 @@ You must output a single, raw JSON object matching this exact field mapping:
       "en": "Future perspectives and upcoming milestones to monitor."
     }
   },
+  "keyActors": [
+    {
+      "name": "Bassirou Diomaye Faye",
+      "role": "Président de la République",
+      "significance": {
+        "fr": "Chef de l'État impulsant les réformes institutionnelles et économiques.",
+        "en": "Head of State driving institutional and economic reforms."
+      }
+    },
+    {
+      "name": "BCEAO",
+      "role": "Régulateur Monétaire Régional",
+      "significance": {
+        "fr": "Banque centrale supervisant la politique monétaire et la stabilité financière.",
+        "en": "Central bank overseeing monetary policy and financial stability."
+      }
+    }
+  ],
   "structuralForces": {
     "political": {
       "fr": "Analyse des dynamiques politiques et gouvernementales.",

@@ -108,39 +108,235 @@ export function getCategoryDefaultEditorialImage(category?: string, titleText?: 
 export interface ImageGenerationOptions {
   title: string;
   excerpt?: string;
+  bodyText?: string;
   category?: string;
+  keyActors?: string[];
   tags?: string[];
   styleHint?: string;
+  forceAiGeneration?: boolean;
 }
 
 export interface GeneratedImageResult {
   imageUrl: string;
-  source: "pollinations_flux" | "gemini" | "openai" | "contextual";
+  source: "internet_search" | "pollinations_flux" | "gemini" | "openai" | "contextual";
   modelUsed?: string;
   promptUsed?: string;
 }
 
 /**
- * Builds a professional editorial photojournalism prompt suited for GenAI image models.
+ * Searches the Internet (Wikimedia Commons & Wikipedia REST APIs) for verified real-world news photos
+ * matching the article title, key entities, or subjects.
+ */
+export async function searchInternetForArticleImage(options: ImageGenerationOptions): Promise<GeneratedImageResult | null> {
+  const { title, keyActors = [], tags = [], category = "" } = options;
+  if (!title || typeof title !== "string") return null;
+
+  // Build an ordered list of search candidate queries
+  const candidateQueries: string[] = [];
+
+  // 1. Specific Key Actors if passed
+  if (Array.isArray(keyActors) && keyActors.length > 0) {
+    for (const actor of keyActors) {
+      if (typeof actor === "string" && actor.length > 3 && !actor.toLowerCase().includes("perspective")) {
+        candidateQueries.push(actor.trim());
+      }
+    }
+  }
+
+  // 2. High-profile entity patterns in title
+  const cleanTitle = title
+    .replace(/^.*?(sénégal|dakar|afrique|urgent|analyse|économie|politique|sports?|flash|exclusif)\s*:\s*/i, "")
+    .replace(/[«»"“”#*`]/g, "")
+    .trim();
+
+  // Known entities detection
+  const ENTITY_MATCHERS: Array<{ match: RegExp; query: string }> = [
+    { match: /bassirou\s+diomaye|diomaye\s+faye/i, query: "Bassirou Diomaye Faye" },
+    { match: /ousmane\s+sonko|sonko/i, query: "Ousmane Sonko" },
+    { match: /macky\s+sall/i, query: "Macky Sall" },
+    { match: /sadio\s+man[eé]/i, query: "Sadio Mané" },
+    { match: /pape\s+thiaw/i, query: "Pape Thiaw" },
+    { match: /aliou\s+ciss[eé]/i, query: "Aliou Cissé" },
+    { match: /port\s+autonome\s+de\s+dakar|port\s+de\s+dakar/i, query: "Port autonome de Dakar" },
+    { match: /train\s+express\s+r[eé]gional|ter\s+dakar|seter/i, query: "Train express régional de Dakar" },
+    { match: /sunubrt|bus\s+rapid\s+transit|brt\s+dakar/i, query: "SunuBRT Dakar" },
+    { match: /bceao|banque\s+centrale\s+des\s+[eé]tats/i, query: "BCEAO" },
+    { match: /stade\s+abdoulaye\s+wade/i, query: "Stade Abdoulaye-Wade" },
+    { match: /a[eé]roport\s+international\s+blaise\s+diagne|aibd/i, query: "Aéroport international Blaise-Diagne" },
+    { match: /monument\s+de\s+la\s+renaissance/i, query: "Monument de la Renaissance africaine" },
+    { match: /diamniadio/i, query: "Diamniadio" },
+    { match: /saint-louis\s+du\s+s[eé]n[eé]gal|saint-louis\s+s[eé]n[eé]gal/i, query: "Saint-Louis (Sénégal)" },
+    { match: /gor[eé]e/i, query: "Île de Gorée" },
+    { match: /senelec/i, query: "Senelec" },
+    { match: /sonatel/i, query: "Sonatel" },
+    { match: /petrosen/i, query: "Petrosen" },
+    { match: /woodside/i, query: "Woodside Energy" },
+    { match: /cedeao|ecowas/i, query: "CEDEAO" },
+    { match: /uemoa/i, query: "UEMOA" },
+    { match: /zlecaf|afcfta/i, query: "ZLECAf" }
+  ];
+
+  for (const item of ENTITY_MATCHERS) {
+    if (item.match.test(title)) {
+      if (!candidateQueries.includes(item.query)) {
+        candidateQueries.push(item.query);
+      }
+    }
+  }
+
+  // 3. Cleaned title segment query
+  if (cleanTitle.length > 5 && cleanTitle.length < 50) {
+    candidateQueries.push(cleanTitle);
+  }
+
+  // 4. Primary tags if present
+  if (Array.isArray(tags)) {
+    for (const tag of tags) {
+      if (typeof tag === "string" && tag.length > 4 && !["sénégal", "actualité", "perspective"].includes(tag.toLowerCase())) {
+        if (!candidateQueries.includes(tag)) candidateQueries.push(tag);
+      }
+    }
+  }
+
+  // Helper to validate whether an image URL is high-quality and not a generic icon/flag
+  const isValidPhotoUrl = (url: string, width?: number): boolean => {
+    if (!url || typeof url !== "string") return false;
+    const lower = url.toLowerCase();
+    if (lower.includes(".svg") || lower.includes("flag_") || lower.includes("coat_of_arms") || lower.includes("blason") || lower.includes("logo") || lower.includes("icon")) {
+      return false;
+    }
+    if (width && width < 380) return false;
+    return lower.startsWith("http://") || lower.startsWith("https://");
+  };
+
+  // Perform search across candidates (timeout bound 3.5s)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+  try {
+    for (const query of candidateQueries.slice(0, 4)) {
+      // Step A: Search Wikimedia Commons for real bitmap photography
+      try {
+        const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query + " filetype:bitmap")}&gsrlimit=4&prop=imageinfo&iiprop=url|size|mime&format=json&origin=*`;
+        const resp = await fetch(commonsUrl, { signal: controller.signal });
+        if (resp.ok) {
+          const data = await resp.json();
+          const pages = data.query?.pages || {};
+          for (const page of Object.values(pages)) {
+            const info = (page as any).imageinfo?.[0];
+            if (info && info.url && isValidPhotoUrl(info.url, info.width)) {
+              clearTimeout(timeoutId);
+              console.log(`[INTERNET IMAGE SEARCH SUCCESS] Matched Commons photo for "${query}": ${info.url}`);
+              return {
+                imageUrl: info.url,
+                source: "internet_search",
+                modelUsed: `Verified Internet Press Wire (Wikimedia: ${query})`,
+                promptUsed: query
+              };
+            }
+          }
+        }
+      } catch (_commonsErr) {
+        // Continue to Wikipedia summary
+      }
+
+      // Step B: Search French Wikipedia Page Summary
+      try {
+        const wikiSummaryUrl = `https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query.replace(/\s+/g, "_"))}`;
+        const resp = await fetch(wikiSummaryUrl, { signal: controller.signal });
+        if (resp.ok) {
+          const summary = await resp.json();
+          const imgUrl = summary.originalimage?.source || summary.thumbnail?.source;
+          const imgWidth = summary.originalimage?.width || summary.thumbnail?.width || 800;
+          if (imgUrl && isValidPhotoUrl(imgUrl, imgWidth)) {
+            clearTimeout(timeoutId);
+            console.log(`[INTERNET IMAGE SEARCH SUCCESS] Matched Wikipedia photo for "${query}": ${imgUrl}`);
+            return {
+              imageUrl: imgUrl,
+              source: "internet_search",
+              modelUsed: `Verified Internet Editorial Photo (Wikipedia: ${query})`,
+              promptUsed: query
+            };
+          }
+        }
+      } catch (_wikiErr) {
+        // Continue
+      }
+    }
+  } catch (searchErr: any) {
+    console.warn(`[INTERNET IMAGE SEARCH] Completed with note: ${searchErr?.message || searchErr}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  return null;
+}
+
+/**
+ * Builds a rich, photorealistic, content-focused photojournalism prompt for GenAI image models.
  */
 export function buildPhotojournalismPrompt(options: ImageGenerationOptions): string {
-  const { title, excerpt = "", category = "Économie" } = options;
+  const { title, excerpt = "", bodyText = "", category = "Économie", keyActors = [] } = options;
   const cleanTitle = title.replace(/[#*`_"]/g, "").trim();
-  const cleanExcerpt = excerpt.replace(/<[^>]*>/g, "").replace(/[#*`_"]/g, "").slice(0, 140).trim();
+  const cleanExcerpt = excerpt.replace(/<[^>]*>/g, "").replace(/[#*`_"]/g, "").slice(0, 150).trim();
+  const combinedContext = `${cleanTitle} ${cleanExcerpt} ${bodyText.slice(0, 200)}`.toLowerCase();
 
-  return `Award-winning newsroom photojournalism capturing the core theme: "${cleanTitle}". Topic: ${category}. Key context: ${cleanExcerpt}. Professional documentary style, sharp focus, authentic natural lighting, high dynamic range, 16:9 widescreen composition, realistic journalistic quality, West African and global editorial atmosphere.`;
+  // Dynamic visual setting builder based on article content
+  let visualSetting = "West African urban and institutional environment in Dakar, Senegal";
+  let subjectFocus = "high-level decision makers and operational infrastructure";
+
+  if (combinedContext.includes("port") || combinedContext.includes("maritime") || combinedContext.includes("navire") || combinedContext.includes("conteneur")) {
+    visualSetting = "active modern container terminal at the Port of Dakar, giant gantry cranes, massive cargo ships, ocean harbor background, bright coastal daylight";
+    subjectFocus = "logistics operations, maritime trade containers, dock workers in safety gear";
+  } else if (combinedContext.includes("train") || combinedContext.includes("ter") || combinedContext.includes("brt") || combinedContext.includes("transport") || combinedContext.includes("route")) {
+    visualSetting = "modern mass transit hub in Dakar, sleek high-speed regional commuter train or electric rapid transit bus, contemporary terminal architecture";
+    subjectFocus = "urban passengers, efficient mobility infrastructure, clean architectural lines";
+  } else if (combinedContext.includes("pétrole") || combinedContext.includes("gaz") || combinedContext.includes("sangomar") || combinedContext.includes("énergie") || combinedContext.includes("senelec") || combinedContext.includes("solaire")) {
+    visualSetting = "modern energy infrastructure, offshore extraction vessel or expansive solar photovoltaic array under bright West African sun, high-tech control center";
+    subjectFocus = "energy engineers, industrial precision, renewable power grid";
+  } else if (combinedContext.includes("football") || combinedContext.includes("lions") || combinedContext.includes("stade") || combinedContext.includes("can") || category === "Sports") {
+    visualSetting = "packed modern sports arena in Senegal, vibrant green pitch under bright stadium floodlights, dynamic athletic action";
+    subjectFocus = "intense athletic competition, football player agility, roaring crowd in background";
+  } else if (combinedContext.includes("startups") || combinedContext.includes("tech") || combinedContext.includes("numérique") || combinedContext.includes("digital") || category === "Tech & Innovation") {
+    visualSetting = "sunlit modern technology innovation incubator in Dakar, glass walls, multiple high-resolution coding displays, collaborative open workspace";
+    subjectFocus = "young African software engineers and entrepreneurs discussing data diagrams";
+  } else if (combinedContext.includes("banque") || combinedContext.includes("bceao") || combinedContext.includes("finance") || combinedContext.includes("dette") || combinedContext.includes("budget") || category === "Économie") {
+    visualSetting = "modern West African banking headquarters, sleek financial towers, executive conference table with analytical charts";
+    subjectFocus = "economic policymakers and institutional leaders reviewing trade indicators";
+  } else if (category === "Politique" || combinedContext.includes("gouvernement") || combinedContext.includes("président") || combinedContext.includes("ministre")) {
+    visualSetting = "prestigious presidential palace press hall in Dakar, West African diplomatic flags, formal executive podium with press microphones";
+    subjectFocus = "dignified institutional briefing, political leadership, formal state atmosphere";
+  }
+
+  const actorsHint = Array.isArray(keyActors) && keyActors.length > 0 ? `Involving key stakeholders: ${keyActors.slice(0, 3).join(", ")}.` : "";
+
+  return `Award-winning documentary photojournalism photograph for a major news publication. Scene: ${visualSetting}. Subject: ${subjectFocus}. Context: "${cleanTitle}". ${actorsHint} Style: Realistic editorial press photography, sharp natural focus, authentic cinematic ambient lighting, high dynamic range, 16:9 widescreen composition, authentic West African documentary aesthetics, zero CGI artifacts, zero text or overlays.`;
 }
 
 /**
  * Primary AI Image Generator for Articles:
- * 1. Generates hyper-realistic photojournalism images via Pollinations Flux AI model (instant, zero quota limit)
- * 2. Tries Gemini image generation / OpenAI DALL-E 3 with fast non-blocking timeouts
- * 3. Falls back smoothly to curated high-resolution editorial photography matched to the article's context
+ * 1. Searches the internet (Wikimedia Commons / Wikipedia) for verified authentic news photography matching the article title / entities
+ * 2. If no verified internet photo exists, generates a content-focused photojournalism image via Pollinations Flux AI / Gemini / OpenAI
+ * 3. Falls back gracefully to curated high-resolution editorial photography
  */
 export async function generateArticleImageWithAI(options: ImageGenerationOptions): Promise<GeneratedImageResult> {
+  // Step 1: Internet Search for matching title and key entities (unless forceAiGeneration is requested)
+  if (!options.forceAiGeneration) {
+    try {
+      console.log(`[AI IMAGE PIPELINE] Searching internet for matching photo for: "${options.title}"...`);
+      const internetMatch = await searchInternetForArticleImage(options);
+      if (internetMatch && internetMatch.imageUrl) {
+        return internetMatch;
+      }
+      console.log(`[AI IMAGE PIPELINE] No verified internet photo found for title. Proceeding to content-focused AI image generation...`);
+    } catch (searchErr) {
+      console.warn(`[AI IMAGE PIPELINE] Internet search non-blocking notice:`, searchErr);
+    }
+  }
+
   const promptText = buildPhotojournalismPrompt(options);
 
-  // 1. Try Gemini Image Generation via Google GenAI SDK (with strict 3s timeout)
+  // Step 2: Try Gemini Image Generation via Google GenAI SDK (with strict 3s timeout)
   const geminiKey = getEffectiveApiKey("GEMINI");
   if (geminiKey) {
     const ai = getGeminiClient();
@@ -187,7 +383,6 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
         } catch (err: any) {
           const msg = err?.message || String(err);
           console.warn(`[AI IMAGE GEN NOTICE] Gemini image model ${model} skipped: ${msg.slice(0, 80)}`);
-          // If quota hit or rate limit, break out of Gemini immediately
           if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
             break;
           }
@@ -196,7 +391,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
     }
   }
 
-  // 2. Try OpenAI DALL-E 3 (if key provided, with 4s timeout)
+  // Step 3: Try OpenAI DALL-E 3 (if key provided, with 4s timeout)
   const openaiKey = getEffectiveApiKey("OPENAI");
   if (openaiKey) {
     const openai = getOpenAIClient();
@@ -229,7 +424,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
     }
   }
 
-  // 3. Pollinations Flux AI Generation Engine (High-Performance, Zero-Quota, Realistic Photojournalism)
+  // Step 4: Pollinations Flux AI Generation Engine (High-Performance, Zero-Quota, Realistic Photojournalism)
   try {
     const seed = Math.floor(Math.random() * 100000);
     const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?width=1200&height=675&nologo=true&model=flux&seed=${seed}`;
@@ -262,7 +457,6 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
         }
       }
     } catch (_abortErr) {
-      // If fetching binary buffer timed out after 3.5s, return direct CDN URL instantly
       clearTimeout(timeoutId);
       console.log(`[AI IMAGE GEN SUCCESS] Returning direct high-res Flux AI image URL: ${pollinationsUrl}`);
       return {
@@ -273,7 +467,6 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
       };
     }
 
-    // Direct URL fallback if response wasn't converted
     return {
       imageUrl: pollinationsUrl,
       source: "pollinations_flux",
@@ -284,7 +477,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
     console.warn(`[AI IMAGE GEN NOTICE] Pollinations Flux skipped: ${pollErr?.message || pollErr}`);
   }
 
-  // 4. Fallback: Highly Targeted Contextual Curated Editorial Photography
+  // Step 5: Fallback to Highly Targeted Contextual Curated Editorial Photography
   console.log(`[AI IMAGE GEN CONTEXTUAL FALLBACK] Using contextual editorial photograph for: "${options.title}"`);
   const contextualUrl = getCategoryDefaultEditorialImage(options.category, options.title);
   return {

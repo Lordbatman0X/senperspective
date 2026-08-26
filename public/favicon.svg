@@ -1,9 +1,69 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <linearGradient id="pGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF5533"/>
-      <stop offset="100%" stop-color="#E85D42"/>
+    <!-- Background Radiant Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E0F14" />
+      <stop offset="50%" stop-color="#14151D" />
+      <stop offset="100%" stop-color="#08090C" />
     </linearGradient>
+
+    <!-- Vibrant Primary Radiant Brand Gradient (Google AI Studio Inspired) -->
+    <linearGradient id="brandGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF3815" />
+      <stop offset="45%" stop-color="#FF5722" />
+      <stop offset="80%" stop-color="#FF7A00" />
+      <stop offset="100%" stop-color="#FFA800" />
+    </linearGradient>
+
+    <!-- Accent Spark Highlight Gradient -->
+    <linearGradient id="sparkGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF8A00" />
+      <stop offset="50%" stop-color="#FFB300" />
+      <stop offset="100%" stop-color="#FFF3D6" />
+    </linearGradient>
+
+    <!-- Outer Rim Border Gradient -->
+    <linearGradient id="rimGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6A3D" stop-opacity="0.8" />
+      <stop offset="50%" stop-color="#FF5722" stop-opacity="0.3" />
+      <stop offset="100%" stop-color="#FFA800" stop-opacity="0.7" />
+    </linearGradient>
+
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
   </defs>
-  <text x="50%" y="50%" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="340" fill="url(#pGrad)" text-anchor="middle" dominant-baseline="central" letter-spacing="-0.045em">P</text>
+
+  <!-- Full-Bleed High-Impact Squircle Canvas (Fills entire 512x512 tab space) -->
+  <rect x="8" y="8" width="496" height="496" rx="124" ry="124" fill="url(#bgGrad)" stroke="url(#rimGrad)" stroke-width="12" />
+
+  <!-- Ambient Glow Behind Monogram -->
+  <circle cx="230" cy="230" r="140" fill="#FF5722" opacity="0.22" filter="url(#glow)" />
+
+  <!-- Bold, Full-Size Stylized Monogram "P" (Edge-to-Edge Prominence) -->
+  <g transform="translate(18, 0)">
+    <!-- Vertical Pillar of P -->
+    <rect x="86" y="82" width="76" height="348" rx="24" ry="24" fill="url(#brandGrad)" />
+
+    <!-- Upper Loop of P (Bold Geometric Curve) -->
+    <path d="M 124 82 L 276 82 C 354 82 408 132 408 206 C 408 280 354 330 276 330 L 124 330 Z" fill="url(#brandGrad)" />
+    
+    <!-- Inner Counter Cutout of P -->
+    <path d="M 162 144 L 268 144 C 314 144 342 168 342 206 C 342 244 314 268 268 268 L 162 268 Z" fill="#111218" />
+
+    <!-- Inner Core Radiant Dot -->
+    <circle cx="228" cy="206" r="18" fill="url(#sparkGrad)" opacity="0.9" />
+  </g>
+
+  <!-- Editorial Apex AI Sparkle Star (Top Right Focal Point) -->
+  <g transform="translate(382, 94) scale(1.15)">
+    <path d="M 0 -36 Q 0 0 -36 0 Q 0 0 0 36 Q 0 0 36 0 Q 0 0 0 -36 Z" fill="url(#sparkGrad)" />
+    <circle cx="0" cy="0" r="7" fill="#FFFFFF" />
+  </g>
+
+  <!-- Subtle Micro Star (Bottom Left) -->
+  <g transform="translate(92, 408) scale(0.65)">
+    <path d="M 0 -22 Q 0 0 -22 0 Q 0 0 0 22 Q 0 0 22 0 Q 0 0 0 -22 Z" fill="#FF7A00" opacity="0.85" />
+  </g>
 </svg>

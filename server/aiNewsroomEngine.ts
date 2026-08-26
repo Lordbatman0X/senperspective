@@ -492,6 +492,16 @@ Return STRICT, VALID JSON ONLY conforming to this schema:
   "readingTime": ${isShortNews ? 3 : 6},
   "featuredImage": "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
   "tags": ["Sénégal", "Afrique de l'Ouest", "Perspective"],
+  "keyActors": [
+    {
+      "name": "Nom réel de la personnalité, ministère, institution, entreprise, club ou autorité engagée dans les faits (ex: Bassirou Diomaye Faye, Ousmane Sonko, BCEAO, Port Autonome de Dakar, Senelec, Sadio Mané). ATTENTION: NE JAMAIS METTRE 'Perspective Group' ou 'Rédaction Perspective'.",
+      "role": "Fonction institutionnelle ou rôle officiel précis (ex: Chef de l'État, Ministre de l'Énergie, Gouverneur, Directeur Général)",
+      "significance": {
+        "fr": "Rôle direct et concret joué dans les événements rapportés dans l'article.",
+        "en": "Concrete and direct role played in the events reported in the story."
+      }
+    }
+  ],
   "perspectiveBrief": {
     "whatHappened": {
       "fr": "Synthèse de ce qu'il s'est passé (max 30 mots).",
@@ -745,6 +755,261 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
 }
 
 /**
+ * Intelligently extracts or identifies authentic Key Actors involved in the article content.
+ * CRITICAL: Key Actors must strictly reflect the real personalities, institutions,
+ * ministries, corporations, and stakeholders of the news event, and NEVER "Perspective Group" or "Rédaction Perspective".
+ */
+export function extractContextualKeyActors(
+  rawJson: any,
+  sourceItem: any,
+  titleFr: string,
+  excerptFr: string,
+  bodyFr: string,
+  category: string
+): Array<{ name: string; role: string; significance: { fr: string; en: string } }> {
+  const combinedText = `${titleFr} ${excerptFr} ${bodyFr} ${typeof sourceItem === "string" ? sourceItem : JSON.stringify(sourceItem || "")}`.toLowerCase();
+  
+  const extractedActors: Array<{ name: string; role: string; significance: { fr: string; en: string } }> = [];
+  const seenNames = new Set<string>();
+
+  const isBannedActor = (name: string, role?: string) => {
+    const n = (name || "").toLowerCase();
+    const r = (role || "").toLowerCase();
+    return n.includes("perspective") || n.includes("rédaction") || n.includes("redaction") ||
+           r.includes("journal de référence") || r.includes("redaction perspective");
+  };
+
+  // 1. Process actors provided by the LLM
+  if (Array.isArray(rawJson.keyActors)) {
+    for (const act of rawJson.keyActors) {
+      if (act && typeof act === "object") {
+        const name = extractString(act.name);
+        const role = extractString(act.role || "Acteur Clé");
+        const sigFr = extractString(act.significance?.fr || act.significance || "Rôle direct dans les faits rapportés.");
+        const sigEn = extractString(act.significance?.en || act.significance || "Direct role in the reported story.");
+
+        if (name && name.length >= 3 && !isBannedActor(name, role) && !seenNames.has(name.toLowerCase())) {
+          seenNames.add(name.toLowerCase());
+          extractedActors.push({
+            name,
+            role,
+            significance: { fr: sigFr, en: sigEn }
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Real-World Entity Recognition & Sourcing against News Context
+  const ENTITY_KNOWLEDGE_BASE: Array<{
+    keywords: string[];
+    name: string;
+    role: string;
+    significanceFr: string;
+    significanceEn: string;
+  }> = [
+    {
+      keywords: ["diomaye", "bassirou diomaye", "président faye", "chef de l'état"],
+      name: "Bassirou Diomaye Faye",
+      role: "Président de la République du Sénégal",
+      significanceFr: "Chef de l'exécutif et garant des orientations stratégiques et réformes de gouvernance.",
+      significanceEn: "Head of State guiding strategic executive policies and institutional governance."
+    },
+    {
+      keywords: ["sonko", "ousmane sonko", "premier ministre", "primature"],
+      name: "Ousmane Sonko",
+      role: "Premier Ministre du Sénégal",
+      significanceFr: "Chef du gouvernement pilotant la mise en œuvre des réformes structurelles et des projets sectoriels.",
+      significanceEn: "Head of Government spearheading structural reforms and policy execution."
+    },
+    {
+      keywords: ["cheikh diba", "ministre des finances", "budget"],
+      name: "Cheikh Diba",
+      role: "Ministre des Finances et du Budget",
+      significanceFr: "Supervision des équilibres budgétaires, de la dette souveraine et des allocations financières.",
+      significanceEn: "Oversight of budgetary equilibria, sovereign debt management, and public allocations."
+    },
+    {
+      keywords: ["abdourahmane sarr", "ministre de l'économie", "plan et coopération"],
+      name: "Abdourahmane Sarr",
+      role: "Ministre de l'Économie, du Plan et de la Coopération",
+      significanceFr: "Coordination des partenariats économiques internationaux et de la planification stratégique.",
+      significanceEn: "Coordination of international economic partnerships and strategic national planning."
+    },
+    {
+      keywords: ["birame souleye diop", "ministre de l'énergie", "pétrole", "mines"],
+      name: "Birame Souleye Diop",
+      role: "Ministre de l'Énergie, du Pétrole et des Mines",
+      significanceFr: "Gestion des ressources hydrocarbures, des contrats miniers et de la transition énergétique.",
+      significanceEn: "Management of hydrocarbon resources, mining frameworks, and renewable energy transition."
+    },
+    {
+      keywords: ["alioune sall", "numérique", "télécommunications", "startups"],
+      name: "Alioune Sall",
+      role: "Ministre de la Communication, des Télécommunications et du Numérique",
+      significanceFr: "Impulsion de la stratégie technologique, de la connectivité nationale et de l'économie numérique.",
+      significanceEn: "Steering technological strategy, national connectivity, and digital economy growth."
+    },
+    {
+      keywords: ["sadio mané", "mané", "al nassr", "lions de la téranga"],
+      name: "Sadio Mané",
+      role: "Capitaine & Leader Technique des Lions de la Téranga",
+      significanceFr: "Cadre offensif incontournable et figure emblématique du football sénégalais.",
+      significanceEn: "Pivotal offensive leader and iconic figure of Senegalese football."
+    },
+    {
+      keywords: ["pape thiaw", "sélectionneur", "staff technique"],
+      name: "Pape Thiaw",
+      role: "Sélectionneur de l'Équipe Nationale du Sénégal",
+      significanceFr: "Direction tactique, choix sportifs et management de la sélection nationale.",
+      significanceEn: "Tactical direction, roster selection, and squad management for the national team."
+    },
+    {
+      keywords: ["bceao", "banque centrale", "jean-claude kassi brou", "franc cfa", "taux directeur"],
+      name: "BCEAO",
+      role: "Banque Centrale des États de l'Afrique de l'Ouest",
+      significanceFr: "Autorité monétaire régionale régulant l'inflation, les réserves de change et la politique de crédit.",
+      significanceEn: "Regional monetary authority regulating inflation, foreign reserves, and credit policy."
+    },
+    {
+      keywords: ["port autonome", "port de dakar", "terminal à conteneurs", "dp world"],
+      name: "Port Autonome de Dakar (PAD)",
+      role: "Autorité Portuaire & Hub Logistique Ouest-Africain",
+      significanceFr: "Plateforme stratégique d'import-export et de transit maritime régional.",
+      significanceEn: "Strategic maritime import-export platform and West African transshipment hub."
+    },
+    {
+      keywords: ["ter", "seter", "train express", "train express régional"],
+      name: "Seter (TER Dakar)",
+      role: "Société d'Exploitation du Train Express Régional",
+      significanceFr: "Gestion et fluidification de la mobilité ferroviaire de masse entre Dakar et Diamniadio.",
+      significanceEn: "Management of mass rail transit corridors between Dakar and Diamniadio."
+    },
+    {
+      keywords: ["brt", "sunubrt", "bus rapid transit", "cetud"],
+      name: "SunuBRT / CETUD",
+      role: "Autorité Organisatrice de la Mobilité Urbaine",
+      significanceFr: "Déploiement du réseau de bus 100% électrique sur les grands axes dakarois.",
+      significanceEn: "Deployment of the 100% electric bus rapid transit network across Dakar."
+    },
+    {
+      keywords: ["senelec", "électricité", "courant", "réseau électrique"],
+      name: "Senelec",
+      role: "Société Nationale d'Électricité du Sénégal",
+      significanceFr: "Production, transport et distribution d'énergie électrique à l'échelle nationale.",
+      significanceEn: "National authority for electric power generation, transmission, and grid distribution."
+    },
+    {
+      keywords: ["sonatel", "orange", "opérateur télécom", "fibre"],
+      name: "Sonatel (Groupe Sonatel)",
+      role: "Opérateur Télécom & Fournisseur d'Infrastructures",
+      significanceFr: "Fourniture des réseaux de télécommunication, internet haut débit et services financiers mobiles.",
+      significanceEn: "Leading provider of telecom networks, high-speed internet, and mobile financial services."
+    },
+    {
+      keywords: ["petrosen", "sangomar", "woodside", "gta", "gaz"],
+      name: "Petrosen",
+      role: "Société Nationale des Pétroles du Sénégal",
+      significanceFr: "Gestion des intérêts de l'État dans l'exploitation pétrolière et gazière offshore.",
+      significanceEn: "Management of State interests in offshore oil and natural gas production."
+    },
+    {
+      keywords: ["fédération sénégalaise de football", "fsf", "augustin senghor"],
+      name: "Fédération Sénégalaise de Football (FSF)",
+      role: "Instance Faîtière du Football Sénégalais",
+      significanceFr: "Organisation des compétitions nationales et gouvernance des sélections officielles.",
+      significanceEn: "Governing body organizing domestic competitions and national squad campaigns."
+    },
+    {
+      keywords: ["cedeao", "ecowas", "sommet cedeao"],
+      name: "Commission de la CEDEAO",
+      role: "Organisation d'Intégration Régionale",
+      significanceFr: "Coordination diplomatique, sécuritaire et commerciale entre les États membres.",
+      significanceEn: "Diplomatic, security, and trade coordination across West African member states."
+    },
+    {
+      keywords: ["uemoa", "union économique et monétaire"],
+      name: "Commission de l'UEMOA",
+      role: "Cadre Régional d'Harmonisation Économique",
+      significanceFr: "Harmonisation des règles budgétaires, fiscales et de libre circulation.",
+      significanceEn: "Harmonization of budgetary rules, fiscal convergence, and free circulation."
+    },
+    {
+      keywords: ["zlecaf", "afcfta", "zone de libre échange"],
+      name: "Secrétariat de la ZLECAf",
+      role: "Organe Panafricain du Commerce",
+      significanceFr: "Mise en œuvre du marché unique continental et démantèlement tarifaire.",
+      significanceEn: "Implementation of the continental single market and tariff liberalization."
+    }
+  ];
+
+  // Scan entity knowledge base
+  for (const ent of ENTITY_KNOWLEDGE_BASE) {
+    if (extractedActors.length >= 4) break;
+    const match = ent.keywords.some(kw => combinedText.includes(kw));
+    if (match && !seenNames.has(ent.name.toLowerCase())) {
+      seenNames.add(ent.name.toLowerCase());
+      extractedActors.push({
+        name: ent.name,
+        role: ent.role,
+        significance: { fr: ent.significanceFr, en: ent.significanceEn }
+      });
+    }
+  }
+
+  // 3. Category-specific authentic institutional fallbacks if fewer than 2 actors found
+  const CATEGORY_DEFAULT_ACTORS: Record<string, Array<{ name: string; role: string; fr: string; en: string }>> = {
+    "Politique": [
+      { name: "Présidence de la République du Sénégal", role: "Institution Exécutive", fr: "Orientation des réformes législatives et institutionnelles.", en: "Strategic guidance of legislative and institutional reforms." },
+      { name: "Assemblée Nationale du Sénégal", role: "Pouvoir Législatif", fr: "Contrôle parlementaire, débats et adoption des textes de loi.", en: "Parliamentary oversight, debate, and legislative enactment." }
+    ],
+    "Économie": [
+      { name: "Ministère des Finances et du Budget", role: "Tutelle Budgétaire", fr: "Gestion des finances publiques et du cadre macroéconomique national.", en: "Management of public finances and macroeconomic stability." },
+      { name: "Secteur Privé & Patronat National", role: "Opérateurs Économiques", fr: "Investissement productif, création d'emplois et partenariats industriels.", en: "Productive investment, job creation, and industrial partnerships." }
+    ],
+    "Tech & Innovation": [
+      { name: "Ministère de la Communication et du Numérique", role: "Régulation & Stratégie", fr: "Déploiement des infrastructures digitales et inclusion numérique.", en: "Deployment of digital infrastructure and digital inclusion." },
+      { name: "Écosystème Tech & Startups Sénégal", role: "Innovateurs & Développeurs", fr: "Création de solutions technologiques et valorisation de l'innovation locale.", en: "Design of software solutions and scaling of local innovation." }
+    ],
+    "Sports": [
+      { name: "Fédération Sénégalaise de Football / Staff Technique", role: "Encadrement Sportif", fr: "Direction technique, préparation physique et gestion des compétitions.", en: "Technical direction, athletic preparation, and fixture management." },
+      { name: "Athlètes & Clubs Engagés", role: "Protagonistes Sportifs", fr: "Performances sur le terrain et engagement compétitif.", en: "Field performance and competitive tournament engagement." }
+    ],
+    "Société": [
+      { name: "Collectivités Territoriales & Élus Locaux", role: "Administration Locale", fr: "Gestion de proximité et réponse aux besoins quotidiens des populations.", en: "Grassroots governance and public service delivery to citizens." },
+      { name: "Organisations de la Société Civile", role: "Veille Citoyenne", fr: "Plaidoyer social et dialogue communautaire constructif.", en: "Social advocacy and constructive community dialogue." }
+    ],
+    "Santé & Environnement": [
+      { name: "Ministère de la Santé et de l'Action Sociale", role: "Autorité Sanitaire", fr: "Coordination des dispositifs de soins et politiques de santé publique.", en: "Coordination of healthcare delivery and public health policies." },
+      { name: "Direction de l'Environnement et des Établissements Classés", role: "Préservation Écologique", fr: "Suivi des normes écologiques et résilience face au changement climatique.", en: "Ecological compliance and climate resilience oversight." }
+    ],
+    "Culture & People": [
+      { name: "Ministère de la Jeunesse, des Sports et de la Culture", role: "Tutelle Culturelle", fr: "Préservation du patrimoine et promotion des créateurs nationaux.", en: "Heritage preservation and promotion of creative industries." },
+      { name: "Acteurs & Créateurs Culturels", role: "Production Artistique", fr: "Dynamisme artistique et valorisation du rayonnement culturel ouest-africain.", en: "Artistic creation and promotion of West African cultural vitality." }
+    ],
+    "International": [
+      { name: "Ministère de l'Intégration Africaine et des Affaires Étrangères", role: "Diplomatie d'État", fr: "Négociations bilatérales et représentation des intérêts nationaux.", en: "Bilateral negotiations and strategic international representation." },
+      { name: "Organisations Multilatérales Régionales", role: "Cadre de Coopération", fr: "Médiation, libre échange et intégration sous-régionale.", en: "Mediation, free trade agreements, and regional integration." }
+    ]
+  };
+
+  const catFallback = CATEGORY_DEFAULT_ACTORS[category] || CATEGORY_DEFAULT_ACTORS["Économie"];
+  for (const fallback of catFallback) {
+    if (extractedActors.length >= 3) break;
+    if (!seenNames.has(fallback.name.toLowerCase())) {
+      seenNames.add(fallback.name.toLowerCase());
+      extractedActors.push({
+        name: fallback.name,
+        role: fallback.role,
+        significance: { fr: fallback.fr, en: fallback.en }
+      });
+    }
+  }
+
+  return extractedActors;
+}
+
+/**
  * Validates and enriches parsed article data ensuring high storytelling coherence and zero blind spots.
  */
 export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallbackCategory = "Économie", articleType: ArticleStyleType = "News"): any {
@@ -836,23 +1101,15 @@ export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallback
     {
       date: todayIso,
       description: {
-        fr: `Développement majeur documenté par la Rédaction Perspective sur : ${titleFr}`,
-        en: `Major development documented by Perspective Editorial Desk on: ${titleEn}`
+        fr: `Développement majeur documenté : ${titleFr}`,
+        en: `Major development documented: ${titleEn}`
       }
     }
   ];
 
-  // Key Actors
-  let keyActors = Array.isArray(rawJson.keyActors) && rawJson.keyActors.length > 0 ? rawJson.keyActors : [
-    {
-      name: "Rédaction Perspective",
-      role: "Journal de Référence",
-      significance: {
-        fr: "Veille journalistique et décryptage des dynamiques régionales.",
-        en: "Journalistic intelligence and regional dynamics monitoring."
-      }
-    }
-  ];
+  // Key Actors strictly matched to the content of the article (NEVER "Perspective Group")
+  const resolvedCategory = rawJson.category || fallbackCategory || "Économie";
+  const keyActors = extractContextualKeyActors(rawJson, sourceItem, titleFr, excerptFr, bodyFr, resolvedCategory);
 
   // Structural Forces
   let structuralForces = rawJson.structuralForces;

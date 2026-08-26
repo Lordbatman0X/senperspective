@@ -116,7 +116,9 @@ export function ArticleEditorTab({
         body: JSON.stringify({
           title: activeTitle,
           excerpt: activeExcerpt,
+          bodyText: bodyFr || bodyEn || '',
           category: category || 'Économie',
+          keyActors: Array.isArray(keyActors) ? keyActors.map((a: any) => a.name).filter(Boolean) : [],
           tags: tags || []
         })
       });
@@ -124,6 +126,10 @@ export function ArticleEditorTab({
       const data = await res.json();
       if (res.ok && data?.imageUrl) {
         setImageUrl(data.imageUrl);
+        if (data.modelUsed) {
+          setAiStatusMsg(language === 'fr' ? `Image sélectionnée/générée avec succès : ${data.modelUsed}` : `Image retrieved/generated: ${data.modelUsed}`);
+          setTimeout(() => setAiStatusMsg(null), 5000);
+        }
       } else {
         throw new Error(data?.error || 'Échec de génération');
       }

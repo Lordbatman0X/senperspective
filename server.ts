@@ -2018,18 +2018,21 @@ app.use((req, res, next) => {
   // Dedicated AI Article Image Generation API (POST /api/ai/generate-article-image)
   app.post("/api/ai/generate-article-image", async (req, res) => {
     try {
-      const { title, excerpt, category, tags, styleHint } = req.body || {};
+      const { title, excerpt, bodyText, category, keyActors, tags, styleHint, forceAiGeneration } = req.body || {};
       if (!title || typeof title !== "string") {
         return res.status(400).json({ success: false, error: "Missing 'title' parameter." });
       }
 
-      console.log(`[API AI IMAGE] Generating image for title: "${title}" (Category: ${category || 'Économie'})`);
+      console.log(`[API AI IMAGE] Requesting image for title: "${title}" (Category: ${category || 'Économie'})`);
       const result = await generateArticleImageWithAI({
         title,
         excerpt,
+        bodyText,
         category: category || "Économie",
+        keyActors: Array.isArray(keyActors) ? keyActors : [],
         tags: Array.isArray(tags) ? tags : [],
-        styleHint
+        styleHint,
+        forceAiGeneration: !!forceAiGeneration
       });
 
       return res.json({
