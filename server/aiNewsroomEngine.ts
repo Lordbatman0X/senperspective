@@ -773,10 +773,21 @@ export function extractContextualKeyActors(
   const seenNames = new Set<string>();
 
   const isBannedActor = (name: string, role?: string) => {
-    const n = (name || "").toLowerCase();
-    const r = (role || "").toLowerCase();
+    const n = (name || "").toLowerCase().trim();
+    const r = (role || "").toLowerCase().trim();
     return n.includes("perspective") || n.includes("rédaction") || n.includes("redaction") ||
+           n === "setr" || n === "seter" || n.includes("setr") ||
            r.includes("journal de référence") || r.includes("redaction perspective");
+  };
+
+  // Helper to match whole words or phrases in combinedText
+  const matchKeyword = (kw: string) => {
+    const cleanKw = kw.toLowerCase().trim();
+    if (cleanKw.length <= 4) {
+      const regex = new RegExp(`\\b${cleanKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      return regex.test(combinedText);
+    }
+    return combinedText.includes(cleanKw);
   };
 
   // 1. Process actors provided by the LLM
@@ -879,35 +890,35 @@ export function extractContextualKeyActors(
       significanceEn: "Strategic maritime import-export platform and West African transshipment hub."
     },
     {
-      keywords: ["ter", "seter", "train express", "train express régional"],
+      keywords: ["train express régional", "ter dakar", "ter de dakar", "billetterie ter", "gares du ter"],
       name: "Seter (TER Dakar)",
       role: "Société d'Exploitation du Train Express Régional",
       significanceFr: "Gestion et fluidification de la mobilité ferroviaire de masse entre Dakar et Diamniadio.",
       significanceEn: "Management of mass rail transit corridors between Dakar and Diamniadio."
     },
     {
-      keywords: ["brt", "sunubrt", "bus rapid transit", "cetud"],
+      keywords: ["sunubrt", "bus rapid transit", "cetud", "lignes brt"],
       name: "SunuBRT / CETUD",
       role: "Autorité Organisatrice de la Mobilité Urbaine",
       significanceFr: "Déploiement du réseau de bus 100% électrique sur les grands axes dakarois.",
       significanceEn: "Deployment of the 100% electric bus rapid transit network across Dakar."
     },
     {
-      keywords: ["senelec", "électricité", "courant", "réseau électrique"],
+      keywords: ["senelec", "réseau électrique", "centrale électrique", "coupure d'électricité"],
       name: "Senelec",
       role: "Société Nationale d'Électricité du Sénégal",
       significanceFr: "Production, transport et distribution d'énergie électrique à l'échelle nationale.",
       significanceEn: "National authority for electric power generation, transmission, and grid distribution."
     },
     {
-      keywords: ["sonatel", "orange", "opérateur télécom", "fibre"],
+      keywords: ["sonatel", "groupe sonatel", "orange sénégal", "opérateur télécom"],
       name: "Sonatel (Groupe Sonatel)",
       role: "Opérateur Télécom & Fournisseur d'Infrastructures",
       significanceFr: "Fourniture des réseaux de télécommunication, internet haut débit et services financiers mobiles.",
       significanceEn: "Leading provider of telecom networks, high-speed internet, and mobile financial services."
     },
     {
-      keywords: ["petrosen", "sangomar", "woodside", "gta", "gaz"],
+      keywords: ["petrosen", "sangomar", "woodside", "gisement gta", "champs gaziers"],
       name: "Petrosen",
       role: "Société Nationale des Pétroles du Sénégal",
       significanceFr: "Gestion des intérêts de l'État dans l'exploitation pétrolière et gazière offshore.",
@@ -946,8 +957,8 @@ export function extractContextualKeyActors(
   // Scan entity knowledge base
   for (const ent of ENTITY_KNOWLEDGE_BASE) {
     if (extractedActors.length >= 4) break;
-    const match = ent.keywords.some(kw => combinedText.includes(kw));
-    if (match && !seenNames.has(ent.name.toLowerCase())) {
+    const match = ent.keywords.some(kw => matchKeyword(kw));
+    if (match && !isBannedActor(ent.name, ent.role) && !seenNames.has(ent.name.toLowerCase())) {
       seenNames.add(ent.name.toLowerCase());
       extractedActors.push({
         name: ent.name,

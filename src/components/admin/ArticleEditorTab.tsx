@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Article, BilingualText, KeyActor, TimelineEvent, PerspectiveBrief, StructuralForces } from '../../types';
 import { useStore } from '../../store';
-import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon, CheckCircle2, AlertCircle, Search, Compass, Radio, Layers, ExternalLink, Zap, ShieldAlert } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
@@ -83,6 +83,75 @@ export function ArticleEditorTab({
 
   // Relations list state
   const [relatedIds, setRelatedIds] = useState<string[]>([]);
+  const [surveillanceSearch, setSurveillanceSearch] = useState('');
+  const [inspectedSurveillanceArticle, setInspectedSurveillanceArticle] = useState<Article | null>(null);
+
+  // Compute smart suggested similar articles for cross-relation and surveillance
+  const autoSuggestedArticles = useMemo(() => {
+    if (!allArticles || allArticles.length === 0) return [];
+
+    const activeTokens = [
+      ...(titleFr || '').toLowerCase().split(/[\s,.'’"-]+/).filter(w => w.length >= 4),
+      ...(titleEn || '').toLowerCase().split(/[\s,.'’"-]+/).filter(w => w.length >= 4),
+      ...(tags || []).map(t => t.toLowerCase()),
+      ...(keyActors || []).map(a => a.name?.toLowerCase()).filter(Boolean)
+    ];
+
+    const currentId = article?.id;
+
+    return allArticles
+      .filter(cand => cand.id !== currentId)
+      .map(cand => {
+        let score = 0;
+        const reasons: string[] = [];
+
+        // Category match
+        if (cand.category && category && cand.category.toLowerCase() === category.toLowerCase()) {
+          score += 35;
+          reasons.push(language === 'fr' ? `Rubrique : ${cand.category}` : `Category: ${cand.category}`);
+        }
+
+        // Tag overlap
+        const candTags = (cand.tags || []).map(t => t.toLowerCase());
+        const sharedTags = (tags || []).filter(t => candTags.includes(t.toLowerCase()));
+        if (sharedTags.length > 0) {
+          score += sharedTags.length * 20;
+          reasons.push(language === 'fr' ? `${sharedTags.length} tag(s) commun(s)` : `${sharedTags.length} shared tag(s)`);
+        }
+
+        // Shared key actors
+        const candActors = Array.isArray(cand.keyActors) ? cand.keyActors.map(a => a.name?.toLowerCase()).filter(Boolean) : [];
+        const sharedActors = (keyActors || []).filter(a => a.name && candActors.includes(a.name.toLowerCase()));
+        if (sharedActors.length > 0) {
+          score += sharedActors.length * 25;
+          reasons.push(language === 'fr' ? `Acteur(s) : ${sharedActors.map(a => a.name).join(', ')}` : `Actor(s): ${sharedActors.map(a => a.name).join(', ')}`);
+        }
+
+        // Keyword tokens in title & excerpt
+        const candTitle = `${cand.title?.fr || ''} ${cand.title?.en || ''} ${cand.excerpt?.fr || ''}`.toLowerCase();
+        let tokenMatches = 0;
+        for (const token of activeTokens) {
+          if (candTitle.includes(token)) {
+            tokenMatches++;
+          }
+        }
+        if (tokenMatches > 0) {
+          const bonus = Math.min(tokenMatches * 8, 30);
+          score += bonus;
+          if (reasons.length < 3) {
+            reasons.push(language === 'fr' ? `Contexte thématique proche` : `Thematic overlap`);
+          }
+        }
+
+        return {
+          article: cand,
+          score: Math.min(score, 100),
+          reasons,
+          isLinked: relatedIds.includes(cand.id)
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [allArticles, article?.id, category, tags, keyActors, titleFr, titleEn, relatedIds, language]);
 
   // Word & read time estimates
   const [wordCount, setWordCount] = useState({ fr: 0, en: 0 });
@@ -1483,21 +1552,204 @@ export function ArticleEditorTab({
               </div>
             </div>
 
-            {/* Related articles relationships */}
-            <div className="pt-2">
-              <label className="text-[10px] text-zinc-300 font-bold uppercase block mb-2">Related Articles Connectivity</label>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto border border-zinc-800 p-3 bg-zinc-950/80 rounded-md">
-                {allArticles.filter(a => a.id !== article?.id).map(a => (
-                  <label key={a.id} className="flex items-center gap-2 text-xs font-semibold text-zinc-200 cursor-pointer select-none">
-                    <input 
-                      type="checkbox" 
-                      className="accent-[#E85D42]"
-                      checked={relatedIds.includes(a.id)} 
-                      onChange={() => toggleRelation(a.id)}
-                    />
-                    <span className="truncate">{a.title?.fr || a.title?.en}</span>
+            {/* Automated Suggested Similar Articles & Editorial Surveillance */}
+            <div className="pt-3 border-t border-zinc-800 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-[#E85D42] animate-pulse" />
+                  <label className="text-[11px] text-[#E85D42] font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <Radio size={13} />
+                    {language === 'fr' ? 'Suggestions Automatiques & Veille Rédactionnelle' : 'Automated Suggestions & Editorial Surveillance'}
                   </label>
+                  <span className="text-[10px] text-zinc-400 font-mono bg-zinc-950 px-1.5 py-0.5 border border-zinc-800 rounded">
+                    {autoSuggestedArticles.filter(s => s.score >= 25).length} {language === 'fr' ? 'pertinents' : 'relevant'}
+                  </span>
+                </div>
+
+                {autoSuggestedArticles.filter(s => s.score >= 25).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const top3 = autoSuggestedArticles
+                        .filter(s => s.score >= 25)
+                        .slice(0, 3)
+                        .map(s => s.article.id);
+                      const combined = Array.from(new Set([...relatedIds, ...top3]));
+                      setRelatedIds(combined);
+                    }}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-[#E85D42]/10 hover:bg-[#E85D42]/20 text-[#E85D42] border border-[#E85D42]/30 px-2.5 py-1 rounded transition-colors cursor-pointer"
+                  >
+                    <Zap size={11} />
+                    {language === 'fr' ? 'Lier Auto Top 3' : 'Auto-Link Top 3'}
+                  </button>
+                )}
+              </div>
+
+              {/* Suggestions Cards Grid */}
+              <div className="space-y-2">
+                {autoSuggestedArticles.filter(s => s.score >= 25).slice(0, 5).map(({ article: sugArt, score, reasons, isLinked }) => (
+                  <div 
+                    key={sugArt.id} 
+                    className={`p-3 border transition-all rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                      isLinked 
+                        ? 'bg-[#E85D42]/10 border-[#E85D42]/50 text-white' 
+                        : 'bg-zinc-950/90 border-zinc-800 hover:border-zinc-700 text-zinc-200'
+                    }`}
+                  >
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          score >= 70 
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                            : score >= 45 
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                            : 'bg-zinc-800 text-zinc-400'
+                        }`}>
+                          {score}% {language === 'fr' ? 'Affinité' : 'Match'}
+                        </span>
+                        <span className="text-[10px] text-[#E85D42] font-mono font-bold uppercase">
+                          {sugArt.category}
+                        </span>
+                        {sugArt.date && (
+                          <span className="text-[9px] text-zinc-500 font-mono">
+                            {new Date(sugArt.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="text-xs font-bold text-zinc-100 truncate">
+                        {sugArt.title?.fr || sugArt.title?.en}
+                      </h4>
+
+                      {/* Rationale tags */}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        {reasons.map((r, rIdx) => (
+                          <span key={rIdx} className="text-[9px] text-zinc-400 bg-zinc-900 px-1.5 py-0.5 border border-zinc-800 rounded font-mono">
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setInspectedSurveillanceArticle(sugArt)}
+                        className="text-[10px] font-bold text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 px-2.5 py-1.5 rounded flex items-center gap-1 cursor-pointer transition-colors"
+                        title={language === 'fr' ? 'Inspecter les faits et la chronologie pour surveillance' : 'Inspect facts and timeline for surveillance'}
+                      >
+                        <Eye size={11} />
+                        {language === 'fr' ? 'Veille' : 'Peek'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleRelation(sugArt.id)}
+                        className={`text-[10px] font-bold uppercase px-3 py-1.5 rounded flex items-center gap-1 cursor-pointer transition-colors ${
+                          isLinked 
+                            ? 'bg-[#E85D42] hover:bg-[#D45037] text-white' 
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                        }`}
+                      >
+                        {isLinked ? (
+                          <>
+                            <Check size={11} />
+                            {language === 'fr' ? 'Lié' : 'Linked'}
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={11} />
+                            {language === 'fr' ? 'Lier' : 'Link'}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
                 ))}
+
+                {autoSuggestedArticles.filter(s => s.score >= 25).length === 0 && (
+                  <p className="text-xs text-zinc-500 italic p-3 bg-zinc-950 border border-zinc-800 rounded">
+                    {language === 'fr' 
+                      ? 'Aucune suggestion thématique directe détectée pour le moment. Renseignez la rubrique, les tags ou les acteurs clés.' 
+                      : 'No direct thematic suggestions detected yet. Provide category, tags, or key actors.'}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Manual Related articles relationships & Archive Search */}
+            <div className="pt-3 border-t border-zinc-800">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] text-zinc-300 font-bold uppercase">
+                  {language === 'fr' ? 'Toutes les Relations & Archives' : 'All Manual Relationships & Archives'}
+                </label>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  {relatedIds.length} {language === 'fr' ? 'sélectionné(s)' : 'selected'}
+                </span>
+              </div>
+
+              {/* Archive Search input */}
+              <div className="relative mb-2">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  type="text"
+                  value={surveillanceSearch}
+                  onChange={e => setSurveillanceSearch(e.target.value)}
+                  placeholder={language === 'fr' ? 'Filtrer les archives par titre, mot-clé ou ID...' : 'Filter archives by title, keyword, or ID...'}
+                  className="w-full bg-zinc-950 border border-zinc-800 pl-7 pr-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 rounded focus:outline-none focus:border-[#E85D42]"
+                />
+                {surveillanceSearch && (
+                  <button 
+                    type="button" 
+                    onClick={() => setSurveillanceSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-1 max-h-48 overflow-y-auto border border-zinc-800 p-2.5 bg-zinc-950/80 rounded-md">
+                {allArticles
+                  .filter(a => a.id !== article?.id)
+                  .filter(a => {
+                    if (!surveillanceSearch.trim()) return true;
+                    const q = surveillanceSearch.toLowerCase();
+                    const tFr = (a.title?.fr || '').toLowerCase();
+                    const tEn = (a.title?.en || '').toLowerCase();
+                    const cat = (a.category || '').toLowerCase();
+                    return tFr.includes(q) || tEn.includes(q) || cat.includes(q) || a.id.toLowerCase().includes(q);
+                  })
+                  .map(a => {
+                    const isChecked = relatedIds.includes(a.id);
+                    return (
+                      <div 
+                        key={a.id} 
+                        className={`flex items-center justify-between p-1.5 rounded transition-colors ${
+                          isChecked ? 'bg-[#E85D42]/10 border border-[#E85D42]/30' : 'hover:bg-zinc-900/60'
+                        }`}
+                      >
+                        <label className="flex items-center gap-2 text-xs font-semibold text-zinc-200 cursor-pointer select-none truncate flex-1 pr-2">
+                          <input 
+                            type="checkbox" 
+                            className="accent-[#E85D42]"
+                            checked={isChecked} 
+                            onChange={() => toggleRelation(a.id)}
+                          />
+                          <span className="text-[10px] text-[#E85D42] font-mono shrink-0">[{a.category || 'Général'}]</span>
+                          <span className="truncate">{a.title?.fr || a.title?.en}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setInspectedSurveillanceArticle(a)}
+                          className="text-[10px] text-zinc-400 hover:text-white p-1 shrink-0"
+                          title="Aperçu rapide"
+                        >
+                          <Eye size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>
@@ -1878,6 +2130,130 @@ export function ArticleEditorTab({
                     <span>Lancer la Réécriture IA</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Surveillance Inspection Modal */}
+      {inspectedSurveillanceArticle && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700 border-t-4 border-t-[#E85D42] w-full max-w-2xl max-h-[85vh] overflow-y-auto rounded-lg shadow-2xl p-6 space-y-4 text-left">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Radio size={16} className="text-[#E85D42]" />
+                <span className="text-xs font-mono font-bold uppercase text-[#E85D42]">
+                  {language === 'fr' ? 'Fiche de Veille Rédactionnelle & Chronologique' : 'Editorial Surveillance & Timeline Dossier'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectedSurveillanceArticle(null)}
+                className="text-zinc-400 hover:text-white p-1 rounded hover:bg-zinc-800 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-[#E85D42] text-white px-2 py-0.5 font-bold uppercase rounded">
+                  {inspectedSurveillanceArticle.category}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-mono">
+                  ID: {inspectedSurveillanceArticle.id}
+                </span>
+                {inspectedSurveillanceArticle.date && (
+                  <span className="text-[10px] text-zinc-400 font-mono ml-auto">
+                    {new Date(inspectedSurveillanceArticle.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </span>
+                )}
+              </div>
+
+              <h2 className="text-base font-black text-white uppercase">
+                {inspectedSurveillanceArticle.title?.fr || inspectedSurveillanceArticle.title?.en}
+              </h2>
+
+              <p className="text-xs text-zinc-300 italic bg-zinc-950 p-3 border border-zinc-800 rounded">
+                {inspectedSurveillanceArticle.excerpt?.fr || inspectedSurveillanceArticle.excerpt?.en || 'Aucun extrait disponible.'}
+              </p>
+
+              {/* Perspective Brief Summary */}
+              {inspectedSurveillanceArticle.perspectiveBrief && (
+                <div className="border-t border-zinc-800 pt-3 space-y-2">
+                  <h4 className="text-[11px] font-bold text-[#E85D42] uppercase tracking-wider">
+                    {language === 'fr' ? 'Brief Perspective (3 Piliers)' : 'Perspective Brief (3 Pillars)'}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                    <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800">
+                      <strong className="text-zinc-200 block mb-1 text-[10px]">📌 {language === 'fr' ? "Ce qui s'est passé" : "What happened"} :</strong>
+                      <p className="text-zinc-400 text-[10px]">
+                        {inspectedSurveillanceArticle.perspectiveBrief.whatHappened?.fr || inspectedSurveillanceArticle.perspectiveBrief.whatHappened?.en || '-'}
+                      </p>
+                    </div>
+                    <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800">
+                      <strong className="text-zinc-200 block mb-1 text-[10px]">⚡ {language === 'fr' ? "Pourquoi cela compte" : "Why it matters"} :</strong>
+                      <p className="text-zinc-400 text-[10px]">
+                        {inspectedSurveillanceArticle.perspectiveBrief.whyItMatters?.fr || inspectedSurveillanceArticle.perspectiveBrief.whyItMatters?.en || '-'}
+                      </p>
+                    </div>
+                    <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800">
+                      <strong className="text-zinc-200 block mb-1 text-[10px]">🔍 {language === 'fr' ? "À surveiller" : "To watch next"} :</strong>
+                      <p className="text-zinc-400 text-[10px]">
+                        {inspectedSurveillanceArticle.perspectiveBrief.whatToWatchNext?.fr || inspectedSurveillanceArticle.perspectiveBrief.whatToWatchNext?.en || '-'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Key Actors */}
+              {inspectedSurveillanceArticle.keyActors && inspectedSurveillanceArticle.keyActors.length > 0 && (
+                <div className="border-t border-zinc-800 pt-3">
+                  <h4 className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider mb-2">
+                    {language === 'fr' ? 'Acteurs Clés Documentés' : 'Documented Key Actors'}
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {inspectedSurveillanceArticle.keyActors.map((act, aIdx) => (
+                      <span key={aIdx} className="text-[10px] bg-zinc-950 border border-zinc-800 text-zinc-300 px-2 py-1 rounded">
+                        <strong>{act.name}</strong> <span className="text-zinc-500">({act.role})</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-between items-center border-t border-zinc-800 pt-4">
+              <button
+                type="button"
+                onClick={() => toggleRelation(inspectedSurveillanceArticle.id)}
+                className={`text-xs font-bold uppercase px-4 py-2 rounded flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  relatedIds.includes(inspectedSurveillanceArticle.id)
+                    ? 'bg-[#E85D42] text-white'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                }`}
+              >
+                {relatedIds.includes(inspectedSurveillanceArticle.id) ? (
+                  <>
+                    <Check size={13} />
+                    {language === 'fr' ? 'Lié aux Relations' : 'Linked to Relations'}
+                  </>
+                ) : (
+                  <>
+                    <Plus size={13} />
+                    {language === 'fr' ? 'Ajouter aux Relations de cet Article' : 'Add to Relations of this Article'}
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInspectedSurveillanceArticle(null)}
+                className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 text-zinc-300 rounded text-xs font-bold uppercase transition-colors cursor-pointer"
+              >
+                {language === 'fr' ? 'Fermer' : 'Close'}
               </button>
             </div>
           </div>
