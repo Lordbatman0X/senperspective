@@ -221,6 +221,7 @@ export interface CustomEditorialGuidelines {
 
 export interface GenerateArticleOptions {
   rssItem?: any;
+  sourceItem?: any;
   prompt?: string;
   category?: string;
   type?: ArticleStyleType;
@@ -540,10 +541,8 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
   // Current production model cascade for fast inference and strict JSON response
   const models = [
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash"
+    "gemini-3.1-flash-lite",
+    "gemini-3.7-flash"
   ];
   let lastErr: any = null;
 
@@ -562,7 +561,7 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
       });
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Gemini timeout on ${model} (25s)`)), 25000)
+        setTimeout(() => reject(new Error(`Gemini timeout on ${model} (7s)`)), 7000)
       );
 
       const response = await Promise.race([apiCall, timeoutPromise]);
@@ -581,14 +580,15 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
       lastErr = err;
       const msg = err?.message || String(err);
       if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
-        console.warn(`[GEMINI ENGINE NOTICE] Quota limit hit on ${model}. Trying next model/engine...`);
+        console.warn(`[GEMINI ENGINE NOTICE] Quota limit hit on ${model}. Fast-breaking to next engine...`);
+        break; // Break immediately so we don't stall the request across 5 exhausted models
       } else {
         console.warn(`[GEMINI ENGINE NOTICE] Model ${model} failed (${msg.slice(0, 100)}). Trying fallback...`);
       }
     }
   }
 
-  throw lastErr || new Error("All Gemini models exhausted or rate-limited.");
+  throw lastErr || new Error("Gemini models exhausted or rate-limited.");
 }
 
 /**
@@ -650,11 +650,11 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
   }
 
   const models = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "gemma2-9b-it",
-    "llama-3.2-3b-preview",
-    "llama-3.2-1b-preview"
+    "qwen/qwen3.6-27b",
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile"
   ];
   let lastErr: any = null;
 
@@ -668,7 +668,7 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
         ],
         response_format: { type: "json_object" },
         temperature: 0.25,
-        max_tokens: 3500,
+        max_tokens: 3000,
       });
 
       const text = completion.choices[0]?.message?.content?.trim();
@@ -704,12 +704,10 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
   }
 
   const models = [
+    "qwen/qwen-2.5-72b-instruct",
     "meta-llama/llama-3.3-70b-instruct",
-    "deepseek/deepseek-chat",
-    "deepseek/deepseek-r1",
     "mistralai/mistral-small-24b-instruct-2501",
-    "google/gemini-2.0-flash-001",
-    "google/gemini-flash-1.5",
+    "deepseek/deepseek-chat",
     "openai/gpt-4o-mini"
   ];
   let lastErr: any = null;
@@ -724,7 +722,7 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
         ],
         response_format: { type: "json_object" },
         temperature: 0.25,
-        max_tokens: 3500, // Explicit limit prevents 402 credit threshold errors
+        max_tokens: 2200, // Explicit limit prevents 402 credit threshold errors on free/low credit keys
       });
 
       const text = completion.choices[0]?.message?.content?.trim();
@@ -927,7 +925,8 @@ export async function orchestrateDualEngineArticleGeneration(options: GenerateAr
   } = options;
 
   const systemInstruction = buildEditorialSystemPrompt(type, customGuidelinesOverride);
-  const contextData = typeof rssItem === "object" ? JSON.stringify(rssItem) : (rssItem || prompt || "Actualité Ouest-Africaine");
+  const sourceItemResolved = options.rssItem || options.sourceItem || options.prompt || "Actualité Ouest-Africaine";
+  const contextData = typeof sourceItemResolved === "object" ? JSON.stringify(sourceItemResolved) : String(sourceItemResolved);
   const userPrompt = `SOURCE STORY CONTEXT:
 ${contextData}
 ${prompt ? `\nADDITIONAL EDITORIAL INSTRUCTION: ${prompt}` : ""}
@@ -1059,7 +1058,7 @@ Please craft the complete bilingual storytelling article in strict JSON matching
 
   // Smart Local Synthesis Fallback if both cloud AI APIs hit rate/quota limits or are unconfigured
   if (!rawJson) {
-    const fallbackItem = rssItem || prompt || "Actualité Ouest-Africaine";
+    const fallbackItem = sourceItemResolved;
     const itemTitle = extractString(typeof fallbackItem === "object" ? (fallbackItem.title || "Actualité Ouest-Africaine") : String(fallbackItem));
     const itemDesc = extractString(typeof fallbackItem === "object" ? (fallbackItem.description || fallbackItem.content || fallbackItem.body || "") : "");
 

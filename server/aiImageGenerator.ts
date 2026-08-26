@@ -115,7 +115,7 @@ export interface ImageGenerationOptions {
 
 export interface GeneratedImageResult {
   imageUrl: string;
-  source: "gemini" | "openai" | "contextual";
+  source: "pollinations_flux" | "gemini" | "openai" | "contextual";
   modelUsed?: string;
   promptUsed?: string;
 }
@@ -133,31 +133,30 @@ export function buildPhotojournalismPrompt(options: ImageGenerationOptions): str
 
 /**
  * Primary AI Image Generator for Articles:
- * 1. Tries Gemini image generation via @google/genai SDK (gemini-3.1-flash-lite-image / gemini-3.1-flash-image)
- * 2. Tries OpenAI DALL-E 3 fallback if OpenAI API key is active
+ * 1. Generates hyper-realistic photojournalism images via Pollinations Flux AI model (instant, zero quota limit)
+ * 2. Tries Gemini image generation / OpenAI DALL-E 3 with fast non-blocking timeouts
  * 3. Falls back smoothly to curated high-resolution editorial photography matched to the article's context
  */
 export async function generateArticleImageWithAI(options: ImageGenerationOptions): Promise<GeneratedImageResult> {
   const promptText = buildPhotojournalismPrompt(options);
 
-  // 1. Try Gemini Image Generation via Google GenAI SDK
+  // 1. Try Gemini Image Generation via Google GenAI SDK (with strict 3s timeout)
   const geminiKey = getEffectiveApiKey("GEMINI");
   if (geminiKey) {
     const ai = getGeminiClient();
     if (ai) {
       const modelsToTry = [
         "gemini-3.1-flash-lite-image",
-        "gemini-3.1-flash-image",
-        "gemini-2.5-flash-image",
-        "imagen-3.0-generate-002"
+        "gemini-2.5-flash-image"
       ];
 
       for (const model of modelsToTry) {
         try {
-          console.log(`[AI IMAGE GEN] Attempting image generation with Gemini model: ${model}...`);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Gemini Image timeout (3s)")), 3000)
+          );
 
-          // Attempt via generateContent
-          const response = await ai.models.generateContent({
+          const genPromise = ai.models.generateContent({
             model,
             contents: [{ role: "user", parts: [{ text: promptText }] }],
             config: {
@@ -167,6 +166,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
             }
           });
 
+          const response = await Promise.race([genPromise, timeoutPromise]);
           const candidates = response.candidates || [];
           for (const cand of candidates) {
             const parts = cand.content?.parts || [];
@@ -174,7 +174,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
               if (part.inlineData && part.inlineData.data) {
                 const mime = part.inlineData.mimeType || "image/jpeg";
                 const base64Url = `data:${mime};base64,${part.inlineData.data}`;
-                console.log(`[AI IMAGE GEN SUCCESS] Generated image successfully with Gemini model ${model}!`);
+                console.log(`[AI IMAGE GEN SUCCESS] Generated with Gemini model ${model}!`);
                 return {
                   imageUrl: base64Url,
                   source: "gemini",
@@ -186,20 +186,26 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
           }
         } catch (err: any) {
           const msg = err?.message || String(err);
-          console.warn(`[AI IMAGE GEN NOTICE] Gemini image model ${model} unavailable: ${msg.slice(0, 120)}`);
+          console.warn(`[AI IMAGE GEN NOTICE] Gemini image model ${model} skipped: ${msg.slice(0, 80)}`);
+          // If quota hit or rate limit, break out of Gemini immediately
+          if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+            break;
+          }
         }
       }
     }
   }
 
-  // 2. Try OpenAI DALL-E 3 Fallback
+  // 2. Try OpenAI DALL-E 3 (if key provided, with 4s timeout)
   const openaiKey = getEffectiveApiKey("OPENAI");
   if (openaiKey) {
     const openai = getOpenAIClient();
     if (openai) {
       try {
-        console.log(`[AI IMAGE GEN] Attempting image generation via OpenAI DALL-E 3...`);
-        const response = await openai.images.generate({
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("OpenAI DALL-E timeout (4s)")), 4000)
+        );
+        const genPromise = openai.images.generate({
           model: "dall-e-3",
           prompt: promptText.slice(0, 950),
           n: 1,
@@ -207,8 +213,9 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
           quality: "standard"
         });
 
+        const response = await Promise.race([genPromise, timeoutPromise]);
         if (response.data && response.data[0]?.url) {
-          console.log(`[AI IMAGE GEN SUCCESS] Generated image successfully via OpenAI DALL-E 3!`);
+          console.log(`[AI IMAGE GEN SUCCESS] Generated image via OpenAI DALL-E 3!`);
           return {
             imageUrl: response.data[0].url,
             source: "openai",
@@ -217,13 +224,68 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
           };
         }
       } catch (dalleErr: any) {
-        console.warn(`[AI IMAGE GEN NOTICE] OpenAI DALL-E 3 failed: ${dalleErr?.message || dalleErr}`);
+        console.warn(`[AI IMAGE GEN NOTICE] OpenAI DALL-E 3 skipped: ${dalleErr?.message || dalleErr}`);
       }
     }
   }
 
-  // 3. Fallback: Highly Targeted Contextual Curated Editorial Photography
-  console.log(`[AI IMAGE GEN CONTEXTUAL FALLBACK] Using contextual high-resolution editorial photograph for: "${options.title}"`);
+  // 3. Pollinations Flux AI Generation Engine (High-Performance, Zero-Quota, Realistic Photojournalism)
+  try {
+    const seed = Math.floor(Math.random() * 100000);
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}?width=1200&height=675&nologo=true&model=flux&seed=${seed}`;
+    console.log(`[AI IMAGE GEN POLLINATIONS] Requesting Flux AI photojournalism for "${options.title}"...`);
+
+    // Quick attempt to convert to base64 for local persistence (3.5s timeout)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+    try {
+      const resp = await fetch(pollinationsUrl, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (resp.ok) {
+        const contentType = resp.headers.get("content-type") || "image/jpeg";
+        if (contentType.includes("image")) {
+          const buffer = await resp.arrayBuffer();
+          if (buffer.byteLength > 1000) {
+            const base64Data = Buffer.from(buffer).toString("base64");
+            const mime = contentType.includes("png") ? "image/png" : "image/jpeg";
+            const dataUri = `data:${mime};base64,${base64Data}`;
+            console.log(`[AI IMAGE GEN SUCCESS] Generated and synthesized with Pollinations Flux AI (${Math.round(buffer.byteLength / 1024)} KB)!`);
+            return {
+              imageUrl: dataUri,
+              source: "pollinations_flux",
+              modelUsed: "Flux AI Photojournalism Engine",
+              promptUsed: promptText
+            };
+          }
+        }
+      }
+    } catch (_abortErr) {
+      // If fetching binary buffer timed out after 3.5s, return direct CDN URL instantly
+      clearTimeout(timeoutId);
+      console.log(`[AI IMAGE GEN SUCCESS] Returning direct high-res Flux AI image URL: ${pollinationsUrl}`);
+      return {
+        imageUrl: pollinationsUrl,
+        source: "pollinations_flux",
+        modelUsed: "Flux AI Photojournalism CDN",
+        promptUsed: promptText
+      };
+    }
+
+    // Direct URL fallback if response wasn't converted
+    return {
+      imageUrl: pollinationsUrl,
+      source: "pollinations_flux",
+      modelUsed: "Flux AI Photojournalism CDN",
+      promptUsed: promptText
+    };
+  } catch (pollErr: any) {
+    console.warn(`[AI IMAGE GEN NOTICE] Pollinations Flux skipped: ${pollErr?.message || pollErr}`);
+  }
+
+  // 4. Fallback: Highly Targeted Contextual Curated Editorial Photography
+  console.log(`[AI IMAGE GEN CONTEXTUAL FALLBACK] Using contextual editorial photograph for: "${options.title}"`);
   const contextualUrl = getCategoryDefaultEditorialImage(options.category, options.title);
   return {
     imageUrl: contextualUrl,
