@@ -349,7 +349,7 @@ export function HomePage() {
   
   const featuredArticles = articles.filter(a => a.isFeatured).slice(0, 4);
   const flashArticles = articles.filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');
-  const arenaArticles = articles.filter(a => a.category === "L'Arène" || a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
+  const arenaArticles = articles.filter(a => a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
   const dossierArticles = articles.filter(a => a.category === 'Dossiers' || a.category === 'Dossier' || a.category?.toLowerCase().includes('dossier'));
   const maritimeArticles = articles.filter(a => a.category === 'Météo & Maritime' || a.category === 'Chaloupe & Transports' || a.category?.toLowerCase().includes('météo') || a.category?.toLowerCase().includes('chaloupe'));
 

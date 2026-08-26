@@ -3,6 +3,44 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 
+// Helper to safely extract string values from XML or parsed objects
+export function extractString(val: any): string {
+  if (!val) return "";
+  if (typeof val === "string") return val;
+  if (typeof val === "object") {
+    if (typeof val._ === "string") return val._;
+    if (typeof val.text === "string") return val.text;
+    if (Array.isArray(val) && val.length > 0) return extractString(val[0]);
+    return "";
+  }
+  return String(val);
+}
+
+const baseStorageDir = process.env.VERCEL ? "/tmp" : process.cwd();
+const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
+
+export function getEffectiveApiKey(provider: string): string | undefined {
+  try {
+    if (fs.existsSync(apiKeysFile)) {
+      const keys = JSON.parse(fs.readFileSync(apiKeysFile, "utf-8"));
+      if (keys[provider] && keys[provider].trim() !== "" && keys[provider] !== "undefined") {
+        return keys[provider];
+      }
+    }
+  } catch (err) {
+    console.error(`Error reading apiKeysFile for ${provider}:`, err);
+  }
+  
+  // Fallbacks to process.env
+  switch (provider) {
+    case 'GEMINI': return process.env.GEMINI_API_KEY;
+    case 'OPENAI': return process.env.OPENAI_API_KEY;
+    case 'GROQ': return process.env.GROQ_API_KEY;
+    case 'OPENROUTER': return process.env.OPENROUTER_API_KEY;
+    default: return undefined;
+  }
+}
+
 export type ArticleStyleType = "News" | "Analysis" | "Deep Dive" | "Explainer" | "Opinion";
 
 export interface CustomEditorialGuidelines {
@@ -43,70 +81,17 @@ export interface DualEngineResult {
 const GUIDELINES_FILE_PATH = path.join(process.cwd(), "server", "editorial_guidelines.json");
 
 export const DEFAULT_EDITORIAL_GUIDELINES: CustomEditorialGuidelines = {
-  customDirectives: `[TRIAGE ÉDITORIAL DYNAMIQUE & LOGIQUE DUAL-NEWS]
-Avant d'écrire, classifier l'information en [STANDARD_NEWS] ou [DEEP_DIVE] :
-
-1. IF [STANDARD_NEWS] (Information factuelle, fait local, fait sportif, communiqué simple, dépêche) :
-   - Format : 2 à 3 courts paragraphes de texte continu fluide.
-   - Sous-titres (##) : AUCUN SOUS-TITRE / AUCUN INTERTITRE (No ##).
-   - Perspective Brief : Fournir UNIQUEMENT "What Happened". OMETTRE "Why It Matters" et "What To Watch Next".
-   - Forces Structurelles : OMETTRE ENTIÈREMENT. Ne pas créer artificiellement de grille structurelle pour les faits divers ou brèves.
-
-2. IF [DEEP_DIVE] (Dossier complexe, analyse sectorielle, grand format Tech/Culture/Sport/Politique/Économie) :
-   - Format : 3 à 5 paragraphes développés.
-   - Sous-titres (##) : OBLIGATOIRE d'utiliser des intertitres Markdown (##) adaptés au domaine (ex: "Tactique & Enjeux" pour le Sport, "Souveraineté & Code" pour la Tech, "Création & Patrimoine" pour la Culture).
-   - Citations (> ) : OBLIGATOIRE d'inclure au moins une citation pertinente (> ).
-   - Perspective Brief : OBLIGATOIRE d'inclure les 3 volets (What Happened, Why It Matters, What To Watch Next).
-   - Forces Structurelles : OBLIGATOIRE de générer les grilles adaptées à la thématique.
-
-[RÈGLE D'ADAPTATION PAR RUBRIQUE]
-Le journal couvre TOUTES les rubriques (Politique, Économie, Société, Tech, Culture, Sports, Santé, International). Adapter le vocabulaire, le ton et les sous-titres à la rubrique réelle de l'article sans plaquer artificiellement du jargon géopolitique ou macroéconomique sur les sujets culturels, sportifs ou technologiques.
-
-[EMBODIED STORYTELLING & STYLE]
-- Toujours ouvrir l'article par une scène vivante, une situation humaine concrète ou un ancrage géographique fort (ex: "Dans les pépinières tech de Dakar...", "Sur le sable chaud de l'Arène...", "Dans les galeries de la Biennale...", "Dans les couloirs de l'Assemblée...").
-- Bilinguisme d'excellence : La version anglaise doit impérativement lire comme une publication internationale de référence (anglais idiomatique, concis et élégant).`,
-  editorialComments: `Respecter strictement la politique Zero-Cliché. Les chapeaux doivent obligatoirement inclure un ancrage géographique ou une personnalité nommée. Pour les STANDARD_NEWS, garder une longueur dynamique sans fioritures.`,
-  forbiddenPhrases: [
-    "game-changer",
-    "pleine mutation",
-    "monde en perpétuelle évolution",
-    "plonger au cœur de",
-    "il convient de noter que",
-    "forces vives",
-    "tournant historique"
-  ],
+  customDirectives: "",
+  editorialComments: "",
+  forbiddenPhrases: [],
   preferredTone: "analytical",
   exemplaryExample: {
-    titleFr: "Port de Ndayane : Radiographie d'un mégaprojet logistique au cœur de l'ambition maritime ouest-africaine",
-    excerptFr: "À 50 kilomètres au sud de Dakar, les engins de chantier dessinent les contours du futur poumon portuaire de l'Afrique de l'Ouest. Entre souveraineté logistique et retombées économiques, Perspective décrypte les enjeux d'un investissement de plus de 800 millions de dollars.",
-    bodyFr: `## Une ambition logistique aux portes de Dakar
-
-Sous le soleil zénithal de la Petite-Côte, le chantier du port en eau profonde de Ndayane s'impose comme le plus vaste projet d'infrastructures de la décennie au Sénégal. Conçu pour désengorger le Port Autonome de Dakar, ce complexe vise à accueillir les plus grands navires porte-conteneurs du commerce mondial.
-
-> « Ndayane n'est pas seulement un port commercial, c'est le levier stratégique qui repositionne la presqu'île du Cap-Vert au centre des flux Atlantique-Sahel. »
-
-## Impact économique et souveraineté sous-régionale
-
-L'engorgement récurrent des quais dakarois imposait une alternative industrielle d'envergure. En connectant Ndayane aux grands corridors de transport de l'UEMOA, les autorités sénégalaises entendent réduire de 30% les délais de transit des marchandises vers le Mali et la sous-région.
-
-## Ce qu'il faut surveiller
-
-La livraison de la première phase opérationnelle est scrutée par les acteurs de la logistique internationale. Les prochains mois seront décisifs pour finaliser les raccordements autoroutiers et ferroviaires.`,
-    titleEn: "Ndayane Deepwater Port: Inside West Africa's $800M Maritime Logistics Anchor",
-    excerptEn: "Fifty kilometers south of Dakar, heavy machinery is shaping West Africa's next maritime hub. Perspective breaks down the economic leverage and regional trade dynamics behind Senegal's flagship infrastructure project.",
-    bodyEn: `## Strategic Maritime Hub at Dakar's Doorstep
-
-Along Senegal's Atlantic coastline, the construction of the Ndayane deepwater port represents the nation's largest infrastructure endeavor of the decade. Designed to relieve chronic congestion at the Port of Dakar, the terminal is built to accommodate ultra-large container vessels.
-
-> "Ndayane is not merely a commercial harbor; it is the strategic pivot positioning the Cap-Vert peninsula at the center of Atlantic-Sahel trade flows."
-
-## Economic Impact & Regional Integration
-
-Connecting Ndayane directly to WAEMU trade corridors aims to shave up to 30% off transit times for landlocked neighbors like Mali.
-
-## Outlook & Next Milestones
-
-Phase-one operational trials will be closely monitored by global logistics operators. Road and rail intermodal links remain the critical path over the coming months.`
+    titleFr: "",
+    excerptFr: "",
+    bodyFr: "",
+    titleEn: "",
+    excerptEn: "",
+    bodyEn: ""
   },
   updatedAt: new Date().toISOString()
 };
@@ -162,13 +147,15 @@ export function resetEditorialGuidelinesToDefault(): CustomEditorialGuidelines {
 }
 
 // Lazy-initialized Gemini Client
+let lastGeminiKey: string | null = null;
 let geminiInstance: GoogleGenAI | null = null;
 export function getGeminiClient(): GoogleGenAI | null {
-  const key = process.env.GEMINI_API_KEY;
+  const key = getEffectiveApiKey('GEMINI');
   if (!key || key.trim() === "" || key === "undefined" || key === "null") {
     return null;
   }
-  if (!geminiInstance) {
+  if (!geminiInstance || lastGeminiKey !== key) {
+    lastGeminiKey = key;
     geminiInstance = new GoogleGenAI({
       apiKey: key,
       httpOptions: {
@@ -182,26 +169,30 @@ export function getGeminiClient(): GoogleGenAI | null {
 }
 
 // Lazy-initialized OpenAI Client
+let lastOpenAIKey: string | null = null;
 let openaiInstance: OpenAI | null = null;
 export function getOpenAIClient(): OpenAI | null {
-  const key = process.env.OPENAI_API_KEY;
+  const key = getEffectiveApiKey('OPENAI');
   if (!key || key.trim() === "" || key === "undefined" || key === "null") {
     return null;
   }
-  if (!openaiInstance) {
+  if (!openaiInstance || lastOpenAIKey !== key) {
+    lastOpenAIKey = key;
     openaiInstance = new OpenAI({ apiKey: key });
   }
   return openaiInstance;
 }
 
 // Lazy-initialized Groq Client (using OpenAI SDK compatibility)
+let lastGroqKey: string | null = null;
 let groqInstance: OpenAI | null = null;
 export function getGroqClient(): OpenAI | null {
-  const key = process.env.GROQ_API_KEY;
+  const key = getEffectiveApiKey('GROQ');
   if (!key || key.trim() === "" || key === "undefined" || key === "null") {
     return null;
   }
-  if (!groqInstance) {
+  if (!groqInstance || lastGroqKey !== key) {
+    lastGroqKey = key;
     groqInstance = new OpenAI({
       apiKey: key,
       baseURL: "https://api.groq.com/openai/v1"
@@ -211,13 +202,15 @@ export function getGroqClient(): OpenAI | null {
 }
 
 // Lazy-initialized OpenRouter Client
+let lastOpenRouterKey: string | null = null;
 let openRouterInstance: OpenAI | null = null;
 export function getOpenRouterClient(): OpenAI | null {
-  const key = process.env.OPENROUTER_API_KEY;
+  const key = getEffectiveApiKey('OPENROUTER');
   if (!key || key.trim() === "" || key === "undefined" || key === "null") {
     return null;
   }
-  if (!openRouterInstance) {
+  if (!openRouterInstance || lastOpenRouterKey !== key) {
+    lastOpenRouterKey = key;
     openRouterInstance = new OpenAI({
       apiKey: key,
       baseURL: "https://openrouter.ai/api/v1",
@@ -253,13 +246,13 @@ Perspective Group is NOT limited to geopolitics or macroeconomics. It is a full-
 - **Société & Transports**: Community life, education, urban mobility, social change, daily civic developments.
 - **Tech & Innovation**: Startups, software, AI, telecom, digital transformation, fintech, tech infrastructure.
 - **Culture, Arts & People**: Cinema, music, literature, heritage, design, creative economy, cultural diplomacy.
-- **Sports & L'Arène**: Senegalese Lamb wrestling, basketball, football, athletic performance, tactical breakdowns, fan culture.
+- **Sports**: Senegalese Lamb wrestling, basketball, football, athletic performance, tactical breakdowns, fan culture.
 - **Santé & Environnement**: Public health, medical innovation, climate resilience, ecological transition.
 - **International & Afrique**: Global affairs, regional cooperation, diplomacy, South-South alliances.
 
 CATEGORY-SPECIFIC WRITING STYLE ADAPTATION:
 - **Tech & Innovation**: Use forward-looking, crisp, technical-yet-accessible prose focusing on innovation dynamics and digital impact.
-- **Sports & L'Arène**: Use energetic, vivid, field-grounded storytelling highlighting athletic prowess, strategic matchups, and cultural fervor.
+- **Sports**: Use energetic, vivid, field-grounded storytelling highlighting athletic prowess, strategic matchups, and cultural fervor.
 - **Culture & Arts**: Use evocative, expressive, artistic prose capturing creative vision, heritage, and human emotion.
 - **Santé & Environnement**: Focus on community well-being, scientific facts, public policy, and environmental stewardship.
 - **Société & Transports**: Focus on lived human experience, civic perspectives, and social transformations.
@@ -285,7 +278,7 @@ IF [DEEP_DIVE]:
 - Structural Forces: MUST generate the analytical forces relevant to the article.
 
 UNIVERSAL GUIDELINES:
-- Embodied Storytelling: Always open the article with a vivid scene, a concrete human situation, or a geographic anchor (e.g., "In Dakar's tech hubs...", "On the sands of the Arena...", "At the National Theatre...", "In the hallways of the Assembly...").
+- Embodied Storytelling: Always open the article with a vivid scene, a concrete human situation, or a geographic anchor (e.g., "In Dakar's tech hubs...", "In Senegal's regional sports centers...", "At the National Theatre...", "In the hallways of the Assembly...").
 - Citation & Sourcing: You MUST cite actual authorities, verifiable metrics, or primary quotes relevant to the news. Do not invent facts, but structure them analytically. Use Markdown blockquotes (> ) for all direct speech or official statements.
 - Analytical Depth & Tone: Write with the gravitas, rigor, and clinical precision of the Financial Times or The Economist. Avoid hyperbolic adjectives. Focus on macro-implications, strategic shifts, and structural consequences.
 - Bilingual Output: All final output MUST be perfectly bilingual. You MUST provide BOTH a French and an English version for the title, excerpt, body, and all structural fields.
@@ -336,7 +329,7 @@ Return STRICT, VALID JSON ONLY conforming to this schema:
     "fr": "Corps de l'article en français respectant les règles d'écritures dynamiques selon STANDARD_NEWS ou DEEP_DIVE.",
     "en": "Article body in English adhering to dynamic writing rules (Financial Times style)."
   },
-  "category": "Politique|Économie|Société|International|L'Arène|Dossiers|Flash Info|Météo & Maritime|Culture & People|Tech & Innovation",
+  "category": "Politique|Économie|Société|International|Sports|Dossiers|Flash Info|Météo & Maritime|Culture & People|Tech & Innovation",
   "type": "${articleType}",
   "author": "Rédaction Perspective",
   "readingTime": ${isShortNews ? 3 : 6},
@@ -582,8 +575,8 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
  */
 export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallbackCategory = "Économie", articleType: ArticleStyleType = "News"): any {
   const todayIso = new Date().toISOString().split("T")[0];
-  const itemTitle = typeof sourceItem === "string" ? sourceItem : (sourceItem?.title || "Actualité Ouest-Africaine");
-  const itemDesc = typeof sourceItem === "object" ? (sourceItem.description || sourceItem.body || sourceItem.content || "") : "";
+  const itemTitle = extractString(typeof sourceItem === "string" ? sourceItem : (sourceItem?.title || "Actualité Ouest-Africaine"));
+  const itemDesc = extractString(typeof sourceItem === "object" ? (sourceItem.description || sourceItem.body || sourceItem.content || "") : "");
 
   // Title validation & bilingual pairing
   let titleFr = rawJson.title?.fr || (typeof rawJson.title === "string" ? rawJson.title : "") || itemTitle;
@@ -768,10 +761,15 @@ ${feedUrl ? `\nSOURCE FEED: ${feedUrl}` : ""}
 Please craft the complete bilingual storytelling article in strict JSON matching the schema.`;
 
   let primary = preferredEngine;
-  const geminiAvailable = !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== "";
-  const groqAvailable = !!process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.trim() !== "";
-  const openRouterAvailable = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim() !== "";
-  const openAiAvailable = !!process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== "";
+  const geminiKey = getEffectiveApiKey('GEMINI');
+  const groqKey = getEffectiveApiKey('GROQ');
+  const openrouterKey = getEffectiveApiKey('OPENROUTER');
+  const openaiKey = getEffectiveApiKey('OPENAI');
+
+  const geminiAvailable = !!geminiKey && geminiKey.trim() !== "";
+  const groqAvailable = !!groqKey && groqKey.trim() !== "";
+  const openRouterAvailable = !!openrouterKey && openrouterKey.trim() !== "";
+  const openAiAvailable = !!openaiKey && openaiKey.trim() !== "";
 
   if (primary === "auto") {
     primary = geminiAvailable ? "gemini" : (groqAvailable ? "groq" : (openRouterAvailable ? "openrouter" : (openAiAvailable ? "openai" : "gemini")));
@@ -886,8 +884,8 @@ Please craft the complete bilingual storytelling article in strict JSON matching
   // Smart Local Synthesis Fallback if both cloud AI APIs hit rate/quota limits or are unconfigured
   if (!rawJson) {
     const fallbackItem = rssItem || prompt || "Actualité Ouest-Africaine";
-    const itemTitle = typeof fallbackItem === "object" ? (fallbackItem.title || "Actualité Ouest-Africaine") : String(fallbackItem);
-    const itemDesc = typeof fallbackItem === "object" ? (fallbackItem.description || fallbackItem.content || fallbackItem.body || "") : "";
+    const itemTitle = extractString(typeof fallbackItem === "object" ? (fallbackItem.title || "Actualité Ouest-Africaine") : String(fallbackItem));
+    const itemDesc = extractString(typeof fallbackItem === "object" ? (fallbackItem.description || fallbackItem.content || fallbackItem.body || "") : "");
 
     const isDeep = type === "Deep Dive" || type === "Analysis" || itemTitle.length > 65 || itemDesc.length > 350;
     const categoryName = category || (typeof fallbackItem === "object" && fallbackItem.category) || "Économie";

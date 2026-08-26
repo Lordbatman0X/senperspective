@@ -15,7 +15,6 @@ export type ArticleCategory =
   | 'Sports' 
   | 'People'
   | 'Gouvernance'
-  | "L'Arène"
   | 'Dossiers'
   | 'Dossier'
   | 'Flash Info'

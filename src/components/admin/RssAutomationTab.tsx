@@ -34,7 +34,7 @@ export const RSS_CATEGORIES = [
   'Économie',
   'Société',
   'International',
-  "L'Arène",
+  'Sports',
   'Dossiers',
   'Flash Info',
   'Météo & Maritime',
@@ -81,7 +81,7 @@ export const ALL_RELIABLE_RSS_FEEDS = [
   // --- SÉNÉGAL PRESS & MEDIA ---
   { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
-  { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "L'Arène", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "Sports", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'seneweb', name: 'Seneweb Actualités Wire', url: 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'allafrica-senegal', name: 'AllAfrica Sénégal (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
@@ -116,14 +116,14 @@ export const ALL_RELIABLE_RSS_FEEDS = [
   { id: 'cbc-top', name: 'CBC Top Stories', url: 'https://www.cbc.ca/webfeed/rss/rss-topstories', category: 'International', pack: 'world', originCountry: 'Canada', originFlag: '🇨🇦', originRegion: 'International & Global', active: true },
   { id: 'foxnews', name: 'Fox News Latest', url: 'https://feeds.foxnews.com/foxnews/latest', category: 'International', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global', active: true },
 
-  // --- SPORTS & L'ARÈNE / FOOTBALL ---
-  { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
-  { id: 'bbc-epl', name: 'BBC Premier League', url: 'https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
-  { id: 'bbc-ucl', name: 'BBC UEFA Champions League', url: 'https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
-  { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports", active: true },
-  { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1 (France)', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "L'Arène", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "L'Arène & Sports", active: true },
-  { id: 'espn-fc', name: 'ESPN FC Soccer (Google Wire)', url: 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr', category: "L'Arène", pack: 'sports', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: "L'Arène & Sports", active: true },
-  { id: 'teranga-lions-gn', name: 'Équipe du Sénégal (Teranga Lions Wire)', url: 'https://news.google.com/rss/search?q=Teranga+Lions', category: "L'Arène", pack: 'sports', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: "L'Arène & Sports", active: true }
+  // --- SPORTS & FOOTBALL ---
+  { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports", active: true },
+  { id: 'bbc-epl', name: 'BBC Premier League', url: 'https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports", active: true },
+  { id: 'bbc-ucl', name: 'BBC UEFA Champions League', url: 'https://feeds.bbci.co.uk/sport/football/champions-league/rss.xml', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports", active: true },
+  { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports", active: true },
+  { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1 (France)', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "Sports", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "Sports", active: true },
+  { id: 'espn-fc', name: 'ESPN FC Soccer (Google Wire)', url: 'https://news.google.com/rss/search?q=site:espn.com+soccer&hl=fr&gl=SN&ceid=SN:fr', category: "Sports", pack: 'sports', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: "Sports", active: true },
+  { id: 'teranga-lions-gn', name: 'Équipe du Sénégal (Teranga Lions Wire)', url: 'https://news.google.com/rss/search?q=Teranga+Lions', category: "Sports", pack: 'sports', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: "Sports", active: true }
 ];
 
 export function normalizeRssFeedUrl(url: string | undefined | null, feedName?: string): string {
@@ -560,7 +560,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         preferredTone: 'analytical',
         customDirectives: `1. ADAPTATION PAR RUBRIQUE : Identifier la rubrique réelle (Politique, Économie, Tech, Sports, Culture, Santé, Société) et adopter le ton, le vocabulaire et la structure spécifiques à ce secteur.
 2. ÉTAYAGE FACTUEL & DONNÉES CLÉS : Inclure systématiquement des faits vérifiés, chiffres précis, citations ou données pour étayer chaque analyse.
-3. SOUS-TITRES SPÉCIFIQUES DE RUBRIQUE : Remplacer les sous-titres génériques par des sous-titres évocateurs propres au secteur (ex: "Code & Souveraineté" pour la Tech, "Tactique & Arène" pour le Sport, "Patrimoine & Vision" pour la Culture).
+3. SOUS-TITRES SPÉCIFIQUES DE RUBRIQUE : Remplacer les sous-titres génériques par des sous-titres évocateurs propres au secteur (ex: "Code & Souveraineté" pour la Tech, "Tactique & Stratégie" pour le Sport, "Patrimoine & Vision" pour la Culture).
 4. PERSPECTIVES : Proposer en conclusion les enjeux clés à surveiller pour le secteur concerné.`
       });
     } else if (presetKey === 'investigative') {

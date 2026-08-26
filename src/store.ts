@@ -1193,7 +1193,7 @@ export const useStore = create<AppState>()(
           { id: 'international', labelFr: 'International', labelEn: 'International', url: '/category/international', enabled: true },
           { id: 'tech', labelFr: 'Tech', labelEn: 'Tech', url: '/category/tech', enabled: true },
           { id: 'sante', labelFr: 'Santé', labelEn: 'Health', url: '/category/sante', enabled: true },
-          { id: 'sports', labelFr: "L'Arène", labelEn: 'The Arena', url: '/larene', enabled: true },
+          { id: 'sports', labelFr: "Sports", labelEn: 'Sports', url: '/category/sports', enabled: true },
           { id: 'gouvernance', labelFr: 'Gouvernance', labelEn: 'Governance', url: '/category/gouvernance', enabled: true },
         ],
         aiModelMode: 'flash',
@@ -1300,7 +1300,7 @@ export const useStore = create<AppState>()(
           { id: 'elections', fr: 'Élections', en: 'Elections' }
         ],
         keywords: [
-          'Sénégal', 'Dakar', 'Perspective Group', 'L\'Arène', 'politique', 'économie', 'tech', 'culture', 'sports', 'santé', 'société', 'international', 'afrique', 'investigation', 'décryptage'
+          'Sénégal', 'Dakar', 'Perspective Group', 'politique', 'économie', 'tech', 'culture', 'sports', 'santé', 'société', 'international', 'afrique', 'investigation', 'décryptage'
         ]
       },
       updateSiteSettings: async (settings) => {

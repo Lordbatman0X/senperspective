@@ -95,13 +95,13 @@ export function getAbdelContextualPrompts(
     if (categorySegment.includes("sport") || categorySegment.includes("arene") || categorySegment.includes("larene")) {
       return {
         sectionLabel: {
-          fr: "Rubrique Sport & L'Arène",
-          en: "Sports & Arena Section",
+          fr: "Rubrique Sports",
+          en: "Sports Section",
         },
         locationType: "sports",
         greeting: {
-          fr: "Salut ! Vous explorez la rubrique Sports & L'Arène. Entre ferveur du Lamb, football et exploits athlétiques, quel match ou analyse vous intéresse ?",
-          en: "Welcome! You're checking out Sports & The Arena. Between Senegalese Lamb wrestling, football, and athletic feats, what matchup or story can I break down for you?",
+          fr: "Salut ! Vous explorez la rubrique Sports. Entre ferveur du Lamb, football et exploits athlétiques, quel match ou analyse vous intéresse ?",
+          en: "Welcome! You're checking out Sports. Between Senegalese Lamb wrestling, football, and athletic feats, what matchup or story can I break down for you?",
         },
         prompts: {
           fr: [
@@ -299,19 +299,19 @@ export function getAbdelContextualPrompts(
   if (pathname.startsWith("/larene") || pathname.startsWith("/arene")) {
     return {
       sectionLabel: {
-        fr: "L'Arène & Lamb Sénégalais",
-        en: "The Arena & Senegalese Lamb",
+        fr: "Sports & Lamb Sénégalais",
+        en: "Sports & Senegalese Lamb",
       },
       locationType: "sports",
       greeting: {
-        fr: "Bienvenue dans L'Arène ! Le Lamb sénégalais est un art, un sport et une passion nationale. Sur quel combat, lutteur ou écurie voulez-vous mon regard ?",
-        en: "Welcome to The Arena! Senegalese wrestling is a cultural art, a sport, and a nationwide passion. Which fight, wrestler, or stable should we discuss?",
+        fr: "Bienvenue dans l'espace Sports ! Le Lamb sénégalais est un art, un sport et une passion nationale. Sur quel combat, lutteur ou écurie voulez-vous mon regard ?",
+        en: "Welcome to Sports! Senegalese wrestling is a cultural art, a sport, and a nationwide passion. Which fight, wrestler, or stable should we discuss?",
       },
       prompts: {
         fr: [
           "Décrypte-moi la dimension culturelle, rituelle et sportive de la lutte sénégalaise",
           "Quels sont les grands combats, rivalités historiques et affiches à venir ?",
-          "Qui sont les figures légendaires et les jeunes pépites de l'arène ?",
+          "Qui sont les figures légendaires et les jeunes pépites de la lutte ?",
           "Comment fonctionne l'économie des promoteurs et la préparation des champions ?",
         ],
         en: [

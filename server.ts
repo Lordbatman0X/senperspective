@@ -826,7 +826,7 @@ app.use((req, res, next) => {
     // Senegal Wire
     { id: 'aps', name: 'APS (Agence de Presse Sénégalaise)', url: 'https://aps.sn/feed/', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'lesoleil', name: 'Le Soleil (Journal National)', url: 'https://lesoleil.sn/feed/', category: 'Économie', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
-    { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "L'Arène", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
+    { id: 'senenews', name: 'SeneNews Sénégal', url: 'https://www.senenews.com/feed', category: "Sports", pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'seneweb', name: 'Seneweb Actualités', url: 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
     { id: 'allafrica-senegal', name: 'AllAfrica Sénégal Wire', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain' },
@@ -849,9 +849,9 @@ app.use((req, res, next) => {
     { id: 'foxnews', name: 'Fox News Latest', url: 'https://feeds.foxnews.com/foxnews/latest', category: 'International', pack: 'world', originCountry: 'États-Unis', originFlag: '🇺🇸', originRegion: 'International & Global' },
 
     // Sports Wire
-    { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports" },
-    { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "L'Arène", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "L'Arène & Sports" },
-    { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "L'Arène", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "L'Arène & Sports" }
+    { id: 'bbc-football', name: 'BBC Football Wire', url: 'https://feeds.bbci.co.uk/sport/football/rss.xml', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports" },
+    { id: 'sky-sports-fb', name: 'Sky Sports Football', url: 'https://www.skysports.com/rss/12040', category: "Sports", pack: 'sports', originCountry: 'Royaume-Uni', originFlag: '🇬🇧', originRegion: "Sports" },
+    { id: 'rmc-ligue1', name: 'RMC Sport Ligue 1', url: 'https://rmcsport.bfmtv.com/rss/football/ligue-1/', category: "Sports", pack: 'sports', originCountry: 'France', originFlag: '🇫🇷', originRegion: "Sports" }
   ];
 
   function getFeedOriginMetadata(url: string, name?: string) {
@@ -2396,7 +2396,7 @@ app.use((req, res, next) => {
       let systemInstruction = `You are Abdel, a warm, perceptive, and highly articulate editorial companion and senior analyst for "Perspective Group", the premier West African and Senegalese journal of record.
 
 Core Persona & Journalistic Scope:
-- Multi-Thematic Scope: Perspective Group is a full-spectrum journal covering ALL categories with equal depth and rigor: Politique, Économie, Société, Tech & Innovation, Culture & Arts, Sports & L'Arène, Santé & Environnement, International, Gouvernance, and Transports. You master every single beat with category-appropriate expertise.
+- Multi-Thematic Scope: Perspective Group is a full-spectrum journal covering ALL categories with equal depth and rigor: Politique, Économie, Société, Tech & Innovation, Culture & Arts, Sports, Santé & Environnement, International, Gouvernance, and Transports. You master every single beat with category-appropriate expertise.
 - Voice: Thoughtful, cultured, conversational, engaging, and deeply informed. You speak with natural warmth and intellectual clarity, like a veteran journalist having an insightful conversation with an engaged reader.
 - Avoid all robotic clichés: Never say "As an AI...", "I am a language model...", "Here is your response:", or generic formulaic filler. Jump straight into the dialogue with organic intelligence and eloquence.
 - Language: Always converse fluently in ${userLang === "fr" ? "French" : "English"}.
@@ -2406,7 +2406,7 @@ Core Persona & Journalistic Scope:
 Location & Context Awareness:
 - You are strictly aware of where the user currently is within the journal.
 - If the user is reading an article, proactively ground your answers in the article's specific facts, arguments, cited actors, and nuances regardless of category (Tech, Sports, Culture, Health, Politics, Economy, etc.).
-- If the user is exploring a category or topic (e.g. Tech, Sports, Politics, Economy, Culture, L'Arène), frame your insights with the specialized nuance and tone of that specific beat.
+- If the user is exploring a category or topic (e.g. Tech, Sports, Politics, Economy, Culture), frame your insights with the specialized nuance and tone of that specific beat.
 - Conclude naturally with an engaging open thought or question to keep the intellectual exchange alive when appropriate.`;
 
       if (context && (context.title || context.body)) {

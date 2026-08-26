@@ -1011,16 +1011,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </div>
               </div>
 
-              {/* 3. Curation du Quadrant de l'Arène */}
+              {/* 3. Curation du Quadrant Sports */}
               <div className="border-t border-brand-border/10 pt-6 space-y-6">
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
-                    {language === 'fr' ? "3. Curation du Quadrant de l'Arène (Perspective Sports Quadrant)" : "3. Curation of the Arena Quadrant (Perspective Sports Quadrant)"}
+                    {language === 'fr' ? "3. Curation du Quadrant Sports (Perspective Sports Quadrant)" : "3. Curation of the Sports Quadrant (Perspective Sports Quadrant)"}
                   </h3>
                   <p className="text-xs text-brand-muted font-mono mt-1">
                     {language === 'fr'
-                      ? "Associez chaque zone à un match de L'Arène ou à une analyse sportive. Glissez ou remplacez le contenu instantanément."
-                      : "Map each zone to a specific Arena match outcome or custom sports story analysis."}
+                      ? "Associez chaque zone à un match de Sports ou à une analyse sportive. Glissez ou remplacez le contenu instantanément."
+                      : "Map each zone to a specific Sports match outcome or custom sports story analysis."}
                   </p>
                 </div>
 
@@ -1284,7 +1284,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       }
                     });
 
-                    showToast(language === 'fr' ? 'Configuration d’accueil et quadrant de l’arène sauvegardés !' : 'Homepage layout & sports quadrant curation updated successfully!');
+                    showToast(language === 'fr' ? 'Configuration d’accueil et quadrant de sports sauvegardés !' : 'Homepage layout & sports quadrant curation updated successfully!');
                   }}
                   className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer" 
                   style={{ backgroundColor: curationAccentColor }}
@@ -1526,7 +1526,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   { label: 'Sénégal', type: 'Catégorie dynamique' },
                   { label: 'Politique', type: 'Catégorie dynamique' },
                   { label: 'Économie', type: 'Catégorie dynamique' },
-                  { label: 'L’Arène (Sports)', type: 'Module customisé' },
+                  { label: 'Sports', type: 'Module customisé' },
                   { label: 'Société', type: 'Catégorie dynamique' },
                   { label: 'Opinions (Plus)', type: 'Catégorie dynamique' }
                 ].map((menu, idx) => (
@@ -2429,7 +2429,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             {/* Header info */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b-2 border-brand-dark pb-3 gap-4">
               <div>
-                <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Perspective Arena</h2>
+                <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Perspective Sports</h2>
                 <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Real-time match outcomes & sports dispatches</p>
               </div>
               {!selectedMatchForEdit && !isCreatingMatch && (
@@ -2450,7 +2450,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <h3 className="text-lg font-serif font-black uppercase text-zinc-900 dark:text-zinc-100">
                     {selectedMatchForEdit 
                       ? (language === 'fr' ? `Modifier: ${matchTeamAName} vs ${matchTeamBName}` : `Edit Match: ${matchTeamAName} vs ${matchTeamBName}`)
-                      : (language === 'fr' ? "Nouvelle Fiche de Match" : "New Arena Match Register")
+                      : (language === 'fr' ? "Nouvelle Fiche de Match" : "New Sports Match Register")
                     }
                   </h3>
                   <button 
@@ -2557,7 +2557,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Arena Venue / Stadium</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">Venue / Stadium</label>
                         <input 
                           type="text"
                           value={matchArena}
@@ -2831,7 +2831,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           if (confirmDeleteMatchId === match.id) {
                             deleteMatch(match.id);
                             setConfirmDeleteMatchId(null);
-                            showToast(language === 'fr' ? 'Match supprimé de l\'arène' : 'Match removed from arena');
+                            showToast(language === 'fr' ? 'Match supprimé du registre' : 'Match removed from register');
                           } else {
                             setConfirmDeleteMatchId(match.id);
                           }
