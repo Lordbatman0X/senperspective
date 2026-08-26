@@ -280,7 +280,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     openai: { configured: boolean; status: string; models: string[] };
     failoverActive: boolean;
   }>({
-    gemini: { configured: true, status: 'ready', models: ['gemini-2.5-flash'] },
+    gemini: { configured: true, status: 'ready', models: ['gemini-3.7-flash'] },
     openai: { configured: true, status: 'ready', models: ['gpt-4o-mini'] },
     failoverActive: true
   });
@@ -1180,7 +1180,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                 className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs font-mono px-3 py-2 rounded-xl outline-none focus:border-orange-500"
               >
                 <option value="all">{isFr ? 'Tous Moteurs IA' : 'All AI Engines'}</option>
-                <option value="gemini">Gemini 2.5 Flash</option>
+                <option value="gemini">Gemini 3.7 Flash</option>
                 <option value="groq">Groq Llama 3.3</option>
                 <option value="openrouter">OpenRouter / Claude</option>
                 <option value="openai">OpenAI GPT-4o</option>
@@ -1691,7 +1691,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                   <option value="auto">🤖 Multi-Engine Cascade Auto (Gemini ⇄ Groq ⇄ OpenRouter ⇄ OpenAI)</option>
                   <option value="groq">🚀 Groq Llama 3.3 70B (Vitesse Éclair)</option>
                   <option value="openrouter">🌐 OpenRouter (Claude 3.5 / DeepSeek R1)</option>
-                  <option value="gemini">⚡ Gemini 2.5 Flash Principal</option>
+                  <option value="gemini">⚡ Gemini 3.7 Flash Principal</option>
                   <option value="openai">🧠 OpenAI GPT-4o-mini Principal</option>
                 </select>
                 <p className="text-[10px] text-zinc-500 font-mono">

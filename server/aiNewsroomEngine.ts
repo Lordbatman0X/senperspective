@@ -437,7 +437,7 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
   }
 
   // Current production model cascade for fast inference and strict JSON response
-  const models = ["gemini-2.5-flash", "gemini-2.5-pro"];
+  const models = ["gemini-3.7-flash", "gemini-3.1-pro-preview"];
   let lastErr: any = null;
 
   for (const model of models) {
@@ -589,7 +589,7 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
     "anthropic/claude-3.5-sonnet",
     "deepseek/deepseek-r1",
     "meta-llama/llama-3.3-70b-instruct",
-    "google/gemini-2.5-flash",
+    "google/gemini-2.0-flash",
     "openai/gpt-4o-mini"
   ];
   let lastErr: any = null;

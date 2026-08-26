@@ -1624,7 +1624,7 @@ app.use((req, res, next) => {
       gemini: {
         configured: geminiConfigured,
         status: geminiConfigured ? "ready" : "unconfigured",
-        models: ["gemini-2.5-flash", "gemini-2.5-pro"]
+        models: ["gemini-3.7-flash", "gemini-3.1-pro-preview"]
       },
       openai: {
         configured: openAiConfigured,
@@ -2428,7 +2428,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const modelsToTry = ["gemini-2.5-flash", "gemini-2.5-pro"];
+          const modelsToTry = ["gemini-3.7-flash", "gemini-3.1-pro-preview"];
           for (const model of modelsToTry) {
             try {
               const apiCall = ai.models.generateContent({
@@ -2489,7 +2489,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
             "anthropic/claude-3.5-sonnet",
             "deepseek/deepseek-r1",
             "meta-llama/llama-3.3-70b-instruct",
-            "google/gemini-2.5-flash"
+            "google/gemini-2.0-flash"
           ];
           for (const model of openRouterModels) {
             try {

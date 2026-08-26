@@ -25,8 +25,8 @@ import { GoogleIntegrationsTab } from '../components/admin/GoogleIntegrationsTab
 import { CloudSqlTab } from '../components/admin/CloudSqlTab';
 import { TaxonomyTab } from '../components/admin/TaxonomyTab';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
-import { MakeWebhookTab } from '../components/admin/MakeWebhookTab';
-import { RssAutomationTab } from '../components/admin/RssAutomationTab';
+import { RssFeedManagementTab } from '../components/admin/RssFeedManagementTab';
+import { DraftGenerationTab } from '../components/admin/DraftGenerationTab';
 import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { VercelMigrationTab } from '../components/admin/VercelMigrationTab';
@@ -320,15 +320,18 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
-  const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation'>('articles');
+  const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
 
-  const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation') => {
+  const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics') => {
     if (tabId === 'make_webhook') {
       setActiveTab('list');
       setContentSubTab('rss_automation');
     } else if (tabId === 'rss_automation') {
       setActiveTab('list');
       setContentSubTab('rss_drafts');
+    } else if (tabId === 'api_diagnostic') {
+      setActiveTab('list');
+      setContentSubTab('ai_diagnostics');
     } else {
       setActiveTab(tabId as any);
       if (subTab) {
@@ -2955,19 +2958,19 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               </div>
 
               <div 
-                onClick={() => setContentSubTab('rss_automation')}
+                onClick={() => setContentSubTab('ai_diagnostics')}
                 className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  contentSubTab === 'rss_automation' 
+                  contentSubTab === 'ai_diagnostics' 
                     ? 'bg-zinc-900 border-[#E85D42] shadow-md' 
                     : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
                 }`}
               >
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-mono uppercase font-bold text-emerald-400">Pipeline Webhook</span>
-                  <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 border border-emerald-800 rounded">LIVE</span>
+                  <span className="text-[10px] font-mono uppercase font-bold text-[#E85D42]">Moteurs IA & Statuts</span>
+                  <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 border border-emerald-800 rounded">READY</span>
                 </div>
-                <span className="text-xl font-black text-emerald-300">Inbound RSS</span>
-                <span className="text-[10px] text-zinc-500 block font-mono">Relais Make / Zapier</span>
+                <span className="text-xl font-black text-zinc-100">Diagnostics</span>
+                <span className="text-[10px] text-zinc-500 block font-mono">Statuts des clés & API</span>
               </div>
             </div>
 
@@ -2997,7 +3000,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 }`}
               >
                 <Bot size={15} />
-                <span>{language === 'fr' ? '2. Brouillons RSS & Générateur IA' : '2. RSS AI Drafts & Generator'}</span>
+                <span>{language === 'fr' ? '2. Rédaction & Brouillons IA' : '2. AI Draft Generation'}</span>
                 {articles.filter(a => !a.isPublished).length > 0 && (
                   <span className="px-2 py-0.5 text-[10px] font-mono font-black bg-amber-500 text-black rounded-full">
                     {articles.filter(a => !a.isPublished).length}
@@ -3014,7 +3017,19 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 }`}
               >
                 <Zap size={15} />
-                <span>{language === 'fr' ? '3. Sources RSS & Automatisations' : '3. RSS Feeds & Webhooks'}</span>
+                <span>{language === 'fr' ? '3. Régie de Flux RSS' : '3. RSS Feed Management'}</span>
+              </button>
+
+              <button
+                onClick={() => setContentSubTab('ai_diagnostics')}
+                className={`flex-1 py-2.5 px-4 font-extrabold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                  contentSubTab === 'ai_diagnostics'
+                    ? 'bg-[#E85D42] text-white shadow-lg'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                <Wrench size={15} />
+                <span>{language === 'fr' ? '4. Diagnostics IA & API' : '4. AI Diagnostics'}</span>
               </button>
             </div>
 
@@ -3116,9 +3131,9 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               </div>
             )}
 
-            {/* Sub-tab 2: RSS AI Drafts & Generator */}
+            {/* Sub-tab 2: Decoupled Draft Generation */}
             {contentSubTab === 'rss_drafts' && (
-              <RssAutomationTab 
+              <DraftGenerationTab 
                 onEditArticle={(art) => {
                   setEditingArticle(art);
                   setActiveTab('editor');
@@ -3126,9 +3141,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               />
             )}
 
-            {/* Sub-tab 3: RSS Feeds & Webhook Pipelines */}
+            {/* Sub-tab 3: Decoupled RSS Feed Management */}
             {contentSubTab === 'rss_automation' && (
-              <MakeWebhookTab />
+              <RssFeedManagementTab />
+            )}
+
+            {/* Sub-tab 4: Decoupled AI Diagnostics */}
+            {contentSubTab === 'ai_diagnostics' && (
+              <ApiDiagnosticTab />
             )}
           </div>
         )}
