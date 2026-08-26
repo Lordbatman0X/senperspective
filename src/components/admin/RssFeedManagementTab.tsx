@@ -102,6 +102,14 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   const [newFeedPack, setNewFeedPack] = useState('senegal');
   const [showAddFeedModal, setShowAddFeedModal] = useState(false);
 
+  // Edit Feed Form State
+  const [editingFeed, setEditingFeed] = useState<any | null>(null);
+  const [editFeedName, setEditFeedName] = useState('');
+  const [editFeedUrl, setEditFeedUrl] = useState('');
+  const [editFeedCategory, setEditFeedCategory] = useState('Politique');
+  const [editFeedPack, setEditFeedPack] = useState('senegal');
+  const [editFeedFlag, setEditFeedFlag] = useState('🇸🇳');
+
   // Webhook Testing States
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -268,6 +276,48 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
     setNewFeedUrl('');
     setShowAddFeedModal(false);
     showStatus(isFr ? `Flux "${newFeed.name}" ajouté avec succès !` : `Feed "${newFeed.name}" added successfully!`);
+  };
+
+  // Open Edit Feed Modal
+  const handleOpenEditFeed = (feed: any) => {
+    setEditingFeed(feed);
+    setEditFeedName(feed.name || '');
+    setEditFeedUrl(feed.url || '');
+    setEditFeedCategory(feed.category || 'Politique');
+    setEditFeedPack(feed.pack || 'senegal');
+    setEditFeedFlag(feed.originFlag || (feed.pack === 'senegal' ? '🇸🇳' : feed.pack === 'africa' ? '🌍' : '🌐'));
+  };
+
+  // Save edited feed
+  const handleSaveEditedFeed = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFeed || !editFeedName.trim() || !editFeedUrl.trim()) return;
+
+    const validatedUrl = ensureValidUrl(editFeedUrl);
+    if (!validatedUrl) {
+      showStatus(isFr ? "URL du flux RSS invalide." : "Invalid RSS URL.", 'error');
+      return;
+    }
+
+    const updatedFeeds = rssFeeds.map(f => {
+      if (f.id === editingFeed.id) {
+        return {
+          ...f,
+          name: editFeedName.trim(),
+          url: validatedUrl,
+          category: editFeedCategory,
+          pack: editFeedPack,
+          originFlag: editFeedFlag,
+          originCountry: editFeedPack === 'senegal' ? 'Sénégal' : editFeedPack === 'africa' ? 'Panafricain' : 'International'
+        };
+      }
+      return f;
+    });
+
+    setRssFeeds(updatedFeeds);
+    localStorage.setItem('perspective_rss_feeds', JSON.stringify(updatedFeeds));
+    setEditingFeed(null);
+    showStatus(isFr ? `Source "${editFeedName}" mise à jour avec succès !` : `Media source "${editFeedName}" updated!`);
   };
 
   // Remove a feed
@@ -716,8 +766,8 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
           </div>
 
           {/* Feeds Table list */}
-          <div className="bg-black border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
-            <table className="w-full text-left text-xs whitespace-nowrap text-zinc-300 font-mono">
+          <div className="bg-black border border-zinc-800 rounded-2xl overflow-x-auto shadow-xl scrollbar-thin scrollbar-thumb-zinc-700">
+            <table className="w-full min-w-[980px] text-left text-xs whitespace-nowrap text-zinc-300 font-mono">
               <thead className="bg-zinc-900 border-b border-zinc-800 uppercase tracking-widest text-orange-400 font-black">
                 <tr>
                   <th className="px-6 py-4">{isFr ? 'Agence / Organe de presse' : 'Media / Source Name'}</th>
@@ -733,11 +783,31 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                   return (
                     <tr key={`${feed.id}-${index}`} className="border-b border-zinc-800/60 hover:bg-zinc-900/40 transition-colors">
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{feed.originFlag}</span>
-                          <div>
-                            <span className="font-extrabold text-white text-xs block">{feed.name}</span>
-                            <span className="text-[10px] text-zinc-500 block max-w-sm truncate">{feed.url}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl shrink-0">{feed.originFlag || '📰'}</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleOpenEditFeed(feed)}
+                                className="font-extrabold text-white text-xs hover:text-orange-400 text-left transition-colors cursor-pointer group flex items-center gap-1.5"
+                                title={isFr ? "Cliquer pour modifier le nom ou l'URL" : "Click to edit source details"}
+                              >
+                                <span className="underline decoration-dotted decoration-zinc-600 group-hover:decoration-orange-400">{feed.name}</span>
+                                <Edit3 size={11} className="text-zinc-500 group-hover:text-orange-400 shrink-0" />
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-zinc-500 font-mono max-w-xs truncate block">{feed.url}</span>
+                              <a
+                                href={feed.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-zinc-600 hover:text-orange-400 transition-colors"
+                                title={isFr ? "Ouvrir le flux RSS original" : "Open original RSS stream"}
+                              >
+                                <ExternalLink size={10} />
+                              </a>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -751,7 +821,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                           <div className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full ${health.status === 'healthy' ? 'bg-emerald-400' : 'bg-red-500'}`} />
                             <span className={health.status === 'healthy' ? 'text-emerald-400 font-bold' : 'text-red-400'}>
-                              {health.status === 'healthy' ? `OK (${health.itemCount} articles)` : 'FAIL'}
+                              {health.status === 'healthy' ? `OK (${health.itemCount} ${isFr ? 'articles' : 'stories'})` : 'FAIL'}
                             </span>
                             {health.errorDetail && (
                               <span className="text-[10px] text-zinc-500 max-w-xs truncate block" title={health.errorDetail}>
@@ -773,7 +843,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end items-center gap-2">
-                          {/* NEW: Button to open articles 1-by-1 inspector for this feed */}
+                          {/* Button to open articles 1-by-1 inspector for this feed */}
                           <button
                             onClick={() => handleInspectFeed(feed)}
                             className="px-2.5 py-1.5 bg-orange-600/10 hover:bg-orange-600/20 text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/60 rounded-lg transition-all font-bold text-[10px] flex items-center gap-1.5 cursor-pointer"
@@ -792,6 +862,15 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                           >
                             <Sparkles size={11} className={quickDraftingFeedId === feed.id ? 'animate-spin' : ''} />
                             <span>{quickDraftingFeedId === feed.id ? '...' : (isFr ? '1 Art.' : '1 Story')}</span>
+                          </button>
+
+                          {/* Edit Source Button */}
+                          <button
+                            onClick={() => handleOpenEditFeed(feed)}
+                            className="p-1.5 text-zinc-400 hover:text-orange-400 hover:bg-orange-950/20 border border-zinc-800 rounded-lg transition-colors cursor-pointer"
+                            title={isFr ? "Modifier les détails de la source" : "Edit media source details"}
+                          >
+                            <Edit3 size={13} />
                           </button>
 
                           <button
@@ -1170,6 +1249,123 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                 >
                   {isFr ? 'Ajouter la source' : 'Index Source'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Feed */}
+      {editingFeed && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg p-6 space-y-6 shadow-2xl">
+            <div className="border-b border-zinc-800 pb-4 flex justify-between items-center">
+              <h3 className="font-black text-white text-base uppercase tracking-widest flex items-center gap-2">
+                <Edit3 size={18} className="text-orange-500" />
+                {isFr ? 'Modifier la Source / Organe de presse' : 'Edit Media / Source Name'}
+              </h3>
+              <button 
+                onClick={() => setEditingFeed(null)}
+                className="text-zinc-400 hover:text-white font-mono text-sm uppercase font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditedFeed} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold uppercase text-orange-400 block">
+                  {isFr ? 'Nom du Média / Organe de presse' : 'Media / Source Name'}
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="ex: APS Sénégal, Reuters, Jeune Afrique..."
+                  value={editFeedName}
+                  onChange={e => setEditFeedName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl px-3 py-2.5 text-xs font-bold focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold uppercase text-zinc-400 block">
+                  {isFr ? 'URL du Flux RSS' : 'RSS XML / Atom URL'}
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="https://example.com/rss"
+                  value={editFeedUrl}
+                  onChange={e => setEditFeedUrl(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 text-white rounded-xl px-3 py-2.5 text-xs font-mono focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono font-bold uppercase text-zinc-400 block">
+                    {isFr ? 'Rubrique standard' : 'Default Category'}
+                  </label>
+                  <select
+                    value={editFeedCategory}
+                    onChange={e => setEditFeedCategory(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-orange-500"
+                  >
+                    {['Politique', 'Économie', 'Société', 'Sports', 'International', 'Dossiers', 'Culture'].map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono font-bold uppercase text-zinc-400 block">
+                    {isFr ? 'Pack / Région' : 'Pack / Region'}
+                  </label>
+                  <select
+                    value={editFeedPack}
+                    onChange={e => {
+                      const p = e.target.value;
+                      setEditFeedPack(p);
+                      setEditFeedFlag(p === 'senegal' ? '🇸🇳' : p === 'africa' ? '🌍' : p === 'sports' ? '⚽' : '🌐');
+                    }}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-orange-500"
+                  >
+                    <option value="senegal">🇸🇳 Sénégal Wire</option>
+                    <option value="africa">🌍 Regional Africa</option>
+                    <option value="world">🌐 International</option>
+                    <option value="sports">⚽ Sports</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-4 border-t border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRemoveFeed(editingFeed.id);
+                    setEditingFeed(null);
+                  }}
+                  className="px-3 py-2 bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-900/30 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Trash2 size={13} />
+                  <span>{isFr ? 'Supprimer' : 'Delete'}</span>
+                </button>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingFeed(null)}
+                    className="px-4 py-2 bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
+                  >
+                    {isFr ? 'Annuler' : 'Cancel'}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-orange-950/20"
+                  >
+                    {isFr ? 'Enregistrer' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

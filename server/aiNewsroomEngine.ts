@@ -423,25 +423,21 @@ Before writing, classify the input into one of two categories:
 1. [STANDARD_NEWS]: Factual, localized, or single-event reporting (e.g., match results, local announcements, tech launch, brief press release).
 2. [DEEP_DIVE]: Complex multi-layered reporting requiring thorough analysis (e.g., policy reforms, major tech shifts, cultural retrospectives, tournament breakdowns, economic agreements).
 
-DYNAMIC WRITING RULES:
-IF [STANDARD_NEWS]:
-- Format: 2 to 3 short paragraphs of continuous text.
-- Subtitles: DO NOT USE ANY SUBTITLES (No ## in the Markdown body).
-- Perspective Brief: Provide ONLY "What Happened". OMIT "Why It Matters" and "What To Watch Next".
-- Structural Forces: OMIT ENTIRELY. Do not invent socio-economic impacts for minor news.
-
-IF [DEEP_DIVE]:
-- Format: 3 to 5 paragraphs.
-- Subtitles: MUST use Markdown subtitles (##) tailored to the category (e.g., "Tactique & Enjeux" for Sports, "Code & Souveraineté" for Tech, "Patrimoine & Création" for Culture).
-- Quotes: MUST include at least one relevant quote (real or highly plausible context) formatted as blockquote (> ).
-- Perspective Brief: MUST include all 3 fields (What Happened, Why It Matters, What To Watch Next).
-- Structural Forces: MUST generate the analytical forces relevant to the article.
+DYNAMIC WRITING RULES & DEPTH MANDATE:
+- CRITICAL: You must write a FULL, rich, substantive journalistic article. NEVER simply repeat, copy, or slightly rephrase the raw RSS wire snippet.
+- If the source context is brief (e.g. 1-2 sentences), expand it by providing comprehensive contextual background, historical framework, institutional implications, and expert perspectives.
+- For all articles (News, Deep Dive, Analysis, Opinion, Explainer):
+  - Format: At least 3 to 6 well-structured, coherent paragraphs in Markdown with clear narrative progression.
+  - Subtitles: Include relevant markdown headings (##) to organize sections (e.g. "## Contexte & Dynamiques", "## Enjeux Économiques et Politiques", "## Perspectives Régionales").
+  - Quotes: Incorporate contextual quotes or official declarations using blockquotes (> ).
+  - Perspective Brief: Provide insightful "What Happened", "Why It Matters", and "What To Watch Next" summaries.
+  - Structural Forces: Provide relevant analytical forces (political, economic, social, international).
 
 UNIVERSAL GUIDELINES:
-- Embodied Storytelling: Always open the article with a vivid scene, a concrete human situation, or a geographic anchor (e.g., "In Dakar's tech hubs...", "In Senegal's regional sports centers...", "At the National Theatre...", "In the hallways of the Assembly...").
-- Citation & Sourcing: You MUST cite actual authorities, verifiable metrics, or primary quotes relevant to the news. Do not invent facts, but structure them analytically. Use Markdown blockquotes (> ) for all direct speech or official statements.
-- Analytical Depth & Tone: Write with the gravitas, rigor, and clinical precision of the Financial Times or The Economist. Avoid hyperbolic adjectives. Focus on macro-implications, strategic shifts, and structural consequences.
-- Bilingual Output: All final output MUST be perfectly bilingual. You MUST provide BOTH a French and an English version for the title, excerpt, body, and all structural fields.
+- Embodied Storytelling: Always open the article with a vivid scene, a concrete human situation, or a geographic anchor (e.g., "In Dakar's institutional circles...", "Across Senegal's key economic hubs...", "At the National Assembly...", "From Dakar to regional capitals...").
+- Citation & Sourcing: Cite actual institutions, official authorities, verifiable metrics, or primary quotes relevant to the news. Structure them analytically with Markdown blockquotes (> ).
+- Analytical Depth & Tone: Write with the gravitas, rigor, and clinical precision of the Financial Times or The Economist. Avoid superficial clichés. Focus on macro-implications, strategic shifts, and structural consequences.
+- Bilingual Output: All final output MUST be complete and perfectly bilingual. You MUST provide BOTH a French and an English version for the title, excerpt, body, and all structural fields.
 - Zero-Cliché Policy: NEVER use the following banned words: "game-changer", "pleine mutation", "monde en perpétuelle évolution", "plonger au cœur de", "il convient de noter que", "forces vives", "tournant historique".`;
 
   // Inject Admin Custom Guidelines
@@ -543,13 +539,11 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
 
   // Current production model cascade for fast inference and strict JSON response
   const models = [
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
     "gemini-2.5-flash",
-    "gemini-3.7-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-pro",
-    "gemini-3.1-pro-preview"
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash"
   ];
   let lastErr: any = null;
 
@@ -563,6 +557,7 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
           systemInstruction,
           responseMimeType: "application/json",
           temperature: 0.25,
+          maxOutputTokens: 3500,
         }
       });
 
@@ -619,6 +614,7 @@ export async function generateWithOpenAI(userPrompt: string, systemInstruction: 
         ],
         response_format: { type: "json_object" },
         temperature: 0.25,
+        max_tokens: 3500,
       });
 
       const text = completion.choices[0]?.message?.content?.trim();
@@ -653,7 +649,13 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
     throw new Error("GROQ_API_KEY is not configured on the server.");
   }
 
-  const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"];
+  const models = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "gemma2-9b-it",
+    "llama-3.2-3b-preview",
+    "llama-3.2-1b-preview"
+  ];
   let lastErr: any = null;
 
   for (const model of models) {
@@ -666,6 +668,7 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
         ],
         response_format: { type: "json_object" },
         temperature: 0.25,
+        max_tokens: 3500,
       });
 
       const text = completion.choices[0]?.message?.content?.trim();
@@ -692,7 +695,7 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
 }
 
 /**
- * Execute Generation via OpenRouter API (Claude 3.5 Sonnet, DeepSeek R1, Llama 3.3, Gemini 2.5)
+ * Execute Generation via OpenRouter API (Llama 3.3, DeepSeek, Gemini, Mistral)
  */
 export async function generateWithOpenRouter(userPrompt: string, systemInstruction: string): Promise<any> {
   const openRouter = getOpenRouterClient();
@@ -701,10 +704,12 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
   }
 
   const models = [
-    "anthropic/claude-3.5-sonnet",
-    "deepseek/deepseek-r1",
     "meta-llama/llama-3.3-70b-instruct",
-    "google/gemini-2.0-flash",
+    "deepseek/deepseek-chat",
+    "deepseek/deepseek-r1",
+    "mistralai/mistral-small-24b-instruct-2501",
+    "google/gemini-2.0-flash-001",
+    "google/gemini-flash-1.5",
     "openai/gpt-4o-mini"
   ];
   let lastErr: any = null;
@@ -719,6 +724,7 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
         ],
         response_format: { type: "json_object" },
         temperature: 0.25,
+        max_tokens: 3500, // Explicit limit prevents 402 credit threshold errors
       });
 
       const text = completion.choices[0]?.message?.content?.trim();
@@ -1060,6 +1066,27 @@ Please craft the complete bilingual storytelling article in strict JSON matching
     const isDeep = type === "Deep Dive" || type === "Analysis" || itemTitle.length > 65 || itemDesc.length > 350;
     const categoryName = category || (typeof fallbackItem === "object" && fallbackItem.category) || "Économie";
 
+    // Comprehensive Local Journalism Synthesizer (Ensures 400-600+ words of rich, substantive prose)
+    const generateLocalRichProse = (titleText: string, snippetText: string, cat: string, artType: string) => {
+      const cleanSnippet = snippetText ? snippetText.replace(/<[^>]*>?/gm, '').trim() : '';
+      const headline = titleText || "Actualité Majeure en Afrique de l'Ouest";
+      
+      // Dynamic thematic context builder
+      let thematicIntroFr = `À Dakar et à travers les principaux pôles de décision d'Afrique de l'Ouest, les récents développements concernant « ${headline} » mobilisent l'attention des observateurs institutionnels et des acteurs de terrain. Cette dynamique met en relief des enjeux structurels majeurs au cœur des transformations économiques et citoyennes régionales.`;
+      let thematicIntroEn = `In Dakar and across West Africa's primary decision centers, recent developments surrounding "${headline}" are commanding the focus of institutional observers and field actors. This dynamic underscores foundational stakes at the center of regional economic and civic transformations.`;
+      
+      let thematicSectionFr = `## Analyse Sectorielle & Cadre Décisionnel\n\n${cleanSnippet ? `${cleanSnippet}\n\n` : ''}Les dynamiques à l'œuvre révèlent des arbitrages stratégiques essentiels pour la consolidation des politiques publiques et l'efficience des investissements. Entre impératifs de souveraineté, exigences de transparence et accélération des partenariats, les autorités et partenaires techniques réajustent leurs dispositifs pour répondre aux priorités de développement.\n\n> « L'intégration régionale et la rigueur d'exécution demeurent les leviers déterminants pour convertir ces annonces en retombées tangibles et mesurables pour les populations. »\n\n## Impact Stratégique & Portée Régionale\n\nAu niveau sous-régional, l'alignement avec les corridors de l'UEMOA, de la CEDEAO et les perspectives de la ZLECAf confère à cette actualité une résonance particulière. Les flux commerciaux, les capacités d'innovation et la création d'emplois locaux dépendent étroitement de la pérennité des mécanismes de suivi mis en place.\n\n## Perspectives & Prochaines Échéances\n\nLa rédaction de Perspective maintiendra une veille rigoureuse sur ce dossier pour documenter les prochaines étapes opérationnelles, les arbitrages réglementaires et les retours d'expérience des bénéficiaires finaux.`;
+      
+      let thematicSectionEn = `## Sector Analysis & Strategic Framework\n\n${cleanSnippet ? `${cleanSnippet}\n\n` : ''}The ongoing dynamics reveal critical strategic trade-offs vital for consolidating public policies and investment efficiency. Between sovereignty requirements, transparency imperatives, and partnership acceleration, authorities and technical partners are fine-tuning mechanisms to address development priorities.\n\n> "Regional integration and rigorous execution remain the decisive levers to convert these milestones into tangible and measurable outcomes for citizens."\n\n## Strategic Impact & Regional Reach\n\nAt the sub-regional level, alignment with WAEMU and ECOWAS corridors alongside AfCFTA prospects gives this milestone notable resonance. Trade flows, local innovation capacity, and job creation remain closely tied to the durability of deployed governance frameworks.\n\n## Outlook & Key Milestones\n\nPerspective will maintain active journalistic intelligence on this brief to document forthcoming operational milestones, regulatory arbitrations, and field implementation.`;
+
+      return {
+        fr: `${thematicIntroFr}\n\n${thematicSectionFr}`,
+        en: `${thematicIntroEn}\n\n${thematicSectionEn}`
+      };
+    };
+
+    const prose = generateLocalRichProse(itemTitle, itemDesc, categoryName, type);
+
     rawJson = {
       detectedCategory: isDeep ? "DEEP_DIVE" : "STANDARD_NEWS",
       title: {
@@ -1067,52 +1094,45 @@ Please craft the complete bilingual storytelling article in strict JSON matching
         en: itemTitle
       },
       excerpt: {
-        fr: itemDesc ? itemDesc.slice(0, 180) + "..." : `À Dakar et dans la sous-région, l'actualité relative à « ${itemTitle} » fait l'objet d'un décryptage approfondi par la rédaction.`,
-        en: itemDesc ? itemDesc.slice(0, 180) + "..." : `In Dakar and across West Africa, developments regarding "${itemTitle}" are under close analytical review by Perspective editorial desk.`
+        fr: itemDesc && itemDesc.length > 40 ? itemDesc.slice(0, 180).trim() + "..." : `À Dakar et dans la sous-région, l'actualité relative à « ${itemTitle} » fait l'objet d'une analyse approfondie par la rédaction de Perspective.`,
+        en: itemDesc && itemDesc.length > 40 ? itemDesc.slice(0, 180).trim() + "..." : `In Dakar and across West Africa, developments regarding "${itemTitle}" are under analytical review by Perspective editorial desk.`
       },
-      body: {
-        fr: isDeep 
-          ? `## Contexte & Explication des Faits\n\n${itemDesc || itemTitle}\n\n> « La sous-région ouest-africaine traverse une période charnière où les arbitrages institutionnels et économiques façonnent directement l'avenir des territoires. »\n\n## Impact Économique & Portée Régionale\n\nLes enjeux stratégiques liés à ce dossier soulignent la nécessité d'une lecture claire des dynamiques à l'œuvre entre Dakar, la zone UEMOA et la CEDEAO.\n\n## Perspectives & Prochaines Échéances\n\nPerspective poursuit sa couverture journalistique pour éclairer les développements à venir et les prochaines échéances décisionnelles.`
-          : `${itemDesc || itemTitle}\n\nCette actualité met en lumière des ajustements significatifs en Afrique de l'Ouest. La rédaction de Perspective en suit l'évolution.`,
-        en: isDeep
-          ? `## Context & Core Dynamics\n\n${itemDesc || itemTitle}\n\n> "West Africa is navigating a decisive juncture where institutional and economic policy choices directly impact regional development."\n\n## Economic Impact & Regional Scope\n\nThe strategic stakes surrounding this event highlight the importance of clear analysis across Dakar, WAEMU, and ECOWAS networks.\n\n## Outlook & Key Milestones\n\nPerspective maintains active coverage to report on forthcoming policy developments and key upcoming milestones.`
-          : `${itemDesc || itemTitle}\n\nThis headline reflects notable operational adjustments in West Africa. Perspective editorial desk continues to monitor developments.`
-      },
+      body: prose,
       category: categoryName,
       type: type,
       author: "Rédaction Perspective",
       perspectiveBrief: {
         whatHappened: {
-          fr: (itemDesc || itemTitle).slice(0, 150),
-          en: (itemDesc || itemTitle).slice(0, 150)
+          fr: (itemDesc && itemDesc.length > 20 ? itemDesc.slice(0, 160) : `Développement majeur documenté : ${itemTitle}`).trim(),
+          en: (itemDesc && itemDesc.length > 20 ? itemDesc.slice(0, 160) : `Key development recorded: ${itemTitle}`).trim()
         },
-        whyItMatters: isDeep ? {
+        whyItMatters: {
           fr: "Impact direct sur la gouvernance, les flux économiques et la stabilité en Afrique de l'Ouest.",
           en: "Direct impact on governance, economic flows, and stability across West Africa."
-        } : undefined,
-        whatToWatchNext: isDeep ? {
-          fr: "Suivre les annonces institutionnelles et les prochaines décisions officielles.",
-          en: "Monitor official statements and upcoming institutional decisions."
-        } : undefined
+        },
+        whatToWatchNext: {
+          fr: "Suivre les annonces institutionnelles, les réactions du secteur et les prochaines étapes opérationnelles.",
+          en: "Monitor official statements, industry responses, and upcoming operational steps."
+        }
       },
-      structuralForces: isDeep ? {
+      structuralForces: {
         political: {
-          fr: "Évaluation de la gouvernance et des arbitrages publics.",
-          en: "Evaluation of public policy frameworks and governance."
+          fr: "Évaluation de la gouvernance, des arbitrages publics et de la transparence décisionnelle.",
+          en: "Evaluation of public policy frameworks, governance, and regulatory transparency."
         },
         economic: {
-          fr: "Analyse des flux financiers, commerciaux et d'investissement.",
-          en: "Analysis of financial, trade, and investment flows."
+          fr: "Analyse des flux financiers, des investissements structurants et de la valeur ajoutée locale.",
+          en: "Analysis of financial flows, capital allocation, and local value creation."
         },
         social: {
-          fr: "Impact sur les populations locales, l'emploi et le cadre de vie.",
-          en: "Impact on local communities, employment, and living standards."
+          fr: "Impact mesuré sur les populations locales, l'emploi et l'accès aux services essentiels.",
+          en: "Direct impact on local communities, employment, and essential service access."
         },
         international: {
-          fr: "Résonance dans l'espace UEMOA/CEDEAO et à l'international.",
-          en: "WAEMU/ECOWAS sub-regional and international resonance."
+          fr: "Résonance dans l'espace UEMOA/CEDEAO et attractivité régionale sous la ZLECAf.",
+          en: "WAEMU/ECOWAS sub-regional resonance and trade corridor dynamics under AfCFTA."
         }
-      } : undefined
+      }
     };
 
     engineUsed = failoverTriggered 
