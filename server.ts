@@ -601,29 +601,106 @@ app.use((req, res, next) => {
     }
   };
 
-  // Helper function to parse XML RSS, Atom, or RDF feed strings into structured items
+  // Helper function to decode XML/HTML entities and clean text
   const decodeXmlEntities = (str: string): string => {
     if (!str) return "";
     return str
       .replace(/&amp;/g, "&")
+      .replace(/&#038;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
+      .replace(/&#8220;/g, '“')
+      .replace(/&#8221;/g, '”')
+      .replace(/&#8216;/g, "‘")
+      .replace(/&#8217;/g, "’")
+      .replace(/&#8230;/g, "…")
       .replace(/&#39;/g, "'")
       .replace(/&apos;/g, "'")
       .replace(/&#x27;/g, "'")
+      .replace(/&nbsp;/g, " ")
       .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)))
-      .replace(/<[^>]*>/g, "") // strip html tags
+      .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/<[^>]*>/g, "") // strip residual html tags
       .trim();
   };
 
+  // Robust multi-format RSS / Atom / RDF date parser
+  const parseFeedDate = (rawDateStr?: string | null): { timestamp: number; isoDate: string; freshnessText: string } => {
+    const now = Date.now();
+    if (!rawDateStr || typeof rawDateStr !== "string") {
+      return { timestamp: now, isoDate: new Date(now).toISOString(), freshnessText: "À l'instant" };
+    }
+
+    let str = rawDateStr.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1").trim();
+    str = str.replace(/<[^>]*>/g, "").trim();
+
+    if (!str) {
+      return { timestamp: now, isoDate: new Date(now).toISOString(), freshnessText: "À l'instant" };
+    }
+
+    let parsedTime = Date.parse(str);
+
+    // If native Date.parse failed, attempt French month substitution and timezone normalization
+    if (isNaN(parsedTime) || parsedTime <= 0) {
+      const frMonths: Record<string, string> = {
+        "janvier": "Jan", "janv": "Jan", "janv.": "Jan",
+        "février": "Feb", "fevrier": "Feb", "févr": "Feb", "févr.": "Feb", "fevr": "Feb",
+        "mars": "Mar", "avril": "Apr", "avr": "Apr", "avr.": "Apr",
+        "mai": "May", "juin": "Jun", "juillet": "Jul", "juil": "Jul", "juil.": "Jul",
+        "août": "Aug", "aout": "Aug", "septembre": "Sep", "sept": "Sep", "sept.": "Sep",
+        "octobre": "Oct", "oct": "Oct", "oct.": "Oct",
+        "novembre": "Nov", "nov": "Nov", "nov.": "Nov",
+        "décembre": "Dec", "decembre": "Dec", "déc": "Dec", "déc.": "Dec", "dec": "Dec"
+      };
+
+      let normalized = str;
+      for (const [fr, en] of Object.entries(frMonths)) {
+        const reg = new RegExp(`\\b${fr}\\b`, "gi");
+        normalized = normalized.replace(reg, en);
+      }
+
+      parsedTime = Date.parse(normalized);
+    }
+
+    // If string is numeric timestamp (seconds or milliseconds)
+    if ((isNaN(parsedTime) || parsedTime <= 0) && /^\d{10,13}$/.test(str)) {
+      const num = Number(str);
+      parsedTime = str.length === 10 ? num * 1000 : num;
+    }
+
+    // Final sanity check: if parsed date is in far future (> 2 days from now) or NaN, default to now
+    if (isNaN(parsedTime) || parsedTime <= 0 || parsedTime > now + 2 * 86400000) {
+      parsedTime = now;
+    }
+
+    const isoDate = new Date(parsedTime).toISOString();
+    const diffMinutes = Math.max(0, Math.floor((now - parsedTime) / (60 * 1000)));
+
+    let freshnessText = "À l'instant";
+    if (diffMinutes < 60) {
+      freshnessText = `Il y a ${Math.max(1, diffMinutes)} min`;
+    } else if (diffMinutes < 1440) {
+      const h = Math.floor(diffMinutes / 60);
+      freshnessText = `Il y a ${h} h`;
+    } else {
+      const d = Math.floor(diffMinutes / 1440);
+      freshnessText = `Il y a ${d} j`;
+    }
+
+    return { timestamp: parsedTime, isoDate, freshnessText };
+  };
+
+  // Comprehensive XML RSS 2.0, Atom 1.0, and RDF 1.0 feed parser
   const parseRssXmlFeed = (xmlStr: string) => {
     const items: any[] = [];
     if (!xmlStr || typeof xmlStr !== "string") return items;
 
-    // Clean CDATA wrappers throughout XML
+    // Clean global CDATA wrappers while preserving inner content
     const cleanXml = xmlStr.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/gi, "$1");
     const itemMatches = cleanXml.match(/<(item|entry)[\s\S]*?<\/\1>/gi) || [];
+
+    const seenTitles = new Set<string>();
 
     for (const itemXml of itemMatches) {
       const getTagVal = (tags: string[]): string => {
@@ -639,35 +716,14 @@ app.use((req, res, next) => {
 
       let rawTitle = getTagVal(["title"]);
       let title = decodeXmlEntities(rawTitle).trim();
-      const description = getTagVal(["description", "summary", "content:encoded", "content"]);
+      const description = getTagVal(["description", "summary", "content:encoded", "content", "itunes:summary"]);
       const cleanDesc = decodeXmlEntities(description).trim();
-      const rawPubDate = getTagVal(["pubDate", "updated", "published", "dc:date"]);
+      const rawPubDate = getTagVal(["pubDate", "updated", "published", "dc:date", "date", "atom:updated", "atom:published", "lastBuildDate"]);
       const author = decodeXmlEntities(getTagVal(["dc:creator", "author", "creator", "publisher"])).trim();
-      const category = decodeXmlEntities(getTagVal(["category"])).trim();
+      const category = decodeXmlEntities(getTagVal(["category", "dc:subject"])).trim();
 
-      // Normalize pubDate to timestamp and ISO string
-      let timestamp = Date.now();
-      let isoDate = new Date().toISOString();
-      if (rawPubDate) {
-        const parsedTime = Date.parse(rawPubDate);
-        if (!isNaN(parsedTime) && parsedTime > 0) {
-          timestamp = parsedTime;
-          isoDate = new Date(parsedTime).toISOString();
-        }
-      }
-
-      // Compute relative freshness
-      const diffMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / (60 * 1000)));
-      let freshnessText = "À l'instant";
-      if (diffMinutes < 60) {
-        freshnessText = `Il y a ${Math.max(1, diffMinutes)} min`;
-      } else if (diffMinutes < 1440) {
-        const h = Math.floor(diffMinutes / 60);
-        freshnessText = `Il y a ${h} h`;
-      } else {
-        const d = Math.floor(diffMinutes / 1440);
-        freshnessText = `Il y a ${d} j`;
-      }
+      // Normalize pubDate to timestamp, ISO string, and human-friendly freshness
+      const dateInfo = parseFeedDate(rawPubDate);
 
       // Google News & RSS Source tag extraction
       let sourceName = "";
@@ -678,16 +734,19 @@ app.use((req, res, next) => {
         sourceName = decodeXmlEntities(sourceMatch[2]).trim();
       }
 
-      // Link extraction (support RSS 2.0 <link>, Atom <link href="...">, and RDF <item rdf:about="...">)
+      // Link extraction (support RSS 2.0 <link>, Atom <link href="...">, RDF <item rdf:about="...">, and <guid>)
       let link = "";
       const linkHrefMatch = itemXml.match(/<link[^>]*href=["']([^"']+)["']/i);
       const linkTagMatch = itemXml.match(/<link[^>]*>([\s\S]*?)<\/link>/i);
       const rdfAboutMatch = itemXml.match(/<item[^>]*rdf:about=["']([^"']+)["']/i);
+      const guidMatch = itemXml.match(/<guid[^>]*isPermaLink=["']true["'][^>]*>([\s\S]*?)<\/guid>/i);
 
       if (linkHrefMatch && linkHrefMatch[1]) {
         link = linkHrefMatch[1].trim();
       } else if (linkTagMatch && linkTagMatch[1]) {
         link = linkTagMatch[1].trim();
+      } else if (guidMatch && guidMatch[1]) {
+        link = guidMatch[1].trim();
       } else if (rdfAboutMatch && rdfAboutMatch[1]) {
         link = rdfAboutMatch[1].trim();
       } else if (sourceUrlAttr) {
@@ -697,7 +756,7 @@ app.use((req, res, next) => {
       // Handle Google News title pattern: "Headline Title - Source Name"
       if (!sourceName && title.includes(" - ")) {
         const lastDashIdx = title.lastIndexOf(" - ");
-        if (lastDashIdx > 10) {
+        if (lastDashIdx > 8) {
           sourceName = title.substring(lastDashIdx + 3).trim();
           title = title.substring(0, lastDashIdx).trim();
         }
@@ -706,9 +765,10 @@ app.use((req, res, next) => {
       // Clean title from accidental leftover tags
       title = title.replace(/<[^>]*>/g, "").trim();
 
-      // Image extraction
+      // Media / Thumbnail image extraction
       let imageUrl = "";
       const mediaMatch = itemXml.match(/<media:content[^>]*url=["']([^"']+)["']/i) ||
+                         itemXml.match(/<media:thumbnail[^>]*url=["']([^"']+)["']/i) ||
                          itemXml.match(/<enclosure[^>]*url=["']([^"']+)["']/i) ||
                          itemXml.match(/<img[^>]*src=["']([^"']+)["']/i);
       if (mediaMatch && mediaMatch[1]) {
@@ -716,26 +776,33 @@ app.use((req, res, next) => {
       }
 
       if (title || cleanDesc) {
-        items.push({
-          title: title || cleanDesc.slice(0, 100),
-          snippet: cleanDesc || title,
-          description: cleanDesc || title,
-          body: description || cleanDesc || title,
-          sourceUrl: link,
-          link,
-          pubDate: rawPubDate || isoDate,
-          isoDate,
-          timestamp,
-          freshnessText,
-          author: author || undefined,
-          category: category || undefined,
-          sourceName: sourceName || undefined,
-          imageUrl: imageUrl || undefined
-        });
+        const effectiveTitle = title || cleanDesc.slice(0, 120);
+        const titleKey = effectiveTitle.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 50);
+
+        // Deduplicate identical items in same stream
+        if (!seenTitles.has(titleKey)) {
+          seenTitles.add(titleKey);
+          items.push({
+            title: effectiveTitle,
+            snippet: cleanDesc || effectiveTitle,
+            description: cleanDesc || effectiveTitle,
+            body: description || cleanDesc || effectiveTitle,
+            sourceUrl: link,
+            link,
+            pubDate: rawPubDate || dateInfo.isoDate,
+            isoDate: dateInfo.isoDate,
+            timestamp: dateInfo.timestamp,
+            freshnessText: dateInfo.freshnessText,
+            author: author || undefined,
+            category: category || undefined,
+            sourceName: sourceName || undefined,
+            imageUrl: imageUrl || undefined
+          });
+        }
       }
     }
 
-    // Sort items so the freshest articles (highest timestamp) are ALWAYS on top
+    // Sort items so the freshest articles (highest timestamp) are ALWAYS at the top
     items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     return items;
@@ -771,24 +838,28 @@ app.use((req, res, next) => {
     return rawUrl.trim();
   };
 
-  // Resilient RSS fetcher with dynamic cache-busting and automatic real-time wire bridge fallback
+  // Resilient RSS fetcher with dynamic cache-busting, strict freshness headers, and automatic real-time wire bridge fallback
   const fetchRssFeedResilient = async (rawUrl: string, feedName?: string) => {
     let url = normalizeRssFeedUrl(rawUrl, feedName);
     const startTime = Date.now();
 
-    // Add cache-busting timestamp to WordPress/direct RSS endpoints to bypass proxy caches
+    // Cache-busting parameter for dynamic endpoints (avoiding breaking static .rdf or Google News endpoints)
     let requestUrl = url;
-    if (!url.includes('news.google.com')) {
+    const isStaticFile = url.endsWith('.rdf') || url.endsWith('.xml') || url.includes('news.google.com');
+    if (!isStaticFile) {
       const sep = url.includes('?') ? '&' : '?';
-      requestUrl = `${url}${sep}_nocache=${Date.now()}`;
+      requestUrl = `${url}${sep}_t=${Date.now()}`;
     }
 
-    const headers = {
+    // Enforce strict HTTP cache validation and fresh item retrieval
+    const headers: Record<string, string> = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "application/rss+xml, application/xml, text/xml, application/atom+xml, */*",
+      "Accept": "application/rss+xml, application/xml, text/xml, application/atom+xml, text/html;q=0.9, */*;q=0.8",
       "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
       "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
-      "Pragma": "no-cache"
+      "Pragma": "no-cache",
+      "Expires": "0",
+      "If-Modified-Since": "Thu, 01 Jan 1970 00:00:00 GMT"
     };
 
     let statusCode = 0;
@@ -1467,8 +1538,8 @@ app.use((req, res, next) => {
     }
   }, 30000);
 
-  // Endpoint to fetch external RSS feed URL directly from server (POST /api/rss/fetch)
-  app.post("/api/rss/fetch", async (req, res) => {
+  // Endpoint to fetch external RSS feed URL directly from server (GET or POST /api/rss/fetch)
+  app.all("/api/rss/fetch", async (req, res) => {
     try {
       const feedUrl = req.body?.feedUrl || req.body?.url || req.query?.url;
       if (!feedUrl || typeof feedUrl !== "string") {
