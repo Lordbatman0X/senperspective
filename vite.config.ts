@@ -16,6 +16,7 @@ export default defineConfig(() => {
       emptyOutDir: true,
     },
     server: {
+      allowedHosts: ['senperspective.com', '.senperspective.com', 'localhost', '127.0.0.1'],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
