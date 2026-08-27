@@ -1,3 +1,4 @@
+import { realFirebaseAuth, GoogleAuthProvider, signInWithPopup as realSignInWithPopup } from "../lib/realFirebase";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { 
   auth, 
@@ -63,6 +64,7 @@ interface AuthContextType {
     pin?: string, 
     twoFactorEnabled?: boolean
   ) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logoutUser: () => Promise<void>;
   resetUserPassword: (email: string) => Promise<void>;
 }
@@ -71,7 +73,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading,
+       setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<FirestoreUser[]>([]);
   const { setReaderProfile } = useStore();
 
@@ -571,6 +574,58 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribeAuth();
   }, [setReaderProfile]);
 
+  const loginWithGoogle = async () => {
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await realSignInWithPopup(realFirebaseAuth, provider);
+      const u = result.user;
+      const cleanEmail = u.email ? u.email.toLowerCase().trim() : "";
+      if (!cleanEmail) throw new Error("No email returned from Google");
+      const userDocRef = doc(db, "users", cleanEmail);
+      const userDoc = await getDoc(userDocRef);
+      let profileObj;
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const isAdminUser = cleanEmail === "kadersdiaz3@gmail.com" || cleanEmail === "admin@perspective.sn" || data.role === "Admin" || cleanEmail.includes("admin");
+        profileObj = {
+          ...data,
+          id: data.id || u.uid,
+          name: data.name || u.displayName || cleanEmail.split("@")[0],
+          email: cleanEmail,
+          avatarUrl: data.avatarUrl || u.photoURL || "preset-male",
+          role: isAdminUser ? "Admin" : (data.role || "Member"),
+          isFirebase: true
+        };
+        await setDoc(userDocRef, { ...profileObj, lastLoginAt: new Date().toISOString() }, { merge: true });
+      } else {
+        const isAdminUser = cleanEmail === "kadersdiaz3@gmail.com" || cleanEmail === "admin@perspective.sn" || cleanEmail.includes("admin");
+        profileObj = {
+          id: u.uid,
+          name: u.displayName || cleanEmail.split("@")[0],
+          email: cleanEmail,
+          avatarUrl: u.photoURL || "preset-male",
+          role: isAdminUser ? "Admin" : "Member",
+          emailVerified: true,
+          mfaEnabled: false,
+          isFirebase: true,
+          coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+          streak: 1,
+          readingTime: 0,
+          hidePersonalInfo: false,
+          bio: "Membre lecteur",
+          accolades: ["verified_identity"]
+        };
+        await setDoc(userDocRef, { ...profileObj, registeredAt: new Date().toISOString(), lastLoginAt: new Date().toISOString() }, { merge: true });
+      }
+      setReaderProfile(profileObj);
+      // Update fake Mongo auth service to sync state if needed
+      try { await auth.register(cleanEmail, "google_oauth_pass_ignored", profileObj.name); } catch(e){}
+    } catch (err) {
+      console.error("Google sign in error:", err);
+      throw err;
+    }
+  };
+
   const loginWithEmail = async (email: string, pass: string, remember: boolean = true) => {
     let cleanEmail = email.toLowerCase().trim();
     if (cleanEmail === "admin") cleanEmail = "admin@perspective.sn";
@@ -851,6 +906,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider value={{
       user,
       loading,
+      loginWithGoogle,
       allUsers,
       loginWithEmail,
       registerWithEmail,
