@@ -349,7 +349,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
       for (const model of modelsToTry) {
         try {
           const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Gemini Image timeout (3s)")), 3000)
+            setTimeout(() => reject(new Error("Gemini Image timeout (30s)")), 30000)
           );
 
           const genPromise = ai.models.generateContent({
@@ -398,7 +398,7 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
     if (openai) {
       try {
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("OpenAI DALL-E timeout (4s)")), 4000)
+          setTimeout(() => reject(new Error("OpenAI DALL-E timeout (30s)")), 30000)
         );
         const genPromise = openai.images.generate({
           model: "dall-e-3",

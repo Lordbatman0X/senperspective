@@ -260,7 +260,20 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
 }
 
 export function HomePage() {
-  const articles = useStore((s) => s.articles).filter(a => a.isPublished !== false && (a as any).status !== 'draft');
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc'>('date-desc');
+  
+  const articles = useStore((s) => s.articles)
+    .filter(a => a.isPublished !== false && (a as any).status !== 'draft')
+    .sort((a, b) => {
+      if (sortBy === 'date-asc') {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      } else if (sortBy === 'title-asc') {
+        const titleA = (a.title?.fr || a.title?.en || '').toLowerCase();
+        const titleB = (b.title?.fr || b.title?.en || '').toLowerCase();
+        return titleA.localeCompare(titleB);
+      }
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
   const language = useStore((s) => s.language);
   const theme = useStore((s) => s.theme);
   const ads = useStore((s) => s.ads);
@@ -344,7 +357,6 @@ export function HomePage() {
     coastAndHarbor: {},
     dailyWisdom: {}
   };
-  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc'>('date-desc');
   const [activeCoastTab, setActiveCoastTab] = useState<'tide' | 'goree' | 'meteo' | 'gale' | null>(null);
   
   const featuredArticles = articles.filter(a => a.isFeatured).slice(0, 4);

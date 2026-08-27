@@ -3007,6 +3007,39 @@ Context Details: ${JSON.stringify(locationInfo)}`;
   });
 
   // ==========================================
+  // TIMELINE GENERATION ENDPOINT
+  // ==========================================
+  app.post("/api/generate-timeline", express.json(), async (req, res) => {
+    try {
+      const { title, excerpt, language = 'fr' } = req.body;
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const prompt = `Perform a web search about the following news topic: "${title}".
+Create a chronological timeline of 3 to 5 key events related to this topic.
+Respond ONLY with a JSON array of objects. Each object must have:
+- 'date': A string representing the date of the event (e.g. "12 Mars 2026").
+- 'descriptionFr': A short description of the event in French.
+- 'descriptionEn': A short description of the event in English.
+Do not wrap the response in markdown blocks (like \`\`\`json). Just the raw JSON array.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+        }
+      });
+      
+      const rawText = response.text || "[]";
+      const cleanText = rawText.replace(/```json/gi, "").replace(/```/g, "").trim();
+      const events = JSON.parse(cleanText);
+      return res.json({ success: true, events });
+    } catch (err: any) {
+      console.error("Error generating timeline:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ==========================================
   // VERCEL STORAGE & MIGRATION API ENDPOINTS
   // ==========================================
 

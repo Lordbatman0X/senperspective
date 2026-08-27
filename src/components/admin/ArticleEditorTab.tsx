@@ -70,6 +70,7 @@ export function ArticleEditorTab({
   const [keyActors, setKeyActors] = useState<KeyActor[]>([]);
   // Timeline form builder
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [isGeneratingTimeline, setIsGeneratingTimeline] = useState(false);
 
   // Structural Forces states
   const [forcePolFr, setForcePolFr] = useState('');
@@ -502,6 +503,44 @@ export function ArticleEditorTab({
 
   const handleRemoveTimeline = (index: number) => {
     setTimeline(timeline.filter((_, i) => i !== index));
+  };
+
+  const handleAutoGenerateTimeline = async () => {
+    if (!titleFr && !titleEn) {
+      alert("Please provide a title first.");
+      return;
+    }
+    
+    setIsGeneratingTimeline(true);
+    try {
+      const res = await fetch('/api/generate-timeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          title: titleFr || titleEn,
+          excerpt: excerptFr || excerptEn,
+          language
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.events) {
+        const newEvents = data.events.map((evt: any) => ({
+          date: evt.date || '',
+          description: {
+            fr: evt.descriptionFr || '',
+            en: evt.descriptionEn || ''
+          }
+        }));
+        setTimeline(newEvents);
+      } else {
+        throw new Error(data.error || "Failed to generate timeline");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Error generating timeline: " + err.message);
+    } finally {
+      setIsGeneratingTimeline(false);
+    }
   };
 
   // Select Ad relations
@@ -1375,13 +1414,24 @@ export function ArticleEditorTab({
               <h3 className="text-xs font-black uppercase tracking-widest text-[#E85D42] flex items-center gap-1.5">
                 <Sparkles size={14} /> Chronological Timeline Events
               </h3>
-              <button 
-                type="button" 
-                onClick={handleAddTimeline} 
-                className="text-[10px] bg-zinc-950 text-white font-bold px-3 py-1.5 uppercase hover:bg-[#E85D42] border border-zinc-700 transition-colors rounded-xs cursor-pointer"
-              >
-                + Add Event
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  type="button" 
+                  onClick={handleAutoGenerateTimeline}
+                  disabled={isGeneratingTimeline}
+                  className="text-[10px] bg-[#E85D42]/10 text-[#E85D42] font-bold px-3 py-1.5 uppercase hover:bg-[#E85D42]/20 border border-[#E85D42]/30 transition-colors rounded-xs cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                >
+                  {isGeneratingTimeline ? <Loader2 size={11} className="animate-spin" /> : <Search size={11} />}
+                  Auto-Generate (Web)
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleAddTimeline} 
+                  className="text-[10px] bg-zinc-950 text-white font-bold px-3 py-1.5 uppercase hover:bg-[#E85D42] border border-zinc-700 transition-colors rounded-xs cursor-pointer"
+                >
+                  + Add Event
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
