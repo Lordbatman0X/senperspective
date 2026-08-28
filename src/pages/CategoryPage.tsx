@@ -9,11 +9,15 @@ import { LArenePage } from './LArenePage';
 export function CategoryPage() {
   const { categoryId } = useParams<{ categoryId: string }>();
   const { articles, language, siteSettings } = useStore();
-  
-  const normalizedId = (categoryId || '').toLowerCase().trim();
-  if (normalizedId === 'sports' || normalizedId === 'sport' || normalizedId === 'larene' || normalizedId === 'arene') {
+  const normalizedId = (categoryId || "").toLowerCase().trim();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [categoryId]);
+  if (normalizedId === "sports" || normalizedId === "sport" || normalizedId === "larene" || normalizedId === "arene") {
     return <LArenePage />;
   }
+
+  
 
   const categoriesList = (siteSettings?.categories && siteSettings.categories.length > 0) ? siteSettings.categories : ARTICLE_CATEGORIES;
   const targetCategory = categoriesList.find(c => c.id === categoryId);
@@ -44,9 +48,6 @@ export function CategoryPage() {
     }
   );
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [categoryId]);
 
   const isDecryptages = categoryId === 'decryptages';
   const catName = isDecryptages

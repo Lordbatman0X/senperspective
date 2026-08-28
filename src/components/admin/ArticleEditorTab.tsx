@@ -169,6 +169,7 @@ export function ArticleEditorTab({
   const [aiTargetType, setAiTargetType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
+  const [aiImagePrompt, setAiImagePrompt] = useState("");
 
   const handleGenerateAiCoverImage = async () => {
     const activeTitle = titleFr || titleEn || '';
@@ -189,6 +190,7 @@ export function ArticleEditorTab({
           bodyText: bodyFr || bodyEn || '',
           category: category || 'Économie',
           keyActors: Array.isArray(keyActors) ? keyActors.map((a: any) => a.name).filter(Boolean) : [],
+          customPrompt: aiImagePrompt,
           tags: tags || []
         })
       });
@@ -1213,6 +1215,10 @@ export function ArticleEditorTab({
                 </div>
 
                 {/* Cover Image Preview Thumbnail */}
+                <div className="w-full flex gap-2 mt-2">
+                  <input type="text" value={aiImagePrompt} onChange={(e) => setAiImagePrompt(e.target.value)} placeholder={language === "fr" ? "Prompt personnalisé pour l'IA (optionnel)" : "Custom AI prompt (optional)"} className="flex-1 bg-zinc-950 border border-zinc-700 text-white text-xs p-2 rounded" />
+                </div>
+
                 {imageUrl && (
                   <div className="mt-3 relative w-36 h-24 border border-zinc-700 rounded-md overflow-hidden bg-black/50 group">
                     <img src={imageUrl} alt="Cover Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />

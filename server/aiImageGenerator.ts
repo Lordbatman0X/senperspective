@@ -114,6 +114,7 @@ export interface ImageGenerationOptions {
   tags?: string[];
   styleHint?: string;
   forceAiGeneration?: boolean;
+  customPrompt?: string;
 }
 
 export interface GeneratedImageResult {
@@ -307,6 +308,8 @@ export function buildPhotojournalismPrompt(options: ImageGenerationOptions): str
     visualSetting = "prestigious presidential palace press hall in Dakar, West African diplomatic flags, formal executive podium with press microphones";
     subjectFocus = "dignified institutional briefing, political leadership, formal state atmosphere";
   }
+
+  if (options.customPrompt) return `${options.customPrompt} Style: Realistic editorial press photography, sharp natural focus, authentic cinematic ambient lighting, high dynamic range, 16:9 widescreen composition, authentic West African documentary aesthetics, zero CGI artifacts, zero text or overlays.`;
 
   const actorsHint = Array.isArray(keyActors) && keyActors.length > 0 ? `Involving key stakeholders: ${keyActors.slice(0, 3).join(", ")}.` : "";
 

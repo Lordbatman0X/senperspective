@@ -2023,7 +2023,7 @@ app.use((req, res, next) => {
   // Dedicated AI Article Image Generation API (POST /api/ai/generate-article-image)
   app.post("/api/ai/generate-article-image", async (req, res) => {
     try {
-      const { title, excerpt, bodyText, category, keyActors, tags, styleHint, forceAiGeneration } = req.body || {};
+      const { title, excerpt, bodyText, category, keyActors, tags, styleHint, forceAiGeneration, customPrompt } = req.body || {};
       if (!title || typeof title !== "string") {
         return res.status(400).json({ success: false, error: "Missing 'title' parameter." });
       }
@@ -2853,6 +2853,8 @@ Context Details: ${JSON.stringify(locationInfo)}`;
       const geminiKey = getEffectiveApiKey('GEMINI');
       if (geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined" && geminiKey !== "null") {
         try {
+      if (!process.env.GEMINI_API_KEY) throw new Error("La clé API Gemini est manquante.");
+
           const ai = new GoogleGenAI({
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
@@ -3012,6 +3014,8 @@ Context Details: ${JSON.stringify(locationInfo)}`;
   app.post("/api/generate-timeline", express.json(), async (req, res) => {
     try {
       const { title, excerpt, language = 'fr' } = req.body;
+      if (!process.env.GEMINI_API_KEY) throw new Error("La clé API Gemini est manquante.");
+
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const prompt = `Perform a web search about the following news topic: "${title}".
 Create a chronological timeline of 3 to 5 key events related to this topic.

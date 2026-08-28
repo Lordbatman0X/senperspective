@@ -1,0 +1,2 @@
+sed -i 's/const \[isGeneratingAiImage, setIsGeneratingAiImage\] = useState(false);/const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);\n  const [aiImagePrompt, setAiImagePrompt] = useState("");/g' src/components/admin/ArticleEditorTab.tsx
+sed -i 's/          keyActors: Array.isArray(keyActors) ? keyActors.map((a: any) => a.name).filter(Boolean) : \[\]\,/          keyActors: Array.isArray(keyActors) ? keyActors.map((a: any) => a.name).filter(Boolean) : [],\n          customPrompt: aiImagePrompt,/g' src/components/admin/ArticleEditorTab.tsx

@@ -1,0 +1,2 @@
+sed -i 's/  forceAiGeneration?: boolean;/  forceAiGeneration?: boolean;\n  customPrompt?: string;/g' server/aiImageGenerator.ts
+sed -i 's/const actorsHint =/if (options.customPrompt) return `${options.customPrompt} Style: Realistic editorial press photography, sharp natural focus, authentic cinematic ambient lighting, high dynamic range, 16:9 widescreen composition, authentic West African documentary aesthetics, zero CGI artifacts, zero text or overlays.`;\n\n  const actorsHint =/g' server/aiImageGenerator.ts

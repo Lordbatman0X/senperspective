@@ -1,0 +1,1 @@
+sed -i 's/const res = await fetch(\/api\/articles\/\${id}\/, { method: '"'"'DELETE'"'"' });/deleteArticle(id);\n      showStatus(isFr ? "Brouillon supprimé." : "Draft deleted successfully.");\n      if (onRefreshArticles) onRefreshArticles();/g' src/components/admin/DraftGenerationTab.tsx
