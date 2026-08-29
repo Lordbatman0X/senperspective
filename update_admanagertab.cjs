@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+const fs = require('fs');
+
+const content = `import React, { useState, useEffect } from 'react';
 import { AdItem, useStore } from '../../store';
 import { 
   Plus, Edit2, Trash2, ImageIcon, Activity, X, BarChart, 
@@ -36,7 +38,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
 
   const handleCreateNew = () => {
     setEditingAd({
-      id: `ad-${Date.now()}`,
+      id: \`ad-\${Date.now()}\`,
       name: '',
       imageUrl: '',
       targetUrl: 'https://',
@@ -72,11 +74,11 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
       <div className="flex border-b border-zinc-800 pb-px">
         <button
           onClick={() => { setActiveSubTab('monitor'); setEditingAd(null); }}
-          className={`pb-4 px-6 font-extrabold uppercase tracking-widest text-xs flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+          className={\`pb-4 px-6 font-extrabold uppercase tracking-widest text-xs flex items-center gap-2 border-b-2 transition-all cursor-pointer \${
             activeSubTab === 'monitor'
               ? 'border-[#E85D42] text-white'
               : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          }`}
+          }\`}
         >
           <MonitorPlay size={14} />
           <span>{isFr ? 'Régie & Monitor Publicitaire' : 'Ad Monitor'}</span>
@@ -90,11 +92,11 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
              if (!editingAd) handleCreateNew();
              else setActiveSubTab('editor');
           }}
-          className={`pb-4 px-6 font-extrabold uppercase tracking-widest text-xs flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+          className={\`pb-4 px-6 font-extrabold uppercase tracking-widest text-xs flex items-center gap-2 border-b-2 transition-all cursor-pointer \${
             activeSubTab === 'editor'
               ? 'border-[#E85D42] text-white'
               : 'border-transparent text-zinc-400 hover:text-zinc-200'
-          }`}
+          }\`}
         >
           {editingAd && editingAd.name ? <Edit2 size={14} /> : <Plus size={14} />}
           <span>{editingAd && editingAd.name ? (isFr ? 'Modifier la Campagne' : 'Edit Campaign') : (isFr ? 'Nouvelle Campagne' : 'New Campaign')}</span>
@@ -183,9 +185,9 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                                 <a href={ad.targetUrl} target="_blank" rel="noopener noreferrer">{ad.targetUrl}</a>
                               </p>
                               <div className="mt-1 flex items-center gap-2">
-                                <span className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm border ${
+                                <span className={\`flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm border \${
                                   ad.active ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-zinc-900 text-zinc-500 border-zinc-700'
-                                }`}>
+                                }\`}>
                                   {ad.active ? (isFr ? 'EN LIGNE' : 'ACTIVE') : (isFr ? 'SUSPENDU' : 'PAUSED')}
                                 </span>
                               </div>
@@ -221,11 +223,11 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                           <div className="flex justify-end gap-1.5">
                             <button 
                               onClick={() => handleToggleStatus(ad)}
-                              className={`p-2 transition-colors cursor-pointer rounded-full ${
+                              className={\`p-2 transition-colors cursor-pointer rounded-full \${
                                 ad.active 
                                   ? 'text-emerald-500 hover:bg-emerald-500/10' 
                                   : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
-                              }`}
+                              }\`}
                               title={ad.active ? (isFr ? "Suspendre la campagne" : "Pause campaign") : (isFr ? "Activer la campagne" : "Activate campaign")}
                             >
                               {ad.active ? <Pause size={14} /> : <Play size={14} />}
@@ -341,7 +343,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
 
                 <div className="space-y-4 bg-zinc-950/50 p-5 rounded-xl border border-zinc-800/80">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-2 mb-3">
-                    {isFr ? "Configuration d'Affichage" : 'Display Configuration'}
+                    {isFr ? 'Configuration d\'Affichage' : 'Display Configuration'}
                   </h4>
 
                   <div>
@@ -466,7 +468,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                           </div>
                           <div className="flex justify-between items-center px-1">
                              <div className="pr-4">
-                               <h4 className="font-extrabold text-sm text-white line-clamp-1">{editingAd.name || "Nom de l'annonceur"}</h4>
+                               <h4 className="font-extrabold text-sm text-white line-clamp-1">{editingAd.name || 'Nom de l\'annonceur'}</h4>
                                {editingAd.description && (
                                  <p className="text-[10px] text-zinc-400 line-clamp-1 mt-0.5">{getSafeText(editingAd.description, language)}</p>
                                )}
@@ -518,7 +520,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                               {editingAd.name || 'PARTENAIRE'}
                             </h4>
                             <p className="text-[10px] text-zinc-300 line-clamp-2 leading-tight mt-1 opacity-90">
-                              {getSafeText(editingAd.description, language) || "Description courte de l'offre partenaire..."}
+                              {getSafeText(editingAd.description, language) || 'Description courte de l\'offre partenaire...'}
                             </p>
                           </div>
                           <span className="px-3 py-2 bg-[#E85D42] hover:bg-[#d05035] text-white text-[9px] font-black uppercase tracking-widest shrink-0 rounded-lg shadow-sm transition-colors cursor-pointer">
@@ -533,14 +535,14 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                          style={{ 
                             backgroundColor: editingAd.bgColor || '#18181b', 
                             borderColor: 'rgba(255,255,255,0.1)',
-                            width: `${editingAd.width || 120}px`,
+                            width: \`\${editingAd.width || 120}px\`,
                             height: '400px'
                           }}
                        >
                          {editingAd.imageUrl ? (
                            <img src={editingAd.imageUrl} alt={editingAd.name} className="w-full h-full object-cover" />
                          ) : (
-                           <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest text-center px-2">PANEL<br/>${editingAd.width || 120}px</span>
+                           <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest text-center px-2">PANEL<br/>\${editingAd.width || 120}px</span>
                          )}
                        </div>
                      )}
@@ -591,3 +593,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/admin/AdManagerTab.tsx', content);
+console.log('AdManagerTab successfully updated');

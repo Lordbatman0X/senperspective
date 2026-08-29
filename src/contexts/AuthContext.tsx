@@ -1,4 +1,4 @@
-import { realFirebaseAuth, GoogleAuthProvider, signInWithPopup as realSignInWithPopup } from "../lib/realFirebase";
+import { realFirebaseAuth, GoogleAuthProvider, GithubAuthProvider, OAuthProvider, FacebookAuthProvider, signInWithPopup as realSignInWithPopup } from "../lib/realFirebase";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { 
   auth, 
@@ -65,6 +65,7 @@ interface AuthContextType {
     twoFactorEnabled?: boolean
   ) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
+  loginWithSocial: (providerName: 'google' | 'github' | 'apple' | 'facebook') => Promise<void>;
   logoutUser: () => Promise<void>;
   resetUserPassword: (email: string) => Promise<void>;
 }
@@ -574,15 +575,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribeAuth();
   }, [setReaderProfile]);
 
-  const loginWithGoogle = async () => {
+  const loginWithSocial = async (providerName: 'google' | 'github' | 'apple' | 'facebook') => {
     try {
-      const provider = new GoogleAuthProvider();
+      let provider: any;
+      switch (providerName) {
+        case 'github':
+          provider = new GithubAuthProvider();
+          break;
+        case 'apple':
+          provider = new OAuthProvider('apple.com');
+          break;
+        case 'facebook':
+          provider = new FacebookAuthProvider();
+          break;
+        case 'google':
+        default:
+          provider = new GoogleAuthProvider();
+          break;
+      }
+
       const result = await realSignInWithPopup(realFirebaseAuth, provider);
       const u = result.user;
-      const cleanEmail = u.email ? u.email.toLowerCase().trim() : "";
-      if (!cleanEmail) throw new Error("No email returned from Google");
+      
+      // Some providers might not return an email (like Github sometimes), fallback to uid@provider.com if needed
+      const rawEmail = u.email || `${u.uid}@${providerName}.com`;
+      const cleanEmail = rawEmail.toLowerCase().trim();
+      
+      if (!cleanEmail) throw new Error("No email returned from " + providerName);
+      
       const userDocRef = doc(db, "users", cleanEmail);
       const userDoc = await getDoc(userDocRef);
+      
       let profileObj;
       if (userDoc.exists()) {
         const data = userDoc.data();
@@ -617,14 +640,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
         await setDoc(userDocRef, { ...profileObj, registeredAt: new Date().toISOString(), lastLoginAt: new Date().toISOString() }, { merge: true });
       }
+      
       setReaderProfile(profileObj);
+      
       // Update fake Mongo auth service to sync state if needed
-      try { await auth.register(cleanEmail, "google_oauth_pass_ignored", profileObj.name); } catch(e){}
+      try { await auth.register(cleanEmail, `${providerName}_oauth_pass_ignored`, profileObj.name); } catch(e){}
     } catch (err) {
-      console.error("Google sign in error:", err);
+      console.error(`${providerName} sign in error:`, err);
       throw err;
     }
   };
+
+  const loginWithGoogle = () => loginWithSocial('google');
 
   const loginWithEmail = async (email: string, pass: string, remember: boolean = true) => {
     let cleanEmail = email.toLowerCase().trim();
@@ -907,6 +934,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user,
       loading,
       loginWithGoogle,
+      loginWithSocial,
       allUsers,
       loginWithEmail,
       registerWithEmail,

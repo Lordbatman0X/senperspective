@@ -369,7 +369,7 @@ export function HomePage() {
   const allMixedSet = [...largeSet].sort(() => Math.random() - 0.5);
 
   const sidebarAds = ads?.filter(a => a.active && a.position === 'sidebar' && a.imageUrl && a.imageUrl.trim() !== '') || [];
-  const activeBetweenAd = ads?.find(a => a.active && a.position === 'between_articles') || ads?.find(a => a.active);
+  const activeBetweenAd = ads?.find(a => a.active && a.position === 'homepage-between');
 
   const categoriesConfig = [
     { main: "Politique", sub: language === 'fr' ? "Politique" : "Politics" },

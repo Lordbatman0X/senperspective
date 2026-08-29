@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useStore } from "../store";
 import { useAuth } from "../contexts/AuthContext";
+import { SocialLoginButtons } from "./SocialLoginButtons";
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import {
@@ -89,7 +90,7 @@ export function Header() {
     updateMatch,
     updateUserSecurity,
   } = useStore();
-  const { user, loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers } = useAuth();
+  const { user, loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers, loginWithSocial } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isScrolledSearchOpen, setIsScrolledSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -305,6 +306,22 @@ export function Header() {
       } catch (err) {
         console.error("Failed to compress registration photo upload:", err);
       }
+    }
+  };
+
+
+  const handleSocialSignIn = async (provider: 'google' | 'github' | 'apple' | 'facebook') => {
+    setAuthError("");
+    setAuthSuccess("");
+    try {
+      await loginWithSocial(provider);
+      setAuthSuccess(language === "fr" ? "Connexion réussie !" : "Login successful!");
+      setTimeout(() => {
+        setShowSignUpModal(false);
+        setAuthSuccess("");
+      }, 800);
+    } catch (err: any) {
+      setAuthError(err.message || `${provider} sign in failed`);
     }
   };
 
@@ -1431,6 +1448,7 @@ export function Header() {
                         ? "S'INSCRIRE & COMMENCER"
                         : "REGISTER & START"}
                   </button>
+                  <SocialLoginButtons language={language} handleSocialSignIn={handleSocialSignIn} isSubmitting={false} />
                 </form>
             </motion.div>
           </motion.div>
