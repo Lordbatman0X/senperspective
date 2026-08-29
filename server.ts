@@ -14,6 +14,7 @@ import {
   getOpenAIClient,
   apiKeyStore,
   getEffectiveApiKey,
+  getGeminiClient,
   saveApiKey,
   loadKeysFromMongo
 } from "./server/aiNewsroomEngine";
@@ -3014,9 +3015,12 @@ Context Details: ${JSON.stringify(locationInfo)}`;
   app.post("/api/generate-timeline", express.json(), async (req, res) => {
     try {
       const { title, excerpt, language = 'fr' } = req.body;
-      if (!process.env.GEMINI_API_KEY) throw new Error("La clé API Gemini est manquante.");
-
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      
+      // Use the centralized aiNewsroomEngine which handles secure API keys and environment credentials
+      const ai = getGeminiClient();
+      if (!ai) {
+        throw new Error("La clé API Gemini est manquante. Veuillez la configurer dans les paramètres.");
+      }
       const prompt = `Perform a web search about the following news topic: "${title}".
 Create a chronological timeline of 3 to 5 key events related to this topic.
 Respond ONLY with a JSON array of objects. Each object must have:
