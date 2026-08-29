@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
+import { db, collection, safeOnSnapshot } from "../lib/mongodb";
 import { useAuth } from "../contexts/AuthContext";
 import { Bot, MessageSquare, X, Send, Trash2, Paperclip, Check, ChevronDown, Sparkles, RefreshCw, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -32,6 +33,17 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"abdel" | "chat">("abdel");
   const containerRef = useRef<HTMLDivElement>(null);
+  const [realFriendsList, setRealFriendsList] = useState<string[]>([]);
+  useEffect(() => {
+    if (!readerProfile?.email) return;
+    const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
+    const unsubscribe = safeOnSnapshot(friendsRef, (snapshot) => {
+      const list: string[] = [];
+      snapshot.forEach((docSnap: any) => list.push(docSnap.id.toLowerCase().trim()));
+      setRealFriendsList(list);
+    }, (err) => console.warn(err));
+    return () => unsubscribe();
+  }, [readerProfile?.email]);
 
   // Compute location-aware Abdel prompts dynamically
   const contextualData = getAbdelContextualPrompts(
@@ -74,10 +86,10 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
   const contactMap = new Map<string, { name: string; email: string; avatar?: string; role?: string; isOnline?: boolean }>();
 
-  // Add all registered users from Firestore except current user
+  // Only add friends to the FloatingHub chat contact list
   allUsers.forEach(u => {
     const emailLow = u.email.toLowerCase().trim();
-    if (emailLow && emailLow !== myEmailLower) {
+    if (emailLow && emailLow !== myEmailLower && realFriendsList.includes(emailLow)) {
       contactMap.set(emailLow, {
         name: u.name || emailLow.split("@")[0],
         email: u.email,
@@ -88,18 +100,6 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     }
   });
 
-  // Add friends list if missing
-  (friends || []).forEach(f => {
-    const emailLow = f.email.toLowerCase().trim();
-    if (emailLow && emailLow !== myEmailLower && !contactMap.has(emailLow)) {
-      contactMap.set(emailLow, {
-        name: f.name || emailLow.split("@")[0],
-        email: f.email,
-        avatar: (f.name || "U").charAt(0).toUpperCase(),
-        role: f.role || "Member"
-      });
-    }
-  });
 
   const contactsList = Array.from(contactMap.values());
   const [userSearchQuery, setUserSearchQuery] = useState("");

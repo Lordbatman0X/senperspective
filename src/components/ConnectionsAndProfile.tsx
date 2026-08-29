@@ -86,6 +86,8 @@ interface ConnectionsAndProfileProps {
   currentSettings: any;
   theme: string;
   friendsList: string[];
+  friendRequests?: string[];
+  sentRequests?: string[];
   toggleFriend: (email: string) => Promise<void>;
   networkSearchQuery: string;
   setNetworkSearchQuery: (val: string) => void;
@@ -141,6 +143,8 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
   currentSettings,
   theme,
   friendsList,
+  friendRequests = [],
+  sentRequests = [],
   toggleFriend,
   networkSearchQuery,
   setNetworkSearchQuery,
@@ -250,9 +254,13 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                     borderColor: friendsList.includes(selectedUserForDetail.email.toLowerCase().trim()) ? "rgba(225, 29, 72, 0.3)" : `${currentSettings.accentColor}30`
                   }}
                 >
-                  {friendsList.includes(selectedUserForDetail.email.toLowerCase().trim()) 
-                    ? (language === "fr" ? "Retirer Ami" : "Remove Friend") 
-                    : (language === "fr" ? "Ajouter Ami" : "Add Friend")}
+                  {(() => {
+                    const email = selectedUserForDetail.email.toLowerCase().trim();
+                    if (friendsList.includes(email)) return language === "fr" ? "Retirer Ami" : "Remove Friend";
+                    if (sentRequests.includes(email)) return language === "fr" ? "Annuler Demande" : "Cancel Request";
+                    if (friendRequests.includes(email)) return language === "fr" ? "Accepter" : "Accept Request";
+                    return language === "fr" ? "Ajouter Ami" : "Add Friend";
+                  })()}
                 </button>
 
                 {/* Direct Secure Chat Button */}
@@ -521,6 +529,16 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                                     ✓ {language === "fr" ? "AMI" : "FRIEND"}
                                   </span>
                                 )}
+                                {!isFriend && sentRequests.includes(member.email.toLowerCase().trim()) && (
+                                  <span className="text-[8.5px] font-mono text-amber-600 dark:text-amber-400 font-black tracking-wider uppercase">
+                                    {language === "fr" ? "EN ATTENTE" : "PENDING"}
+                                  </span>
+                                )}
+                                {!isFriend && friendRequests.includes(member.email.toLowerCase().trim()) && (
+                                  <span className="text-[8.5px] font-mono text-blue-600 dark:text-blue-400 font-black tracking-wider uppercase">
+                                    {language === "fr" ? "DEMANDE REÇUE" : "REQUESTED"}
+                                  </span>
+                                )}
                               </div>
                             </div>
 
@@ -533,9 +551,14 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                                   color: isFriend ? "#e11d48" : currentSettings.accentColor,
                                   borderColor: isFriend ? "rgba(225, 29, 72, 0.3)" : `${currentSettings.accentColor}30`
                                 }}
-                                title={isFriend ? (language === "fr" ? "Retirer" : "Remove Friend") : (language === "fr" ? "Ajouter" : "Add Friend")}
+                                title={
+                                  isFriend ? (language === "fr" ? "Retirer" : "Remove Friend") :
+                                  sentRequests.includes(member.email.toLowerCase().trim()) ? (language === "fr" ? "Annuler" : "Cancel Request") :
+                                  friendRequests.includes(member.email.toLowerCase().trim()) ? (language === "fr" ? "Accepter" : "Accept Request") :
+                                  (language === "fr" ? "Ajouter" : "Add Friend")
+                                }
                               >
-                                {isFriend ? <UserMinus size={13} /> : <UserPlus size={13} />}
+                                {isFriend ? <UserMinus size={13} /> : (sentRequests.includes(member.email.toLowerCase().trim()) || friendRequests.includes(member.email.toLowerCase().trim())) ? <Clock size={13} /> : <UserPlus size={13} />}
                               </button>
                               <Link
                                 to={`/profile/${encodeURIComponent(member.email)}`}

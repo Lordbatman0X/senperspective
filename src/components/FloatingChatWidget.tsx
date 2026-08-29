@@ -32,7 +32,6 @@ export const FloatingChatWidget: React.FC = () => {
   // Contacts directory
   const contacts = [
     { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P" },
-    { email: "kadersdiaz3@gmail.com", name: "Kader Diaz", role: "Directeur Éditorial", avatar: "K" }
   ];
 
   // Global window event listener to open floating chat from Header / Drawer

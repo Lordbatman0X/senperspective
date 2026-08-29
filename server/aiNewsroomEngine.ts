@@ -388,6 +388,19 @@ export function getOpenRouterClient(): OpenAI | null {
  * Builds the Master Editorial System Prompt tailored to Perspective's signature storytelling style.
  * Integrates Admin Custom Guidelines, Feedback Comments & Exemplary Reference Examples.
  */
+
+function extractJsonFromText(text: string): any {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    throw new Error("Could not extract JSON from response: " + text.slice(0, 100));
+  }
+}
+
 export function buildEditorialSystemPrompt(
   articleType: ArticleStyleType = "News",
   overrideGuidelines?: CustomEditorialGuidelines
@@ -581,7 +594,7 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
         throw new Error(`Empty response from Gemini model ${model}`);
       }
 
-      const parsed = JSON.parse(text);
+      const parsed = extractJsonFromText(text);
       if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
         console.log(`[GEMINI ENGINE SUCCESS] Generated with ${model}!`);
         return { parsed, modelUsed: `Gemini (${model})` };
@@ -622,7 +635,7 @@ export async function generateWithOpenAI(userPrompt: string, systemInstruction: 
           { role: "system", content: systemInstruction },
           { role: "user", content: userPrompt }
         ],
-        response_format: { type: "json_object" },
+        
         temperature: 0.25,
         max_tokens: 3500,
       });
@@ -632,7 +645,7 @@ export async function generateWithOpenAI(userPrompt: string, systemInstruction: 
         throw new Error(`Empty response from OpenAI model ${model}`);
       }
 
-      const parsed = JSON.parse(text);
+      const parsed = extractJsonFromText(text);
       if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
         return { parsed, modelUsed: `OpenAI (${model})` };
       }
@@ -663,8 +676,7 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
     "llama-3.3-70b-versatile",
     "llama3-70b-8192",
     "mixtral-8x7b-32768",
-    "qwen/qwen3.6-27b",
-    "qwen/qwen3.8-27b"
+    "qwen-2.5-32b"
   ];
   let lastErr: any = null;
 
@@ -676,7 +688,7 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
           { role: "system", content: systemInstruction },
           { role: "user", content: userPrompt }
         ],
-        response_format: { type: "json_object" },
+        
         temperature: 0.25,
         max_tokens: 3000,
       });
@@ -686,7 +698,7 @@ export async function generateWithGroq(userPrompt: string, systemInstruction: st
         throw new Error(`Empty response from Groq model ${model}`);
       }
 
-      const parsed = JSON.parse(text);
+      const parsed = extractJsonFromText(text);
       if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
         return { parsed, modelUsed: `Groq (${model})` };
       }
@@ -730,7 +742,7 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
           { role: "system", content: systemInstruction },
           { role: "user", content: userPrompt }
         ],
-        response_format: { type: "json_object" },
+        
         temperature: 0.25,
         max_tokens: 2200, // Explicit limit prevents 402 credit threshold errors on free/low credit keys
       });
@@ -740,7 +752,7 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
         throw new Error(`Empty response from OpenRouter model ${model}`);
       }
 
-      const parsed = JSON.parse(text);
+      const parsed = extractJsonFromText(text);
       if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
         return { parsed, modelUsed: `OpenRouter (${model})` };
       }

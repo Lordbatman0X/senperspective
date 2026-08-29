@@ -246,6 +246,29 @@ export function AccountDrawer({
   }, [showProfileModal, activeSubMenu, readerProfile?.email, markDirectMessagesAsRead]);
 
   // Real-time Firestore listener for friends
+  const [friendRequests, setFriendRequests] = useState<string[]>([]);
+  const [sentRequests, setSentRequests] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!readerProfile?.email) return;
+    
+    const reqRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friend_requests");
+    const unsubReq = safeOnSnapshot(reqRef, (snapshot) => {
+      const list: string[] = [];
+      snapshot.forEach((docSnap: any) => list.push(docSnap.id.toLowerCase().trim()));
+      setFriendRequests(list);
+    }, (err) => console.warn(err));
+
+    const sentRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "sent_requests");
+    const unsubSent = safeOnSnapshot(sentRef, (snapshot) => {
+      const list: string[] = [];
+      snapshot.forEach((docSnap: any) => list.push(docSnap.id.toLowerCase().trim()));
+      setSentRequests(list);
+    }, (err) => console.warn(err));
+
+    return () => { unsubReq(); unsubSent(); };
+  }, [readerProfile?.email]);
+
   useEffect(() => {
     if (!readerProfile?.email) return;
     const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
@@ -272,18 +295,46 @@ export function AccountDrawer({
     if (myEmail === targetEmail) return;
 
     const isFriend = friendsList.includes(targetEmail);
+    const hasSentRequest = sentRequests.includes(targetEmail);
+    const hasReceivedRequest = friendRequests.includes(targetEmail);
+
+    const targetUser = allUsers.find(u => u.email.toLowerCase().trim() === targetEmail);
+    const isPrivate = targetUser?.hidePersonalInfo;
+
     try {
       const myFriendDocRef = doc(db, "users", myEmail, "friends", targetEmail);
       const targetFriendDocRef = doc(db, "users", targetEmail, "friends", myEmail);
+      
+      const sentReqRef = doc(db, "users", myEmail, "sent_requests", targetEmail);
+      const targetReqRef = doc(db, "users", targetEmail, "friend_requests", myEmail);
+
+      const receivedReqRef = doc(db, "users", myEmail, "friend_requests", targetEmail);
+      const targetSentReqRef = doc(db, "users", targetEmail, "sent_requests", myEmail);
 
       if (isFriend) {
         await deleteDoc(myFriendDocRef);
         await deleteDoc(targetFriendDocRef);
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
-      } else {
+      } else if (hasSentRequest) {
+        await deleteDoc(sentReqRef);
+        await deleteDoc(targetReqRef);
+        setSettingsSuccessMsg(language === "fr" ? "✓ Demande annulée" : "✓ Request cancelled");
+      } else if (hasReceivedRequest) {
+        await deleteDoc(receivedReqRef);
+        await deleteDoc(targetSentReqRef);
         await setDoc(myFriendDocRef, { email: targetEmail, connectedAt: Date.now() });
         await setDoc(targetFriendDocRef, { email: myEmail, connectedAt: Date.now() });
-        setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
+        setSettingsSuccessMsg(language === "fr" ? "✓ Demande acceptée !" : "✓ Request accepted!");
+      } else {
+        if (isPrivate) {
+          await setDoc(sentReqRef, { email: targetEmail, sentAt: Date.now() });
+          await setDoc(targetReqRef, { email: myEmail, sentAt: Date.now() });
+          setSettingsSuccessMsg(language === "fr" ? "✓ Demande envoyée" : "✓ Request sent");
+        } else {
+          await setDoc(myFriendDocRef, { email: targetEmail, connectedAt: Date.now() });
+          await setDoc(targetFriendDocRef, { email: myEmail, connectedAt: Date.now() });
+          setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
+        }
       }
       setTimeout(() => setSettingsSuccessMsg(""), 3000);
     } catch (err) {
@@ -772,41 +823,16 @@ export function AccountDrawer({
                           const myEmail = readerProfile?.email?.toLowerCase().trim() || "";
                           const contactMap = new Map<string, { email: string; name: string; avatarUrl?: string; role?: string }>();
 
-                          // Add registered Firestore users
+                          // Only add friends to direct message contacts
                           (allUsers || []).forEach(u => {
                             const emailLow = u.email.toLowerCase().trim();
-                            if (emailLow && emailLow !== myEmail) {
+                            if (emailLow && emailLow !== myEmail && friendsList.includes(emailLow)) {
                               contactMap.set(emailLow, {
                                 email: u.email,
                                 name: u.name || emailLow.split("@")[0],
                                 avatarUrl: u.avatarUrl,
                                 role: u.role || "Member"
                               });
-                            }
-                          });
-
-                          // Add friends list
-                          (friends || []).forEach(f => {
-                            const emailLow = f.email.toLowerCase().trim();
-                            if (emailLow && emailLow !== myEmail && !contactMap.has(emailLow)) {
-                              contactMap.set(emailLow, {
-                                email: f.email,
-                                name: f.name || emailLow.split("@")[0],
-                                avatarUrl: f.avatar || (f as any).avatarUrl,
-                                role: f.role || "Member"
-                              });
-                            }
-                          });
-
-                          // Default contacts fallback
-                          const defaultContacts = [
-                            { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group" }
-                          ];
-
-                          defaultContacts.forEach(dc => {
-                            const emailLow = dc.email.toLowerCase().trim();
-                            if (emailLow !== myEmail && !contactMap.has(emailLow)) {
-                              contactMap.set(emailLow, dc);
                             }
                           });
 
@@ -1131,6 +1157,8 @@ export function AccountDrawer({
                       currentSettings={currentSettings}
                       theme={theme}
                       friendsList={friendsList}
+                      friendRequests={friendRequests}
+                      sentRequests={sentRequests}
                       toggleFriend={toggleFriend}
                       networkSearchQuery={networkSearchQuery}
                       setNetworkSearchQuery={setNetworkSearchQuery}
