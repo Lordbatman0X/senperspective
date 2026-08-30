@@ -6,6 +6,8 @@ import {
   Eye, MousePointerClick, TrendingUp, CheckCircle2, AlertCircle, Play, Pause
 } from 'lucide-react';
 import { getSafeText } from '../../lib/utils';
+import { ImageCropModal } from './ImageCropModal';
+import { compressImageFile } from '../../lib/imageUtils';
 
 interface AdManagerTabProps {
   ads: AdItem[];
@@ -22,6 +24,24 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
   const [editingAd, setEditingAd] = useState<AdItem | null>(null);
   const [previewTab, setPreviewTab] = useState<string>('in-article');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  
+  const handleDeviceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const url = URL.createObjectURL(file);
+      setCropImageSrc(url);
+    }
+  };
+
+  const handleCropComplete = async (croppedUrl: string) => {
+    if (editingAd) {
+      setEditingAd({ ...editingAd, imageUrl: croppedUrl });
+    }
+    setCropImageSrc(null);
+  };
+
 
   // Global Stats
   const totalImpressions = ads.reduce((acc, ad) => acc + (ad.impressions || 0), 0);
@@ -335,6 +355,10 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                       >
                         <ImageIcon size={18} />
                       </button>
+                      <label className="bg-zinc-800 text-white px-4 py-2 hover:bg-zinc-700 transition-colors flex items-center justify-center rounded-lg border border-zinc-700 cursor-pointer" title={isFr ? "Uploader depuis l'appareil" : "Upload from Device"}>
+                        <Upload size={18} />
+                        <input type="file" accept="image/*" className="hidden" onChange={handleDeviceUpload} />
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -587,6 +611,15 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
 
           </div>
         </div>
+      )}
+      {/* Crop Modal */}
+      {cropImageSrc && (
+        <ImageCropModal 
+          imageSrc={cropImageSrc} 
+          onCropComplete={handleCropComplete} 
+          onClose={() => setCropImageSrc(null)} 
+          aspectRatio={editingAd?.position === 'sidebar' ? 1 : 16 / 9}
+        />
       )}
     </div>
   );

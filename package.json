@@ -32,6 +32,8 @@
     "opentype.js": "^2.0.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "react-easy-crop": "^6.2.3",
+    "react-image-crop": "^11.1.2",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.16.0",
     "remark-gfm": "^4.0.1",

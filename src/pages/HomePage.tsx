@@ -1276,7 +1276,7 @@ export function HomePage() {
         </div>
 
         {/* Ad Space Right Offset (Far-right Ad Panel - Matching Far-Left Dimensions) */}
-        <div className="hidden lg:block lg:col-span-2 relative">
+        <div className="hidden lg:block lg:col-span-1 relative">
            <div className="sticky top-20 flex flex-col gap-6 items-center">
              {farRightAd ? (
                <div 

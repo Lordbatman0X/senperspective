@@ -1109,6 +1109,7 @@ app.use((req, res, next) => {
     res.setHeader("Connection", "close");
     try {
       // Open access - No secret key required for any automation app or RSS reader
+      if (!rssAutomationConfig.enabled) { return res.status(403).json({ success: false, error: "Automated RSS Ingestion is currently paused by the administrator." }); }
       let bodyData = req.body || {};
       let rawStringPayload = "";
 
@@ -1620,6 +1621,7 @@ app.use((req, res, next) => {
   // Endpoint to fetch external RSS feed URL directly from server (GET or POST /api/rss/fetch)
   app.all("/api/rss/fetch", async (req, res) => {
     try {
+      if (!rssAutomationConfig.enabled) { return res.status(403).json({ success: false, error: "Automated RSS Ingestion is currently paused by the administrator." }); }
       const feedUrl = req.body?.feedUrl || req.body?.url || req.query?.url;
       if (!feedUrl || typeof feedUrl !== "string") {
         return res.status(400).json({ success: false, error: "Missing 'feedUrl' parameter in request body." });

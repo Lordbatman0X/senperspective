@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { MediaItem } from '../../store';
 import { UploadCloud, Search, Trash2, Copy, FileText, Film, Image as ImageIcon, X, Check, Eye } from 'lucide-react';
 import { compressImageFile } from '../../lib/imageUtils';
+import { ImageCropModal } from './ImageCropModal';
 
 interface MediaLibraryTabProps {
   media: MediaItem[];
@@ -19,6 +20,33 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  const handleCropComplete = async (croppedUrl: string) => {
+    if (pendingFile) {
+      addMedia({
+        id: Date.now().toString() + Math.random().toString(36).substring(7),
+        url: croppedUrl,
+        type: 'image',
+        name: pendingFile.name,
+        date: new Date().toISOString().split('T')[0],
+      });
+    } else if (selectedItem) {
+      // Re-crop existing image
+      addMedia({
+        id: Date.now().toString() + Math.random().toString(36).substring(7),
+        url: croppedUrl,
+        type: 'image',
+        name: selectedItem.name + ' (Cropped)',
+        date: new Date().toISOString().split('T')[0],
+      });
+    }
+    setCropImageSrc(null);
+    setPendingFile(null);
+  };
+
+
   // Resize and compress helper
   const resizeImage = (file: File, maxWidth: number, maxHeight: number): Promise<string> => {
     return compressImageFile(file, maxWidth, maxHeight, 0.72);
@@ -28,6 +56,7 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
     for (const file of Array.from(files)) {
       let url = '';
       let type: 'image' | 'video' | 'gif' = 'image';
+
 
       if (file.type.includes('video')) {
         type = 'video';
@@ -42,11 +71,13 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
           r.readAsDataURL(file);
         });
       } else if (file.type.startsWith('image/')) {
-        type = 'image';
-        url = await resizeImage(file, 1020, 1020);
+        setPendingFile(file);
+        setCropImageSrc(URL.createObjectURL(file));
+        return; // Wait for crop
       } else {
         continue;
       }
+
 
       addMedia({
         id: Date.now().toString() + Math.random().toString(36).substring(7),
@@ -264,6 +295,9 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
                   </div>
 
                   <div className="pt-3 border-t border-zinc-800">
+                    <button onClick={() => setCropImageSrc(selectedItem.url)} className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-[10px] uppercase tracking-wider py-2 rounded-md transition-all mb-3 flex items-center justify-center gap-2">
+                      Crop & Resize Media
+                    </button>
                     <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1">Local Asset URL</label>
                     <div className="flex gap-2">
                       <input
@@ -313,6 +347,15 @@ export function MediaLibraryTab({ media, addMedia, deleteMedia, updateMediaName 
           </div>
         </div>
       </div>
+
+      {cropImageSrc && (
+        <ImageCropModal 
+          imageSrc={cropImageSrc} 
+          onCropComplete={handleCropComplete} 
+          onClose={() => { setCropImageSrc(null); setPendingFile(null); }} 
+          aspectRatio={16 / 9}
+        />
+      )}
     </div>
   );
 }
