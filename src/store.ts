@@ -430,8 +430,21 @@ export const useStore = create<AppState>()(
               set({ articles: fetchedArticles });
             }
           }
+
+          // Fetch Ads from MongoDB
+          const adsSnapshot = await getDocs(collection(db, "ads"));
+          if (adsSnapshot && !adsSnapshot.empty) {
+            const fetchedAds = [];
+            adsSnapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data) fetchedAds.push(data);
+            });
+            if (fetchedAds.length > 0) {
+              set({ ads: fetchedAds });
+            }
+          }
         } catch (err) {
-          console.error("Failed to sync articles from MongoDB:", err);
+          console.error("Failed to sync from MongoDB:", err);
         }
       },
       addArticle: async (article) => {
@@ -631,7 +644,10 @@ export const useStore = create<AppState>()(
           console.error("Error saving ad to MongoDB:", err);
         }
       },
-      deleteAd: (id) => set({ ads: (get().ads || []).filter(a => a.id !== id) }),
+      deleteAd: (id) => {
+        set({ ads: (get().ads || []).filter(a => a.id !== id) });
+        deleteDoc(doc(db, "ads", id)).catch(err => console.error("Error deleting ad from MongoDB:", err));
+      },
       comments: seedComments && seedComments.length > 0 ? (seedComments as CommentItem[]) : [],
       directMessages: seedMessages && seedMessages.length > 0 ? (seedMessages as DirectMessage[]) : [],
       sendDirectMessage: (msg) => {
