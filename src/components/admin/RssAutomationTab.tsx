@@ -256,7 +256,7 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
-  const { articles, addArticle, updateArticle, deleteArticle, syncFromFirestore, language } = useStore();
+  const { articles, addArticle, updateArticle, deleteArticle, syncFromMongoDB, language } = useStore();
   const isFr = language === 'fr';
 
   // Active Newsroom Tab
@@ -636,7 +636,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   };
 
   useEffect(() => {
-    syncFromFirestore();
+    syncFromMongoDB();
     fetchAiEngineStatus();
     fetchScheduleConfig();
     fetchEditorialGuidelines();
@@ -956,10 +956,21 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   };
 
   // Action: Purge all drafts
-  const handlePurgeDrafts = () => {
+  const handlePurgeDrafts = async () => {
     if (!window.confirm(isFr ? "Supprimer TOUS les brouillons en attente de validation ?" : "Purge ALL pending drafts?")) return;
-    draftArticles.forEach(d => deleteArticle(d.id));
-    showStatus(isFr ? 'File des brouillons purgée.' : 'Draft queue purged.');
+    
+    try {
+      showStatus(isFr ? 'Purge en cours...' : 'Purging drafts...');
+      const { ok, data, error } = await safeFetchJson('/api/articles/purge', { method: 'POST' });
+      if (ok && data?.success) {
+        await syncFromMongoDB();
+        showStatus(isFr ? 'File des brouillons purgée.' : 'Draft queue purged.');
+      } else {
+        throw new Error(error || data?.error || 'Failed to purge drafts');
+      }
+    } catch (err: any) {
+      showStatus(err.message, 'error');
+    }
   };
 
   const handleSaveScheduleConfig = async (updatedFields: Partial<any>) => {

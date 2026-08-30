@@ -97,7 +97,7 @@ export interface ReaderProfile {
   role?: string;
   emailVerified?: boolean;
   mfaEnabled?: boolean;
-  isFirebase?: boolean;
+  isMongoDB?: boolean;
   coverPhotoUrl?: string;
   streak?: number;
   readingTime?: number;
@@ -205,7 +205,7 @@ interface AppState {
   toggleSavedArticle: (id: string) => void;
   articles: Article[];
   setArticles: (articles: Article[]) => void;
-  syncFromFirestore: () => Promise<void>;
+  syncFromMongoDB: () => Promise<void>;
   addArticle: (article: Article) => void;
   updateArticle: (article: Article) => void;
   deleteArticle: (id: string) => void;
@@ -414,7 +414,7 @@ export const useStore = create<AppState>()(
       },
       articles: sampleArticles,
       setArticles: (articles) => set({ articles }),
-      syncFromFirestore: async () => {
+      syncFromMongoDB: async () => {
         try {
           const snapshot = await getDocs(collection(db, "articles"));
           if (snapshot && !snapshot.empty) {
@@ -431,7 +431,7 @@ export const useStore = create<AppState>()(
             }
           }
         } catch (err) {
-          console.error("Failed to sync articles from Firestore:", err);
+          console.error("Failed to sync articles from MongoDB:", err);
         }
       },
       addArticle: async (article) => {
@@ -440,7 +440,7 @@ export const useStore = create<AppState>()(
           const clean = await sanitizeFirestorePayload(article as any);
           await setDoc(doc(db, "articles", article.id), clean, { merge: true });
         } catch (err) {
-          console.error("Error writing article to Firestore:", err);
+          console.error("Error writing article to MongoDB:", err);
         }
 
         if (article.isPublished) {
@@ -467,7 +467,7 @@ export const useStore = create<AppState>()(
           const clean = await sanitizeFirestorePayload(article as any);
           await setDoc(doc(db, "articles", article.id), clean, { merge: true });
         } catch (err) {
-          console.error("Error updating article in Firestore:", err);
+          console.error("Error updating article in MongoDB:", err);
         }
       },
       deleteArticle: (id) => {
@@ -479,21 +479,21 @@ export const useStore = create<AppState>()(
         const currentArticles = [...(get().articles || [])];
         set({ articles: [] });
 
-        // Delete all captured articles from Firestore
+        // Delete all captured articles from MongoDB
         const deletePromises = currentArticles.map(a => 
           deleteDoc(doc(db, "articles", a.id)).catch(err => console.error(`Failed deleting ${a.id}:`, err))
         );
         await Promise.all(deletePromises);
 
-        // Query Firestore collection directly to delete any remaining draft or live articles
+        // Query MongoDB collection directly to delete any remaining draft or live articles
         try {
           const snapshot = await getDocs(collection(db, "articles"));
-          const firestoreDeletes = snapshot.docs.map(docSnap => 
+          const mongodbDeletes = snapshot.docs.map(docSnap => 
             deleteDoc(doc(db, "articles", docSnap.id)).catch(err => console.error(`Failed deleting doc ${docSnap.id}:`, err))
           );
-          await Promise.all(firestoreDeletes);
+          await Promise.all(mongodbDeletes);
         } catch (e) {
-          console.error("Error purging Firestore articles collection:", e);
+          console.error("Error purging MongoDB articles collection:", e);
         }
 
         // Purge server-side RSS drafts and cache
@@ -510,7 +510,7 @@ export const useStore = create<AppState>()(
           const clean = await sanitizeFirestorePayload(m as any);
           await setDoc(doc(db, "media", m.id), clean, { merge: true });
         } catch (err) {
-          console.error("Error adding media to Firestore:", err);
+          console.error("Error adding media to MongoDB:", err);
         }
       },
       deleteMedia: (id) => {
@@ -628,7 +628,7 @@ export const useStore = create<AppState>()(
           const clean = await sanitizeFirestorePayload(ad as any);
           await setDoc(doc(db, "ads", ad.id), clean, { merge: true });
         } catch (err) {
-          console.error("Error saving ad to Firestore:", err);
+          console.error("Error saving ad to MongoDB:", err);
         }
       },
       deleteAd: (id) => set({ ads: (get().ads || []).filter(a => a.id !== id) }),
@@ -645,14 +645,14 @@ export const useStore = create<AppState>()(
         };
         set({ directMessages: [...dms, newMsg] });
 
-        // Save to Firestore
+        // Save to MongoDB
         try {
           const cleanMsg = JSON.parse(JSON.stringify(newMsg));
           setDoc(doc(db, "messages", msgId), cleanMsg).catch(err => {
-            console.error("Failed to write message to Firestore:", err);
+            console.error("Failed to write message to MongoDB:", err);
           });
         } catch (err) {
-          console.warn("Firestore write failed, falling back to local only:", err);
+          console.warn("MongoDB write failed, falling back to local only:", err);
         }
 
         // Trigger notification for receiver if logged in or mock alert
@@ -750,14 +750,14 @@ export const useStore = create<AppState>()(
         const filtered = comments.filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
         
-        // Write to Firestore comments collection
+        // Write to MongoDB comments collection
         try {
           const cleanComment = JSON.parse(JSON.stringify(comment));
           setDoc(doc(db, "comments", comment.id), cleanComment).catch(err => {
-            console.error("Failed to write comment to Firestore:", err);
+            console.error("Failed to write comment to MongoDB:", err);
           });
         } catch (err) {
-          console.warn("Firestore comment write error:", err);
+          console.warn("MongoDB comment write error:", err);
         }
 
         // Log interaction if author email exists
@@ -831,7 +831,7 @@ export const useStore = create<AppState>()(
 
         set({ comments: comments.filter(c => c.id !== id) });
         try {
-          deleteDoc(doc(db, "comments", id)).catch(err => console.error("Firestore comment deletion error:", err));
+          deleteDoc(doc(db, "comments", id)).catch(err => console.error("MongoDB comment deletion error:", err));
         } catch (err) { console.error(err); }
 
         if (comment && comment.email) {
@@ -1106,7 +1106,7 @@ export const useStore = create<AppState>()(
               active: true
             }, { merge: true });
           } catch (err) {
-            console.error("Error saving subscriber to Firestore:", err);
+            console.error("Error saving subscriber to MongoDB:", err);
           }
         }
       },
@@ -1117,7 +1117,7 @@ export const useStore = create<AppState>()(
           const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
           await deleteDoc(doc(db, "subscribers", subDocId));
         } catch (err) {
-          console.error("Error deleting subscriber from Firestore:", err);
+          console.error("Error deleting subscriber from MongoDB:", err);
         }
       },
       readerProfile: null,
@@ -1299,7 +1299,7 @@ export const useStore = create<AppState>()(
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
         seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
-        databaseProvider: 'firestore',
+        databaseProvider: 'mongodb',
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
@@ -1409,14 +1409,14 @@ export const useStore = create<AppState>()(
           const clean = await sanitizeFirestorePayload(newSettings as any);
           await setDoc(doc(db, "siteSettings", "config"), clean, { merge: true });
         } catch (err) {
-          console.error("Error updating siteSettings in Firestore:", err);
+          console.error("Error updating siteSettings in MongoDB:", err);
         }
       },
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
         set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
         try {
-          deleteDoc(doc(db, "users", normalized)).catch(err => console.error("Error deleting user from Firestore:", err));
+          deleteDoc(doc(db, "users", normalized)).catch(err => console.error("Error deleting user from MongoDB:", err));
         } catch (e) { console.error(e); }
       },
       updateUserRole: (email, role) => {
@@ -1425,7 +1425,7 @@ export const useStore = create<AppState>()(
           users: (get().users || []).map(u => u.email.toLowerCase() === normalized ? { ...u, role } : u)
         });
         try {
-          setDoc(doc(db, "users", normalized), { role }, { merge: true }).catch(err => console.error("Error updating user role in Firestore:", err));
+          setDoc(doc(db, "users", normalized), { role }, { merge: true }).catch(err => console.error("Error updating user role in MongoDB:", err));
         } catch (e) { console.error(e); }
       },
       updateUserSecurity: (email, emailVerified, mfaEnabled) => {
@@ -1441,7 +1441,7 @@ export const useStore = create<AppState>()(
           readerProfile: updatedProfile
         });
         try {
-          setDoc(doc(db, "users", normalized), { emailVerified, mfaEnabled, twoFactorEnabled: mfaEnabled }, { merge: true }).catch(err => console.error("Error updating user security in Firestore:", err));
+          setDoc(doc(db, "users", normalized), { emailVerified, mfaEnabled, twoFactorEnabled: mfaEnabled }, { merge: true }).catch(err => console.error("Error updating user security in MongoDB:", err));
         } catch (e) { console.error(e); }
       },
       updateUserPassword: (email, password) => {
@@ -1462,7 +1462,7 @@ export const useStore = create<AppState>()(
         }
         set({ users: updatedUsers });
         try {
-          setDoc(doc(db, "users", normalized), { password, email: normalized, role: 'Admin' }, { merge: true }).catch(err => console.error("Error updating user password in Firestore:", err));
+          setDoc(doc(db, "users", normalized), { password, email: normalized, role: 'Admin' }, { merge: true }).catch(err => console.error("Error updating user password in MongoDB:", err));
         } catch (e) { console.error(e); }
       },
       updateUserPin: (email, pin) => {
@@ -1478,7 +1478,7 @@ export const useStore = create<AppState>()(
           readerProfile: updatedProfile
         });
         try {
-          setDoc(doc(db, "users", normalized), { pin, authType: 'pin', mfaEnabled: true, twoFactorEnabled: true }, { merge: true }).catch(err => console.error("Error updating user PIN in Firestore:", err));
+          setDoc(doc(db, "users", normalized), { pin, authType: 'pin', mfaEnabled: true, twoFactorEnabled: true }, { merge: true }).catch(err => console.error("Error updating user PIN in MongoDB:", err));
         } catch (e) { console.error(e); }
       },
       purgeDatabaseAndArticles: async () => {
@@ -1507,7 +1507,7 @@ export const useStore = create<AppState>()(
           console.error("Error clearing local storage:", e);
         }
 
-        // 3. Delete documents from Firestore remote collections
+        // 3. Delete documents from MongoDB remote collections
         try {
           for (const art of articlesToDelete) {
             if (art.id) await deleteDoc(doc(db, "articles", art.id)).catch(() => {});
@@ -1516,7 +1516,7 @@ export const useStore = create<AppState>()(
             if (usr.email) await deleteDoc(doc(db, "users", usr.email.toLowerCase().trim())).catch(() => {});
           }
         } catch (e) {
-          console.error("Error purging remote Firestore docs:", e);
+          console.error("Error purging remote MongoDB docs:", e);
         }
       },
       seedSampleArticles: () => {
@@ -1751,7 +1751,7 @@ export const useStore = create<AppState>()(
             const clean = await sanitizeFirestorePayload(target as any);
             await setDoc(doc(db, "matches", matchId), clean, { merge: true });
           } catch (e) {
-            console.error("Error updating match in Firestore:", e);
+            console.error("Error updating match in MongoDB:", e);
           }
         }
       },
@@ -1761,7 +1761,7 @@ export const useStore = create<AppState>()(
           const clean = await sanitizeFirestorePayload(match as any);
           await setDoc(doc(db, "matches", match.id), clean, { merge: true });
         } catch (e) {
-          console.error("Error adding match to Firestore:", e);
+          console.error("Error adding match to MongoDB:", e);
         }
       },
       deleteMatch: (matchId) => {

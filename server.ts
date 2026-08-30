@@ -265,191 +265,33 @@ app.use((req, res, next) => {
 
   const syncArticleToFirestore = async (article: any) => {
     try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/articles/${article.id}?key=${apiKey}`;
-
-      // Helper to serialize map values for Firestore REST API
-      const buildMapField = (obj: any) => {
-        if (!obj || typeof obj !== "object") return { mapValue: { fields: {} } };
-        const fields: any = {};
-        for (const [key, val] of Object.entries(obj)) {
-          if (typeof val === "string") fields[key] = { stringValue: val };
-          else if (typeof val === "boolean") fields[key] = { booleanValue: val };
-          else if (typeof val === "number") fields[key] = { doubleValue: val };
-          else if (val && typeof val === "object" && !Array.isArray(val)) fields[key] = buildMapField(val);
-        }
-        return { mapValue: { fields } };
-      };
-
-      const firestoreBody: any = {
-        fields: {
-          id: { stringValue: article.id },
-          slug: { stringValue: article.slug || "" },
-          category: { stringValue: article.category || "International" },
-          type: { stringValue: article.type || "Analysis" },
-          title: {
-            mapValue: {
-              fields: {
-                fr: { stringValue: article.title?.fr || "" },
-                en: { stringValue: article.title?.en || "" }
-              }
-            }
-          },
-          excerpt: {
-            mapValue: {
-              fields: {
-                fr: { stringValue: article.excerpt?.fr || "" },
-                en: { stringValue: article.excerpt?.en || "" }
-              }
-            }
-          },
-          body: {
-            mapValue: {
-              fields: {
-                fr: { stringValue: article.body?.fr || "" },
-                en: { stringValue: article.body?.en || "" }
-              }
-            }
-          },
-          featuredImage: { stringValue: article.featuredImage || "" },
-          imageUrl: { stringValue: article.imageUrl || article.featuredImage || "" },
-          author: { stringValue: article.author || "Rédaction Perspective" },
-          date: { stringValue: article.date || new Date().toISOString().split("T")[0] },
-          readingTime: { integerValue: Number(article.readingTime || 5) },
-          isPublished: { booleanValue: Boolean(article.isPublished) },
-          isFeatured: { booleanValue: Boolean(article.isFeatured) },
-          isTrending: { booleanValue: Boolean(article.isTrending) },
-          sourceUrl: { stringValue: article.sourceUrl || "" },
-          tags: {
-            arrayValue: {
-              values: (article.tags || []).map((t: string) => ({ stringValue: t }))
-            }
-          }
-        }
-      };
-
-      if (article.perspectiveBrief) {
-        firestoreBody.fields.perspectiveBrief = buildMapField(article.perspectiveBrief);
-      }
-
-      if (article.structuralForces) {
-        firestoreBody.fields.structuralForces = buildMapField(article.structuralForces);
-      }
-
-      if (Array.isArray(article.keyActors) && article.keyActors.length > 0) {
-        firestoreBody.fields.keyActors = {
-          arrayValue: {
-            values: article.keyActors.map((actor: any) => ({
-              mapValue: {
-                fields: {
-                  name: { stringValue: actor.name || "" },
-                  role: { stringValue: actor.role || "" },
-                  significance: {
-                    mapValue: {
-                      fields: {
-                        fr: { stringValue: actor.significance?.fr || "" },
-                        en: { stringValue: actor.significance?.en || "" }
-                      }
-                    }
-                  }
-                }
-              }
-            }))
-          }
-        };
-      }
-
-      if (Array.isArray(article.timeline) && article.timeline.length > 0) {
-        firestoreBody.fields.timeline = {
-          arrayValue: {
-            values: article.timeline.map((ev: any) => ({
-              mapValue: {
-                fields: {
-                  date: { stringValue: ev.date || "" },
-                  description: {
-                    mapValue: {
-                      fields: {
-                        fr: { stringValue: ev.description?.fr || "" },
-                        en: { stringValue: ev.description?.en || "" }
-                      }
-                    }
-                  }
-                }
-              }
-            }))
-          }
-        };
-      }
-
-      await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(firestoreBody)
-      });
-      console.log(`[FIRESTORE SYNC SUCCESS] Synced article "${article.id}" directly to Firestore.`);
-
-      // Sync to MongoDB database
-      try {
-        await saveDocument("articles", article.id, article, false);
-        console.log(`[MONGODB SYNC SUCCESS] Synced article "${article.id}" directly to MongoDB.`);
-      } catch (mErr) {
-        console.warn("[MONGODB SYNC NOTICE]", mErr);
-      }
+      // Exclusively Sync to MongoDB database
+      await saveDocument("articles", article.id, article, false);
+      console.log(`[MONGODB SYNC SUCCESS] Synced article "${article.id}" directly to MongoDB.`);
     } catch (err) {
-      console.error("[FIRESTORE SYNC ERROR]", err);
+      console.error("[MONGODB SYNC ERROR]", err);
     }
   };
 
   const deleteArticleFromFirestore = async (articleId: string) => {
     try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/articles/${articleId}?key=${apiKey}`;
-
-      await fetch(url, { method: "DELETE" });
-      console.log(`[FIRESTORE DELETE SUCCESS] Deleted article "${articleId}" from Firestore.`);
-
-      // Delete from MongoDB database
-      try {
-        await deleteDocument("articles", articleId);
-        console.log(`[MONGODB DELETE SUCCESS] Deleted article "${articleId}" from MongoDB.`);
-      } catch (mErr) {
-        console.warn("[MONGODB DELETE NOTICE]", mErr);
-      }
+      // Exclusively delete from MongoDB database
+      await deleteDocument("articles", articleId);
+      console.log(`[MONGODB DELETE SUCCESS] Deleted article "${articleId}" from MongoDB.`);
     } catch (err) {
-      console.error("[FIRESTORE DELETE ERROR]", err);
+      console.error("[MONGODB DELETE ERROR]", err);
     }
   };
 
   // Helper to purge all documents directly from Firestore articles collection
   const purgeAllFirestoreRssArticles = async () => {
     try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/articles?key=${apiKey}&pageSize=300`;
-
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        const documents = data.documents || [];
-        let deletedCount = 0;
-        for (const doc of documents) {
-          const docName = doc.name; // projects/.../documents/articles/id
-          const docId = docName.split('/').pop();
-          if (docId) {
-            await deleteArticleFromFirestore(docId);
-            deletedCount++;
-          }
-        }
-        console.log(`[FIRESTORE PURGE SUCCESS] Successfully purged ${deletedCount} documents from Firestore articles collection.`);
-        return deletedCount;
-      }
+      // Exclusively purge from MongoDB database
+      const deletedCount = await wipeCollection("articles");
+      console.log(`[MONGODB PURGE SUCCESS] Successfully purged ${deletedCount} documents from MongoDB articles collection.`);
+      return deletedCount;
     } catch (err) {
-      console.error("[FIRESTORE PURGE ERROR]", err);
+      console.error("[MONGODB PURGE ERROR]", err);
     }
     return 0;
   };
