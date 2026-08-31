@@ -12,6 +12,8 @@ import {
   getGroqClient,
   getOpenRouterClient,
   getOpenAIClient,
+  getAnthropicClient,
+  getDeepSeekClient,
   apiKeyStore,
   getEffectiveApiKey,
   getGeminiClient,
@@ -1659,11 +1661,15 @@ app.use((req, res, next) => {
     const openaiKey = getEffectiveApiKey('OPENAI');
     const groqKey = getEffectiveApiKey('GROQ');
     const openrouterKey = getEffectiveApiKey('OPENROUTER');
+    const anthropicKey = getEffectiveApiKey('ANTHROPIC');
+    const deepseekKey = getEffectiveApiKey('DEEPSEEK');
 
     const geminiConfigured = !!geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined";
     const openAiConfigured = !!openaiKey && openaiKey.trim() !== "" && openaiKey !== "undefined";
     const groqConfigured = !!groqKey && groqKey.trim() !== "" && groqKey !== "undefined";
     const openRouterConfigured = !!openrouterKey && openrouterKey.trim() !== "" && openrouterKey !== "undefined";
+    const anthropicConfigured = !!anthropicKey && anthropicKey.trim() !== "" && anthropicKey !== "undefined";
+    const deepseekConfigured = !!deepseekKey && deepseekKey.trim() !== "" && deepseekKey !== "undefined";
 
     return res.json({
       success: true,
@@ -1687,6 +1693,16 @@ app.use((req, res, next) => {
         status: openRouterConfigured ? "ready" : "unconfigured",
         models: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-chat", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash", "openai/gpt-4o-mini"]
       },
+      anthropic: {
+        configured: anthropicConfigured,
+        status: anthropicConfigured ? "ready" : "unconfigured",
+        models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"]
+      },
+      deepseek: {
+        configured: deepseekConfigured,
+        status: deepseekConfigured ? "ready" : "unconfigured",
+        models: ["deepseek-chat", "deepseek-reasoner"]
+      },
       failoverActive: true,
       mode: "multi-orchestrator",
       storytellingEngine: "Perspective Editorial Standards v4"
@@ -1694,13 +1710,13 @@ app.use((req, res, next) => {
   });
 
   // Set API Key Endpoint
-  app.post("/api/ai-engine/keys", express.json(), (req, res) => {
+  app.post("/api/ai-engine/keys", express.json(), async (req, res) => {
     try {
       const { provider, key } = req.body;
       if (!provider || typeof key !== 'string') {
         return res.status(400).json({ success: false, error: "Missing provider or key" });
       }
-      saveApiKey(provider.toUpperCase(), key);
+      await saveApiKey(provider.toUpperCase(), key);
       return res.json({ success: true, message: `API Key for ${provider} saved.` });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
@@ -2698,8 +2714,6 @@ Context Details: ${JSON.stringify(locationInfo)}`;
       const geminiKey = getEffectiveApiKey('GEMINI');
       if (geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined" && geminiKey !== "null") {
         try {
-      if (!process.env.GEMINI_API_KEY) throw new Error("La clé API Gemini est manquante.");
-
           const ai = new GoogleGenAI({
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
@@ -2757,7 +2771,63 @@ Context Details: ${JSON.stringify(locationInfo)}`;
         }
       }
 
-      // 3. Try OpenRouter API (Claude 3.5 Sonnet / DeepSeek R1 / Llama 3.3)
+      // 3. Try Anthropic Client
+      if (!responseText) {
+        const anthropic = getAnthropicClient();
+        if (anthropic) {
+          const anthropicModels = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"];
+          for (const model of anthropicModels) {
+            try {
+              const completion = await anthropic.chat.completions.create({
+                model,
+                messages: [
+                  { role: "system", content: systemInstruction },
+                  { role: "user", content: message }
+                ],
+                temperature: 0.3,
+                max_tokens: 1200
+              });
+              const content = completion.choices[0]?.message?.content?.trim();
+              if (content) {
+                responseText = content;
+                break;
+              }
+            } catch (antErr: any) {
+              console.warn(`[ABDEL ANTHROPIC NOTICE] Model ${model} failed (${antErr?.message || antErr}), trying next...`);
+            }
+          }
+        }
+      }
+
+      // 4. Try DeepSeek Client
+      if (!responseText) {
+        const deepseek = getDeepSeekClient();
+        if (deepseek) {
+          const deepseekModels = ["deepseek-chat", "deepseek-reasoner"];
+          for (const model of deepseekModels) {
+            try {
+              const completion = await deepseek.chat.completions.create({
+                model,
+                messages: [
+                  { role: "system", content: systemInstruction },
+                  { role: "user", content: message }
+                ],
+                temperature: 0.3,
+                max_tokens: 1200
+              });
+              const content = completion.choices[0]?.message?.content?.trim();
+              if (content) {
+                responseText = content;
+                break;
+              }
+            } catch (dsErr: any) {
+              console.warn(`[ABDEL DEEPSEEK NOTICE] Model ${model} failed (${dsErr?.message || dsErr}), trying next...`);
+            }
+          }
+        }
+      }
+
+      // 5. Try OpenRouter API (Claude 3.5 Sonnet / DeepSeek R1 / Llama 3.3)
       if (!responseText) {
         const openRouter = getOpenRouterClient();
         if (openRouter) {
@@ -2790,7 +2860,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
         }
       }
 
-      // 4. Try OpenAI API (GPT-4o-mini / GPT-4o)
+      // 6. Try OpenAI API (GPT-4o-mini / GPT-4o)
       if (!responseText) {
         const openAI = getOpenAIClient();
         if (openAI) {

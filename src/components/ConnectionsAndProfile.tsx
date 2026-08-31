@@ -1095,7 +1095,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                               email: "",
                               role: "Member",
                               avatarUrl: "preset-male",
-                              isMongo: false
+                              isMongoDB: false
                             });
                             if (setShowProfileModal) setShowProfileModal(false);
                           }

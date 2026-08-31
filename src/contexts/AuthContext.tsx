@@ -523,7 +523,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               role: data.role || "Member",
               emailVerified: mongoUser.emailVerified,
               mfaEnabled: false,
-              isMongo: true,
+              isMongoDB: true,
               coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
               streak: data.streak !== undefined ? data.streak : 5,
               readingTime: data.readingTime !== undefined ? data.readingTime : 120,
@@ -555,7 +555,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               role: fallbackProfile.role,
               emailVerified: mongoUser.emailVerified,
               mfaEnabled: false,
-              isMongo: true,
+              isMongoDB: true,
               coverPhotoUrl: fallbackProfile.coverPhotoUrl,
               streak: fallbackProfile.streak,
               readingTime: fallbackProfile.readingTime,
@@ -569,7 +569,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         const currentProfile = useStore.getState().readerProfile;
-        if (currentProfile && currentProfile.isMongo) {
+        if (currentProfile && currentProfile.isMongoDB) {
           setReaderProfile(null);
         }
       }
@@ -633,7 +633,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: cleanEmail,
           avatarUrl: data.avatarUrl || u.photoURL || "preset-male",
           role: isAdminUser ? "Admin" : (data.role || "Member"),
-          isMongo: true
+          isMongoDB: true
         };
         await setDoc(userDocRef, { ...profileObj, lastLoginAt: new Date().toISOString() }, { merge: true });
       } else {
@@ -646,7 +646,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: isAdminUser ? "Admin" : "Member",
           emailVerified: true,
           mfaEnabled: false,
-          isMongo: true,
+          isMongoDB: true,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 1,
           readingTime: 0,
@@ -728,7 +728,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: preset.role,
           emailVerified: true,
           mfaEnabled: false,
-          isMongo: true,
+          isMongoDB: true,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 10,
           readingTime: 300,
@@ -763,7 +763,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             role: finalRole,
             emailVerified: true,
             mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
-            isMongo: true,
+            isMongoDB: true,
             coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
             streak: data.streak || 1,
             readingTime: data.readingTime || 0,
@@ -793,7 +793,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: isAdminUser ? "Admin" : "Member",
           emailVerified: true,
           mfaEnabled: false,
-          isMongo: true,
+          isMongoDB: true,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 1,
           readingTime: 0,
@@ -883,7 +883,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       role: profileData.role,
       emailVerified: true,
       mfaEnabled: twoFactorEnabled,
-      isMongo: true,
+      isMongoDB: true,
       coverPhotoUrl: profileData.coverPhotoUrl,
       streak: profileData.streak,
       readingTime: profileData.readingTime,

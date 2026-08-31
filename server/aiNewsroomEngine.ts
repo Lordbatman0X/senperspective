@@ -384,6 +384,42 @@ export function getOpenRouterClient(): OpenAI | null {
   return openRouterInstance;
 }
 
+// Lazy-initialized Anthropic Client
+let lastAnthropicKey: string | null = null;
+let anthropicInstance: OpenAI | null = null;
+export function getAnthropicClient(): OpenAI | null {
+  const key = getEffectiveApiKey('ANTHROPIC') || getEffectiveApiKey('CLAUDE');
+  if (!key || key.trim() === "" || key === "undefined" || key === "null") {
+    return null;
+  }
+  if (!anthropicInstance || lastAnthropicKey !== key) {
+    lastAnthropicKey = key;
+    anthropicInstance = new OpenAI({
+      apiKey: key,
+      baseURL: "https://api.anthropic.com/v1"
+    });
+  }
+  return anthropicInstance;
+}
+
+// Lazy-initialized DeepSeek Client
+let lastDeepSeekKey: string | null = null;
+let deepseekInstance: OpenAI | null = null;
+export function getDeepSeekClient(): OpenAI | null {
+  const key = getEffectiveApiKey('DEEPSEEK');
+  if (!key || key.trim() === "" || key === "undefined" || key === "null") {
+    return null;
+  }
+  if (!deepseekInstance || lastDeepSeekKey !== key) {
+    lastDeepSeekKey = key;
+    deepseekInstance = new OpenAI({
+      apiKey: key,
+      baseURL: "https://api.deepseek.com/v1"
+    });
+  }
+  return deepseekInstance;
+}
+
 /**
  * Builds the Master Editorial System Prompt tailored to Perspective's signature storytelling style.
  * Integrates Admin Custom Guidelines, Feedback Comments & Exemplary Reference Examples.

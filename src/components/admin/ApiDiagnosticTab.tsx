@@ -14,7 +14,9 @@ export function ApiDiagnosticTab() {
     gemini: '',
     openai: '',
     groq: '',
-    openrouter: ''
+    openrouter: '',
+    anthropic: '',
+    deepseek: ''
   });
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
@@ -163,6 +165,8 @@ export function ApiDiagnosticTab() {
             <ProviderCard name="OpenAI" providerId="OPENAI" inputKeyName="openai" providerData={status.openai} icon={Server} />
             <ProviderCard name="Groq" providerId="GROQ" inputKeyName="groq" providerData={status.groq} icon={Server} />
             <ProviderCard name="OpenRouter" providerId="OPENROUTER" inputKeyName="openrouter" providerData={status.openrouter} icon={Server} />
+            <ProviderCard name="Anthropic (Claude)" providerId="ANTHROPIC" inputKeyName="anthropic" providerData={status.anthropic} icon={Server} />
+            <ProviderCard name="DeepSeek" providerId="DEEPSEEK" inputKeyName="deepseek" providerData={status.deepseek} icon={Server} />
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
