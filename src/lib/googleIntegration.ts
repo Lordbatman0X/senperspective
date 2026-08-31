@@ -1,4 +1,4 @@
-import { realFirebaseAuth, GoogleAuthProvider, signInWithPopup } from './realFirebase';
+import { auth, GoogleAuthProvider, signInWithPopup } from "./mongodb";
 
 type User = any;
 
@@ -25,7 +25,7 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
   provider.setCustomParameters({ prompt: 'select_account' });
 
   try {
-    const result = await signInWithPopup(realFirebaseAuth, provider);
+    const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     
     if (!credential?.accessToken) {

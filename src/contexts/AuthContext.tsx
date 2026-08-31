@@ -1,4 +1,3 @@
-import { realFirebaseAuth, GoogleAuthProvider, GithubAuthProvider, OAuthProvider, FacebookAuthProvider, signInWithPopup as realSignInWithPopup } from "../lib/realFirebase";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { 
   auth, 
@@ -20,7 +19,12 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
-  MongoUser as User
+  MongoUser as User,
+  GoogleAuthProvider,
+  GithubAuthProvider,
+  OAuthProvider,
+  FacebookAuthProvider,
+  signInWithPopup
 } from "../lib/mongodb";
 import { useStore } from "../store";
 import { sampleArticles } from "../data";
@@ -503,23 +507,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Listen to Auth State
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      if (firebaseUser && firebaseUser.email) {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (mongoUser) => {
+      setUser(mongoUser);
+      if (mongoUser && mongoUser.email) {
         try {
-          const userDocRef = doc(db, "users", firebaseUser.email.toLowerCase().trim());
+          const userDocRef = doc(db, "users", mongoUser.email.toLowerCase().trim());
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const data = userDoc.data();
             setReaderProfile({
-              id: firebaseUser.uid,
-              name: data.name || firebaseUser.displayName || "Anonymous",
-              email: firebaseUser.email,
+              id: mongoUser.uid,
+              name: data.name || mongoUser.displayName || "Anonymous",
+              email: mongoUser.email,
               avatarUrl: data.avatarUrl || "preset-male",
               role: data.role || "Member",
-              emailVerified: firebaseUser.emailVerified,
+              emailVerified: mongoUser.emailVerified,
               mfaEnabled: false,
-              isFirebase: true,
+              isMongo: true,
               coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
               streak: data.streak !== undefined ? data.streak : 5,
               readingTime: data.readingTime !== undefined ? data.readingTime : 120,
@@ -531,8 +535,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           } else {
             // Profile does not exist in Firestore yet, create default
             const fallbackProfile = {
-              email: firebaseUser.email,
-              name: firebaseUser.displayName || firebaseUser.email.split("@")[0],
+              email: mongoUser.email,
+              name: mongoUser.displayName || mongoUser.email.split("@")[0],
               avatarUrl: "preset-male",
               role: "Member",
               coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
@@ -544,14 +548,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             };
             await setDoc(userDocRef, fallbackProfile);
             setReaderProfile({
-              id: firebaseUser.uid,
+              id: mongoUser.uid,
               name: fallbackProfile.name,
-              email: firebaseUser.email,
+              email: mongoUser.email,
               avatarUrl: fallbackProfile.avatarUrl,
               role: fallbackProfile.role,
-              emailVerified: firebaseUser.emailVerified,
+              emailVerified: mongoUser.emailVerified,
               mfaEnabled: false,
-              isFirebase: true,
+              isMongo: true,
               coverPhotoUrl: fallbackProfile.coverPhotoUrl,
               streak: fallbackProfile.streak,
               readingTime: fallbackProfile.readingTime,
@@ -565,7 +569,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } else {
         const currentProfile = useStore.getState().readerProfile;
-        if (currentProfile && currentProfile.isFirebase) {
+        if (currentProfile && currentProfile.isMongo) {
           setReaderProfile(null);
         }
       }
@@ -596,7 +600,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       let u: any;
       try {
-        const result = await realSignInWithPopup(realFirebaseAuth, provider);
+        const result = await signInWithPopup(auth, provider);
         u = result.user;
       } catch (authErr: any) {
         console.warn(`[AUTH] Firebase Social Login failed for ${providerName}:`, authErr);
@@ -629,7 +633,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: cleanEmail,
           avatarUrl: data.avatarUrl || u.photoURL || "preset-male",
           role: isAdminUser ? "Admin" : (data.role || "Member"),
-          isFirebase: true
+          isMongo: true
         };
         await setDoc(userDocRef, { ...profileObj, lastLoginAt: new Date().toISOString() }, { merge: true });
       } else {
@@ -642,7 +646,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: isAdminUser ? "Admin" : "Member",
           emailVerified: true,
           mfaEnabled: false,
-          isFirebase: true,
+          isMongo: true,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 1,
           readingTime: 0,
@@ -705,12 +709,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, pass);
-      console.log(`[AUTH LOG] Firebase Auth sign-in successful for: ${userCredential.user.email}`);
+      console.log(`[AUTH LOG] MongoDB Auth sign-in successful for: ${userCredential.user.email}`);
       const userDocRef = doc(db, "users", cleanEmail);
       await setDoc(userDocRef, { lastLoginAt: new Date().toISOString() }, { merge: true }).catch(() => {});
       return;
     } catch (err: any) {
-      console.warn(`[AUTH LOG] Firebase Auth sign-in failed (${err?.code || 'unknown'}): ${err?.message}. Checking Firestore user profiles & fallback credentials...`);
+      console.warn(`[AUTH LOG] MongoDB Auth sign-in failed (${err?.code || 'unknown'}): ${err?.message}. Checking Firestore user profiles & fallback credentials...`);
 
       // 2. Check preset accounts
       if (presetAccounts[cleanEmail]) {
@@ -724,7 +728,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: preset.role,
           emailVerified: true,
           mfaEnabled: false,
-          isFirebase: true,
+          isMongo: true,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 10,
           readingTime: 300,
@@ -759,7 +763,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             role: finalRole,
             emailVerified: true,
             mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
-            isFirebase: true,
+            isMongo: true,
             coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
             streak: data.streak || 1,
             readingTime: data.readingTime || 0,
@@ -789,7 +793,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: isAdminUser ? "Admin" : "Member",
           emailVerified: true,
           mfaEnabled: false,
-          isFirebase: true,
+          isMongo: true,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 1,
           readingTime: 0,
@@ -820,30 +824,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     twoFactorEnabled: boolean = false
   ) => {
     const cleanEmail = email.toLowerCase().trim();
-    let firebaseUid = "usr_" + Date.now();
-    let firebaseUserObj: any = null;
+    let mongoUid = "usr_" + Date.now();
+    let mongoUserObj: any = null;
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
-      firebaseUserObj = userCredential.user;
-      firebaseUid = firebaseUserObj.uid;
+      mongoUserObj = userCredential.user;
+      mongoUid = mongoUserObj.uid;
     } catch (err: any) {
       if (err?.code === "auth/email-already-in-use") {
         try {
           const loginCredential = await signInWithEmailAndPassword(auth, cleanEmail, pass);
-          firebaseUserObj = loginCredential.user;
-          firebaseUid = firebaseUserObj.uid;
+          mongoUserObj = loginCredential.user;
+          mongoUid = mongoUserObj.uid;
         } catch (loginErr) {
           console.warn("Could not sign in existing user during registration fallback:", loginErr);
         }
       } else {
-        console.warn("Firebase Auth createUserWithEmailAndPassword notice:", err);
+        console.warn("MongoDB Auth createUserWithEmailAndPassword notice:", err);
       }
     }
 
     // Save complete user account profile in Firestore users collection
     const profileData = {
-      id: firebaseUid,
+      id: mongoUid,
       email: cleanEmail,
       name,
       avatarUrl: avatarUrl || "preset-male",
@@ -872,14 +876,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Immediately set active readerProfile in global state
     setReaderProfile({
-      id: firebaseUid,
+      id: mongoUid,
       name: profileData.name,
       email: cleanEmail,
       avatarUrl: profileData.avatarUrl,
       role: profileData.role,
       emailVerified: true,
       mfaEnabled: twoFactorEnabled,
-      isFirebase: true,
+      isMongo: true,
       coverPhotoUrl: profileData.coverPhotoUrl,
       streak: profileData.streak,
       readingTime: profileData.readingTime,
@@ -917,7 +921,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await sendPasswordResetEmail(auth, cleanEmail);
       emailSent = true;
     } catch (err: any) {
-      console.warn("Firebase Auth password reset notice:", err?.code || err?.message);
+      console.warn("MongoDB Auth password reset notice:", err?.code || err?.message);
       authError = err?.code || err?.message;
     }
 
@@ -935,7 +939,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.warn("Firestore password_resets write notice:", dbErr);
     }
 
-    // If Firebase Auth threw invalid email or quota error, surface it
+    // If MongoDB Auth threw invalid email or quota error, surface it
     if (authError && authError.includes('invalid-email')) {
       throw new Error("L'adresse e-mail saisie est invalide.");
     }

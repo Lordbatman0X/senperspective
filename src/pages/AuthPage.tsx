@@ -1,5 +1,5 @@
 import { SocialLoginButtons } from '../components/SocialLoginButtons';
-import { realFirebaseAuth } from "../lib/realFirebase";
+import { auth } from "../lib/mongodb";
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
@@ -67,7 +67,7 @@ export const AuthPage: React.FC = () => {
     try {
       await loginWithSocial(provider);
       if (authTab === "newsletter") {
-         const gUser = realFirebaseAuth.currentUser;
+         const gUser = auth.currentUser;
          if (gUser && gUser.email) {
            await addSubscriber(gUser.email);
            setSuccessMessage(language === "fr" ? "Abonnement réussi !" : "Subscription successful!");

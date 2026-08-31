@@ -306,6 +306,17 @@ export async function sendPasswordResetEmail(authObj: any, email: string): Promi
   return auth.resetPassword(email);
 }
 
+
+export class GithubAuthProvider {
+  public addScope(_scope: string) {}
+}
+export class FacebookAuthProvider {
+  public addScope(_scope: string) {}
+}
+export class OAuthProvider {
+  constructor(public providerId: string) {}
+  public addScope(_scope: string) {}
+}
 export class GoogleAuthProvider {
   public addScope(_scope: string) {}
   public setCustomParameters(_params: any) {}
