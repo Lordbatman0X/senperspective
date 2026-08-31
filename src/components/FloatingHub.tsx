@@ -24,7 +24,9 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     markDirectMessagesAsRead,
     articles,
     friends,
-    abdelPrompts
+    abdelPrompts,
+    siteSettings,
+    updateSiteSettings
   } = useStore();
 
   const auth = useAuth();
@@ -32,6 +34,13 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"abdel" | "chat">("abdel");
+  const [selectedAbdelAi, setSelectedAbdelAi] = useState(siteSettings?.abdelAiProvider || 'auto');
+
+  useEffect(() => {
+    if (siteSettings?.abdelAiProvider) {
+      setSelectedAbdelAi(siteSettings.abdelAiProvider);
+    }
+  }, [siteSettings?.abdelAiProvider]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [realFriendsList, setRealFriendsList] = useState<string[]>([]);
   useEffect(() => {
@@ -215,6 +224,8 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
         body: JSON.stringify({
           message: text,
           language,
+          aiProvider: selectedAbdelAi,
+          history: abdelMessages.map(m => ({ role: m.role, text: m.text })),
           locationInfo: {
             pathname: location.pathname,
             section: currentSectionLabel,
@@ -424,6 +435,32 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
             {/* TAB 1: ABDEL AI ASSISTANT */}
             {activeTab === "abdel" && (
               <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
+                {/* AI Provider selector bar */}
+                <div className="px-3 py-1.5 bg-zinc-950/90 border-b border-zinc-800/80 flex items-center justify-between text-[11px] shrink-0">
+                  <span className="text-zinc-400 font-mono text-[10px] uppercase">
+                    {language === 'fr' ? 'Moteur IA :' : 'AI Engine:'}
+                  </span>
+                  <select
+                    value={selectedAbdelAi}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedAbdelAi(val);
+                      if (updateSiteSettings) {
+                        updateSiteSettings({ abdelAiProvider: val });
+                      }
+                    }}
+                    className="bg-zinc-900 border border-zinc-700 text-zinc-100 text-[11px] rounded px-2 py-0.5 focus:outline-none focus:border-[#E85D42]"
+                  >
+                    <option value="auto">🔄 Auto (Smart Failover)</option>
+                    <option value="gemini">✨ Google Gemini</option>
+                    <option value="anthropic">🧠 Anthropic Claude</option>
+                    <option value="deepseek">💡 DeepSeek Chat</option>
+                    <option value="openai">⚡ OpenAI GPT-4o</option>
+                    <option value="groq">🚀 Groq Llama 3.3</option>
+                    <option value="openrouter">🌐 OpenRouter</option>
+                  </select>
+                </div>
+
                 {/* Context-aware suggestions bar */}
                 {abdelMessages.length === 0 && (
                   <div className="p-3.5 border-b border-zinc-800/60 bg-zinc-950/60 backdrop-blur-md">

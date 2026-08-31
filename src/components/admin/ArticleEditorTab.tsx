@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
+import { ImageCropModal } from './ImageCropModal';
 
 interface ArticleEditorTabProps {
   article: Article | null;
@@ -45,6 +46,7 @@ export function ArticleEditorTab({
   const [isFeatured, setIsFeatured] = useState(false);
   const [commentsEnabled, setCommentsEnabled] = useState(true);
   const [imageUrl, setImageUrl] = useState('');
+  const [articleCropImageSrc, setArticleCropImageSrc] = useState<string | null>(null);
   const [authorName, setAuthorName] = useState('Perspective Staff');
   const [youtubeId, setYoutubeId] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -1172,8 +1174,8 @@ export function ArticleEditorTab({
                             return;
                           }
                           try {
-                            const compressed = await compressImageFile(file, 1200, 800, 0.72);
-                            setImageUrl(compressed);
+                            const compressed = await compressImageFile(file, 1400, 900, 0.85);
+                            setArticleCropImageSrc(compressed);
                           } catch (err) {
                             console.error("Compression error:", err);
                           }
@@ -2314,6 +2316,17 @@ export function ArticleEditorTab({
             </div>
           </div>
         </div>
+      )}
+      {articleCropImageSrc && (
+        <ImageCropModal
+          imageSrc={articleCropImageSrc}
+          aspectRatio={16 / 9}
+          onCropComplete={(croppedDataUrl) => {
+            setImageUrl(croppedDataUrl);
+            setArticleCropImageSrc(null);
+          }}
+          onClose={() => setArticleCropImageSrc(null)}
+        />
       )}
     </div>
   );

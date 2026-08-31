@@ -2674,7 +2674,7 @@ app.use((req, res, next) => {
   // AI Chat Route (Abdel Journal Assistant)
   app.post("/api/chat", async (req, res) => {
     try {
-      const { message, context, language, locationInfo } = req.body;
+      const { message, context, language, locationInfo, history, aiProvider } = req.body;
       const userLang = language === "en" ? "en" : "fr";
 
       let systemInstruction = `You are Abdel, a warm, perceptive, and highly articulate editorial companion and senior analyst for "Perspective Group", the premier West African and Senegalese journal of record.
@@ -2710,20 +2710,45 @@ Context Details: ${JSON.stringify(locationInfo)}`;
 
       let responseText = "";
 
-      // 1. Try Gemini API
-      const geminiKey = getEffectiveApiKey('GEMINI');
-      if (geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined" && geminiKey !== "null") {
+      // Build conversation messages for OpenAI/Anthropic/DeepSeek/Groq/OpenRouter
+      const messagesList: any[] = [{ role: "system", content: systemInstruction }];
+      if (Array.isArray(history)) {
+        for (const h of history) {
+          messagesList.push({
+            role: h.role === 'model' || h.role === 'abdel' ? 'assistant' : 'user',
+            content: h.text
+          });
+        }
+      }
+      messagesList.push({ role: "user", content: message });
+
+      // Build contents for Gemini client
+      const geminiContents: any[] = [];
+      if (Array.isArray(history)) {
+        for (const h of history) {
+          geminiContents.push({
+            role: h.role === 'model' || h.role === 'abdel' ? 'model' : 'user',
+            parts: [{ text: h.text }]
+          });
+        }
+      }
+      geminiContents.push({ role: "user", parts: [{ text: message }] });
+
+      // Provider runner functions
+      const runGemini = async () => {
+        const geminiKey = getEffectiveApiKey('GEMINI');
+        if (!geminiKey || geminiKey.trim() === "" || geminiKey === "undefined" || geminiKey === "null") return "";
         try {
           const ai = new GoogleGenAI({
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const modelsToTry = ["gemini-3.7-flash", "gemini-3.1-pro-preview"];
+          const modelsToTry = ["gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-2.0-flash"];
           for (const model of modelsToTry) {
             try {
               const apiCall = ai.models.generateContent({
                 model,
-                contents: [{ role: "user", parts: [{ text: message }] }],
+                contents: geminiContents,
                 config: { systemInstruction, temperature: 0.3 }
               });
               const timeoutPromise = new Promise<never>((_, reject) =>
@@ -2731,161 +2756,140 @@ Context Details: ${JSON.stringify(locationInfo)}`;
               );
               const response = await Promise.race([apiCall, timeoutPromise]);
               if (response.text && response.text.trim()) {
-                responseText = response.text;
-                break;
+                return response.text;
               }
             } catch (err: any) {
-              console.warn(`[ABDEL GEMINI NOTICE] Model ${model} failed (${err?.message || err}), trying next...`);
+              console.warn(`[ABDEL GEMINI NOTICE] Model ${model} failed (${err?.message || err})`);
             }
           }
-        } catch (geminiErr: any) {
-          console.warn("[ABDEL GEMINI FAILOVER]", geminiErr?.message || geminiErr);
-        }
-      }
+        } catch (e) {}
+        return "";
+      };
 
-      // 2. Try Groq API (High Speed Llama 3)
-      if (!responseText) {
+      const runGroq = async () => {
         const groq = getGroqClient();
-        if (groq) {
-          const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
-          for (const model of groqModels) {
-            try {
-              const completion = await groq.chat.completions.create({
-                model,
-                messages: [
-                  { role: "system", content: systemInstruction },
-                  { role: "user", content: message }
-                ],
-                temperature: 0.3,
-                max_tokens: 1200
-              });
-              const content = completion.choices[0]?.message?.content?.trim();
-              if (content) {
-                responseText = content;
-                break;
-              }
-            } catch (groqErr: any) {
-              console.warn(`[ABDEL GROQ NOTICE] Model ${model} failed (${groqErr?.message || groqErr}), trying next...`);
-            }
-          }
+        if (!groq) return "";
+        const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+        for (const model of groqModels) {
+          try {
+            const completion = await groq.chat.completions.create({
+              model,
+              messages: messagesList,
+              temperature: 0.3,
+              max_tokens: 1200
+            });
+            const content = completion.choices[0]?.message?.content?.trim();
+            if (content) return content;
+          } catch (err) {}
         }
-      }
+        return "";
+      };
 
-      // 3. Try Anthropic Client
-      if (!responseText) {
+      const runAnthropic = async () => {
         const anthropic = getAnthropicClient();
-        if (anthropic) {
-          const anthropicModels = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"];
-          for (const model of anthropicModels) {
-            try {
-              const completion = await anthropic.chat.completions.create({
-                model,
-                messages: [
-                  { role: "system", content: systemInstruction },
-                  { role: "user", content: message }
-                ],
-                temperature: 0.3,
-                max_tokens: 1200
-              });
-              const content = completion.choices[0]?.message?.content?.trim();
-              if (content) {
-                responseText = content;
-                break;
-              }
-            } catch (antErr: any) {
-              console.warn(`[ABDEL ANTHROPIC NOTICE] Model ${model} failed (${antErr?.message || antErr}), trying next...`);
-            }
-          }
+        if (!anthropic) return "";
+        const anthropicModels = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"];
+        for (const model of anthropicModels) {
+          try {
+            const completion = await anthropic.chat.completions.create({
+              model,
+              messages: messagesList,
+              temperature: 0.3,
+              max_tokens: 1200
+            });
+            const content = completion.choices[0]?.message?.content?.trim();
+            if (content) return content;
+          } catch (err) {}
         }
-      }
+        return "";
+      };
 
-      // 4. Try DeepSeek Client
-      if (!responseText) {
+      const runDeepSeek = async () => {
         const deepseek = getDeepSeekClient();
-        if (deepseek) {
-          const deepseekModels = ["deepseek-chat", "deepseek-reasoner"];
-          for (const model of deepseekModels) {
-            try {
-              const completion = await deepseek.chat.completions.create({
-                model,
-                messages: [
-                  { role: "system", content: systemInstruction },
-                  { role: "user", content: message }
-                ],
-                temperature: 0.3,
-                max_tokens: 1200
-              });
-              const content = completion.choices[0]?.message?.content?.trim();
-              if (content) {
-                responseText = content;
-                break;
-              }
-            } catch (dsErr: any) {
-              console.warn(`[ABDEL DEEPSEEK NOTICE] Model ${model} failed (${dsErr?.message || dsErr}), trying next...`);
-            }
-          }
+        if (!deepseek) return "";
+        const deepseekModels = ["deepseek-chat", "deepseek-reasoner"];
+        for (const model of deepseekModels) {
+          try {
+            const completion = await deepseek.chat.completions.create({
+              model,
+              messages: messagesList,
+              temperature: 0.3,
+              max_tokens: 1200
+            });
+            const content = completion.choices[0]?.message?.content?.trim();
+            if (content) return content;
+          } catch (err) {}
         }
-      }
+        return "";
+      };
 
-      // 5. Try OpenRouter API (Claude 3.5 Sonnet / DeepSeek R1 / Llama 3.3)
-      if (!responseText) {
+      const runOpenRouter = async () => {
         const openRouter = getOpenRouterClient();
-        if (openRouter) {
-          const openRouterModels = [
-            "anthropic/claude-3.5-sonnet",
-            "deepseek/deepseek-r1",
-            "meta-llama/llama-3.3-70b-instruct",
-            "google/gemini-2.0-flash"
-          ];
-          for (const model of openRouterModels) {
-            try {
-              const completion = await openRouter.chat.completions.create({
-                model,
-                messages: [
-                  { role: "system", content: systemInstruction },
-                  { role: "user", content: message }
-                ],
-                temperature: 0.3,
-                max_tokens: 1200
-              });
-              const content = completion.choices[0]?.message?.content?.trim();
-              if (content) {
-                responseText = content;
-                break;
-              }
-            } catch (openRouterErr: any) {
-              console.warn(`[ABDEL OPENROUTER NOTICE] Model ${model} failed (${openRouterErr?.message || openRouterErr}), trying next...`);
-            }
-          }
+        if (!openRouter) return "";
+        const openRouterModels = [
+          "anthropic/claude-3.5-sonnet",
+          "deepseek/deepseek-r1",
+          "meta-llama/llama-3.3-70b-instruct",
+          "google/gemini-2.0-flash"
+        ];
+        for (const model of openRouterModels) {
+          try {
+            const completion = await openRouter.chat.completions.create({
+              model,
+              messages: messagesList,
+              temperature: 0.3,
+              max_tokens: 1200
+            });
+            const content = completion.choices[0]?.message?.content?.trim();
+            if (content) return content;
+          } catch (err) {}
         }
+        return "";
+      };
+
+      const runOpenAI = async () => {
+        const openAI = getOpenAIClient();
+        if (!openAI) return "";
+        const openAiModels = ["gpt-4o-mini", "gpt-4o"];
+        for (const model of openAiModels) {
+          try {
+            const completion = await openAI.chat.completions.create({
+              model,
+              messages: messagesList,
+              temperature: 0.3,
+              max_tokens: 1200
+            });
+            const content = completion.choices[0]?.message?.content?.trim();
+            if (content) return content;
+          } catch (err) {}
+        }
+        return "";
+      };
+
+      // Determine execution order based on selected aiProvider
+      let providerOrder: (() => Promise<string>)[] = [runGemini, runGroq, runAnthropic, runDeepSeek, runOpenRouter, runOpenAI];
+      if (aiProvider === 'anthropic') {
+        providerOrder = [runAnthropic, runGemini, runGroq, runDeepSeek, runOpenRouter, runOpenAI];
+      } else if (aiProvider === 'deepseek') {
+        providerOrder = [runDeepSeek, runGemini, runGroq, runAnthropic, runOpenRouter, runOpenAI];
+      } else if (aiProvider === 'openai') {
+        providerOrder = [runOpenAI, runGemini, runGroq, runAnthropic, runDeepSeek, runOpenRouter];
+      } else if (aiProvider === 'groq') {
+        providerOrder = [runGroq, runGemini, runAnthropic, runDeepSeek, runOpenRouter, runOpenAI];
+      } else if (aiProvider === 'openrouter') {
+        providerOrder = [runOpenRouter, runGemini, runGroq, runAnthropic, runDeepSeek, runOpenAI];
+      } else if (aiProvider === 'gemini') {
+        providerOrder = [runGemini, runGroq, runAnthropic, runDeepSeek, runOpenRouter, runOpenAI];
       }
 
-      // 6. Try OpenAI API (GPT-4o-mini / GPT-4o)
-      if (!responseText) {
-        const openAI = getOpenAIClient();
-        if (openAI) {
-          const openAiModels = ["gpt-4o-mini", "gpt-4o"];
-          for (const model of openAiModels) {
-            try {
-              const completion = await openAI.chat.completions.create({
-                model,
-                messages: [
-                  { role: "system", content: systemInstruction },
-                  { role: "user", content: message }
-                ],
-                temperature: 0.3,
-                max_tokens: 1200
-              });
-              const content = completion.choices[0]?.message?.content?.trim();
-              if (content) {
-                responseText = content;
-                break;
-              }
-            } catch (oaiErr: any) {
-              console.warn(`[ABDEL OPENAI NOTICE] Model ${model} failed (${oaiErr?.message || oaiErr}), trying next...`);
-            }
+      for (const fn of providerOrder) {
+        try {
+          const resText = await fn();
+          if (resText && resText.trim()) {
+            responseText = resText;
+            break;
           }
-        }
+        } catch (e) {}
       }
 
       // 5. Contextual Editorial Synthesis Fallback (Guarantees zero downtime)

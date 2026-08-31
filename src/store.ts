@@ -276,6 +276,7 @@ interface AppState {
     glassIntensity?: string;
     headerStyle?: string;
     aiModelMode?: string;
+    abdelAiProvider?: string;
     seoTitleSuffix?: string;
     seoCanonicalBase?: string;
     seoDefaultDesc?: string;
@@ -1312,6 +1313,7 @@ export const useStore = create<AppState>()(
           { id: 'gouvernance', labelFr: 'Gouvernance', labelEn: 'Governance', url: '/category/gouvernance', enabled: true },
         ],
         aiModelMode: 'flash',
+        abdelAiProvider: 'auto',
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
         seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
