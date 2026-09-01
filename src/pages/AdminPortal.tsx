@@ -1954,14 +1954,20 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Mode d'exécution Abdel AI</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Moteur / Mode d'exécution Abdel AI</label>
                   <select 
                     value={settingsAIExecutionMode}
                     onChange={(e) => setSettingsAIExecutionMode(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs focus:outline-none font-bold font-mono text-brand-dark dark:text-brand-white"
+                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs focus:outline-none font-bold font-mono text-brand-dark dark:text-brand-white rounded"
                   >
-                    <option value="flash">Gemini 2.5 Flash (Ultra-rapide, défaut)</option>
-                    <option value="pro">Gemini 1.5 Pro (Haute profondeur d’analyse)</option>
+                    <option value="auto">🔄 Auto (Smart Failover Cascade)</option>
+                    <option value="anthropic">🧠 Anthropic Claude 3.5 Sonnet</option>
+                    <option value="deepseek">💡 DeepSeek Chat / Reasoner R1</option>
+                    <option value="flash">✨ Google Gemini 2.5 Flash</option>
+                    <option value="pro">✨ Google Gemini 1.5 Pro</option>
+                    <option value="openai">⚡ OpenAI GPT-4o / GPT-4o-mini</option>
+                    <option value="groq">🚀 Groq Llama 3.3 70B</option>
+                    <option value="openrouter">🌐 OpenRouter Multi-Model</option>
                   </select>
                 </div>
                 <div>

@@ -1724,11 +1724,13 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                   onChange={e => setManualPreferredEngine(e.target.value as any)}
                   className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-emerald-500"
                 >
-                  <option value="auto">🤖 Multi-Engine Cascade Auto (Gemini ⇄ Groq ⇄ OpenRouter ⇄ OpenAI)</option>
-                  <option value="groq">🚀 Groq Llama 3.3 70B (Vitesse Éclair)</option>
-                  <option value="openrouter">🌐 OpenRouter (Claude 3.5 / DeepSeek R1)</option>
-                  <option value="gemini">⚡ Gemini 3.7 Flash Principal</option>
-                  <option value="openai">🧠 OpenAI GPT-4o-mini Principal</option>
+                  <option value="auto">🔄 Auto (Smart Failover Cascade)</option>
+                  <option value="anthropic">🧠 Anthropic Claude 3.5 Sonnet</option>
+                  <option value="deepseek">💡 DeepSeek Chat / Reasoner R1</option>
+                  <option value="gemini">✨ Google Gemini (Flash / Pro)</option>
+                  <option value="openai">⚡ OpenAI GPT-4o / GPT-4o-mini</option>
+                  <option value="groq">🚀 Groq Llama 3.3 70B</option>
+                  <option value="openrouter">🌐 OpenRouter Multi-Model</option>
                 </select>
                 <p className="text-[10px] text-zinc-500 font-mono">
                   {isFr ? 'Bascule automatique en cas de quota dépassé ou de latence.' : 'Automatic switch when quota or rate-limit is hit.'}

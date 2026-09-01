@@ -1628,11 +1628,13 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                                 onChange={(e) => updateCfg({ engine: e.target.value })}
                                 className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-1.5 font-mono outline-none focus:border-orange-500"
                               >
-                                <option value="auto">⚡ Auto-Orchestrator (Railway / Env)</option>
-                                <option value="gemini">✨ Gemini 2.0 Flash / Pro</option>
-                                <option value="groq">⚡ Groq (Llama 3.3 70B Fast)</option>
-                                <option value="openrouter">🌐 OpenRouter (Multi-Model)</option>
-                                <option value="openai">🤖 OpenAI (GPT-4o)</option>
+                                <option value="auto">🔄 Auto (Smart Failover)</option>
+                                <option value="anthropic">🧠 Anthropic Claude 3.5</option>
+                                <option value="deepseek">💡 DeepSeek Chat / R1</option>
+                                <option value="gemini">✨ Google Gemini</option>
+                                <option value="openai">⚡ OpenAI GPT-4o</option>
+                                <option value="groq">🚀 Groq Llama 3.3</option>
+                                <option value="openrouter">🌐 OpenRouter</option>
                               </select>
                             </div>
 

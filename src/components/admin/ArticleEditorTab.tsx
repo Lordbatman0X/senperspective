@@ -7,6 +7,7 @@ import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
 import { ImageCropModal } from './ImageCropModal';
+import { getAuthHeaders } from '../../lib/apiUtils';
 
 interface ArticleEditorTabProps {
   article: Article | null;
@@ -167,7 +168,7 @@ export function ArticleEditorTab({
   const [showAiRewriteModal, setShowAiRewriteModal] = useState(false);
   const [isRewritingWithAi, setIsRewritingWithAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai'>('groq');
+  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai' | 'anthropic' | 'deepseek'>('groq');
   const [aiTargetType, setAiTargetType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
@@ -185,7 +186,7 @@ export function ArticleEditorTab({
     try {
       const res = await fetch('/api/ai/generate-article-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           title: activeTitle,
           excerpt: activeExcerpt,
@@ -519,7 +520,7 @@ export function ArticleEditorTab({
     try {
       const res = await fetch('/api/generate-timeline', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ 
           title: titleFr || titleEn,
           excerpt: excerptFr || excerptEn,
@@ -586,7 +587,7 @@ export function ArticleEditorTab({
 
       const res = await fetch('/api/ai/rewrite-article', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           article: currentDraftPayload,
           prompt: aiPrompt,
@@ -1222,16 +1223,31 @@ export function ArticleEditorTab({
                 </div>
 
                 {imageUrl && (
-                  <div className="mt-3 relative w-36 h-24 border border-zinc-700 rounded-md overflow-hidden bg-black/50 group">
-                    <img src={imageUrl} alt="Cover Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
-                    <button 
-                      type="button" 
-                      onClick={() => setImageUrl('')}
-                      className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100 transition-opacity shadow-md cursor-pointer"
-                      title="Supprimer l'image"
-                    >
-                      <X size={12} />
-                    </button>
+                  <div className="mt-3 flex items-start gap-4">
+                    <div className="relative w-36 h-24 border border-zinc-700 rounded-md overflow-hidden bg-black/50 group shrink-0">
+                      <img src={imageUrl} alt="Cover Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                      <button 
+                        type="button" 
+                        onClick={() => setImageUrl('')}
+                        className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100 transition-opacity shadow-md cursor-pointer"
+                        title="Supprimer l'image"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-2 justify-center">
+                      <button
+                        type="button"
+                        onClick={() => setArticleCropImageSrc(imageUrl)}
+                        className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 text-xs font-bold uppercase rounded flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <ImageIcon size={14} className="text-[#E85D42]" />
+                        <span>{language === 'fr' ? 'Rogner & Ajuster (16:9)' : 'Crop & Adjust (16:9)'}</span>
+                      </button>
+                      <span className="text-[10px] text-zinc-400 font-mono">
+                        {language === 'fr' ? 'Glissez, zoomez et recadrez l’image de couverture.' : 'Drag, zoom and crop cover image.'}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -2018,7 +2034,7 @@ export function ArticleEditorTab({
                 <label className="block text-xs font-extrabold text-zinc-300 uppercase tracking-wider mb-1.5">
                   Moteur IA Privilégié (Dual-Engine)
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                   <button
                     type="button"
                     onClick={() => setAiPreferredEngine('groq')}
@@ -2029,7 +2045,33 @@ export function ArticleEditorTab({
                     }`}
                   >
                     <span className="font-mono text-sm">Groq Llama 3.3</span>
-                    <span className="text-[10px] opacity-75">Vitesse Éclair (70B)</span>
+                    <span className="text-[10px] opacity-75">Vitesse Éclair</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('anthropic')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'anthropic'
+                        ? 'bg-orange-600/20 border-orange-500 text-orange-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">Claude 3.5</span>
+                    <span className="text-[10px] opacity-75">Anthropic</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAiPreferredEngine('deepseek')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                      aiPreferredEngine === 'deepseek'
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="font-mono text-sm">DeepSeek R1</span>
+                    <span className="text-[10px] opacity-75">Raisonnement</span>
                   </button>
 
                   <button
@@ -2042,7 +2084,7 @@ export function ArticleEditorTab({
                     }`}
                   >
                     <span className="font-mono text-sm">OpenRouter</span>
-                    <span className="text-[10px] opacity-75">Claude / DeepSeek</span>
+                    <span className="text-[10px] opacity-75">Multi-Modèle</span>
                   </button>
 
                   <button
@@ -2055,7 +2097,7 @@ export function ArticleEditorTab({
                     }`}
                   >
                     <span className="font-mono text-sm">Gemini 2.5</span>
-                    <span className="text-[10px] opacity-75">Ultra-Rapide & Structuré</span>
+                    <span className="text-[10px] opacity-75">Google AI</span>
                   </button>
 
                   <button
@@ -2081,7 +2123,7 @@ export function ArticleEditorTab({
                     }`}
                   >
                     <span className="font-mono text-sm">Auto Cascade</span>
-                    <span className="text-[10px] opacity-75">Basculement Auto</span>
+                    <span className="text-[10px] opacity-75">Smart Failover</span>
                   </button>
                 </div>
               </div>
