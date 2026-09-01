@@ -21,13 +21,21 @@ export function ImageCropModal({ imageSrc, onCropComplete, onClose, aspectRatio 
 
   const showCroppedImage = useCallback(async () => {
     try {
-      if (!croppedAreaPixels) return;
-      const croppedImage = await getCroppedImg(imageSrc, croppedAreaPixels);
-      if (croppedImage) onCropComplete(croppedImage);
+      let pixels = croppedAreaPixels;
+      if (!pixels) {
+        pixels = { x: 0, y: 0, width: 1200, height: Math.round(1200 / aspectRatio) };
+      }
+      const croppedImage = await getCroppedImg(imageSrc, pixels);
+      if (croppedImage) {
+        onCropComplete(croppedImage);
+      } else {
+        onCropComplete(imageSrc);
+      }
     } catch (e) {
       console.error(e);
+      onCropComplete(imageSrc);
     }
-  }, [croppedAreaPixels, imageSrc, onCropComplete]);
+  }, [croppedAreaPixels, imageSrc, onCropComplete, aspectRatio]);
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4">

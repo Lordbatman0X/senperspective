@@ -360,6 +360,35 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                         <input type="file" accept="image/*" className="hidden" onChange={handleDeviceUpload} />
                       </label>
                     </div>
+
+                    {editingAd.imageUrl && (
+                      <div className="mt-3 flex items-start gap-4">
+                        <div className="relative w-36 h-24 border border-zinc-700 rounded-md overflow-hidden bg-black/50 group shrink-0">
+                          <img src={editingAd.imageUrl} alt="Ad Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                          <button 
+                            type="button" 
+                            onClick={() => setEditingAd({ ...editingAd, imageUrl: '' })}
+                            className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100 transition-opacity shadow-md cursor-pointer"
+                            title="Supprimer l'image"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-2 justify-center">
+                          <button
+                            type="button"
+                            onClick={() => setCropImageSrc(editingAd.imageUrl)}
+                            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 text-zinc-200 text-xs font-bold uppercase rounded flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <ImageIcon size={14} className="text-[#E85D42]" />
+                            <span>{isFr ? 'Rogner & Ajuster' : 'Crop & Adjust'}</span>
+                          </button>
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            {isFr ? 'Glissez, zoomez et recadrez la bannière publicitaire.' : 'Drag, zoom and crop ad banner image.'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
