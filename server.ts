@@ -18,7 +18,8 @@ import {
   getEffectiveApiKey,
   getGeminiClient,
   saveApiKey,
-  loadKeysFromMongo
+  loadKeysFromMongo,
+  getProviderStatus
 } from "./server/aiNewsroomEngine";
 import { 
   generateArticleImageWithAI, 
@@ -1657,50 +1658,37 @@ app.use((req, res, next) => {
 
   // AI Engine Status Endpoint (GET /api/ai-engine/status)
   app.get("/api/ai-engine/status", (req, res) => {
-    const geminiKey = getEffectiveApiKey('GEMINI');
-    const openaiKey = getEffectiveApiKey('OPENAI');
-    const groqKey = getEffectiveApiKey('GROQ');
-    const openrouterKey = getEffectiveApiKey('OPENROUTER');
-    const anthropicKey = getEffectiveApiKey('ANTHROPIC');
-    const deepseekKey = getEffectiveApiKey('DEEPSEEK');
-
-    const geminiConfigured = !!geminiKey && geminiKey.trim() !== "" && geminiKey !== "undefined";
-    const openAiConfigured = !!openaiKey && openaiKey.trim() !== "" && openaiKey !== "undefined";
-    const groqConfigured = !!groqKey && groqKey.trim() !== "" && groqKey !== "undefined";
-    const openRouterConfigured = !!openrouterKey && openrouterKey.trim() !== "" && openrouterKey !== "undefined";
-    const anthropicConfigured = !!anthropicKey && anthropicKey.trim() !== "" && anthropicKey !== "undefined";
-    const deepseekConfigured = !!deepseekKey && deepseekKey.trim() !== "" && deepseekKey !== "undefined";
+    const geminiInfo = getProviderStatus('GEMINI');
+    const openAiInfo = getProviderStatus('OPENAI');
+    const groqInfo = getProviderStatus('GROQ');
+    const openRouterInfo = getProviderStatus('OPENROUTER');
+    const anthropicInfo = getProviderStatus('ANTHROPIC');
+    const deepseekInfo = getProviderStatus('DEEPSEEK');
 
     return res.json({
       success: true,
       gemini: {
-        configured: geminiConfigured,
-        status: geminiConfigured ? "ready" : "unconfigured",
+        ...geminiInfo,
         models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.7-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-3.1-pro-preview"]
       },
       openai: {
-        configured: openAiConfigured,
-        status: openAiConfigured ? "ready" : "unconfigured",
+        ...openAiInfo,
         models: ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
       },
       groq: {
-        configured: groqConfigured,
-        status: groqConfigured ? "ready" : "unconfigured",
+        ...groqInfo,
         models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
       },
       openrouter: {
-        configured: openRouterConfigured,
-        status: openRouterConfigured ? "ready" : "unconfigured",
+        ...openRouterInfo,
         models: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-chat", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash", "openai/gpt-4o-mini"]
       },
       anthropic: {
-        configured: anthropicConfigured,
-        status: anthropicConfigured ? "ready" : "unconfigured",
+        ...anthropicInfo,
         models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"]
       },
       deepseek: {
-        configured: deepseekConfigured,
-        status: deepseekConfigured ? "ready" : "unconfigured",
+        ...deepseekInfo,
         models: ["deepseek-chat", "deepseek-reasoner"]
       },
       failoverActive: true,

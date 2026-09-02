@@ -66,7 +66,11 @@ export function ApiDiagnosticTab() {
   }, []);
 
   const ProviderCard = ({ name, providerId, inputKeyName, providerData, icon: Icon }: { name: string, providerId: string, inputKeyName: keyof typeof keysInput, providerData: any, icon: any }) => {
-    const isReady = providerData?.status === 'ready' || !!localStorage.getItem(`api_key_${providerId.toLowerCase()}`);
+    const isConfigured = providerData?.configured;
+    const isRateLimited = providerData?.rateLimited;
+    const cooldownSec = providerData?.cooldownRemainingSeconds || 0;
+    const statusText = !isConfigured ? 'MISSING KEY' : isRateLimited ? `RATE LIMITED (${cooldownSec}s)` : 'ACTIVE / READY';
+    
     return (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-4 relative overflow-hidden group hover:border-zinc-700 transition-colors">
         <div className="absolute top-0 right-0 p-4 opacity-10">
@@ -74,20 +78,31 @@ export function ApiDiagnosticTab() {
         </div>
         <div className="flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${isReady ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-              {isReady ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
+            <div className={`p-2 rounded-lg ${isConfigured && !isRateLimited ? 'bg-emerald-500/10 text-emerald-400' : isRateLimited ? 'bg-amber-500/10 text-amber-400' : 'bg-red-500/10 text-red-400'}`}>
+              {isConfigured && !isRateLimited ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
             </div>
-            <h3 className="font-bold text-white text-lg tracking-wide">{name}</h3>
+            <div>
+              <h3 className="font-bold text-white text-lg tracking-wide">{name}</h3>
+              <p className="text-[10px] text-zinc-400 font-mono">Success: {providerData?.successCount || 0} | Errors: {providerData?.errorCount || 0}</p>
+            </div>
           </div>
           <span className={`px-2.5 py-1 text-xs font-mono font-bold uppercase rounded-md border ${
-            isReady 
+            isConfigured && !isRateLimited
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+              : isRateLimited
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
+              : 'bg-red-500/10 text-red-400 border-red-500/20'
           }`}>
-            {isReady ? 'ACTIVE' : 'MISSING KEY'}
+            {statusText}
           </span>
         </div>
         
+        {providerData?.lastError && (
+          <div className="bg-red-950/30 border border-red-900/40 p-2.5 rounded-lg text-[11px] text-red-300 font-mono truncate" title={providerData.lastError}>
+            <span className="font-bold">Last Error:</span> {providerData.lastError}
+          </div>
+        )}
+
         <div className="z-10 mt-2">
           <p className="text-xs text-zinc-400 font-mono mb-2 uppercase tracking-wider">Models Available:</p>
           <div className="flex flex-wrap gap-2 mb-4">
@@ -101,7 +116,7 @@ export function ApiDiagnosticTab() {
           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-zinc-800/50">
             <input
               type="password"
-              placeholder={isReady ? "Update API Key..." : "Enter API Key..."}
+              placeholder={isConfigured ? "Update API Key..." : "Enter API Key..."}
               value={keysInput[inputKeyName]}
               onChange={(e) => setKeysInput(prev => ({ ...prev, [inputKeyName]: e.target.value }))}
               className="flex-1 bg-zinc-950 border border-zinc-800 text-white text-xs px-3 py-2 rounded-lg focus:outline-none focus:border-[#E85D42] font-mono"

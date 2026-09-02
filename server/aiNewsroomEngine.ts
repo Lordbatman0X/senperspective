@@ -25,6 +25,90 @@ const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
 
 import { saveDocument, getDocument } from "../src/lib/mongoServer";
 
+// Circuit Breaker & Rate Limit tracker with automatic 3-minute cooldown reset
+interface ProviderHealth {
+  rateLimited: boolean;
+  rateLimitedUntil: number;
+  lastError: string;
+  successCount: number;
+  errorCount: number;
+}
+
+const providerHealthMap: Record<string, ProviderHealth> = {
+  GEMINI: { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 },
+  OPENAI: { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 },
+  GROQ: { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 },
+  OPENROUTER: { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 },
+  ANTHROPIC: { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 },
+  DEEPSEEK: { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 }
+};
+
+export function getProviderStatus(provider: string) {
+  const p = (provider || '').trim().toUpperCase();
+  const health = providerHealthMap[p] || { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 };
+  const now = Date.now();
+  if (health.rateLimited && now > health.rateLimitedUntil) {
+    // Cooldown expired! Automatically reset rate limit status so it renews
+    health.rateLimited = false;
+    health.rateLimitedUntil = 0;
+  }
+  const key = getEffectiveApiKey(p);
+  const configured = !!key && key.trim() !== "" && key !== "undefined";
+  
+  let status = "unconfigured";
+  if (!configured) {
+    status = "unconfigured";
+  } else if (health.rateLimited) {
+    status = "rate_limited";
+  } else {
+    status = "ready";
+  }
+
+  const cooldownRemainingSeconds = health.rateLimited ? Math.max(0, Math.ceil((health.rateLimitedUntil - now) / 1000)) : 0;
+
+  return {
+    configured,
+    status,
+    rateLimited: health.rateLimited,
+    cooldownRemainingSeconds,
+    lastError: health.lastError,
+    successCount: health.successCount,
+    errorCount: health.errorCount
+  };
+}
+
+export function recordProviderError(provider: string, err: any) {
+  const p = (provider || '').trim().toUpperCase();
+  if (!providerHealthMap[p]) {
+    providerHealthMap[p] = { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 };
+  }
+  const h = providerHealthMap[p];
+  h.errorCount++;
+  const errStr = String(err?.message || err).toLowerCase();
+  if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('exhausted') || errStr.includes('rate limit') || errStr.includes('resource_exhausted')) {
+    h.rateLimited = true;
+    // 3 minutes cooldown (180,000 ms) before automatic renewal
+    h.rateLimitedUntil = Date.now() + 180 * 1000;
+    h.lastError = `Rate limit / Quota exceeded: ${err?.message || err}`;
+    console.warn(`[AI CIRCUIT BREAKER] Provider ${p} rate limited. Cooldown active for 3 minutes.`);
+  } else {
+    h.lastError = err?.message || String(err);
+  }
+}
+
+export function recordProviderSuccess(provider: string) {
+  const p = (provider || '').trim().toUpperCase();
+  if (!providerHealthMap[p]) {
+    providerHealthMap[p] = { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 };
+  }
+  const h = providerHealthMap[p];
+  h.successCount++;
+  if (h.rateLimited && Date.now() > h.rateLimitedUntil) {
+    h.rateLimited = false;
+    h.rateLimitedUntil = 0;
+  }
+}
+
 export let cachedMongoKeys: Record<string, string> = {};
 
 export async function loadKeysFromMongo() {
