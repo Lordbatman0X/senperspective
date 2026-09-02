@@ -225,7 +225,7 @@ export interface GenerateArticleOptions {
   prompt?: string;
   category?: string;
   type?: ArticleStyleType;
-  preferredEngine?: "auto" | "gemini" | "openai" | "groq" | "openrouter";
+  preferredEngine?: "auto" | "gemini" | "openai" | "groq" | "openrouter" | "anthropic" | "deepseek";
   feedUrl?: string;
   customGuidelinesOverride?: CustomEditorialGuidelines;
 }
@@ -803,6 +803,98 @@ export async function generateWithOpenRouter(userPrompt: string, systemInstructi
 }
 
 /**
+ * Execute Generation via Anthropic Claude API
+ */
+export async function generateWithAnthropic(userPrompt: string, systemInstruction: string): Promise<any> {
+  const anthropic = getAnthropicClient();
+  if (!anthropic) {
+    throw new Error("ANTHROPIC_API_KEY is not configured on the server.");
+  }
+
+  const models = [
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022"
+  ];
+  let lastErr: any = null;
+
+  for (const model of models) {
+    try {
+      const completion = await anthropic.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2200
+      });
+
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) {
+        throw new Error(`Empty response from Anthropic model ${model}`);
+      }
+
+      const parsed = extractJsonFromText(text);
+      if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
+        return { parsed, modelUsed: `Anthropic (${model})` };
+      }
+    } catch (err: any) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      console.warn(`[ANTHROPIC ENGINE NOTICE] Model ${model} notice (${msg.slice(0, 100)}). Trying fallback...`);
+    }
+  }
+
+  throw lastErr || new Error("All Anthropic models exhausted or unavailable.");
+}
+
+/**
+ * Execute Generation via DeepSeek API
+ */
+export async function generateWithDeepSeek(userPrompt: string, systemInstruction: string): Promise<any> {
+  const deepseek = getDeepSeekClient();
+  if (!deepseek) {
+    throw new Error("DEEPSEEK_API_KEY is not configured on the server.");
+  }
+
+  const models = [
+    "deepseek-chat",
+    "deepseek-reasoner"
+  ];
+  let lastErr: any = null;
+
+  for (const model of models) {
+    try {
+      const completion = await deepseek.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: systemInstruction },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 2200
+      });
+
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (!text) {
+        throw new Error(`Empty response from DeepSeek model ${model}`);
+      }
+
+      const parsed = extractJsonFromText(text);
+      if (parsed && (parsed.title?.fr || parsed.title?.en || parsed.title)) {
+        return { parsed, modelUsed: `DeepSeek (${model})` };
+      }
+    } catch (err: any) {
+      lastErr = err;
+      const msg = err?.message || String(err);
+      console.warn(`[DEEPSEEK ENGINE NOTICE] Model ${model} notice (${msg.slice(0, 100)}). Trying fallback...`);
+    }
+  }
+
+  throw lastErr || new Error("All DeepSeek models exhausted or unavailable.");
+}
+
+/**
  * Intelligently extracts or identifies authentic Key Actors involved in the article content.
  * CRITICAL: Key Actors must strictly reflect the real personalities, institutions,
  * ministries, corporations, and stakeholders of the news event, and NEVER "Perspective Group" or "Rédaction Perspective".
@@ -1251,19 +1343,23 @@ ${feedUrl ? `\nSOURCE FEED: ${feedUrl}` : ""}
 
 Please craft the complete bilingual storytelling article in strict JSON matching the schema.`;
 
-  let primary = preferredEngine;
+  let primary: string = preferredEngine || 'auto';
   const geminiKey = getEffectiveApiKey('GEMINI');
+  const anthropicKey = getEffectiveApiKey('ANTHROPIC') || getEffectiveApiKey('CLAUDE');
+  const deepseekKey = getEffectiveApiKey('DEEPSEEK');
   const groqKey = getEffectiveApiKey('GROQ');
   const openrouterKey = getEffectiveApiKey('OPENROUTER');
   const openaiKey = getEffectiveApiKey('OPENAI');
 
   const geminiAvailable = !!geminiKey && geminiKey.trim() !== "";
+  const anthropicAvailable = !!anthropicKey && anthropicKey.trim() !== "";
+  const deepseekAvailable = !!deepseekKey && deepseekKey.trim() !== "";
   const groqAvailable = !!groqKey && groqKey.trim() !== "";
   const openRouterAvailable = !!openrouterKey && openrouterKey.trim() !== "";
   const openAiAvailable = !!openaiKey && openaiKey.trim() !== "";
 
   if (primary === "auto") {
-    primary = geminiAvailable ? "gemini" : (groqAvailable ? "groq" : (openRouterAvailable ? "openrouter" : (openAiAvailable ? "openai" : "gemini")));
+    primary = geminiAvailable ? "gemini" : (anthropicAvailable ? "anthropic" : (deepseekAvailable ? "deepseek" : (groqAvailable ? "groq" : (openRouterAvailable ? "openrouter" : (openAiAvailable ? "openai" : "gemini")))));
   }
 
   let failoverTriggered = false;
@@ -1272,19 +1368,6 @@ Please craft the complete bilingual storytelling article in strict JSON matching
   let engineUsed = "";
 
   // Helper for sequential execution
-  const tryGroq = async (): Promise<boolean> => {
-    if (!groqAvailable) return false;
-    try {
-      const res = await generateWithGroq(userPrompt, systemInstruction);
-      rawJson = res.parsed;
-      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
-      return true;
-    } catch (err: any) {
-      failoverReason += ` | Groq: ${err?.message || err}`;
-      return false;
-    }
-  };
-
   const tryGemini = async (): Promise<boolean> => {
     if (!geminiAvailable) return false;
     try {
@@ -1294,6 +1377,45 @@ Please craft the complete bilingual storytelling article in strict JSON matching
       return true;
     } catch (err: any) {
       failoverReason += ` | Gemini: ${err?.message || err}`;
+      return false;
+    }
+  };
+
+  const tryAnthropic = async (): Promise<boolean> => {
+    if (!anthropicAvailable) return false;
+    try {
+      const res = await generateWithAnthropic(userPrompt, systemInstruction);
+      rawJson = res.parsed;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | Anthropic: ${err?.message || err}`;
+      return false;
+    }
+  };
+
+  const tryDeepSeek = async (): Promise<boolean> => {
+    if (!deepseekAvailable) return false;
+    try {
+      const res = await generateWithDeepSeek(userPrompt, systemInstruction);
+      rawJson = res.parsed;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | DeepSeek: ${err?.message || err}`;
+      return false;
+    }
+  };
+
+  const tryGroq = async (): Promise<boolean> => {
+    if (!groqAvailable) return false;
+    try {
+      const res = await generateWithGroq(userPrompt, systemInstruction);
+      rawJson = res.parsed;
+      engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      return true;
+    } catch (err: any) {
+      failoverReason += ` | Groq: ${err?.message || err}`;
       return false;
     }
   };
@@ -1324,53 +1446,38 @@ Please craft the complete bilingual storytelling article in strict JSON matching
     }
   };
 
-  // 1. Try Selected Primary Engine
-  if (primary === "groq" && groqAvailable) {
-    if (!(await tryGroq())) {
-      failoverTriggered = true;
-      if (!(await tryGemini())) {
-        if (!(await tryOpenRouter())) {
-          await tryOpenAI();
-        }
+  // Safe Cascade Sequence Helper
+  const runCascade = async (excludeEngine?: string): Promise<boolean> => {
+    const sequence = [
+      { name: 'gemini', fn: tryGemini, available: geminiAvailable },
+      { name: 'anthropic', fn: tryAnthropic, available: anthropicAvailable },
+      { name: 'deepseek', fn: tryDeepSeek, available: deepseekAvailable },
+      { name: 'groq', fn: tryGroq, available: groqAvailable },
+      { name: 'openrouter', fn: tryOpenRouter, available: openRouterAvailable },
+      { name: 'openai', fn: tryOpenAI, available: openAiAvailable }
+    ];
+
+    // Try primary first if specified & not excluded
+    if (primary && primary !== excludeEngine && primary !== 'auto') {
+      const match = sequence.find(s => s.name === primary);
+      if (match && match.available) {
+        if (await match.fn()) return true;
+        failoverTriggered = true;
       }
     }
-  } else if (primary === "openrouter" && openRouterAvailable) {
-    if (!(await tryOpenRouter())) {
-      failoverTriggered = true;
-      if (!(await tryGroq())) {
-        if (!(await tryGemini())) {
-          await tryOpenAI();
-        }
+
+    // Try remainder in order
+    for (const eng of sequence) {
+      if (eng.name === primary && !failoverTriggered) continue; // already tried
+      if (eng.available) {
+        failoverTriggered = true;
+        if (await eng.fn()) return true;
       }
     }
-  } else if (primary === "gemini" && geminiAvailable) {
-    if (!(await tryGemini())) {
-      failoverTriggered = true;
-      if (!(await tryGroq())) {
-        if (!(await tryOpenRouter())) {
-          await tryOpenAI();
-        }
-      }
-    }
-  } else if (primary === "openai" && openAiAvailable) {
-    if (!(await tryOpenAI())) {
-      failoverTriggered = true;
-      if (!(await tryGroq())) {
-        if (!(await tryGemini())) {
-          await tryOpenRouter();
-        }
-      }
-    }
-  } else {
-    // Cascade fallback: Gemini -> Groq -> OpenRouter -> OpenAI
-    if (!(await tryGemini())) {
-      if (!(await tryGroq())) {
-        if (!(await tryOpenRouter())) {
-          await tryOpenAI();
-        }
-      }
-    }
-  }
+    return false;
+  };
+
+  await runCascade();
 
   // Smart Local Synthesis Fallback if both cloud AI APIs hit rate/quota limits or are unconfigured
   if (!rawJson) {

@@ -277,43 +277,16 @@ export async function searchInternetForArticleImage(options: ImageGenerationOpti
  * Builds a rich, photorealistic, content-focused photojournalism prompt for GenAI image models.
  */
 export function buildPhotojournalismPrompt(options: ImageGenerationOptions): string {
-  const { title, excerpt = "", bodyText = "", category = "Économie", keyActors = [] } = options;
-  const cleanTitle = title.replace(/[#*`_"]/g, "").trim();
-  const cleanExcerpt = excerpt.replace(/<[^>]*>/g, "").replace(/[#*`_"]/g, "").slice(0, 150).trim();
-  const combinedContext = `${cleanTitle} ${cleanExcerpt} ${bodyText.slice(0, 200)}`.toLowerCase();
-
-  // Dynamic visual setting builder based on article content
-  let visualSetting = "West African urban and institutional environment in Dakar, Senegal";
-  let subjectFocus = "high-level decision makers and operational infrastructure";
-
-  if (combinedContext.includes("port") || combinedContext.includes("maritime") || combinedContext.includes("navire") || combinedContext.includes("conteneur")) {
-    visualSetting = "active modern container terminal at the Port of Dakar, giant gantry cranes, massive cargo ships, ocean harbor background, bright coastal daylight";
-    subjectFocus = "logistics operations, maritime trade containers, dock workers in safety gear";
-  } else if (combinedContext.includes("train") || combinedContext.includes("ter") || combinedContext.includes("brt") || combinedContext.includes("transport") || combinedContext.includes("route")) {
-    visualSetting = "modern mass transit hub in Dakar, sleek high-speed regional commuter train or electric rapid transit bus, contemporary terminal architecture";
-    subjectFocus = "urban passengers, efficient mobility infrastructure, clean architectural lines";
-  } else if (combinedContext.includes("pétrole") || combinedContext.includes("gaz") || combinedContext.includes("sangomar") || combinedContext.includes("énergie") || combinedContext.includes("senelec") || combinedContext.includes("solaire")) {
-    visualSetting = "modern energy infrastructure, offshore extraction vessel or expansive solar photovoltaic array under bright West African sun, high-tech control center";
-    subjectFocus = "energy engineers, industrial precision, renewable power grid";
-  } else if (combinedContext.includes("football") || combinedContext.includes("lions") || combinedContext.includes("stade") || combinedContext.includes("can") || category === "Sports") {
-    visualSetting = "packed modern sports arena in Senegal, vibrant green pitch under bright stadium floodlights, dynamic athletic action";
-    subjectFocus = "intense athletic competition, football player agility, roaring crowd in background";
-  } else if (combinedContext.includes("startups") || combinedContext.includes("tech") || combinedContext.includes("numérique") || combinedContext.includes("digital") || category === "Tech & Innovation") {
-    visualSetting = "sunlit modern technology innovation incubator in Dakar, glass walls, multiple high-resolution coding displays, collaborative open workspace";
-    subjectFocus = "young African software engineers and entrepreneurs discussing data diagrams";
-  } else if (combinedContext.includes("banque") || combinedContext.includes("bceao") || combinedContext.includes("finance") || combinedContext.includes("dette") || combinedContext.includes("budget") || category === "Économie") {
-    visualSetting = "modern West African banking headquarters, sleek financial towers, executive conference table with analytical charts";
-    subjectFocus = "economic policymakers and institutional leaders reviewing trade indicators";
-  } else if (category === "Politique" || combinedContext.includes("gouvernement") || combinedContext.includes("président") || combinedContext.includes("ministre")) {
-    visualSetting = "prestigious presidential palace press hall in Dakar, West African diplomatic flags, formal executive podium with press microphones";
-    subjectFocus = "dignified institutional briefing, political leadership, formal state atmosphere";
+  const { title, excerpt = "", category = "Économie", keyActors = [] } = options;
+  const rawText = `${title} ${excerpt} ${keyActors.join(" ")} ${category}`.replace(/<[^>]*>/g, "").replace(/[#*`_"]/g, " ");
+  const words = rawText.split(/\s+/).filter(w => w.length > 2);
+  const topKeywords = Array.from(new Set(words)).slice(0, 50).join(", ");
+  
+  if (options.customPrompt) {
+    return `${options.customPrompt.slice(0, 250)} | 16:9 editorial press photo`.slice(0, 300);
   }
 
-  if (options.customPrompt) return `${options.customPrompt} Style: Realistic editorial press photography, sharp natural focus, authentic cinematic ambient lighting, high dynamic range, 16:9 widescreen composition, authentic West African documentary aesthetics, zero CGI artifacts, zero text or overlays.`;
-
-  const actorsHint = Array.isArray(keyActors) && keyActors.length > 0 ? `Involving key stakeholders: ${keyActors.slice(0, 3).join(", ")}.` : "";
-
-  return `Award-winning documentary photojournalism photograph for a major news publication. Scene: ${visualSetting}. Subject: ${subjectFocus}. Context: "${cleanTitle}". ${actorsHint} Style: Realistic editorial press photography, sharp natural focus, authentic cinematic ambient lighting, high dynamic range, 16:9 widescreen composition, authentic West African documentary aesthetics, zero CGI artifacts, zero text or overlays.`;
+  return `Professional photojournalism, 16:9 widescreen editorial photograph, West African documentary context. Key elements: ${topKeywords}. Realistic lighting, sharp focus, zero text overlays.`;
 }
 
 /**
