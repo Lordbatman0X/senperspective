@@ -454,7 +454,7 @@ export function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Main Content: Chronological Journal Feed */}
-        <div className={`${hasRightAd ? 'lg:col-span-7' : 'lg:col-span-8'} min-w-0 space-y-8`}>
+        <div className={`${hasRightAd ? 'lg:col-span-7' : 'lg:col-span-9'} min-w-0 space-y-8`}>
           <div className="border-b-4 border-brand-dark pb-3 flex justify-between items-end dark:border-zinc-800">
             <div>
               <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-brand-dark">
@@ -499,34 +499,34 @@ export function HomePage() {
                   <ArticleCard key={`${article.id}-${idx}`} article={article} />
                 );
 
-                // Insert dynamic horizontally structured ad banner up to 5 times (every 4 items)
+                // Insert dynamic horizontally structured ad banner up to 5 times (every 4 items) - One line in phone mode
                 if ((idx + 1) % 4 === 0 && activeBetweenAds.length > 0) {
                   const adIndex = Math.floor((idx + 1) / 4) - 1;
                   
                   if (adIndex < 5) { // up to 5 ads
                     const currentAd = activeBetweenAds[adIndex % activeBetweenAds.length];
                     elements.push(
-                      <div className="col-span-1 sm:col-span-2 pt-3 pb-3" key={`horizontal-mid-ad-${adIndex}`}>
-                        <div className="bg-[#E85D42]/5 text-zinc-955 dark:text-zinc-200 border border-[#E85D42]/20 p-4 relative overflow-hidden group font-sans">
-                          <span className="absolute right-3 top-2.5 text-[7px] bg-[#E85D42]/10 text-[#E85D42] font-black px-1.5 tracking-widest uppercase" style={{ color: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '1a' }}>
-                            {language === 'fr' ? 'SPONSORISÉ DE L\'ÉDITION' : 'EDITION SPONSOR'}
+                      <div className="col-span-1 sm:col-span-2 pt-2 pb-2" key={`horizontal-mid-ad-${adIndex}`}>
+                        <div className="bg-[#E85D42]/5 text-zinc-950 dark:text-zinc-200 border border-[#E85D42]/20 p-2.5 sm:p-3 relative overflow-hidden group font-sans">
+                          <span className="absolute right-2 top-2 text-[6px] bg-[#E85D42]/10 text-[#E85D42] font-black px-1.5 tracking-widest uppercase" style={{ color: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '1a' }}>
+                            {language === 'fr' ? 'SPONSOR' : 'SPONSOR'}
                           </span>
                           
-                          <div className="flex flex-col md:flex-row gap-4 items-center justify-between w-full">
-                            <div className="flex gap-4 items-center flex-1 min-w-0">
+                          <div className="flex flex-row items-center gap-2 justify-between w-full flex-nowrap">
+                            <div className="flex gap-2 items-center flex-1 min-w-0">
                               {currentAd.imageUrl && currentAd.imageUrl.trim() !== '' && (
                                 <img 
                                   src={currentAd.imageUrl} 
                                   alt="" 
-                                  className="w-12 h-12 object-cover border border-brand-border shrink-0"
+                                  className="w-8 h-8 sm:w-10 sm:h-10 object-cover border border-brand-border shrink-0"
                                   referrerPolicy="no-referrer"
                                 />
                               )}
                               <div className="text-left flex-1 min-w-0">
-                                <h4 className="font-black text-xs uppercase tracking-widest text-[#E85D42] truncate" style={{ color: currentSettings.accentColor }}>
+                                <h4 className="font-black text-[10px] sm:text-xs uppercase tracking-wider text-[#E85D42] truncate" style={{ color: currentSettings.accentColor }}>
                                   {currentAd.name}
                                 </h4>
-                                <p className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold leading-relaxed mt-0.5 line-clamp-2">
+                                <p className="text-[9px] text-zinc-600 dark:text-zinc-400 font-semibold leading-tight line-clamp-1">
                                   {typeof currentAd.description === 'object'
                                     ? ((currentAd.description as any)[language] || (currentAd.description as any).fr || (currentAd.description as any).en || '')
                                     : (currentAd.description || currentAd.targetUrl)}
@@ -537,7 +537,7 @@ export function HomePage() {
                               href={currentAd.targetUrl} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="px-4 bg-[#E85D42] text-white text-[9px] font-black py-2 uppercase tracking-widest hover:opacity-90 shrink-0 transition-colors"
+                              className="px-2.5 sm:px-3.5 bg-[#E85D42] text-white text-[8px] sm:text-[9px] font-black py-1.5 uppercase tracking-widest hover:opacity-90 shrink-0 transition-colors"
                               style={{ backgroundColor: currentSettings.accentColor }}
                             >
                               {currentAd.ctaText || (language === 'fr' ? 'DÉCOUVRIR' : 'DISCOVER')}
@@ -554,8 +554,8 @@ export function HomePage() {
           </div>
         </div>
         
-        {/* Right Sidebar Rubrics (Slightly wider to highlights sports & trendings) */}
-        <div className={`${hasRightAd ? 'lg:col-span-3' : 'lg:col-span-4'} min-w-0 space-y-8`}>
+        {/* Right Sidebar Rubrics (Stays lg:col-span-3 when ad disappears, so articles widen) */}
+        <div className="lg:col-span-3 min-w-0 space-y-8">
           
           {/* Widget 1: Trendings - Sourced from our actual journal articles */}
           <div className="glass p-5 border-t-4 border-t-[#E85D42] bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: currentSettings.accentColor }}>
@@ -1268,20 +1268,16 @@ export function HomePage() {
                  <div 
                    key={farRightAd.id} 
                    className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-3 flex flex-col items-center justify-center text-center shadow-sm relative group overflow-hidden"
-                   style={{
-                     minHeight: '750px',
-                     width: '100%'
-                   }}
                  >
                     <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2 block">
                       {language === 'fr' ? 'SPONSOR DROITE' : 'RIGHT SPONSOR'}
                     </span>
                     {farRightAd.imageUrl && farRightAd.imageUrl.trim() !== '' ? (
-                      <a href={farRightAd.targetUrl || '#'} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-20px)] flex-1">
-                         <img src={farRightAd.imageUrl} alt="Advertisement" className="w-full h-full object-cover rounded-xs group-hover:opacity-90 transition-opacity" />
+                      <a href={farRightAd.targetUrl || '#'} target="_blank" rel="noreferrer" className="block w-full">
+                         <img src={farRightAd.imageUrl} alt="Advertisement" className="w-full h-auto object-contain max-h-[850px] rounded-xs group-hover:opacity-90 transition-opacity" />
                       </a>
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-brand-soft/30 dark:bg-zinc-800/40 border border-dashed border-zinc-300 dark:border-zinc-700 flex-1">
+                      <div className="w-full h-40 flex flex-col items-center justify-center p-4 bg-brand-soft/30 dark:bg-zinc-800/40 border border-dashed border-zinc-300 dark:border-zinc-700">
                          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 text-center">{farRightAd.name || t.adSpace}</span>
                       </div>
                     )}
@@ -1291,11 +1287,10 @@ export function HomePage() {
                    <div 
                      key={ad.id} 
                      className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-3 flex flex-col items-center justify-center text-center shadow-sm relative group"
-                     style={{ minHeight: '350px' }}
                    >
                       <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2 block">{t.adLabel}</span>
-                      <a href={ad.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="block w-full h-[calc(100%-20px)] flex-1">
-                         <img src={ad.imageUrl} alt="Advertisement" className="w-full h-full object-cover border border-brand-border/10 dark:border-zinc-800/40 group-hover:opacity-90 transition-opacity" />
+                      <a href={ad.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="block w-full">
+                         <img src={ad.imageUrl} alt="Advertisement" className="w-full h-auto object-contain max-h-[600px] border border-brand-border/10 dark:border-zinc-800/40 group-hover:opacity-90 transition-opacity" />
                       </a>
                    </div>
                  ))
@@ -1305,9 +1300,6 @@ export function HomePage() {
         )}
 
       </div>
-
-      {/* Full-width Google Sheets-integrated Newsletter Signup Component */}
-      <NewsletterSignup />
 
       {/* INTERACTIVE MODAL 1: Newsletter Registration Confirmation */}
       {showNewsletterModal && (

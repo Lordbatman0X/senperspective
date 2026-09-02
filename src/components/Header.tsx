@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useStore } from "../store";
 import { useAuth } from "../contexts/AuthContext";
-import { SocialLoginButtons } from "./SocialLoginButtons";
+
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import {
@@ -1448,7 +1448,6 @@ export function Header() {
                         ? "S'INSCRIRE & COMMENCER"
                         : "REGISTER & START"}
                   </button>
-                  <SocialLoginButtons language={language} handleSocialSignIn={handleSocialSignIn} isSubmitting={false} />
                 </form>
             </motion.div>
           </motion.div>
