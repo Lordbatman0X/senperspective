@@ -436,6 +436,14 @@ export function HomePage() {
 
   const farLeftAd = ads?.find(a => a.active && a.position === 'far-left');
   const farRightAd = ads?.find(a => a.active && a.position === 'far-right');
+  const hasLeftAd = !!farLeftAd;
+  const hasRightAd = !!(farRightAd || (sidebarAds && sidebarAds.length > 0));
+
+  const mainColSpan = hasLeftAd && hasRightAd 
+    ? 'lg:col-span-8' 
+    : hasLeftAd || hasRightAd 
+    ? 'lg:col-span-10' 
+    : 'lg:col-span-12';
 
   return (
     <div className="max-w-[1280px] mx-auto px-4 py-6">
@@ -445,32 +453,31 @@ export function HomePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* Far-Left Ad Panel with customizable width & height */}
-        {farLeftAd && (
-          <div className="hidden lg:block lg:col-span-1">
+        {/* Far-Left Ad Panel fitting dead space */}
+        {hasLeftAd && (
+          <div className="hidden lg:block lg:col-span-2">
             <div 
-              className="sticky top-20 border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm"
+              className="sticky top-20 border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-3 flex flex-col items-center justify-center text-center shadow-sm"
               style={{
-                width: farLeftAd.width ? `${farLeftAd.width}px` : '120px',
-                height: farLeftAd.height ? `${farLeftAd.height}px` : '600px',
-                maxWidth: '100%',
-                maxHeight: '1000px'
+                minHeight: '750px',
+                width: '100%',
+                maxWidth: '100%'
               }}
             >
-              <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">
+              <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2 block">
                 {language === 'fr' ? 'SPONSOR GAUCHE' : 'LEFT SPONSOR'}
               </span>
               {farLeftAd.imageUrl && farLeftAd.imageUrl.trim() !== '' ? (
-                <a href={farLeftAd.targetUrl} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-15px)]">
+                <a href={farLeftAd.targetUrl} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-20px)] flex-1">
                   <img 
                     src={farLeftAd.imageUrl} 
                     alt="" 
-                    className="w-full h-full object-cover" 
+                    className="w-full h-full object-cover rounded-xs" 
                     referrerPolicy="no-referrer"
                   />
                 </a>
               ) : (
-                <div className="text-[9px] font-black uppercase text-zinc-500 dark:text-zinc-400 font-mono p-4 flex-1 flex items-center justify-center">
+                <div className="text-[10px] font-black uppercase text-zinc-500 dark:text-zinc-400 font-mono p-4 flex-1 flex items-center justify-center">
                   {farLeftAd.title?.[language] || farLeftAd.title?.fr || 'AD BANNER'}
                 </div>
               )}
@@ -479,7 +486,7 @@ export function HomePage() {
         )}
 
         {/* Main Content: Chronological Journal Feed */}
-        <div className={`${farLeftAd ? 'lg:col-span-6' : 'lg:col-span-7'} min-w-0 space-y-8`}>
+        <div className={`${mainColSpan} min-w-0 space-y-8`}>
           <div className="border-b-4 border-brand-dark pb-3 flex justify-between items-end dark:border-zinc-800">
             <div>
               <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-brand-dark">
@@ -1003,9 +1010,14 @@ export function HomePage() {
                   animate={{ opacity: 1, height: 'auto' }} 
                   className="bg-zinc-50 dark:bg-zinc-950 p-3 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2"
                 >
-                  <p className="font-bold text-zinc-900 dark:text-white uppercase text-[9px] tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">
-                    {language === 'fr' ? 'HORAIRES OFFICIELS CHALOUPE GORÉE' : 'GORÉE FERRY DEPARTURES (CHALOUPE)'}
-                  </p>
+                  <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-800 pb-1">
+                    <p className="font-bold text-zinc-900 dark:text-white uppercase text-[9px] tracking-widest">
+                      {language === 'fr' ? 'HORAIRES OFFICIELS CHALOUPE GORÉE' : 'GORÉE FERRY DEPARTURES (CHALOUPE)'}
+                    </p>
+                    <a href="https://www.lmdg.sn" target="_blank" rel="noopener noreferrer" className="text-[8.5px] text-[#E85D42] font-bold hover:underline">
+                      LMDG ↗
+                    </a>
+                  </div>
                   <div className="grid grid-cols-2 gap-3 text-[10px] font-mono leading-relaxed text-zinc-800 dark:text-zinc-200">
                     <div>
                       <span className="font-bold text-[#E85D42] uppercase text-[8px] tracking-wider block mb-1">
@@ -1036,8 +1048,8 @@ export function HomePage() {
                   </div>
                   <p className="text-[9.5px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-medium italic mt-1 font-sans">
                     {language === 'fr' 
-                      ? 'Note : Horaires officiels de la Liaison Maritime Dakar-Gorée. Retards minimes possibles en cas de forte houle.' 
-                      : 'Note: Official schedules. Slight delays may occur only during major offshore gales.'}
+                      ? (currentSettings.coastAndHarbor?.goreeNoteFr || 'Note : Horaires officiels de la Liaison Maritime Dakar-Gorée (LMDG). Mis à jour quotidiennement.') 
+                      : (currentSettings.coastAndHarbor?.goreeNoteEn || 'Note: Official schedules of Dakar-Gorée Maritime Link (LMDG). Updated daily.')}
                   </p>
                 </motion.div>
               )}
@@ -1076,20 +1088,25 @@ export function HomePage() {
                 <motion.div 
                   initial={{ opacity: 0, height: 0 }} 
                   animate={{ opacity: 1, height: 'auto' }} 
-                  className="bg-red-50 dark:bg-red-950/20 p-3 border border-red-200 dark:border-red-900/40 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2 animate-pulse"
+                  className="bg-red-50 dark:bg-red-950/20 p-3 border border-red-200 dark:border-red-900/40 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2"
                 >
-                  <p className="font-black text-red-700 dark:text-red-400 uppercase text-[9px] tracking-widest border-b border-red-200 dark:border-red-900/20 pb-1">
-                    {language === 'fr' ? '⚠️ BULLETIN SPÉCIAL (ANACIM)' : '⚠️ SPECIAL ADVISORY (ANACIM)'}
-                  </p>
+                  <div className="flex justify-between items-center border-b border-red-200 dark:border-red-900/20 pb-1">
+                    <p className="font-black text-red-700 dark:text-red-400 uppercase text-[9px] tracking-widest">
+                      {language === 'fr' ? '⚠️ BULLETIN SPÉCIAL (ANACIM)' : '⚠️ SPECIAL ADVISORY (ANACIM)'}
+                    </p>
+                    <a href="https://anacim.sn" target="_blank" rel="noopener noreferrer" className="text-[8.5px] text-red-600 dark:text-red-400 font-bold hover:underline">
+                      ANACIM ↗
+                    </a>
+                  </div>
                   <p className="text-[11px] leading-relaxed font-bold text-zinc-900 dark:text-zinc-100">
                     {language === 'fr' 
-                      ? "Avis de coup de vent et de houle dangereuse de secteur Nord-Ouest dépassant 2,5 mètres de hauteur sur l'axe Saint-Louis - Dakar - Mbour." 
-                      : 'Severe NW gale warning with hazardous offshore swells reaching 2.5 to 3.0 meters along the Saint-Louis - Dakar - Mbour coast.'}
+                      ? (currentSettings.coastAndHarbor?.galeWarningFr || "Avis de coup de vent et de houle dangereuse de secteur Nord-Ouest dépassant 2,5 mètres de hauteur sur l'axe Saint-Louis - Dakar - Mbour.") 
+                      : (currentSettings.coastAndHarbor?.galeWarningEn || "Severe NW gale warning with hazardous offshore swells reaching 2.5 to 3.0 meters along the Saint-Louis - Dakar - Mbour coast.")}
                   </p>
                   <p className="text-[9.5px] leading-relaxed text-red-600 dark:text-red-300 italic">
                     {language === 'fr' 
-                      ? 'Recommandation : Les sorties en haute mer des pirogues artisanales et bateaux légers de plaisance sont vivement déconseillées durant les prochaines 24 heures.' 
-                      : 'Safety directive: Traditional fishing pirogues and small watercraft operations should be suspended for the next 24 hours.'}
+                      ? 'Recommandation officielle ANACIM : Les sorties en haute mer des pirogues artisanales et bateaux légers sont vivement déconseillées.' 
+                      : 'ANACIM official directive: Traditional fishing pirogues and small watercraft operations are advised to suspend high seas navigation.'}
                   </p>
                 </motion.div>
               )}
@@ -1281,59 +1298,48 @@ export function HomePage() {
         </div>
 
         {/* Ad Space Right Offset (Far-right Ad Panel - Matching Far-Left Dimensions) */}
-        <div className="hidden lg:block lg:col-span-1 relative">
-           <div className="sticky top-20 flex flex-col gap-6 items-center">
-             {farRightAd ? (
-               <div 
-                 key={farRightAd.id} 
-                 className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm relative group overflow-hidden"
-                 style={{
-                   width: farRightAd.width ? `${farRightAd.width}px` : '100%',
-                   height: farRightAd.height ? `${farRightAd.height}px` : '1250px',
-                   maxWidth: '100%',
-                   maxHeight: '1800px'
-                 }}
-               >
-                  <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">
-                    {language === 'fr' ? 'SPONSOR DROITE' : 'RIGHT SPONSOR'}
-                  </span>
-                  {farRightAd.imageUrl && farRightAd.imageUrl.trim() !== '' ? (
-                    <a href={farRightAd.targetUrl || '#'} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-15px)]">
-                       <img src={farRightAd.imageUrl} alt="Advertisement" className="w-full h-full object-cover rounded-xs group-hover:opacity-90 transition-opacity" />
-                    </a>
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center p-2 bg-brand-soft/30 dark:bg-zinc-800/40 border border-dashed border-zinc-300 dark:border-zinc-700">
-                       <span className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 text-center">{farRightAd.name || t.adSpace}</span>
-                    </div>
-                  )}
-               </div>
-             ) : sidebarAds.length > 0 ? (
-               sidebarAds.map(ad => (
+        {hasRightAd && (
+          <div className="hidden lg:block lg:col-span-2 relative">
+             <div className="sticky top-20 flex flex-col gap-6 items-center">
+               {farRightAd ? (
                  <div 
-                   key={ad.id} 
-                   className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm relative group"
-                   style={{ height: '300px' }}
+                   key={farRightAd.id} 
+                   className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-3 flex flex-col items-center justify-center text-center shadow-sm relative group overflow-hidden"
+                   style={{
+                     minHeight: '750px',
+                     width: '100%'
+                   }}
                  >
-                    <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">{t.adLabel}</span>
-                    <a href={ad.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="block w-full h-[calc(100%-15px)]">
-                       <img src={ad.imageUrl} alt="Advertisement" className="w-full h-full object-cover border border-brand-border/10 dark:border-zinc-800/40 group-hover:opacity-90 transition-opacity" />
-                    </a>
+                    <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2 block">
+                      {language === 'fr' ? 'SPONSOR DROITE' : 'RIGHT SPONSOR'}
+                    </span>
+                    {farRightAd.imageUrl && farRightAd.imageUrl.trim() !== '' ? (
+                      <a href={farRightAd.targetUrl || '#'} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-20px)] flex-1">
+                         <img src={farRightAd.imageUrl} alt="Advertisement" className="w-full h-full object-cover rounded-xs group-hover:opacity-90 transition-opacity" />
+                      </a>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-brand-soft/30 dark:bg-zinc-800/40 border border-dashed border-zinc-300 dark:border-zinc-700 flex-1">
+                         <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 text-center">{farRightAd.name || t.adSpace}</span>
+                      </div>
+                    )}
                  </div>
-               ))
-             ) : (
-               <div 
-                 className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-2.5 flex flex-col items-center justify-center text-center shadow-sm relative group"
-                 style={{ height: farLeftAd?.height ? `${farLeftAd.height}px` : '600px' }}
-               >
-                  <span className="text-[7px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-1.5 block">{t.adLabel}</span>
-                  <div className="bg-brand-white/50 w-full h-[calc(100%-20px)] flex items-center justify-center border border-dashed border-brand-border/25 dark:border-zinc-800/50 relative overflow-hidden group">
-                     <div className="absolute inset-0 bg-gradient-to-br from-[#E85D42]/5 to-transparent"></div>
-                     <span className="text-zinc-500 dark:text-gray-400 font-bold uppercase tracking-widest text-center text-xs group-hover:scale-105 transition-transform">{t.adSpace}</span>
-                  </div>
-               </div>
-             )}
-           </div>
-        </div>
+               ) : sidebarAds.length > 0 ? (
+                 sidebarAds.map(ad => (
+                   <div 
+                     key={ad.id} 
+                     className="w-full border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-3 flex flex-col items-center justify-center text-center shadow-sm relative group"
+                     style={{ minHeight: '350px' }}
+                   >
+                      <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2 block">{t.adLabel}</span>
+                      <a href={ad.targetUrl || '#'} target="_blank" rel="noopener noreferrer" className="block w-full h-[calc(100%-20px)] flex-1">
+                         <img src={ad.imageUrl} alt="Advertisement" className="w-full h-full object-cover border border-brand-border/10 dark:border-zinc-800/40 group-hover:opacity-90 transition-opacity" />
+                      </a>
+                   </div>
+                 ))
+               ) : null}
+             </div>
+          </div>
+        )}
 
       </div>
 

@@ -128,6 +128,10 @@ export function CustomizerTab() {
   const [meteoCondEn, setMeteoCondEn] = useState(siteSettings?.coastAndHarbor?.meteoCondEn || 'Sunny & Windy');
   const [windValue, setWindValue] = useState(siteSettings?.coastAndHarbor?.windValue || '18 km/h NW');
   const [windGusts, setWindGusts] = useState(siteSettings?.coastAndHarbor?.windGusts || 'Gusts: 22 km/h');
+  const [galeWarningFr, setGaleWarningFr] = useState(siteSettings?.coastAndHarbor?.galeWarningFr || "Avis de coup de vent et de houle dangereuse de secteur Nord-Ouest dépassant 2,5 mètres de hauteur sur l'axe Saint-Louis - Dakar - Mbour.");
+  const [galeWarningEn, setGaleWarningEn] = useState(siteSettings?.coastAndHarbor?.galeWarningEn || "Severe NW gale warning with hazardous offshore swells reaching 2.5 to 3.0 meters along the Saint-Louis - Dakar - Mbour coast.");
+  const [goreeNoteFr, setGoreeNoteFr] = useState(siteSettings?.coastAndHarbor?.goreeNoteFr || "Horaires officiels de la Liaison Maritime Dakar-Gorée (LMDG). Retards minimes possibles en cas de forte houle.");
+  const [goreeNoteEn, setGoreeNoteEn] = useState(siteSettings?.coastAndHarbor?.goreeNoteEn || "Official schedules of Dakar-Gorée Maritime Link (LMDG). Slight delays may occur only during major offshore gales.");
 
   // Local state for daily wisdom
   const [wisdomWolof, setWisdomWolof] = useState(siteSettings?.dailyWisdom?.wolof || "Nila lay doxé, sa gënëg du lënk.");
@@ -204,7 +208,11 @@ export function CustomizerTab() {
         meteoCondFr,
         meteoCondEn,
         windValue,
-        windGusts
+        windGusts,
+        galeWarningFr,
+        galeWarningEn,
+        goreeNoteFr,
+        goreeNoteEn
       },
       dailyWisdom: {
         wolof: wisdomWolof,
@@ -906,6 +914,42 @@ export function CustomizerTab() {
                 type="text"
                 value={windValue}
                 onChange={e => setWindValue(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
+              />
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1">Bulletin Coup de Vent ANACIM (FR)</label>
+              <textarea
+                value={galeWarningFr}
+                onChange={e => setGaleWarningFr(e.target.value)}
+                rows={2}
+                className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
+              />
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1">Bulletin Coup de Vent ANACIM (EN)</label>
+              <textarea
+                value={galeWarningEn}
+                onChange={e => setGaleWarningEn(e.target.value)}
+                rows={2}
+                className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
+              />
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1">Note Navettes Gorée LMDG (FR)</label>
+              <textarea
+                value={goreeNoteFr}
+                onChange={e => setGoreeNoteFr(e.target.value)}
+                rows={2}
+                className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
+              />
+            </div>
+            <div className="md:col-span-3">
+              <label className="block text-xs font-bold uppercase tracking-wider text-zinc-300 mb-1">Note Navettes Gorée LMDG (EN)</label>
+              <textarea
+                value={goreeNoteEn}
+                onChange={e => setGoreeNoteEn(e.target.value)}
+                rows={2}
                 className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
               />
             </div>

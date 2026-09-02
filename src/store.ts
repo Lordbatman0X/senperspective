@@ -352,6 +352,10 @@ interface AppState {
       meteoCondEn: string;
       windValue: string;
       windGusts: string;
+      galeWarningFr?: string;
+      galeWarningEn?: string;
+      goreeNoteFr?: string;
+      goreeNoteEn?: string;
     };
     dailyWisdom: {
       wolof: string;
@@ -1382,7 +1386,11 @@ export const useStore = create<AppState>()(
           meteoCondFr: 'Ensoleillé & Venté',
           meteoCondEn: 'Sunny & Windy',
           windValue: '18 km/h NW',
-          windGusts: 'Gusts: 22 km/h'
+          windGusts: 'Gusts: 22 km/h',
+          galeWarningFr: "Avis de coup de vent et de houle dangereuse de secteur Nord-Ouest dépassant 2,5 mètres de hauteur sur l'axe Saint-Louis - Dakar - Mbour.",
+          galeWarningEn: "Severe NW gale warning with hazardous offshore swells reaching 2.5 to 3.0 meters along the Saint-Louis - Dakar - Mbour coast.",
+          goreeNoteFr: "Horaires officiels de la Liaison Maritime Dakar-Gorée (LMDG). Retards minimes possibles en cas de forte houle.",
+          goreeNoteEn: "Official schedules of Dakar-Gorée Maritime Link (LMDG). Slight delays may occur only during major offshore gales."
         },
         dailyWisdom: {
           wolof: "Nila lay doxé, sa gënëg du lënk.",
