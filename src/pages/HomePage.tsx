@@ -60,11 +60,11 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="group flex flex-col h-full overflow-hidden square-card"
+      className="group flex flex-col h-full overflow-hidden square-card bg-white dark:bg-zinc-900 border border-brand-border dark:border-zinc-800 shadow-sm"
     >
       <Link to={`/article/${article.slug || article.id}`} className="block relative overflow-hidden shrink-0">
         <div 
-          className={`relative bg-cover bg-center transition-transform duration-700 group-hover:scale-105 ${large ? 'h-[12rem] md:h-[16rem]' : tall ? 'h-52 sm:h-60' : small ? 'aspect-[4/5]' : 'h-48'}`}
+          className={`relative bg-cover bg-center transition-transform duration-700 group-hover:scale-105 ${large ? 'h-[12rem] md:h-[16rem]' : tall ? 'h-52 sm:h-60' : small ? 'aspect-[4/5]' : 'h-56 sm:h-64'}`}
           style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
         >
           {large && (
@@ -78,20 +78,20 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         )}
       </Link>
       
-      <div className={`flex flex-col flex-grow ${small ? 'p-4' : tall ? 'p-6' : 'p-5'}`}>
-        <div className="flex-grow">
+      <div className={`flex flex-col flex-grow ${small ? 'p-4' : tall ? 'p-6' : 'p-6 sm:p-7'} justify-between`}>
+        <div className="flex-grow space-y-3">
           <Link to={`/article/${article.slug || article.id}`}>
-            <h3 className={`font-black mb-3 leading-tight transition-colors ${large ? 'text-3xl lg:text-4xl text-brand-dark group-hover:text-brand-primary line-clamp-3' : small ? 'text-base text-brand-dark group-hover:text-brand-primary line-clamp-2' : tall ? 'text-[22px] text-[#E85D42] hover:text-[#D45037] line-clamp-3' : 'text-lg text-brand-dark group-hover:text-brand-primary line-clamp-3'}`}>
+            <h3 className={`font-black mb-3 leading-snug transition-colors ${large ? 'text-3xl lg:text-4xl text-brand-dark group-hover:text-brand-primary line-clamp-3' : small ? 'text-base text-brand-dark group-hover:text-brand-primary line-clamp-2' : tall ? 'text-[22px] text-[#E85D42] hover:text-[#D45037] line-clamp-3' : 'text-xl text-brand-dark group-hover:text-brand-primary line-clamp-3'}`}>
               {getSafeText(article.title, language) || 'Sans titre'}
             </h3>
-            <p className={`mb-4 ${large ? 'text-brand-muted text-lg line-clamp-3' : small ? 'text-brand-muted text-xs line-clamp-2' : tall ? 'text-zinc-600 dark:text-zinc-300 text-[15px] leading-relaxed line-clamp-4 font-medium' : 'text-brand-muted text-sm line-clamp-3'}`}>
+            <p className={`mt-2 ${large ? 'text-brand-muted text-lg line-clamp-3' : small ? 'text-brand-muted text-xs line-clamp-2' : tall ? 'text-zinc-600 dark:text-zinc-300 text-[15px] leading-relaxed line-clamp-4 font-medium' : 'text-brand-muted text-sm sm:text-base leading-relaxed line-clamp-3'}`}>
               {getSafeText(article.excerpt, language) || ''}
             </p>
           </Link>
         </div>
         
-        <div className={`flex justify-between items-center mt-auto pt-4 ${tall ? 'border-t border-zinc-200 dark:border-zinc-700' : 'border-t border-brand-border pt-3'}`}>
-          <div className={`font-bold uppercase tracking-wider ${tall ? 'text-[11px] text-zinc-500 dark:text-zinc-400' : 'text-[9px] text-brand-muted'}`}>
+        <div className={`flex justify-between items-center mt-6 pt-4 ${tall ? 'border-t border-zinc-200 dark:border-zinc-700' : 'border-t border-brand-border dark:border-zinc-800'}`}>
+          <div className={`font-bold uppercase tracking-wider ${tall ? 'text-[11px] text-zinc-500 dark:text-zinc-400' : 'text-[10px] text-brand-muted'}`}>
             {tall ? `${formatRelativeDate(article.date, language)} • ${article.readingTime} MIN` : `${article.author} • ${formatRelativeDate(article.date, language)}`}
           </div>
           <button 
@@ -507,18 +507,18 @@ export function HomePage() {
                     const currentAd = activeBetweenAds[adIndex % activeBetweenAds.length];
                     elements.push(
                       <div className="col-span-1 sm:col-span-2 pt-2 pb-2" key={`horizontal-mid-ad-${adIndex}`}>
-                        <div className="bg-[#E85D42]/5 text-zinc-950 dark:text-zinc-200 border border-[#E85D42]/20 p-2.5 sm:p-3 relative overflow-hidden group font-sans">
-                          <span className="absolute right-2 top-2 text-[6px] bg-[#E85D42]/10 text-[#E85D42] font-black px-1.5 tracking-widest uppercase" style={{ color: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '1a' }}>
+                        <div className="bg-[#E85D42]/5 text-zinc-950 dark:text-zinc-200 border border-[#E85D42]/20 p-3 sm:p-4 relative overflow-hidden group font-sans">
+                          <span className="absolute right-3 top-2 text-[6px] bg-[#E85D42]/10 text-[#E85D42] font-black px-1.5 py-0.5 tracking-widest uppercase" style={{ color: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '1a' }}>
                             {language === 'fr' ? 'SPONSOR' : 'SPONSOR'}
                           </span>
                           
-                          <div className="flex flex-row items-center gap-2 justify-between w-full flex-nowrap">
-                            <div className="flex gap-2 items-center flex-1 min-w-0">
+                          <div className="flex flex-row items-center gap-3 justify-between w-full flex-nowrap pr-16 sm:pr-24">
+                            <div className="flex gap-3 items-center flex-1 min-w-0">
                               {currentAd.imageUrl && currentAd.imageUrl.trim() !== '' && (
                                 <img 
                                   src={currentAd.imageUrl} 
                                   alt="" 
-                                  className="w-8 h-8 sm:w-10 sm:h-10 object-cover border border-brand-border shrink-0"
+                                  className="w-9 h-9 sm:w-11 sm:h-11 object-cover border border-brand-border shrink-0"
                                   referrerPolicy="no-referrer"
                                 />
                               )}
@@ -526,7 +526,7 @@ export function HomePage() {
                                 <h4 className="font-black text-[10px] sm:text-xs uppercase tracking-wider text-[#E85D42] truncate" style={{ color: currentSettings.accentColor }}>
                                   {currentAd.name}
                                 </h4>
-                                <p className="text-[9px] text-zinc-600 dark:text-zinc-400 font-semibold leading-tight line-clamp-1">
+                                <p className="text-[9px] sm:text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold leading-tight line-clamp-1">
                                   {typeof currentAd.description === 'object'
                                     ? ((currentAd.description as any)[language] || (currentAd.description as any).fr || (currentAd.description as any).en || '')
                                     : (currentAd.description || currentAd.targetUrl)}
@@ -537,7 +537,7 @@ export function HomePage() {
                               href={currentAd.targetUrl} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="px-2.5 sm:px-3.5 bg-[#E85D42] text-white text-[8px] sm:text-[9px] font-black py-1.5 uppercase tracking-widest hover:opacity-90 shrink-0 transition-colors"
+                              className="px-3 sm:px-4 bg-[#E85D42] text-white text-[8px] sm:text-[9px] font-black py-2 uppercase tracking-widest hover:opacity-90 shrink-0 transition-colors"
                               style={{ backgroundColor: currentSettings.accentColor }}
                             >
                               {currentAd.ctaText || (language === 'fr' ? 'DÉCOUVRIR' : 'DISCOVER')}
