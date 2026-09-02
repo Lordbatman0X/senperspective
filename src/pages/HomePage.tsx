@@ -454,7 +454,7 @@ export function HomePage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Main Content: Chronological Journal Feed */}
-        <div className="lg:col-span-8 min-w-0 space-y-8">
+        <div className={`${hasRightAd ? 'lg:col-span-7' : 'lg:col-span-8'} min-w-0 space-y-8`}>
           <div className="border-b-4 border-brand-dark pb-3 flex justify-between items-end dark:border-zinc-800">
             <div>
               <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-brand-dark">
@@ -555,7 +555,7 @@ export function HomePage() {
         </div>
         
         {/* Right Sidebar Rubrics (Slightly wider to highlights sports & trendings) */}
-        <div className="lg:col-span-3 min-w-0 space-y-8">
+        <div className={`${hasRightAd ? 'lg:col-span-3' : 'lg:col-span-4'} min-w-0 space-y-8`}>
           
           {/* Widget 1: Trendings - Sourced from our actual journal articles */}
           <div className="glass p-5 border-t-4 border-t-[#E85D42] bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: currentSettings.accentColor }}>
@@ -1262,7 +1262,7 @@ export function HomePage() {
 
         {/* Ad Space Right Offset (Far-right Ad Panel - Matching Far-Left Dimensions) */}
         {hasRightAd && (
-          <div className="hidden lg:block lg:col-span-1 relative">
+          <div className="hidden lg:block lg:col-span-2 relative">
              <div className="sticky top-20 flex flex-col gap-6 items-center">
                {farRightAd ? (
                  <div 
