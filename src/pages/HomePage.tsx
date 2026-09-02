@@ -440,9 +440,9 @@ export function HomePage() {
   const hasRightAd = !!(farRightAd || (sidebarAds && sidebarAds.length > 0));
 
   const mainColSpan = hasLeftAd && hasRightAd 
-    ? 'lg:col-span-8' 
-    : hasLeftAd || hasRightAd 
     ? 'lg:col-span-10' 
+    : hasLeftAd || hasRightAd 
+    ? 'lg:col-span-11' 
     : 'lg:col-span-12';
 
   return (
@@ -453,40 +453,8 @@ export function HomePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* Far-Left Ad Panel fitting dead space */}
-        {hasLeftAd && (
-          <div className="hidden lg:block lg:col-span-2">
-            <div 
-              className="sticky top-20 border border-brand-border dark:border-zinc-800 bg-brand-white dark:bg-zinc-900 p-3 flex flex-col items-center justify-center text-center shadow-sm"
-              style={{
-                minHeight: '750px',
-                width: '100%',
-                maxWidth: '100%'
-              }}
-            >
-              <span className="text-[8px] font-mono uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2 block">
-                {language === 'fr' ? 'SPONSOR GAUCHE' : 'LEFT SPONSOR'}
-              </span>
-              {farLeftAd.imageUrl && farLeftAd.imageUrl.trim() !== '' ? (
-                <a href={farLeftAd.targetUrl} target="_blank" rel="noreferrer" className="block w-full h-[calc(100%-20px)] flex-1">
-                  <img 
-                    src={farLeftAd.imageUrl} 
-                    alt="" 
-                    className="w-full h-full object-cover rounded-xs" 
-                    referrerPolicy="no-referrer"
-                  />
-                </a>
-              ) : (
-                <div className="text-[10px] font-black uppercase text-zinc-500 dark:text-zinc-400 font-mono p-4 flex-1 flex items-center justify-center">
-                  {farLeftAd.title?.[language] || farLeftAd.title?.fr || 'AD BANNER'}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Main Content: Chronological Journal Feed */}
-        <div className={`${mainColSpan} min-w-0 space-y-8`}>
+        <div className="lg:col-span-8 min-w-0 space-y-8">
           <div className="border-b-4 border-brand-dark pb-3 flex justify-between items-end dark:border-zinc-800">
             <div>
               <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-brand-dark">
@@ -1046,11 +1014,6 @@ export function HomePage() {
                       </div>
                     </div>
                   </div>
-                  <p className="text-[9.5px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-medium italic mt-1 font-sans">
-                    {language === 'fr' 
-                      ? (currentSettings.coastAndHarbor?.goreeNoteFr || 'Note : Horaires officiels de la Liaison Maritime Dakar-Gorée (LMDG). Mis à jour quotidiennement.') 
-                      : (currentSettings.coastAndHarbor?.goreeNoteEn || 'Note: Official schedules of Dakar-Gorée Maritime Link (LMDG). Updated daily.')}
-                  </p>
                 </motion.div>
               )}
 
@@ -1299,7 +1262,7 @@ export function HomePage() {
 
         {/* Ad Space Right Offset (Far-right Ad Panel - Matching Far-Left Dimensions) */}
         {hasRightAd && (
-          <div className="hidden lg:block lg:col-span-2 relative">
+          <div className="hidden lg:block lg:col-span-1 relative">
              <div className="sticky top-20 flex flex-col gap-6 items-center">
                {farRightAd ? (
                  <div 
