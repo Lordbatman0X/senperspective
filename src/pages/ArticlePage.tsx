@@ -629,9 +629,9 @@ export function ArticlePage() {
         }
 
         return (
-          <div className="relative z-20 max-w-3xl mx-auto px-4 -mb-16 md:-mb-24 mt-4">
-            <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
-              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+          <div className="relative z-10 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-5 sm:px-6 mt-4 sm:mt-6 mb-10 sm:mb-14">
+            <div className="brief-box border border-zinc-200/90 dark:border-zinc-800/90 border-t-4 border-t-[#E85D42] rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
+              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '16px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
                 <span>{t.brief}</span>
                 <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold tracking-wider">
                   {t.briefSubtitle}
@@ -641,7 +641,7 @@ export function ArticlePage() {
                 {whatHappenedText !== '' && (
                   <li>
                     <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whatHappened}</strong>
-                    <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                    <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
                       {whatHappenedText}
                     </span>
                   </li>
@@ -649,7 +649,7 @@ export function ArticlePage() {
                 {whyItMattersText !== '' && (
                   <li>
                     <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whyItMatters}</strong>
-                    <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                    <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
                       {whyItMattersText}
                     </span>
                   </li>
@@ -657,7 +657,7 @@ export function ArticlePage() {
                 {watchNextText !== '' && (
                   <li>
                     <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.watchNext}</strong>
-                    <span className="text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                    <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
                       {watchNextText}
                     </span>
                   </li>
@@ -668,33 +668,32 @@ export function ArticlePage() {
         );
       })()}
 
-      {/* Featured Image - Reduced Size */}
-      <div className="relative mb-0 z-10 max-w-5xl mx-auto px-4 sm:px-6 my-4">
+      {/* Featured Image - Stands Significantly Wider & More Visibly Prominent */}
+      <div className="relative z-10 w-full max-w-6xl xl:max-w-7xl mx-auto -mx-4 sm:mx-auto w-[calc(100%+2rem)] sm:w-full px-0 sm:px-4 my-8 sm:my-14">
         <img 
           src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
           alt="" 
-          className="w-full h-auto max-h-[380px] sm:max-h-[440px] object-cover rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800" 
+          className="w-full h-80 sm:h-[450px] md:h-[520px] lg:h-[600px] object-cover sm:rounded-2xl shadow-2xl border-y sm:border border-zinc-200 dark:border-zinc-800 transition-all" 
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
           }}
         />
       </div>
 
-      {/* Main Content overlapping image slightly */}
-      <div className="max-w-4xl mx-auto px-4 relative z-10 -mt-10 sm:-mt-14 mb-16">
+      {/* Main Content Box - Pulled Down & Modular, Snug & Narrower Width */}
+      <div className="max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 relative z-10 mt-10 sm:mt-16 mb-20">
         <div className="w-full">
           {/* Main Article Content */}
           <div 
             style={{ 
               ['--article-font-size' as any]: `${fontSize}px`
             }}
-            className="article-box w-full p-6 md:p-12 shadow-2xl backdrop-blur-md border border-zinc-200/80 dark:border-zinc-800/80 rounded-none text-left"
+            className="article-box w-full p-5 sm:p-8 md:p-12 shadow-2xl backdrop-blur-md border border-zinc-200/90 dark:border-zinc-800/90 rounded-xl sm:rounded-2xl text-left bg-white/95 dark:bg-zinc-900/95"
           >
             <Markdown className="animate-fadeIn prose-article-reader text-zinc-900 dark:text-white">
               {articleBodyText}
             </Markdown>
           </div>
-
         </div>
       </div>
 

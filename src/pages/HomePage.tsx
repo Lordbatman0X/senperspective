@@ -506,38 +506,43 @@ export function HomePage() {
                   if (adIndex < 5) { // up to 5 ads
                     const currentAd = activeBetweenAds[adIndex % activeBetweenAds.length];
                     elements.push(
-                      <div className="col-span-1 sm:col-span-2 pt-2 pb-2" key={`horizontal-mid-ad-${adIndex}`}>
-                        <div className="bg-[#E85D42]/5 text-zinc-950 dark:text-zinc-200 border border-[#E85D42]/20 p-3 sm:p-4 relative overflow-hidden group font-sans">
-                          <span className="absolute right-3 top-2 text-[6px] bg-[#E85D42]/10 text-[#E85D42] font-black px-1.5 py-0.5 tracking-widest uppercase" style={{ color: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '1a' }}>
-                            {language === 'fr' ? 'SPONSOR' : 'SPONSOR'}
-                          </span>
-                          
-                          <div className="flex flex-row items-center gap-3 justify-between w-full flex-nowrap pr-16 sm:pr-24">
-                            <div className="flex gap-3 items-center flex-1 min-w-0">
+                      <div className="col-span-1 sm:col-span-2 py-1" key={`horizontal-mid-ad-${adIndex}`}>
+                        <div className="bg-[#E85D42]/5 text-zinc-950 dark:text-zinc-200 border border-[#E85D42]/20 px-3 py-2 sm:px-4 sm:py-2.5 relative overflow-hidden group font-sans">
+                          <div className="flex flex-row items-center justify-between gap-2.5 sm:gap-4 w-full flex-nowrap">
+                            {/* Left: Sponsor badge, thumbnail, and info */}
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                              <span 
+                                className="shrink-0 text-[7px] sm:text-[8px] bg-[#E85D42]/10 font-black px-1.5 py-0.5 tracking-wider uppercase border border-[#E85D42]/20 select-none" 
+                                style={{ color: currentSettings.accentColor, borderColor: `${currentSettings.accentColor}33` }}
+                              >
+                                {language === 'fr' ? 'SPONSOR' : 'SPONSOR'}
+                              </span>
                               {currentAd.imageUrl && currentAd.imageUrl.trim() !== '' && (
                                 <img 
                                   src={currentAd.imageUrl} 
                                   alt="" 
-                                  className="w-9 h-9 sm:w-11 sm:h-11 object-cover border border-brand-border shrink-0"
+                                  className="w-7 h-7 sm:w-8 sm:h-8 object-cover border border-brand-border shrink-0 rounded-none"
                                   referrerPolicy="no-referrer"
                                 />
                               )}
-                              <div className="text-left flex-1 min-w-0">
-                                <h4 className="font-black text-[10px] sm:text-xs uppercase tracking-wider text-[#E85D42] truncate" style={{ color: currentSettings.accentColor }}>
+                              <div className="text-left min-w-0 flex-1">
+                                <h4 className="font-black text-[10px] sm:text-xs uppercase tracking-wider text-[#E85D42] truncate leading-tight" style={{ color: currentSettings.accentColor }}>
                                   {currentAd.name}
                                 </h4>
-                                <p className="text-[9px] sm:text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold leading-tight line-clamp-1">
+                                <p className="text-[9px] sm:text-[10px] text-zinc-600 dark:text-zinc-400 font-medium truncate hidden xs:block sm:block leading-tight">
                                   {typeof currentAd.description === 'object'
                                     ? ((currentAd.description as any)[language] || (currentAd.description as any).fr || (currentAd.description as any).en || '')
                                     : (currentAd.description || currentAd.targetUrl)}
                                 </p>
                               </div>
                             </div>
+
+                            {/* Right: CTA button on far right, widely separated */}
                             <a 
                               href={currentAd.targetUrl} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="px-3 sm:px-4 bg-[#E85D42] text-white text-[8px] sm:text-[9px] font-black py-2 uppercase tracking-widest hover:opacity-90 shrink-0 transition-colors"
+                              className="px-2.5 py-1.5 sm:px-4 sm:py-2 bg-[#E85D42] text-white text-[8px] sm:text-[9px] font-black uppercase tracking-widest hover:opacity-90 shrink-0 transition-opacity ml-2 whitespace-nowrap"
                               style={{ backgroundColor: currentSettings.accentColor }}
                             >
                               {currentAd.ctaText || (language === 'fr' ? 'DÉCOUVRIR' : 'DISCOVER')}

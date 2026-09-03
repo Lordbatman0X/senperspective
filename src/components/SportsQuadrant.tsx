@@ -91,15 +91,6 @@ export function SportsQuadrant() {
   const zone3 = resolveZone(3);
   const zone4 = resolveZone(4);
 
-  const handleAskAbdelAboutMatch = (match: Match) => {
-    const prompt = language === "fr"
-      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques et sportifs de la rencontre suivante : ${match.teamA.name} contre ${match.teamB.name} (${formatBilingual(match.leagueLabel, 'fr')}) ? Donne-moi un résumé clair et factuel.`
-      : `Hi Abdel, can you break down the political and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${formatBilingual(match.leagueLabel, 'en')})? Include key facts and background.`;
-
-    localStorage.setItem("abdel_prefilled_prompt", prompt);
-    window.dispatchEvent(new CustomEvent("trigger_abdel_chat", { detail: { prompt } }));
-  };
-
   const renderFlagBadge = (name: string) => {
     const cleanName = name.replace(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/g, "").trim();
 
@@ -253,13 +244,13 @@ export function SportsQuadrant() {
                 </div>
                 
                 {zone1.type === "match" ? (
-                  <button
-                    onClick={() => handleAskAbdelAboutMatch(zone1.data as Match)}
-                    className="bg-[#E85D42]/10 hover:bg-[#E85D42] text-[#E85D42] hover:text-white border border-[#E85D42]/20 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5 cursor-pointer"
+                  <Link
+                    to="/arene"
+                    className="bg-[#E85D42]/10 hover:bg-[#E85D42] text-[#E85D42] hover:text-white border border-[#E85D42]/20 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-1.5"
                   >
-                    <MessageSquare size={10} />
-                    <span>{language === "fr" ? "Décrypter avec Abdel" : "Analyze via Abdel"}</span>
-                  </button>
+                    <Trophy size={10} />
+                    <span>{language === "fr" ? "L'Arène" : "The Arena"}</span>
+                  </Link>
                 ) : (
                   <Link
                     to={`/article/${(zone1.data as Article).slug}`}
@@ -306,12 +297,12 @@ export function SportsQuadrant() {
                         <span className="truncate">{(zone2.data as Match).teamB.name}</span>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleAskAbdelAboutMatch(zone2.data as Match)}
+                    <Link
+                      to="/arene"
                       className="bg-zinc-200 dark:bg-zinc-800 hover:bg-[#E85D42] text-zinc-800 dark:text-zinc-200 hover:text-white px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest transition-colors cursor-pointer shrink-0"
                     >
-                      Abdel AI
-                    </button>
+                      {language === "fr" ? "L'Arène" : "The Arena"}
+                    </Link>
                   </div>
                 ) : (
                   <div>

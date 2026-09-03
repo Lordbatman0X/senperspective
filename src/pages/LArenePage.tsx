@@ -64,15 +64,6 @@ export function LArenePage() {
     })
     .sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
 
-  const handleAskAbdelAboutMatch = (match: Match) => {
-    const prompt = language === "fr"
-      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques, sociaux et sportifs du match : ${match.teamA.name} contre ${match.teamB.name} (${match.leagueLabel.fr}) ? Donne-moi l'historique et les détails sociétaux de cette rivalité au Sénégal ou en Afrique.`
-      : `Hi Abdel, can you break down the political, social, and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${match.leagueLabel.en})? Include the history and societal impact of this rivalry in Senegal or Africa.`;
-
-    localStorage.setItem("abdel_prefilled_prompt", prompt);
-    window.dispatchEvent(new CustomEvent("trigger_abdel_chat", { detail: { prompt } }));
-  };
-
   const renderFlag = (name: string) => {
     const cleanName = name.replace(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/g, "").trim();
     const isWrestling = !name.includes("🇪🇸") && !name.includes("🏴󠁧󠁢󠁥󠁮󠁧󠁿") && !name.includes("🇫🇷") && !name.includes("🇩🇪") && !name.includes("🇳🇱") && !name.includes("🇦🇷") && !name.includes("🇧🇷") && !name.includes("🇪🇬") && !name.includes("🇹🇳") && !name.includes("🇦🇴");
@@ -422,15 +413,6 @@ export function LArenePage() {
                           <div className="mt-4 p-3 bg-zinc-100/30 dark:bg-zinc-950/20 border-l-4 border-[#C69B52] text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-medium italic">
                             {language === "fr" ? match.contextInfo?.fr : match.contextInfo?.en}
                           </div>
-
-                          {/* Abdel AI Integration button */}
-                          <button
-                            onClick={() => handleAskAbdelAboutMatch(match)}
-                            className="mt-4 w-full py-2.5 rounded-lg bg-[#E85D42]/10 hover:bg-[#E85D42] text-[#E85D42] hover:text-white text-[9px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-1.5 shadow-sm border border-[#E85D42]/20 hover:border-transparent cursor-pointer"
-                          >
-                            <MessageSquare size={10} />
-                            <span>{language === "fr" ? "Décrypter l'Impact : Abdel AI" : "Socio-Political Analysis : Abdel"}</span>
-                          </button>
                         </motion.div>
                       );
                     })}
@@ -459,25 +441,11 @@ export function LArenePage() {
                   ? "Pourquoi le Lamb est bien plus qu'un sport national" 
                   : "Why traditional Wrestling is far more than a sport"}
               </h4>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-medium mb-4">
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-medium">
                 {language === "fr"
                   ? "Au Sénégal, la lutte avec frappe unifie des quartiers entiers de Dakar, de Thiaroye à Guédiawaye. Au-delà de l'affrontement athlétique, elle représente un ascenseur social puissant pour la jeunesse de la banlieue, mobilisant des capitaux importants issus de sponsors locaux et se connectant étroitement aux rituels mystiques traditionnels sénégalais."
                   : "In Senegal, traditional wrestling with strikes unites entire neighborhoods of Dakar, from Thiaroye to Guédiawaye. Beyond the athletic contest, it is a powerful vehicle of social climbing for suburban youth, pooling massive local sponsorship budgets and closely weaving into mystical ancestral rites."}
               </p>
-              <div className="flex gap-4">
-                <button
-                  onClick={() => {
-                    const prompt = language === "fr"
-                      ? "Bonjour Abdel, peux-tu me décrypter la dimension sociologique et l'économie politique de la lutte sénégalaise (le Lamb) ? Pourquoi ce sport mobilise-t-il autant de ferveur par rapport au football ?"
-                      : "Hi Abdel, can you analyze the sociological dimensions and political economy of Senegalese wrestling (Lamb)? Why does this sport mobilize so much fervor compared to football?";
-                    localStorage.setItem("abdel_prefilled_prompt", prompt);
-                    window.dispatchEvent(new CustomEvent("trigger_abdel_chat", { detail: { prompt } }));
-                  }}
-                  className="btn btn-primary cursor-pointer text-[10px] uppercase font-black tracking-widest bg-[#C69B52] border-[#C69B52] shadow-[2px_2px_0px_0px_rgba(23,32,51,0.8)] hover:bg-[#a37937]"
-                >
-                  {language === "fr" ? "Consulter Abdel sur la sociologie du Lamb" : "Consult Abdel on Lamb Sociology"}
-                </button>
-              </div>
             </div>
 
           </div>

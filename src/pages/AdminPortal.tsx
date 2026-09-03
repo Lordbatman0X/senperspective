@@ -31,6 +31,7 @@ import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { VercelMigrationTab } from '../components/admin/VercelMigrationTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
+import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab';
 
 const ADMIN_SESSION_KEY = "perspective-temp-admin-session";
 
@@ -319,7 +320,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
 
   const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics') => {
@@ -644,28 +645,24 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
   const menuItems = [
     { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
-    { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données' : 'Database Manager', icon: Database, badge: 0 },
     { id: 'list', label: language === 'fr' ? 'Gestion des Contenus' : 'Content & RSS Suite', icon: FileText, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
-    { id: 'taxonomy', label: language === 'fr' ? 'Taxonomie & Tags' : 'Taxonomy & Tags', icon: Tag, badge: 0 },
-    { id: 'homepage_curation', label: language === 'fr' ? 'Page d’accueil' : 'Homepage Curation', icon: Home, badge: 0 },
-    { id: 'media', label: language === 'fr' ? 'Médias' : 'Media Library', icon: ImageIcon, badge: 0 },
-    { id: 'matches', label: language === 'fr' ? 'L’Arène' : 'L’Arène', icon: Trophy, badge: 0 },
-    { id: 'live_alerts', label: language === 'fr' ? 'Direct et alertes' : 'Live & Alerts', icon: Bell, badge: 0 },
-    { id: 'comments', label: language === 'fr' ? 'Communauté' : 'Comments & Community', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
-    { id: 'audience', label: language === 'fr' ? 'Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
-    { id: 'subscribers', label: language === 'fr' ? 'Newsletters' : 'Newsletters', icon: Mail, badge: subscribers?.length || 0 },
+    { id: 'taxonomy', label: language === 'fr' ? 'Catégories & Taxonomie' : 'Categories & Taxonomy', icon: Tag, badge: 0 },
+    { id: 'flashes_curation', label: language === 'fr' ? 'Flashes, International & Sagesse' : 'Flashes, News & Wisdom', icon: Bell, badge: 0 },
+    { id: 'homepage_curation', label: language === 'fr' ? 'Curation Page d’accueil' : 'Homepage Curation', icon: Home, badge: 0 },
+    { id: 'media', label: language === 'fr' ? 'Bibliothèque Média' : 'Media Library', icon: ImageIcon, badge: 0 },
+    { id: 'matches', label: language === 'fr' ? 'L’Arène (Sports)' : 'L’Arène (Sports)', icon: Trophy, badge: 0 },
+    { id: 'comments', label: language === 'fr' ? 'Communauté & Modération' : 'Community & Comments', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
+    { id: 'audience', label: language === 'fr' ? 'Analyses d’Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
+    { id: 'subscribers', label: language === 'fr' ? 'Newsletters & Abonnés' : 'Newsletters & Subscribers', icon: Mail, badge: subscribers?.length || 0 },
     { id: 'google_integrations', label: language === 'fr' ? 'Intégrations Google' : 'Google Hub', icon: Zap, badge: 0 },
-    { id: 'vercel_migration', label: language === 'fr' ? 'Migration Vercel' : 'Vercel Migration', icon: Cloud, badge: 0 },
-    { id: 'cloud_sql', label: language === 'fr' ? 'Base Cloud SQL' : 'Cloud SQL DB', icon: Database, badge: 0 },
-    { id: 'ads', label: language === 'fr' ? 'Monétisation' : 'Monetization', icon: DollarSign, badge: 0 },
-    { id: 'customizer', label: language === 'fr' ? 'Apparence' : 'Appearance', icon: Palette, badge: 0 },
-    { id: 'navigation', label: language === 'fr' ? 'Navigation' : 'Menu Navigation', icon: Compass, badge: 0 },
-    { id: 'seo_distribution', label: language === 'fr' ? 'SEO et distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
-    { id: 'abdel_chat_config', label: language === 'fr' ? 'Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
-    { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Passwords', icon: ShieldCheck, badge: 0 },
-    { id: 'api_diagnostic', label: language === 'fr' ? 'Diagnostic IA' : 'AI Diagnostic', icon: Server, badge: 0 },
-    { id: 'moderation', label: language === 'fr' ? 'Utilisateurs et rôles' : 'Users & Roles', icon: Users, badge: 0 },
-    { id: 'settings', label: language === 'fr' ? 'Paramètres' : 'Global Settings', icon: Settings, badge: 0 },
+    { id: 'ads', label: language === 'fr' ? 'Monétisation & Publicité' : 'Monetization & Ads', icon: DollarSign, badge: 0 },
+    { id: 'customizer', label: language === 'fr' ? 'Apparence & Style' : 'Appearance & Style', icon: Palette, badge: 0 },
+    { id: 'navigation', label: language === 'fr' ? 'Navigation & Menus' : 'Menu Navigation', icon: Compass, badge: 0 },
+    { id: 'seo_distribution', label: language === 'fr' ? 'SEO & Distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
+    { id: 'abdel_chat_config', label: language === 'fr' ? 'Assistant Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
+    { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Access', icon: ShieldCheck, badge: 0 },
+    { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données (MongoDB)' : 'Database Manager', icon: Database, badge: 0 },
+    { id: 'settings', label: language === 'fr' ? 'Paramètres Globaux' : 'Global Settings', icon: Settings, badge: 0 },
     { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
   ] as const;
 
@@ -1391,123 +1388,8 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
 
-        {activeTab === 'live_alerts' && (
-          <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
-            <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
-              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">
-                {language === 'fr' ? 'Flashes & Alertes en Direct' : 'Live & Alert Bulletins'}
-              </h2>
-              <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Broadcast breaking analyst dispatches to the home ticker</p>
-            </div>
-            
-            <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Flash en Français</label>
-                  <textarea 
-                    value={liveFlashFr}
-                    onChange={(e) => setLiveFlashFr(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-3 text-xs focus:outline-none h-20 placeholder-zinc-500 font-medium text-brand-dark dark:text-brand-white" 
-                    placeholder="Signalisation d'actualité en temps réel..." 
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Flash in English</label>
-                  <textarea 
-                    value={liveFlashEn}
-                    onChange={(e) => setLiveFlashEn(e.target.value)}
-                    className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-3 text-xs focus:outline-none h-20 placeholder-zinc-500 font-medium text-brand-dark dark:text-brand-white" 
-                    placeholder="Real-time news broadcast update..." 
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Type de Signalisation / Level</label>
-                <select 
-                  value={liveFlashType}
-                  onChange={(e) => setLiveFlashType(e.target.value)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs focus:outline-none font-bold text-brand-dark dark:text-brand-white"
-                >
-                  <option value="crimson">Crimson Flash (Urgence Politique / Geopolitical Alert)</option>
-                  <option value="standard">Standard Amber (Information générale / Mainstream)</option>
-                  <option value="pulse">Pulse Glass (Signal discret / Economic Update)</option>
-                </select>
-              </div>
-
-              <div className="pt-4 border-t border-zinc-200/10">
-                <button 
-                  onClick={() => {
-                    if (!liveFlashFr.trim() || !liveFlashEn.trim()) {
-                      alert(language === 'fr' ? 'Veuillez remplir les deux langues.' : 'Please provide alert text in both languages.');
-                      return;
-                    }
-
-                    const currentDispatches = currentSettings.analystDispatches || [];
-                    const dkrHour = String(new Date().getUTCHours()).padStart(2, '0');
-                    const dkrMin = String(new Date().getUTCMinutes()).padStart(2, '0');
-                    const timestampStr = `${dkrHour}:${dkrMin} GMT`;
-
-                    const newDispatch = {
-                      id: `disp-${Date.now()}`,
-                      time: timestampStr,
-                      contentFr: liveFlashFr.trim(),
-                      contentEn: liveFlashEn.trim(),
-                      level: liveFlashType
-                    };
-
-                    updateSiteSettings({
-                      analystDispatches: [newDispatch, ...currentDispatches]
-                    });
-
-                    setLiveFlashFr('');
-                    setLiveFlashEn('');
-                    showToast(language === 'fr' ? 'Signal d’alerte publié au téléscripteur !' : 'Breaking bulletin broadcasted to live ticker!');
-                  }}
-                  className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer" 
-                  style={{ backgroundColor: currentSettings.accentColor }}
-                >
-                  {language === 'fr' ? 'Diffuser le Flash d\'Alerte' : 'Broadcast Breaking Flash'}
-                </button>
-              </div>
-            </div>
-
-            {/* List of current alerts */}
-            <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40">
-              <h3 className="text-xs font-black uppercase tracking-widest mb-4">Alertes actives sur le site ({currentSettings.analystDispatches?.length || 0})</h3>
-              <div className="space-y-3 font-sans text-xs">
-                {(currentSettings.analystDispatches && currentSettings.analystDispatches.length > 0) ? (
-                  currentSettings.analystDispatches.map((d: any) => (
-                    <div key={d.id} className="flex justify-between items-start gap-4 p-3 bg-zinc-500/5 border border-brand-border/10">
-                      <div className="space-y-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black font-mono text-[#E85D42]">{d.time}</span>
-                          <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.2 rounded ${d.level === 'crimson' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
-                            {d.level || 'standard'}
-                          </span>
-                        </div>
-                        <p className="text-brand-dark dark:text-brand-white font-semibold">FR: {d.contentFr}</p>
-                        <p className="text-brand-muted">EN: {d.contentEn}</p>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          const updated = currentSettings.analystDispatches.filter((item: any) => item.id !== d.id);
-                          updateSiteSettings({ analystDispatches: updated });
-                          showToast(language === 'fr' ? 'Alerte supprimée.' : 'Alert deleted.');
-                        }}
-                        className="p-1 text-red-500 hover:bg-red-500/10 cursor-pointer"
-                        title="Delete alert"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-brand-muted font-mono italic text-center py-4">Aucune alerte active en direct.</p>
-                )}
-              </div>
-            </div>
-          </div>
+        {(activeTab === 'flashes_curation' || activeTab === 'live_alerts') && (
+          <FlashesAndCurationTab />
         )}
 
         {activeTab === 'audience' && (
@@ -1657,28 +1539,65 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               </div>
 
               {/* Social Media Card Visual Preview */}
-              <div className="p-4 bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 block">
-                  {language === 'fr' ? 'Aperçu Carte OpenGraph / Twitter & LinkedIn Card' : 'OpenGraph / Social Media Card Preview'}
-                </span>
-                
-                <div className="border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg overflow-hidden shadow-sm max-w-lg">
-                  <div className="h-32 bg-zinc-800 relative flex items-center justify-center overflow-hidden">
-                    {seoOgImage ? (
-                      <img src={seoOgImage} alt="OG Banner" className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
-                        <span className="font-serif font-black text-2xl text-white tracking-widest z-20">THE PERSPECTIVE GROUP</span>
-                      </>
-                    )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3">
+                  <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 block">
+                    {language === 'fr' ? 'Aperçu Carte OpenGraph / Twitter & LinkedIn' : 'OpenGraph / Social Media Card Preview'}
+                  </span>
+                  
+                  <div className="border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg overflow-hidden shadow-sm">
+                    <div className="h-28 bg-zinc-800 relative flex items-center justify-center overflow-hidden">
+                      {seoOgImage ? (
+                        <img src={seoOgImage} alt="OG Banner" className="w-full h-full object-cover" />
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
+                          <span className="font-serif font-black text-xl text-white tracking-widest z-20">PERSPECTIVE</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="p-3 space-y-1 bg-zinc-900 text-white">
+                      <span className="text-[10px] font-mono text-zinc-400 uppercase">perspective.sn</span>
+                      <h4 className="text-xs font-bold text-white truncate">
+                        L'Économie Sénégalaise & Géopolitique du Sahel {seoTitleSuffix}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                        {seoDefaultDesc}
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-3.5 space-y-1 bg-zinc-900 text-white">
-                    <span className="text-[10px] font-mono text-zinc-400 uppercase">perspective.sn</span>
-                    <h4 className="text-sm font-bold text-white truncate">
-                      L'Économie Sénégalaise & Géopolitique du Sahel {seoTitleSuffix}
-                    </h4>
-                    <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">
+                </div>
+
+                {/* Live Google Search Engine Result Page (SERP) Preview */}
+                <div className="p-4 bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      {language === 'fr' ? 'Aperçu Direct Résultats Google (SERP)' : 'Live Google SERP Preview'}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
+                      Google Index: Active
+                    </span>
+                  </div>
+
+                  <div className="bg-white dark:bg-[#1a1a1a] p-4 rounded-xl border border-zinc-300 dark:border-zinc-800 font-sans shadow-sm space-y-1.5">
+                    {/* Breadcrumb URL */}
+                    <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
+                      <div className="w-4 h-4 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-[9px]">G</div>
+                      <span className="truncate">{seoCanonicalBase || 'https://perspective.sn'}</span>
+                      <span className="text-zinc-400">› article › ...</span>
+                    </div>
+
+                    {/* Clickable Title */}
+                    <h3 className="text-sm font-medium text-blue-600 dark:text-[#8ab4f8] hover:underline cursor-pointer leading-snug line-clamp-1">
+                      L'Actualité & Géopolitique au Sénégal {seoTitleSuffix}
+                    </h3>
+
+                    {/* Description Snippet */}
+                    <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-2 leading-relaxed">
+                      <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[10px] mr-1">
+                        {new Date().toLocaleDateString()} —
+                      </span>
                       {seoDefaultDesc}
                     </p>
                   </div>

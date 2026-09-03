@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 @variant dark (&:where(.dark, .dark *));
 @plugin "@tailwindcss/typography";
@@ -7,6 +7,7 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-serif: "Playfair Display", "Georgia", ui-serif, serif;
   --font-body: "Lora", "Georgia", ui-serif, serif;
+  --font-montserrat: "Montserrat", sans-serif;
   --font-cambria: "Cambria", "Georgia", ui-serif, serif;
   --color-brand-primary: var(--color-brand-primary);
   --color-brand-primary-hover: var(--color-brand-primary-hover);

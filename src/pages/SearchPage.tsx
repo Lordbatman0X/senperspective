@@ -64,16 +64,6 @@ export function SearchPage() {
           </p>
         </header>
 
-        {/* Abdel Suggestion Bar */}
-        <div className="mb-12 border border-brand-primary bg-brand-soft p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 text-brand-dark font-bold text-sm">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-primary"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-            {language === 'fr' 
-              ? `Vous voulez approfondir ce sujet ? Demandez à Abdel de vous faire un résumé complet.`
-              : `Want to go deeper into this topic? Ask Abdel to build a reading list.`}
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 gap-6 max-w-4xl">
           {results.map((article, idx) => (
             <div key={`${article.id}-${idx}`} className="square-card group flex flex-col md:flex-row h-full md:h-48 overflow-hidden border border-brand-border hover:border-brand-primary transition-colors">

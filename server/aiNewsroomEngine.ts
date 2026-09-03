@@ -47,8 +47,8 @@ export function getProviderStatus(provider: string) {
   const p = (provider || '').trim().toUpperCase();
   const health = providerHealthMap[p] || { rateLimited: false, rateLimitedUntil: 0, lastError: '', successCount: 0, errorCount: 0 };
   const now = Date.now();
-  if (health.rateLimited && now > health.rateLimitedUntil) {
-    // Cooldown expired! Automatically reset rate limit status so it renews
+  if (health.rateLimited && now >= health.rateLimitedUntil) {
+    // Cooldown expired! Automatically reset rate limit status so it renews immediately
     health.rateLimited = false;
     health.rateLimitedUntil = 0;
   }
@@ -77,6 +77,62 @@ export function getProviderStatus(provider: string) {
   };
 }
 
+export function resetAllProviderRateLimits() {
+  for (const p of Object.keys(providerHealthMap)) {
+    providerHealthMap[p].rateLimited = false;
+    providerHealthMap[p].rateLimitedUntil = 0;
+    providerHealthMap[p].lastError = '';
+  }
+  console.log("[AI CIRCUIT BREAKER] All provider rate limits and cooldowns have been manually reset & renewed.");
+}
+
+export function resetSingleProviderRateLimit(provider: string) {
+  const p = (provider || '').trim().toUpperCase();
+  if (providerHealthMap[p]) {
+    providerHealthMap[p].rateLimited = false;
+    providerHealthMap[p].rateLimitedUntil = 0;
+    providerHealthMap[p].lastError = '';
+    console.log(`[AI CIRCUIT BREAKER] Provider ${p} rate limit reset.`);
+  }
+}
+
+export async function testProviderPing(provider: string): Promise<{ success: boolean; latencyMs: number; message: string; modelUsed?: string }> {
+  const p = (provider || '').trim().toUpperCase();
+  const startTime = Date.now();
+  try {
+    if (p === 'GEMINI') {
+      const res = await generateWithGemini('Respond with {"status": "ok", "title": {"fr": "Test", "en": "Test"}} in valid JSON.', 'You are an API diagnostic ping agent. Return valid JSON only.');
+      recordProviderSuccess('GEMINI');
+      return { success: true, latencyMs: Date.now() - startTime, message: "Gemini responding nominally!", modelUsed: res.modelUsed };
+    } else if (p === 'OPENAI') {
+      const res = await generateWithOpenAI('Respond with {"status": "ok", "title": {"fr": "Test", "en": "Test"}} in valid JSON.', 'You are an API diagnostic ping agent. Return valid JSON only.');
+      recordProviderSuccess('OPENAI');
+      return { success: true, latencyMs: Date.now() - startTime, message: "OpenAI responding nominally!", modelUsed: res.modelUsed };
+    } else if (p === 'GROQ') {
+      const res = await generateWithGroq('Respond with {"status": "ok", "title": {"fr": "Test", "en": "Test"}} in valid JSON.', 'You are an API diagnostic ping agent. Return valid JSON only.');
+      recordProviderSuccess('GROQ');
+      return { success: true, latencyMs: Date.now() - startTime, message: "Groq responding nominally!", modelUsed: res.modelUsed };
+    } else if (p === 'OPENROUTER') {
+      const res = await generateWithOpenRouter('Respond with {"status": "ok", "title": {"fr": "Test", "en": "Test"}} in valid JSON.', 'You are an API diagnostic ping agent. Return valid JSON only.');
+      recordProviderSuccess('OPENROUTER');
+      return { success: true, latencyMs: Date.now() - startTime, message: "OpenRouter responding nominally!", modelUsed: res.modelUsed };
+    } else if (p === 'ANTHROPIC') {
+      const res = await generateWithAnthropic('Respond with {"status": "ok", "title": {"fr": "Test", "en": "Test"}} in valid JSON.', 'You are an API diagnostic ping agent. Return valid JSON only.');
+      recordProviderSuccess('ANTHROPIC');
+      return { success: true, latencyMs: Date.now() - startTime, message: "Anthropic responding nominally!", modelUsed: res.modelUsed };
+    } else if (p === 'DEEPSEEK') {
+      const res = await generateWithDeepSeek('Respond with {"status": "ok", "title": {"fr": "Test", "en": "Test"}} in valid JSON.', 'You are an API diagnostic ping agent. Return valid JSON only.');
+      recordProviderSuccess('DEEPSEEK');
+      return { success: true, latencyMs: Date.now() - startTime, message: "DeepSeek responding nominally!", modelUsed: res.modelUsed };
+    } else {
+      throw new Error(`Unknown provider: ${provider}`);
+    }
+  } catch (err: any) {
+    recordProviderError(p, err);
+    return { success: false, latencyMs: Date.now() - startTime, message: err?.message || String(err) };
+  }
+}
+
 export function recordProviderError(provider: string, err: any) {
   const p = (provider || '').trim().toUpperCase();
   if (!providerHealthMap[p]) {
@@ -87,10 +143,10 @@ export function recordProviderError(provider: string, err: any) {
   const errStr = String(err?.message || err).toLowerCase();
   if (errStr.includes('429') || errStr.includes('quota') || errStr.includes('exhausted') || errStr.includes('rate limit') || errStr.includes('resource_exhausted')) {
     h.rateLimited = true;
-    // 3 minutes cooldown (180,000 ms) before automatic renewal
-    h.rateLimitedUntil = Date.now() + 180 * 1000;
-    h.lastError = `Rate limit / Quota exceeded: ${err?.message || err}`;
-    console.warn(`[AI CIRCUIT BREAKER] Provider ${p} rate limited. Cooldown active for 3 minutes.`);
+    // 60 seconds auto-cooldown before automatic renewal
+    h.rateLimitedUntil = Date.now() + 60 * 1000;
+    h.lastError = `Quota/Rate limit hit: ${err?.message || err}`;
+    console.warn(`[AI CIRCUIT BREAKER] Provider ${p} entered rate-limit status (60s cooldown). Next providers in cascade will take over immediately.`);
   } else {
     h.lastError = err?.message || String(err);
   }
@@ -103,10 +159,8 @@ export function recordProviderSuccess(provider: string) {
   }
   const h = providerHealthMap[p];
   h.successCount++;
-  if (h.rateLimited && Date.now() > h.rateLimitedUntil) {
-    h.rateLimited = false;
-    h.rateLimitedUntil = 0;
-  }
+  h.rateLimited = false;
+  h.rateLimitedUntil = 0;
 }
 
 export let cachedMongoKeys: Record<string, string> = {};
@@ -1451,15 +1505,17 @@ Please craft the complete bilingual storytelling article in strict JSON matching
   let rawJson: any = null;
   let engineUsed = "";
 
-  // Helper for sequential execution
+  // Helper for sequential execution with isolated health tracking
   const tryGemini = async (): Promise<boolean> => {
     if (!geminiAvailable) return false;
     try {
       const res = await generateWithGemini(userPrompt, systemInstruction);
       rawJson = res.parsed;
       engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      recordProviderSuccess('GEMINI');
       return true;
     } catch (err: any) {
+      recordProviderError('GEMINI', err);
       failoverReason += ` | Gemini: ${err?.message || err}`;
       return false;
     }
@@ -1471,8 +1527,10 @@ Please craft the complete bilingual storytelling article in strict JSON matching
       const res = await generateWithAnthropic(userPrompt, systemInstruction);
       rawJson = res.parsed;
       engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      recordProviderSuccess('ANTHROPIC');
       return true;
     } catch (err: any) {
+      recordProviderError('ANTHROPIC', err);
       failoverReason += ` | Anthropic: ${err?.message || err}`;
       return false;
     }
@@ -1484,8 +1542,10 @@ Please craft the complete bilingual storytelling article in strict JSON matching
       const res = await generateWithDeepSeek(userPrompt, systemInstruction);
       rawJson = res.parsed;
       engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      recordProviderSuccess('DEEPSEEK');
       return true;
     } catch (err: any) {
+      recordProviderError('DEEPSEEK', err);
       failoverReason += ` | DeepSeek: ${err?.message || err}`;
       return false;
     }
@@ -1497,8 +1557,10 @@ Please craft the complete bilingual storytelling article in strict JSON matching
       const res = await generateWithGroq(userPrompt, systemInstruction);
       rawJson = res.parsed;
       engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      recordProviderSuccess('GROQ');
       return true;
     } catch (err: any) {
+      recordProviderError('GROQ', err);
       failoverReason += ` | Groq: ${err?.message || err}`;
       return false;
     }
@@ -1510,8 +1572,10 @@ Please craft the complete bilingual storytelling article in strict JSON matching
       const res = await generateWithOpenRouter(userPrompt, systemInstruction);
       rawJson = res.parsed;
       engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      recordProviderSuccess('OPENROUTER');
       return true;
     } catch (err: any) {
+      recordProviderError('OPENROUTER', err);
       failoverReason += ` | OpenRouter: ${err?.message || err}`;
       return false;
     }
@@ -1523,41 +1587,58 @@ Please craft the complete bilingual storytelling article in strict JSON matching
       const res = await generateWithOpenAI(userPrompt, systemInstruction);
       rawJson = res.parsed;
       engineUsed = engineUsed ? `${res.modelUsed} (Failover)` : res.modelUsed;
+      recordProviderSuccess('OPENAI');
       return true;
     } catch (err: any) {
+      recordProviderError('OPENAI', err);
       failoverReason += ` | OpenAI: ${err?.message || err}`;
       return false;
     }
   };
 
-  // Safe Cascade Sequence Helper
+  // Safe Cascade Sequence Helper with Intelligent Rate-Limit Avoidance
   const runCascade = async (excludeEngine?: string): Promise<boolean> => {
     const sequence = [
-      { name: 'gemini', fn: tryGemini, available: geminiAvailable },
-      { name: 'anthropic', fn: tryAnthropic, available: anthropicAvailable },
-      { name: 'deepseek', fn: tryDeepSeek, available: deepseekAvailable },
-      { name: 'groq', fn: tryGroq, available: groqAvailable },
-      { name: 'openrouter', fn: tryOpenRouter, available: openRouterAvailable },
-      { name: 'openai', fn: tryOpenAI, available: openAiAvailable }
+      { name: 'gemini', providerKey: 'GEMINI', fn: tryGemini, available: geminiAvailable },
+      { name: 'anthropic', providerKey: 'ANTHROPIC', fn: tryAnthropic, available: anthropicAvailable },
+      { name: 'deepseek', providerKey: 'DEEPSEEK', fn: tryDeepSeek, available: deepseekAvailable },
+      { name: 'groq', providerKey: 'GROQ', fn: tryGroq, available: groqAvailable },
+      { name: 'openrouter', providerKey: 'OPENROUTER', fn: tryOpenRouter, available: openRouterAvailable },
+      { name: 'openai', providerKey: 'OPENAI', fn: tryOpenAI, available: openAiAvailable }
     ];
 
-    // Try primary first if specified & not excluded
+    const isRateLimited = (providerKey: string) => {
+      const st = getProviderStatus(providerKey);
+      return st.rateLimited;
+    };
+
+    // Separate available candidates into ready vs rate-limited
+    const availableCandidates = sequence.filter(s => s.available);
+    const readyCandidates = availableCandidates.filter(s => !isRateLimited(s.providerKey));
+    const rateLimitedCandidates = availableCandidates.filter(s => isRateLimited(s.providerKey));
+
+    // Try primary first if specified, available, and NOT rate-limited
     if (primary && primary !== excludeEngine && primary !== 'auto') {
-      const match = sequence.find(s => s.name === primary);
-      if (match && match.available) {
+      const match = availableCandidates.find(s => s.name === primary);
+      if (match && !isRateLimited(match.providerKey)) {
         if (await match.fn()) return true;
         failoverTriggered = true;
       }
     }
 
-    // Try remainder in order
-    for (const eng of sequence) {
-      if (eng.name === primary && !failoverTriggered) continue; // already tried
-      if (eng.available) {
-        failoverTriggered = true;
-        if (await eng.fn()) return true;
-      }
+    // Try ready (non-rate-limited) candidates first
+    for (const eng of readyCandidates) {
+      if (eng.name === primary && !failoverTriggered) continue; // already attempted
+      failoverTriggered = true;
+      if (await eng.fn()) return true;
     }
+
+    // Only if all ready candidates failed, try any recovering rate-limited candidates
+    for (const eng of rateLimitedCandidates) {
+      failoverTriggered = true;
+      if (await eng.fn()) return true;
+    }
+
     return false;
   };
 

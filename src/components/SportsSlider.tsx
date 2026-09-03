@@ -69,17 +69,6 @@ export function SportsSlider() {
     return obj[language] || obj.fr || obj.en || "";
   };
 
-  // Helper to trigger Abdel AI with the matchup prompt
-  const handleAskAbdelAboutMatch = (match: Match) => {
-    const leagueStr = getBilingualText(match.leagueLabel);
-    const prompt = language === "fr" 
-      ? `Bonjour Abdel, peux-tu me décrypter les enjeux politiques et sportifs de la rencontre suivante : ${match.teamA.name} contre ${match.teamB.name} (${leagueStr}) ? S'il y a des détails historiques ou sociétaux, explique-les.`
-      : `Hi Abdel, can you break down the political and sporting context of this match: ${match.teamA.name} vs ${match.teamB.name} (${leagueStr})? Include any cultural or societal background.`;
-    
-    localStorage.setItem("abdel_prefilled_prompt", prompt);
-    window.dispatchEvent(new CustomEvent("trigger_abdel_chat", { detail: { prompt } }));
-  };
-
   // Renders a flag using high-fidelity inline custom HTML/CSS for national teams
   const renderFlag = (name: string) => {
     const cleanName = name.replace(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/g, "").trim();
@@ -316,18 +305,6 @@ export function SportsSlider() {
                     <p className="mt-1.5 text-[8.5px] leading-snug text-zinc-500 dark:text-zinc-400 border-l-2 border-[#E85D42]/50 pl-2 font-medium italic pointer-events-none">
                       {getBilingualText(match.contextInfo)}
                     </p>
-
-                    {/* Interactive Abdel Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAskAbdelAboutMatch(match);
-                      }}
-                      className="mt-2.5 w-full py-2 rounded-lg bg-[#E85D42]/10 hover:bg-[#E85D42] text-[#E85D42] hover:text-white text-[8.5px] font-black uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-1 shadow-sm border border-[#E85D42]/20 hover:border-transparent"
-                    >
-                      <MessageSquare size={9} />
-                      <span>{language === "fr" ? "Décrypter : Abdel" : "Analyze via Abdel"}</span>
-                    </button>
                   </div>
                 </div>
               ))}

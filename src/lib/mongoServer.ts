@@ -247,6 +247,38 @@ export async function wipeCollection(collectionName: string) {
   return deletedCount;
 }
 
+export function isMongoConnected(): boolean {
+  return (mongoose.connection.readyState as number) === 1;
+}
+
+export async function saveAnalyticsEventMongo(eventRecord: any) {
+  const id = eventRecord.id || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+  await saveDocument('analytics_events', id, eventRecord, true);
+  return eventRecord;
+}
+
+export async function saveUserConsentMongo(consentRecord: any) {
+  const id = consentRecord.id || consentRecord.sessionId || `consent_${Date.now()}`;
+  await saveDocument('user_consents', id, consentRecord, true);
+  return consentRecord;
+}
+
+export async function getAnalyticsEventsMongo() {
+  const docs = await getCollectionDocs('analytics_events');
+  return docs.map(d => d.data || d);
+}
+
+export async function getUserConsentsMongo() {
+  const docs = await getCollectionDocs('user_consents');
+  return docs.map(d => d.data || d);
+}
+
+export async function wipeAnalyticsMongo() {
+  await wipeCollection('analytics_events');
+  await wipeCollection('user_consents');
+  return true;
+}
+
 export async function registerUser(email: string, password?: string, name?: string) {
   const normalizedEmail = String(email).toLowerCase().trim();
   const connected = await connectMongo();

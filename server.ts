@@ -19,7 +19,10 @@ import {
   getGeminiClient,
   saveApiKey,
   loadKeysFromMongo,
-  getProviderStatus
+  getProviderStatus,
+  resetAllProviderRateLimits,
+  resetSingleProviderRateLimit,
+  testProviderPing
 } from "./server/aiNewsroomEngine";
 import { 
   generateArticleImageWithAI, 
@@ -35,7 +38,13 @@ import {
   wipeCollection, 
   registerUser, 
   loginUser,
-  updateUserPasswordServer
+  updateUserPasswordServer,
+  saveAnalyticsEventMongo,
+  saveUserConsentMongo,
+  getAnalyticsEventsMongo,
+  getUserConsentsMongo,
+  wipeAnalyticsMongo,
+  isMongoConnected
 } from "./src/lib/mongoServer";
 
 export const app = express();
@@ -1657,6 +1666,12 @@ app.use((req, res, next) => {
   app.post("/api/articles/purge", purgeRssDraftsHandler);
 
   // AI Engine Status Endpoint (GET /api/ai-engine/status)
+  const getMaskedKey = (provider: string): string => {
+    const k = getEffectiveApiKey(provider);
+    if (!k || k.length < 6) return k ? "••••••" : "";
+    return `${k.slice(0, 4)}••••${k.slice(-4)}`;
+  };
+
   app.get("/api/ai-engine/status", (req, res) => {
     const geminiInfo = getProviderStatus('GEMINI');
     const openAiInfo = getProviderStatus('OPENAI');
@@ -1669,32 +1684,76 @@ app.use((req, res, next) => {
       success: true,
       gemini: {
         ...geminiInfo,
+        maskedKey: getMaskedKey('GEMINI'),
         models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.7-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-3.1-pro-preview"]
       },
       openai: {
         ...openAiInfo,
+        maskedKey: getMaskedKey('OPENAI'),
         models: ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
       },
       groq: {
         ...groqInfo,
+        maskedKey: getMaskedKey('GROQ'),
         models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
       },
       openrouter: {
         ...openRouterInfo,
+        maskedKey: getMaskedKey('OPENROUTER'),
         models: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-chat", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash", "openai/gpt-4o-mini"]
       },
       anthropic: {
         ...anthropicInfo,
+        maskedKey: getMaskedKey('ANTHROPIC'),
         models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229", "claude-3-5-haiku-20241022"]
       },
       deepseek: {
         ...deepseekInfo,
+        maskedKey: getMaskedKey('DEEPSEEK'),
         models: ["deepseek-chat", "deepseek-reasoner"]
       },
       failoverActive: true,
       mode: "multi-orchestrator",
       storytellingEngine: "Perspective Editorial Standards v4"
     });
+  });
+
+  // Reset Rate Limits Endpoint
+  app.post("/api/ai-engine/reset-rate-limits", express.json(), (req, res) => {
+    try {
+      const { provider } = req.body || {};
+      if (provider) {
+        resetSingleProviderRateLimit(provider);
+      } else {
+        resetAllProviderRateLimits();
+      }
+      return res.json({ 
+        success: true, 
+        message: provider ? `Limite de taux réinitialisée pour ${provider}` : "Tous les quotas et limites de taux ont été réinitialisés !" 
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Test / Ping Individual AI Provider Endpoint
+  app.post("/api/ai-engine/test-provider", express.json(), async (req, res) => {
+    try {
+      const { provider } = req.body || {};
+      if (!provider) {
+        return res.status(400).json({ success: false, error: "Nom du fournisseur requis" });
+      }
+      const testResult = await testProviderPing(provider);
+      return res.json({
+        success: testResult.success,
+        provider,
+        latencyMs: testResult.latencyMs,
+        message: testResult.message,
+        modelUsed: testResult.modelUsed
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // Set API Key Endpoint
@@ -1705,7 +1764,20 @@ app.use((req, res, next) => {
         return res.status(400).json({ success: false, error: "Missing provider or key" });
       }
       await saveApiKey(provider.toUpperCase(), key);
-      return res.json({ success: true, message: `API Key for ${provider} saved.` });
+      return res.json({ success: true, message: `API Key for ${provider} saved and synced to MongoDB.` });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Delete API Key Endpoint
+  app.delete("/api/ai-engine/keys", express.json(), async (req, res) => {
+    try {
+      const { provider } = req.body || {};
+      if (!provider) return res.status(400).json({ success: false, error: "Missing provider" });
+      await saveApiKey(provider.toUpperCase(), "");
+      resetSingleProviderRateLimit(provider);
+      return res.json({ success: true, message: `Clé API pour ${provider} révoquée.` });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
     }
@@ -2300,11 +2372,16 @@ app.use((req, res, next) => {
 
       userConsentsRepository.unshift(consentRecord);
       await saveAnalyticsData();
+      try {
+        await saveUserConsentMongo(consentRecord);
+      } catch (e) {
+        console.warn("[MongoDB Analytics] saveUserConsentMongo notice:", e);
+      }
       await syncUserConsentToFirestore(consentRecord);
       await syncToAnalyticsArchiveInFirestore(consentRecord, true);
       await syncDailyAnalyticsArchiveToFirestore(new Date().toISOString().split('T')[0]);
 
-      return res.json({ success: true, message: "Consent recorded & archived in Firestore", consent: consentRecord });
+      return res.json({ success: true, message: "Consent recorded & archived in MongoDB & Firestore", consent: consentRecord });
     } catch (err: any) {
       console.error("Error in /api/analytics/consent:", err);
       return res.status(500).json({ success: false, error: err.message });
@@ -2334,35 +2411,74 @@ app.use((req, res, next) => {
 
       analyticsEventsRepository.unshift(eventRecord);
       await saveAnalyticsData();
+      try {
+        await saveAnalyticsEventMongo(eventRecord);
+      } catch (e) {
+        console.warn("[MongoDB Analytics] saveAnalyticsEventMongo notice:", e);
+      }
       await syncAnalyticsEventToFirestore(eventRecord);
       await syncToAnalyticsArchiveInFirestore(eventRecord, false);
       await syncDailyAnalyticsArchiveToFirestore(new Date().toISOString().split('T')[0]);
 
-      return res.json({ success: true, message: "Analytics event tracked & archived in Firestore", event: eventRecord });
+      return res.json({ success: true, message: "Analytics event tracked & archived in MongoDB & Firestore", event: eventRecord });
     } catch (err: any) {
       console.error("Error in /api/analytics/event:", err);
       return res.status(500).json({ success: false, error: err.message });
     }
   });
 
-  // 3. Get Aggregated Real Audience Analytics Dashboard Data
+  // 3. Get Aggregated Real Audience Analytics Dashboard Data (Powered by MongoDB)
   app.get("/api/analytics/dashboard", async (req, res) => {
     try {
-      const totalEvents = analyticsEventsRepository.length;
-      const totalConsents = userConsentsRepository.length;
+      // Fetch real telemetry from MongoDB
+      let mongoEventsList: any[] = [];
+      let mongoConsentsList: any[] = [];
+      let isConnected = false;
+
+      try {
+        isConnected = isMongoConnected();
+        mongoEventsList = await getAnalyticsEventsMongo();
+        mongoConsentsList = await getUserConsentsMongo();
+      } catch (mErr) {
+        console.warn("[MongoDB Dashboard Fetch Warning]", mErr);
+      }
+
+      // Merge MongoDB real records with in-memory repository (deduplicating by ID)
+      const mergedEventsMap = new Map<string, any>();
+      (mongoEventsList || []).forEach(e => { if (e?.id) mergedEventsMap.set(e.id, e); });
+      (analyticsEventsRepository || []).forEach(e => { if (e?.id) mergedEventsMap.set(e.id, e); });
+      const activeEvents = Array.from(mergedEventsMap.values());
+
+      const mergedConsentsMap = new Map<string, any>();
+      (mongoConsentsList || []).forEach(c => { 
+        const cKey = c?.id || c?.sessionId; 
+        if (cKey) mergedConsentsMap.set(cKey, c); 
+      });
+      (userConsentsRepository || []).forEach(c => { 
+        const cKey = c?.id || c?.sessionId; 
+        if (cKey) mergedConsentsMap.set(cKey, c); 
+      });
+      const activeConsents = Array.from(mergedConsentsMap.values());
+
+      // Update in-memory repositories to match
+      analyticsEventsRepository = activeEvents;
+      userConsentsRepository = activeConsents;
+
+      const totalEvents = activeEvents.length;
+      const totalConsents = activeConsents.length;
 
       // Unique session IDs
-      const uniqueSessions = new Set([...analyticsEventsRepository.map(e => e.sessionId), ...userConsentsRepository.map(c => c.sessionId)].filter(Boolean)).size;
-      const totalPageviews = analyticsEventsRepository.filter(e => e.eventName === "pageview" || !e.eventName).length;
+      const uniqueSessions = new Set([...activeEvents.map(e => e.sessionId), ...activeConsents.map(c => c.sessionId)].filter(Boolean)).size;
+      const totalPageviews = activeEvents.filter(e => e.eventName === "pageview" || !e.eventName).length;
 
       // Consents breakdown
-      const analyticsConsents = userConsentsRepository.filter(c => c.analytics).length;
-      const marketingConsents = userConsentsRepository.filter(c => c.marketing).length;
+      const analyticsConsents = activeConsents.filter(c => c.analytics).length;
+      const marketingConsents = activeConsents.filter(c => c.marketing).length;
       const analyticsOptInRate = totalConsents > 0 ? Math.round((analyticsConsents / totalConsents) * 100) : 0;
       const marketingOptInRate = totalConsents > 0 ? Math.round((marketingConsents / totalConsents) * 100) : 0;
 
       // Lead conversions (newsletter signups, subscription clicks, ad clicks, form submissions)
-      const conversionEvents = analyticsEventsRepository.filter(e => 
+      const conversionEvents = activeEvents.filter(e => 
         e.eventName === "newsletter_subscription" || 
         e.eventName === "conversion_lead" || 
         e.eventName === "premium_click" || 
@@ -2372,7 +2488,7 @@ app.use((req, res, next) => {
 
       // Device breakdown from real events & consents
       const deviceCounts: Record<string, number> = { Mobile: 0, Desktop: 0, Tablet: 0 };
-      [...analyticsEventsRepository, ...userConsentsRepository].forEach(item => {
+      [...activeEvents, ...activeConsents].forEach(item => {
         const d = (item.deviceType || item.device || "").toLowerCase();
         if (d.includes("mobile") || d.includes("phone")) deviceCounts.Mobile++;
         else if (d.includes("tablet") || d.includes("ipad")) deviceCounts.Tablet++;
@@ -2394,7 +2510,7 @@ app.use((req, res, next) => {
         'Reste du monde (Europe, Maghreb, Asie)': 0
       };
 
-      const allLocations = [...analyticsEventsRepository, ...userConsentsRepository];
+      const allLocations = [...activeEvents, ...activeConsents];
       allLocations.forEach(loc => {
         const country = (loc.country || "").toLowerCase();
         if (country.includes("senegal") || country.includes("sénégal") || country.includes("dakar")) {
@@ -2425,7 +2541,7 @@ app.use((req, res, next) => {
         const isoDate = d.toISOString().split('T')[0];
         const dayLabel = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 
-        const dayEvts = analyticsEventsRepository.filter(e => (e.timestamp || "").startsWith(isoDate));
+        const dayEvts = activeEvents.filter(e => (e.timestamp || "").startsWith(isoDate));
         const dayViews = dayEvts.filter(e => e.eventName === "pageview" || !e.eventName).length;
         const daySessions = new Set(dayEvts.map(e => e.sessionId)).size;
         const dayConversions = dayEvts.filter(e => ["newsletter_subscription", "conversion_lead", "premium_click", "ad_click", "contact_lead"].includes(e.eventName)).length;
@@ -2441,7 +2557,7 @@ app.use((req, res, next) => {
 
       // Article Performance based strictly on tracked event counts
       const articleStats: Record<string, { views: number; title: string; category: string; totalDuration: number }> = {};
-      analyticsEventsRepository.forEach(e => {
+      activeEvents.forEach(e => {
         if (e.articleId) {
           if (!articleStats[e.articleId]) {
             articleStats[e.articleId] = { views: 0, title: e.articleTitle || "Article", category: e.category || "Analyse", totalDuration: 0 };
@@ -2452,7 +2568,7 @@ app.use((req, res, next) => {
       });
 
       // Commercial Audience Leads list
-      const leads = userConsentsRepository
+      const leads = activeConsents
         .map(c => ({
           sessionId: c.sessionId,
           email: c.userEmail ? c.userEmail : `Session ${c.sessionId.slice(-8)}`,
@@ -2466,6 +2582,13 @@ app.use((req, res, next) => {
 
       return res.json({
         success: true,
+        mongoStatus: {
+          connected: isConnected,
+          database: "MongoDB Atlas (Perspective Analytics)",
+          eventsStored: activeEvents.length,
+          consentsStored: activeConsents.length,
+          storageType: isConnected ? "mongodb_cloud" : "local_cache"
+        },
         summary: {
           totalPageviews,
           uniqueSessions,
@@ -2480,11 +2603,35 @@ app.use((req, res, next) => {
         trafficTimeSeries,
         articleStats,
         leads: leads.slice(0, 50),
-        rawEventsCount: analyticsEventsRepository.length,
-        rawConsentsCount: userConsentsRepository.length
+        recentLiveEvents: activeEvents.slice(0, 30).map(e => ({
+          id: e.id,
+          eventName: e.eventName || 'pageview',
+          path: e.path || '/',
+          articleTitle: e.articleTitle || '',
+          category: e.category || '',
+          deviceType: e.deviceType || '',
+          country: e.country || '',
+          sessionId: e.sessionId || '',
+          timestamp: e.timestamp || new Date().toISOString()
+        })),
+        rawEventsCount: activeEvents.length,
+        rawConsentsCount: activeConsents.length
       });
     } catch (err: any) {
       console.error("Error in /api/analytics/dashboard:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Reset / Clear Analytics in MongoDB & Memory
+  app.post("/api/analytics/clear", async (req, res) => {
+    try {
+      analyticsEventsRepository = [];
+      userConsentsRepository = [];
+      await saveAnalyticsData();
+      await wipeAnalyticsMongo();
+      return res.json({ success: true, message: "Toutes les données analytics ont été réinitialisées dans MongoDB et en mémoire." });
+    } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }
   });
@@ -2731,7 +2878,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const modelsToTry = ["gemini-3.7-flash", "gemini-3.1-pro-preview", "gemini-2.0-flash"];
+          const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"];
           for (const model of modelsToTry) {
             try {
               const apiCall = ai.models.generateContent({

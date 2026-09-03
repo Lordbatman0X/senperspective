@@ -325,38 +325,34 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
       dragMomentum={false}
       className="fixed bottom-4 right-6 sm:right-10 z-[120] flex flex-col items-end font-sans touch-none select-none cursor-grab active:cursor-grabbing"
     >
-      {/* Floating Trigger Bubbles with Transparent Glass Aesthetics */}
+      {/* Floating Trigger Bubbles - Abdel AI & Reader Messenger */}
       {!isOpen && (
-        <div className="group relative flex items-center gap-1.5 p-1.5 bg-black/40 backdrop-blur-xl border border-white/20 hover:border-[#E85D42]/60 rounded-full shadow-2xl transition-all">
-          {/* Abdel Bubble Button ('A' Icon) */}
+        <div className="flex items-center gap-2 p-1.5 bg-black/70 backdrop-blur-xl border border-white/20 rounded-full shadow-2xl transition-all">
           <button
             type="button"
             onClick={() => {
               setActiveTab("abdel");
               setIsOpen(true);
             }}
-            className="w-8 h-8 rounded-full bg-[#E85D42] text-white font-mono font-black text-xs flex items-center justify-center shadow-md hover:scale-108 transition-all cursor-pointer"
-            title="Abdel AI"
+            className="group relative flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#E85D42] text-white hover:bg-[#d04a30] transition-all cursor-pointer shadow-md"
+            title={language === "fr" ? "Discuter avec Abdel AI" : "Chat with Abdel AI"}
           >
-            A
+            <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>A</span>
+            <span className="text-[11px] tracking-tight hidden sm:inline" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>Abdel</span>
           </button>
 
-          {/* Divider */}
-          <div className="w-[1px] h-4 bg-white/20" />
-
-          {/* Paper Plane / Message Bubble Button */}
           <button
             type="button"
             onClick={() => {
               setActiveTab("chat");
               setIsOpen(true);
             }}
-            className="relative w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-zinc-100 hover:text-[#E85D42] flex items-center justify-center transition-all cursor-pointer"
-            title="Messenger"
+            className="relative w-9 h-9 rounded-full bg-white/10 hover:bg-zinc-800 text-zinc-100 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-md"
+            title={language === "fr" ? "Messagerie Lecteurs" : "Reader Messenger"}
           >
             <Send size={15} className="translate-x-[-0.5px] translate-y-[0.5px]" />
 
-            {/* Chat Indicator (ONLY displayed when there are new/unread messages and chat section is closed) */}
+            {/* Chat Indicator */}
             {showLauncherMessageBadge && (
               <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-md">
                 {unreadDMsCount}
@@ -374,54 +370,43 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="w-[380px] sm:w-[420px] h-[540px] bg-black/55 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-zinc-100"
+            className="w-[380px] sm:w-[420px] h-[560px] bg-black/65 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-zinc-100"
           >
-            {/* Header with Tabs and Actions */}
+            {/* Header with Tabs */}
             <div className="bg-zinc-900/95 dark:bg-zinc-900/95 px-4 py-3 flex items-center justify-between border-b border-zinc-800/80">
-              <div className="flex items-center gap-1.5 bg-zinc-950/80 p-1 rounded-xl border border-zinc-800/60">
-                <button
-                  onClick={() => setActiveTab("abdel")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all cursor-pointer ${
-                    activeTab === "abdel"
-                      ? "bg-[#E85D42] text-white shadow-sm"
-                      : "text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  <span className={`w-4 h-4 rounded-full font-mono font-black text-[10px] flex items-center justify-center leading-none transition-colors ${
-                    activeTab === "abdel" ? "bg-white text-[#E85D42]" : "bg-zinc-700 text-zinc-300"
-                  }`}>
-                    A
-                  </span>
-                  {t.abdelTab}
-                </button>
-                <button
-                  onClick={() => setActiveTab("chat")}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all cursor-pointer ${
-                    activeTab === "chat"
-                      ? "bg-[#E85D42] text-white shadow-sm"
-                      : "text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  {t.chatTab}
-                  {unreadDMsCount > 0 && activeTab !== "chat" && (
-                    <span className="w-4 h-4 bg-red-600 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
-                      {unreadDMsCount}
-                    </span>
-                  )}
-                </button>
+              <div className="flex items-center gap-2">
+                <div className="flex bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
+                  <button
+                    onClick={() => setActiveTab("abdel")}
+                    className={`px-3 py-1.5 rounded-md text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === "abdel"
+                        ? "bg-[#E85D42] text-white shadow-md"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px]" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>A</span>
+                    <span style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }} className="text-xs tracking-tight">Abdel</span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("chat")}
+                    className={`relative px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      activeTab === "chat"
+                        ? "bg-[#E85D42] text-white shadow-md"
+                        : "text-zinc-400 hover:text-zinc-200"
+                    }`}
+                  >
+                    <MessageSquare size={13} />
+                    <span>{language === "fr" ? "Messagerie" : "Messenger"}</span>
+                    {unreadDMsCount > 0 && (
+                      <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-red-600 text-white text-[8px] font-bold rounded-full">
+                        {unreadDMsCount}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-1">
-                {activeTab === "abdel" && abdelMessages.length > 0 && (
-                  <button
-                    onClick={() => setAbdelMessages([])}
-                    className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 rounded-lg transition-colors cursor-pointer"
-                    title={language === "fr" ? "Nouvelle conversation" : "New conversation"}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                )}
                 <button
                   onClick={() => setIsOpen(false)}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800/60 transition-colors cursor-pointer"
@@ -432,170 +417,109 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
               </div>
             </div>
 
-            {/* TAB 1: ABDEL AI ASSISTANT */}
-            {activeTab === "abdel" && (
+            {/* TAB 1: ABDEL AI */}
+            {activeTab === "abdel" ? (
               <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
-                {/* AI Provider selector bar */}
-                <div className="px-3 py-1.5 bg-zinc-950/90 border-b border-zinc-800/80 flex items-center justify-between text-[11px] shrink-0">
-                  <span className="text-zinc-400 font-mono text-[10px] uppercase">
-                    {language === 'fr' ? 'Moteur IA :' : 'AI Engine:'}
-                  </span>
-                  <select
-                    value={selectedAbdelAi}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setSelectedAbdelAi(val);
-                      if (updateSiteSettings) {
-                        updateSiteSettings({ abdelAiProvider: val });
-                      }
-                    }}
-                    className="bg-zinc-900 border border-zinc-700 text-zinc-100 text-[11px] rounded px-2 py-0.5 focus:outline-none focus:border-[#E85D42]"
-                  >
-                    <option value="auto">🔄 Auto (Smart Failover)</option>
-                    <option value="gemini">✨ Google Gemini</option>
-                    <option value="anthropic">🧠 Anthropic Claude</option>
-                    <option value="deepseek">💡 DeepSeek Chat</option>
-                    <option value="openai">⚡ OpenAI GPT-4o</option>
-                    <option value="groq">🚀 Groq Llama 3.3</option>
-                    <option value="openrouter">🌐 OpenRouter</option>
-                  </select>
-                </div>
-
-                {/* Context-aware suggestions bar */}
-                {abdelMessages.length === 0 && (
-                  <div className="p-3.5 border-b border-zinc-800/60 bg-zinc-950/60 backdrop-blur-md">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 font-bold flex items-center gap-1.5">
-                        <Sparkles className="w-3 h-3 text-[#E85D42]" />
-                        <span>{currentSectionLabel}</span>
-                      </p>
-                      {contextArticle && (
-                        <span className="text-[9px] font-mono bg-[#E85D42]/20 text-[#E85D42] border border-[#E85D42]/30 px-1.5 py-0.5 rounded-full truncate max-w-[140px]">
-                          {contextArticle.category}
-                        </span>
-                      )}
+                {/* Greeting banner */}
+                <div className="p-3 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-[#E85D42]/20 text-[#E85D42] flex items-center justify-center text-xs" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>
+                      A
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      {currentPrompts.map((promptText, pIdx) => (
+                    <div>
+                      <p className="text-xs text-zinc-100" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>Abdel — {currentSectionLabel}</p>
+                      <p className="text-[10px] text-zinc-400">{currentGreeting}</p>
+                    </div>
+                  </div>
+
+                  {/* Quick Contextual Prompts */}
+                  {currentPrompts.length > 0 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                      {currentPrompts.map((p, idx) => (
                         <button
-                          key={pIdx}
-                          onClick={() => handleSendAbdel(promptText)}
-                          className="text-left text-[11px] leading-snug bg-zinc-900/90 border border-zinc-800/90 hover:border-[#E85D42] px-3 py-2 rounded-xl text-zinc-200 hover:text-white transition-all cursor-pointer flex items-center justify-between group shadow-xs hover:bg-zinc-850"
+                          key={idx}
+                          onClick={() => handleSendAbdel(p)}
+                          className="shrink-0 text-[10px] bg-zinc-950 border border-zinc-800 hover:border-[#E85D42] text-zinc-300 hover:text-white px-2.5 py-1 rounded-full transition-all cursor-pointer"
                         >
-                          <span className="line-clamp-2 pr-2">{promptText}</span>
-                          <span className="text-[10px] text-zinc-500 group-hover:text-[#E85D42] shrink-0 font-mono font-bold">&rarr;</span>
+                          {p}
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Messages Container */}
-                <div ref={abdelMessagesContainerRef} className="flex-1 p-4 overflow-y-auto space-y-3.5">
+                {/* Messages area */}
+                <div ref={abdelMessagesContainerRef} className="flex-1 p-4 overflow-y-auto space-y-3">
                   {abdelMessages.length === 0 ? (
-                    <div className="text-center py-4 px-3 space-y-2.5">
-                      <div className="w-10 h-10 mx-auto rounded-full bg-[#E85D42] text-white font-mono font-black text-sm flex items-center justify-center shadow-md">
-                        A
-                      </div>
-                      <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#E85D42]/10 border border-[#E85D42]/20 text-[#E85D42] text-[10px] font-mono font-bold uppercase tracking-wider">
-                        <Sparkles size={10} />
-                        <span className="truncate max-w-[240px]">{currentSectionLabel}</span>
-                      </div>
-                      <div className="text-xs text-black leading-relaxed font-sans bg-white p-3.5 rounded-xl border border-zinc-200 shadow-md text-left abdel-response-bubble">
-                        <div className="markdown-body abdel-text-content text-xs text-black">
-                          <Markdown invertInDark={false}>{currentGreeting}</Markdown>
-                        </div>
-                      </div>
+                    <div className="text-center py-12 px-4 text-zinc-400 text-xs space-y-2">
+                      <Bot size={28} className="mx-auto text-[#E85D42] opacity-80" />
+                      <p className="font-bold text-zinc-200">
+                        {language === "fr" ? "Bonjour, je suis Abdel, votre assistant éditorial." : "Hello, I'm Abdel, your editorial assistant."}
+                      </p>
+                      <p className="text-[11px] text-zinc-400">
+                        {language === "fr" ? "Posez-moi des questions sur les articles, la géopolitique ou le Sénégal." : "Ask me anything about articles, geopolitics, or Senegal."}
+                      </p>
                     </div>
                   ) : (
                     abdelMessages.map((m, idx) => (
                       <div
                         key={idx}
-                        className={`flex gap-2.5 ${m.role === "user" ? "justify-end" : "justify-start"}`}
+                        className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}
                       >
-                        {m.role === "abdel" && (
-                          <div className="w-7 h-7 rounded-full bg-[#E85D42] text-white font-mono font-black text-xs flex items-center justify-center shrink-0 shadow-xs mt-0.5">
-                            A
-                          </div>
-                        )}
                         <div
-                          className={`max-w-[82%] p-3.5 rounded-xl text-xs leading-relaxed ${
+                          className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed ${
                             m.role === "user"
-                              ? "bg-[#E85D42] text-white rounded-br-none shadow-sm font-sans"
-                              : "bg-white text-black border border-zinc-200/90 rounded-bl-none shadow-md font-medium abdel-response-bubble"
+                              ? "bg-[#E85D42] text-white rounded-br-none"
+                              : "bg-zinc-900/90 border border-zinc-800 text-zinc-200 rounded-bl-none font-sans"
                           }`}
                         >
                           {m.role === "abdel" ? (
-                            <div className="markdown-body abdel-text-content text-black font-sans">
-                              <Markdown invertInDark={false}>{typeof m.text === 'string' ? m.text : getSafeText(m.text, language)}</Markdown>
+                            <div className="markdown-body text-xs text-zinc-200">
+                              <Markdown>{m.text}</Markdown>
                             </div>
                           ) : (
-                            <p>{getSafeText(m.text, language)}</p>
+                            <p className="whitespace-pre-wrap">{m.text}</p>
                           )}
                         </div>
                       </div>
                     ))
                   )}
+
                   {abdelLoading && (
-                    <div className="flex gap-2.5 items-center text-xs text-zinc-400">
-                      <div className="w-7 h-7 rounded-full bg-[#E85D42] text-white font-mono font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
-                        A
-                      </div>
-                      <div className="bg-white text-black border border-zinc-200/90 px-3 py-2 rounded-xl text-xs font-semibold shadow-sm flex items-center gap-2 abdel-response-bubble">
-                        <RefreshCw className="animate-spin text-[#E85D42]" size={13} />
-                        <span className="text-black">{language === "fr" ? "Abdel analyse..." : "Abdel analyzing..."}</span>
-                      </div>
+                    <div className="flex items-center gap-2 text-zinc-400 text-xs py-2">
+                      <div className="w-4 h-4 rounded-full border-2 border-[#E85D42] border-t-transparent animate-spin" />
+                      <span>{language === "fr" ? "Abdel réfléchit..." : "Abdel is thinking..."}</span>
                     </div>
                   )}
                   <div ref={abdelEndRef} />
                 </div>
 
-                {/* Horizontal Suggestion Prompts bar when conversation is active */}
-                {abdelMessages.length > 0 && currentPrompts.length > 0 && (
-                  <div className="px-3 py-2 bg-zinc-950/80 border-t border-zinc-800/60 overflow-x-auto flex gap-1.5 no-scrollbar">
-                    {currentPrompts.map((promptText, pIdx) => (
-                      <button
-                        key={pIdx}
-                        onClick={() => handleSendAbdel(promptText)}
-                        className="shrink-0 text-[10px] bg-zinc-900 border border-zinc-700/70 hover:border-[#E85D42] hover:bg-zinc-800 px-2.5 py-1 rounded-full text-zinc-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 font-sans"
-                      >
-                        <Sparkles size={9} className="text-[#E85D42] shrink-0" />
-                        <span className="truncate max-w-[200px]">{promptText}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
                 {/* Input form */}
-                <div className="p-3 bg-zinc-900/90 border-t border-zinc-800/80">
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSendAbdel(abdelInput);
-                    }}
-                    className="flex items-center gap-2"
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSendAbdel(abdelInput);
+                  }}
+                  className="p-3 bg-zinc-900/80 border-t border-zinc-800/80 flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={abdelInput}
+                    onChange={(e) => setAbdelInput(e.target.value)}
+                    placeholder={t.askAbdelPlaceholder}
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#E85D42]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={abdelLoading || !abdelInput.trim()}
+                    className="p-2.5 bg-[#E85D42] hover:bg-[#d04a30] disabled:opacity-50 text-white rounded-xl transition-colors cursor-pointer"
                   >
-                    <input
-                      type="text"
-                      value={abdelInput}
-                      onChange={(e) => setAbdelInput(e.target.value)}
-                      placeholder={t.askAbdelPlaceholder}
-                      className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#E85D42]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={abdelLoading || !abdelInput.trim()}
-                      className="p-2 bg-[#E85D42] hover:bg-[#d04a30] text-white rounded-xl disabled:opacity-50 transition-colors cursor-pointer"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </form>
-                </div>
+                    <Send className="w-4 h-4" />
+                  </button>
+                </form>
               </div>
-            )}
-
-            {/* TAB 2: MESSENGER / CHAT */}
-            {activeTab === "chat" && (
+            ) : (
+              /* TAB 2: MESSENGER / CHAT */
               <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
                 {/* Contact Search & Slidable Friends Carousel */}
                 <div className="p-3 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2.5">
