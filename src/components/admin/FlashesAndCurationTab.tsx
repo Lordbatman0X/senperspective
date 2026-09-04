@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
-import { Zap, Globe, Quote, Plus, Trash2, Edit2, Check, X, Sparkles, Clock, AlertCircle, FolderKanban, Megaphone } from 'lucide-react';
+import { Zap, Globe, Quote, Plus, Trash2, Edit2, Check, X, Sparkles, Clock, AlertCircle, FolderKanban, Megaphone, Upload } from 'lucide-react';
 
 export function FlashesAndCurationTab() {
-  const { siteSettings, updateSiteSettings, language } = useStore();
+  const { siteSettings, updateSiteSettings, language, media } = useStore();
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = (msg: string) => {

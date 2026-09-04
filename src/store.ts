@@ -272,6 +272,10 @@ interface AppState {
     isMaintenanceMode?: boolean;
     maintenanceMessageFr?: string;
     maintenanceMessageEn?: string;
+    abdelIntroMessageFr?: string;
+    abdelIntroMessageEn?: string;
+    dossiers?: any[];
+    announcements?: any[];
     fontPairing?: string;
     glassIntensity?: string;
     headerStyle?: string;
