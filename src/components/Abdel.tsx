@@ -11,7 +11,7 @@ import { safeFetchJson } from "../lib/apiUtils";
 
 export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();
-  const { language, setLanguage, theme, toggleTheme, abdelPrompts } = useStore();
+  const { language, setLanguage, theme, toggleTheme, abdelPrompts, siteSettings } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [dragConstraints, setDragConstraints] = useState({ left: -600, right: 20, top: -600, bottom: 20 });
@@ -27,7 +27,15 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   );
   const currentPrompts = contextualData.prompts[language] || contextualData.prompts.fr || [];
   const currentSectionLabel = contextualData.sectionLabel[language] || contextualData.sectionLabel.fr;
-  const currentGreeting = contextualData.greeting[language] || contextualData.greeting.fr;
+  
+  const adminCustomGreeting = (siteSettings?.abdelIntroMessageFr || siteSettings?.abdelIntroMessageEn) ? {
+    fr: siteSettings.abdelIntroMessageFr || contextualData.greeting.fr,
+    en: siteSettings.abdelIntroMessageEn || contextualData.greeting.en
+  } : null;
+
+  const currentGreeting = (adminCustomGreeting && adminCustomGreeting[language])
+    ? adminCustomGreeting[language]
+    : (contextualData.greeting[language] || contextualData.greeting.fr);
 
   const buttonRef = useRef<HTMLDivElement>(null);
   const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);

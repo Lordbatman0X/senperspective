@@ -1301,6 +1301,36 @@ export const useStore = create<AppState>()(
         maintenanceMessageFr: "Notre site est actuellement en cours de maintenance et de mise à jour technique. Nous serons de retour très rapidement.",
         maintenanceMessageEn: "Our platform is currently undergoing scheduled maintenance and updates. We will be back online shortly.",
         siteName: 'Perspective',
+        abdelIntroMessageFr: "Bonjour ! Je suis Abdel, votre guide d'actualité sur Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?",
+        abdelIntroMessageEn: "Hello! I am Abdel, your news guide on Perspective Group. What would you like to unpack today?",
+        dossiers: [
+          {
+            id: 'dos-1',
+            tag: { fr: 'Dossier Macro', en: 'Macro Dossier' },
+            titleFr: 'Dakar Real Estate & Bulle Foncière : Analyse des Grands Projets',
+            titleEn: 'Dakar Real Estate & Land Bubble: Macro Analysis',
+            descFr: 'L’immobilier à Dakar est l’un des marchés les plus dynamiques de la région UEMOA.',
+            descEn: 'Real estate in Dakar is one of the most dynamic markets in the WAEMU region.',
+            readTime: '12 MIN',
+            fullTextFr: 'Analyse approfondie de la dynamique foncière, des investissements majeurs et de la pression urbaine.',
+            fullTextEn: 'In-depth analysis of land dynamics, major investments, and urban pressure across the Dakar region.',
+            key1Fr: 'Pression démographique et extension urbaine vers Diamniadio',
+            key1En: 'Demographic pressure and urban expansion towards Diamniadio',
+            key2Fr: 'Rendements locatifs et spéculation foncière',
+            key2En: 'Rental yields and land speculation'
+          }
+        ],
+        announcements: [
+          {
+            id: 'ann-1',
+            titleFr: 'Ouverture du Sommet Économique de Dakar',
+            titleEn: 'Dakar Economic Summit Opening',
+            textFr: 'Retrouvez notre édition spéciale en direct du Centre International de Conférences.',
+            textEn: 'Follow our special live coverage from the International Conference Center.',
+            imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=60',
+            link: '#'
+          }
+        ],
         boukariCorpLogo: '',
         accentColor: '#E85D42',
         headerStyle: 'glass',

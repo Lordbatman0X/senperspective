@@ -608,28 +608,39 @@ export function ArticlePage() {
           </div>
         </header>
 
-      {/* Perspective Brief */}
-      {(() => {
-        const pb = article.perspectiveBrief;
-        if (!pb) return null;
+      {/* Featured Image & Perspective Brief - WordPress Style layout overlapping upper edge */}
+      <div className="relative w-full max-w-6xl xl:max-w-7xl mx-auto -mx-4 sm:mx-auto w-[calc(100%+2rem)] sm:w-full px-0 sm:px-4 my-8 sm:my-14">
+        <img 
+          src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
+          alt="" 
+          className="w-full h-80 sm:h-[450px] md:h-[520px] lg:h-[600px] object-cover sm:rounded-2xl shadow-2xl border-y sm:border border-zinc-200 dark:border-zinc-800 transition-all" 
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
+          }}
+        />
 
-        const formatText = (val: any) => {
-          if (!val) return '';
-          if (typeof val === 'string') return val.trim();
-          if (typeof val === 'object') return (val[language] || val.fr || val.en || '').trim();
-          return String(val).trim();
-        };
+        {/* Perspective Brief - WordPress style overlapping upper edge of article image */}
+        {(() => {
+          const pb = article.perspectiveBrief;
+          if (!pb) return null;
 
-        const whatHappenedText = formatText(pb.whatHappened);
-        const whyItMattersText = formatText(pb.whyItMatters);
-        const watchNextText = formatText(pb.whatToWatchNext);
+          const formatText = (val: any) => {
+            if (!val) return '';
+            if (typeof val === 'string') return val.trim();
+            if (typeof val === 'object') return (val[language] || val.fr || val.en || '').trim();
+            return String(val).trim();
+          };
 
-        if (!whatHappenedText && !whyItMattersText && !watchNextText) {
-          return null;
-        }
+          const whatHappenedText = formatText(pb.whatHappened);
+          const whyItMattersText = formatText(pb.whyItMatters);
+          const watchNextText = formatText(pb.whatToWatchNext);
 
-        return (
-          <div className="relative z-10 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-5 sm:px-6 mt-4 sm:mt-6 mb-10 sm:mb-14">
+          if (!whatHappenedText && !whyItMattersText && !watchNextText) {
+            return null;
+          }
+
+          return (
+            <div className="relative md:absolute md:-top-20 lg:-top-28 left-0 right-0 z-30 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-5 sm:px-6 mt-4 md:mt-0">
             <div className="brief-box border border-zinc-200/90 dark:border-zinc-800/90 border-t-4 border-t-[#E85D42] rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
               <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '16px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
                 <span>{t.brief}</span>
@@ -667,21 +678,10 @@ export function ArticlePage() {
           </div>
         );
       })()}
-
-      {/* Featured Image - Stands Significantly Wider & More Visibly Prominent */}
-      <div className="relative z-10 w-full max-w-6xl xl:max-w-7xl mx-auto -mx-4 sm:mx-auto w-[calc(100%+2rem)] sm:w-full px-0 sm:px-4 my-8 sm:my-14">
-        <img 
-          src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
-          alt="" 
-          className="w-full h-80 sm:h-[450px] md:h-[520px] lg:h-[600px] object-cover sm:rounded-2xl shadow-2xl border-y sm:border border-zinc-200 dark:border-zinc-800 transition-all" 
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
-          }}
-        />
       </div>
 
-      {/* Main Content Box - Pulled Down & Modular, Snug & Narrower Width */}
-      <div className="max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 relative z-10 mt-10 sm:mt-16 mb-20">
+      {/* Main Content Box - WordPress style overlap on desktop */}
+      <div className="max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 relative z-20 mt-6 sm:mt-10 mb-20">
         <div className="w-full">
           {/* Main Article Content */}
           <div 

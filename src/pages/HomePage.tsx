@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { Article } from '../types';
 import { calculateReadingTime, formatRelativeDate, getSafeText, formatCategory } from '../lib/utils';
 import { motion } from 'motion/react';
-import { SlidersHorizontal, Filter, Bookmark, Waves, Ship, CloudSun, Wind, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle, Trophy } from 'lucide-react';
+import { SlidersHorizontal, Filter, Bookmark, Waves, Ship, CloudSun, Wind, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle, Trophy, Megaphone } from 'lucide-react';
 import { SportsSlider } from '../components/SportsSlider';
 import { SportsQuadrant } from '../components/SportsQuadrant';
 import { useSEO } from '../hooks/useSEO';
@@ -60,25 +60,25 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="group flex flex-col h-full overflow-hidden square-card bg-white dark:bg-zinc-900 border border-brand-border dark:border-zinc-800 shadow-sm"
+      className="group flex flex-col h-full overflow-hidden square-card bg-white dark:bg-zinc-900 border border-brand-border dark:border-zinc-800 shadow-sm relative"
     >
       <Link to={`/article/${article.slug || article.id}`} className="block relative overflow-hidden shrink-0">
         <div 
-          className={`relative bg-cover bg-center transition-transform duration-700 group-hover:scale-105 ${large ? 'h-[12rem] md:h-[16rem]' : tall ? 'h-52 sm:h-60' : small ? 'aspect-[4/5]' : 'h-56 sm:h-64'}`}
+          className={`relative bg-cover bg-center transition-transform duration-700 group-hover:scale-105 ${large ? 'h-[12rem] md:h-[16rem]' : tall ? 'h-52 sm:h-60' : small ? 'aspect-[4/5]' : 'h-40 sm:h-48'}`}
           style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
         >
           {large && (
             <div className="absolute inset-0 bg-gradient-to-t from-brand-dark/40 to-transparent pointer-events-none" />
           )}
         </div>
-        {!tall && (
-           <div className="absolute top-0 left-0 bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 m-3 shadow-md">
+        {!tall && !large && (
+           <div className="absolute top-0 left-0 bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 m-3 shadow-md z-20">
              {formatCategory(article.category, language)}
            </div>
         )}
       </Link>
       
-      <div className={`flex flex-col flex-grow ${small ? 'p-4' : tall ? 'p-6' : 'p-6 sm:p-7'} justify-between`}>
+      <div className={`flex flex-col flex-grow ${small ? 'p-4' : tall ? 'p-6' : 'p-5 sm:p-6'} justify-between`}>
         <div className="flex-grow space-y-3">
           <Link to={`/article/${article.slug || article.id}`}>
             <h3 className={`font-black mb-3 leading-snug transition-colors ${large ? 'text-3xl lg:text-4xl text-brand-dark group-hover:text-brand-primary line-clamp-3' : small ? 'text-base text-brand-dark group-hover:text-brand-primary line-clamp-2' : tall ? 'text-[22px] text-[#E85D42] hover:text-[#D45037] line-clamp-3' : 'text-xl text-brand-dark group-hover:text-brand-primary line-clamp-3'}`}>
@@ -1260,6 +1260,45 @@ export function HomePage() {
                   </Link>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Announcements / Annonces Sidebar Widget */}
+          <div className="glass p-5 bg-white/95 dark:bg-zinc-900/80 border-t-4 border-t-[#E85D42] text-left mt-6" style={{ borderTopColor: currentSettings.accentColor }}>
+            <div className="flex items-center justify-between mb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
+              <div className="flex items-center gap-1.5">
+                <Megaphone size={14} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
+                <span className="text-xs font-serif font-black uppercase tracking-widest text-[#E85D42]">
+                  {language === 'fr' ? 'ANNONCES' : 'ANNOUNCEMENTS'}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4 font-sans">
+              {(currentSettings.announcements && currentSettings.announcements.length > 0 ? currentSettings.announcements : [
+                { id: 'ann-1', titleFr: 'Ouverture du Sommet Économique de Dakar', titleEn: 'Dakar Economic Summit Opening', textFr: 'Retrouvez notre édition spéciale en direct.', textEn: 'Follow our special live coverage.', imageUrl: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800&auto=format&fit=crop&q=60', link: '#' }
+              ]).map((ann: any) => (
+                <div key={ann.id} className="group flex flex-col gap-2 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0">
+                  {ann.imageUrl && ann.imageUrl.trim() !== '' && (
+                    <div className="w-full h-36 bg-cover bg-center rounded-xs overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                      <img src={ann.imageUrl} alt={language === 'fr' ? ann.titleFr : ann.titleEn} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="font-black text-xs leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors mb-1">
+                      {language === 'fr' ? ann.titleFr : ann.titleEn}
+                    </h4>
+                    <p className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium leading-relaxed">
+                      {language === 'fr' ? ann.textFr : ann.textEn}
+                    </p>
+                  </div>
+                  {ann.link && ann.link !== '#' && (
+                    <a href={ann.link} className="text-[9px] font-mono font-black uppercase tracking-widest text-[#E85D42] hover:underline" style={{ color: currentSettings.accentColor }}>
+                      {language === 'fr' ? 'EN SAVOIR PLUS →' : 'LEARN MORE →'}
+                    </a>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
