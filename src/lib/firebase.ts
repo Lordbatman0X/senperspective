@@ -1,4 +1,4 @@
-// Re-export MongoDB client API for backward compatibility and seamless MongoDB integration
-export * from "./mongodb";
-import mongodb from "./mongodb";
-export default mongodb;
+// Re-export Firebase client API for app-wide Firebase integration
+export * from "./realFirebase";
+import { realFirestore } from "./realFirebase";
+export default realFirestore;

@@ -4,7 +4,7 @@ import { get, set as idbSet, del } from 'idb-keyval';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { db, doc, setDoc, deleteDoc, getDocs, collection } from './lib/mongodb';
+import { realFirestore as db, collection, doc, setDoc, deleteDoc, getDocs } from './lib/realFirebase';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
@@ -1567,16 +1567,30 @@ export const useStore = create<AppState>()(
           console.error("Error clearing local storage:", e);
         }
 
-        // 3. Delete documents from MongoDB remote collections
+        // 3. Delete documents from Firestore collections
         try {
-          for (const art of articlesToDelete) {
-            if (art.id) await deleteDoc(doc(db, "articles", art.id)).catch(() => {});
+          // Delete all articles (including drafts)
+          const artSnapshot = await getDocs(collection(db, "articles"));
+          for (const docSnap of artSnapshot.docs) {
+            await deleteDoc(doc(db, "articles", docSnap.id)).catch(() => {});
           }
-          for (const usr of usersToDelete) {
-            if (usr.email) await deleteDoc(doc(db, "users", usr.email.toLowerCase().trim())).catch(() => {});
+          
+          // Delete users
+          const userSnapshot = await getDocs(collection(db, "users"));
+          for (const docSnap of userSnapshot.docs) {
+            await deleteDoc(doc(db, "users", docSnap.id)).catch(() => {});
+          }
+
+          // Delete other data
+          const colNames = ["comments", "messages", "notifications", "interactions", "subscribers", "media", "ads", "matches"];
+          for (const colName of colNames) {
+            const snap = await getDocs(collection(db, colName));
+            for (const docSnap of snap.docs) {
+                await deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+            }
           }
         } catch (e) {
-          console.error("Error purging remote MongoDB docs:", e);
+          console.error("Error purging Firestore docs:", e);
         }
       },
       seedSampleArticles: () => {

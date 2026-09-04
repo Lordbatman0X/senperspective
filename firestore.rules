@@ -1,63 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection
-    match /users/{userEmail} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if request.auth != null;
-
-      match /friends/{friendEmail} {
-        allow read, write: if true;
-      }
-    }
-
-    // Direct Messages
-    match /messages/{messageId} {
-      allow read, write: if true;
-    }
-
-    // Comments
-    match /comments/{commentId} {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    // Articles, Media, Ads & Site Settings
-    match /articles/{articleId} {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    match /media/{document=**} {
-      allow read, write: if true;
-    }
-
-    match /ads/{document=**} {
-      allow read, write: if true;
-    }
-
-    match /settings/{document=**} {
-      allow read, write: if true;
-    }
-
-    // Dedicated Real Analytics & Consents Collections in Firebase
-    match /analytics_events/{eventId} {
-      allow read, write: if true;
-    }
-
-    match /user_consents/{consentId} {
-      allow read, write: if true;
-    }
-
-    match /daily_analytics/{date} {
-      allow read, write: if true;
-    }
-
-    // Fallback for all other documents
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }
-
