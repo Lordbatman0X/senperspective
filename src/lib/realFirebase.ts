@@ -6,5 +6,6 @@ import firebaseConfig from '../../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 export const realFirebaseAuth = getAuth(app);
 export const realFirestore = getFirestore(app);
+export const auth = { ...realFirebaseAuth, register: async (email: string, pass: string, name: string) => {} };
 export { collection, doc, setDoc, deleteDoc, getDocs, getDoc, onSnapshot, query, orderBy };
 export { GoogleAuthProvider, GithubAuthProvider, OAuthProvider, FacebookAuthProvider, signInWithPopup, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, browserSessionPersistence };
