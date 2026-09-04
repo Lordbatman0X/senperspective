@@ -1,31 +1,29 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { User } from 'firebase/auth';
 import { 
-  auth, 
-  db, 
-  safeOnSnapshot, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  onSnapshot, 
-  getDocs, 
-  query, 
-  deleteDoc, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
+  realFirebaseAuth as auth,
+  realFirestore as db,
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  onSnapshot as firestoreOnSnapshot,
+  getDocs,
+  deleteDoc,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
   sendPasswordResetEmail,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
-  MongoUser as User,
   GoogleAuthProvider,
   GithubAuthProvider,
   OAuthProvider,
   FacebookAuthProvider,
   signInWithPopup
-} from "../lib/mongodb";
+} from "../lib/realFirebase";
 import { useStore } from "../store";
 import { sampleArticles } from "../data";
 import { Article } from "../types";
@@ -159,7 +157,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     cleanOldMockData();
 
     // Subscribe to Firestore users collection in real time
-    const unsubscribeUsers = safeOnSnapshot(collection(db, "users"), (snapshot) => {
+    const unsubscribeUsers = firestoreOnSnapshot(collection(db, "users"), (snapshot) => {
       const usersList: FirestoreUser[] = [];
       snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
@@ -196,7 +194,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Real-time synchronization of Direct Messages via Firestore
   useEffect(() => {
     // Listen to messages collection in real-time
-    const unsubscribeMessages = safeOnSnapshot(collection(db, "messages"), (snapshot) => {
+    const unsubscribeMessages = firestoreOnSnapshot(collection(db, "messages"), (snapshot) => {
       const messagesList: any[] = [];
       snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
@@ -246,7 +244,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time synchronization of Comments via Firestore
   useEffect(() => {
-    const unsubscribeComments = safeOnSnapshot(collection(db, "comments"), (snapshot) => {
+    const unsubscribeComments = firestoreOnSnapshot(collection(db, "comments"), (snapshot) => {
       if (snapshot.empty) return;
       const commentsList: any[] = [];
       snapshot.forEach((docSnap: any) => {
@@ -282,7 +280,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time synchronization of Articles via Firestore
   useEffect(() => {
-    const unsubscribeArticles = safeOnSnapshot(collection(db, "articles"), (snapshot) => {
+    const unsubscribeArticles = firestoreOnSnapshot(collection(db, "articles"), (snapshot) => {
       if (snapshot.empty) {
         const existing = useStore.getState().articles;
         if (!existing || existing.length === 0) {
@@ -434,7 +432,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time synchronization of Media via Firestore
   useEffect(() => {
-    const unsubscribeMedia = safeOnSnapshot(collection(db, "media"), (snapshot) => {
+    const unsubscribeMedia = firestoreOnSnapshot(collection(db, "media"), (snapshot) => {
       if (snapshot.empty) return;
       const mediaList: any[] = [];
       snapshot.forEach((docSnap: any) => {
@@ -450,7 +448,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time synchronization of Site Settings via Firestore
   useEffect(() => {
-    const unsubscribeSettings = safeOnSnapshot(doc(db, "siteSettings", "config"), (docSnap) => {
+    const unsubscribeSettings = firestoreOnSnapshot(doc(db, "siteSettings", "config"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         useStore.setState((state) => ({
@@ -470,7 +468,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time synchronization of Matches via Firestore
   useEffect(() => {
-    const unsubscribeMatches = safeOnSnapshot(collection(db, "matches"), (snapshot) => {
+    const unsubscribeMatches = firestoreOnSnapshot(collection(db, "matches"), (snapshot) => {
       if (snapshot.empty) return;
       const matchesList: any[] = [];
       snapshot.forEach((docSnap: any) => {
@@ -486,7 +484,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Real-time synchronization of Subscribers via Firestore
   useEffect(() => {
-    const unsubscribeSubscribers = safeOnSnapshot(collection(db, "subscribers"), (snapshot) => {
+    const unsubscribeSubscribers = firestoreOnSnapshot(collection(db, "subscribers"), (snapshot) => {
       if (snapshot.empty) return;
       const subList: any[] = [];
       snapshot.forEach((docSnap: any) => {

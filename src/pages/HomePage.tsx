@@ -745,7 +745,7 @@ export function HomePage() {
             </p>
             <div className="space-y-4 font-sans">
               {(currentSettings.leMondeDispatches && currentSettings.leMondeDispatches.length > 0) ? (
-                currentSettings.leMondeDispatches.map((item: any, idx: number) => (
+                currentSettings.leMondeDispatches.slice(0, 5).map((item: any, idx: number) => (
                   <div 
                     key={`${item.id}-${idx}`} 
                     className="block border-l-2 border-[#E85D42] pl-3 py-1 bg-zinc-50/50 dark:bg-zinc-950/30 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/20 transition-colors group"
