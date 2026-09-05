@@ -701,7 +701,7 @@ export function ArticlePage() {
           }
 
           return (
-            <div className="hidden md:block absolute md:top-8 left-0 right-0 z-30 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-5 sm:px-6 mt-4 md:mt-0">
+            <div className="hidden md:block absolute md:-top-16 left-0 right-0 z-30 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-5 sm:px-6 mt-4 md:mt-0">
             <div className="brief-box border border-zinc-200/90 dark:border-zinc-800/90 border-t-4 border-t-[#E85D42] rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
               <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '16px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
                 <span>{t.brief}</span>

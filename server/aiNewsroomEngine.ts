@@ -20,7 +20,7 @@ export function extractString(val: any): string {
   return String(val);
 }
 
-const baseStorageDir = process.env.VERCEL ? "/tmp" : process.cwd();
+const baseStorageDir = process.cwd();
 const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
 
 import { saveDocument, getDocument } from "../src/lib/mongoServer";
