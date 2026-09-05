@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { User } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
 import { 
   realFirebaseAuth as auth,
   realFirestore as db,
@@ -80,6 +81,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
        setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<FirestoreUser[]>([]);
   const { setReaderProfile } = useStore();
+  const navigate = useNavigate();
 
   const knownMsgIdsRef = React.useRef<Set<string> | null>(null);
   const knownArtIdsRef = React.useRef<Set<string> | null>(null);
@@ -904,6 +906,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     await signOut(auth);
     setReaderProfile(null);
+    navigate('/');
   };
 
   const resetUserPassword = async (email: string) => {

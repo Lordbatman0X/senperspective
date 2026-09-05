@@ -29,7 +29,6 @@ import { RssFeedManagementTab } from '../components/admin/RssFeedManagementTab';
 import { DraftGenerationTab } from '../components/admin/DraftGenerationTab';
 import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
-import { VercelMigrationTab } from '../components/admin/VercelMigrationTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
 import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab';
 
@@ -320,7 +319,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'vercel_migration' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
 
   const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics') => {
@@ -885,10 +884,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
         {activeTab === 'google_integrations' && (
           <GoogleIntegrationsTab />
-        )}
-
-        {activeTab === 'vercel_migration' && (
-          <VercelMigrationTab />
         )}
 
         {activeTab === 'cloud_sql' && (

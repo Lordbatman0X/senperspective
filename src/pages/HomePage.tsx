@@ -779,44 +779,7 @@ export function HomePage() {
                   </div>
                 ))
               ) : (
-                articles.filter(a => a.category === 'International' || a.category?.toLowerCase() === 'international').map((art, idx) => {
-                  const times = ["14:22 GMT", "11:05 GMT", "08:45 GMT"];
-                  const displayTime = times[idx % times.length];
-                  return (
-                    <Link 
-                      key={`${art.id}-${idx}`} 
-                      to={`/article/${art.slug}`} 
-                      className="block border-l-2 border-[#E85D42] pl-3 py-1 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/20 transition-colors group"
-                      style={{ borderLeftColor: currentSettings.accentColor }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[8px] font-mono tracking-wider font-extrabold text-[#E85D42]">
-                          {art.type || 'International'}
-                        </span>
-                        <span 
-                          className="text-[8px] font-mono tracking-wider font-extrabold dark:text-zinc-400"
-                          style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                        >
-                          {displayTime}
-                        </span>
-                      </div>
-                      <p 
-                        className="text-xs leading-relaxed font-extrabold mt-0.5 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors"
-                        style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                      >
-                        {art.title?.[language] || 'Untitled'}
-                      </p>
-                      {art.excerpt?.[language] && (
-                        <p 
-                          className="text-[10px] font-medium line-clamp-1 mt-0.5 dark:text-zinc-300"
-                          style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                        >
-                          {art.excerpt[language]}
-                        </p>
-                      )}
-                    </Link>
-                  );
-                })
+                <p className="text-xs text-zinc-500 italic">No updates</p>
               )}
             </div>
           </div>

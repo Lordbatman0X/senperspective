@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   Database, Server, Activity, CheckCircle2, AlertTriangle, Trash2, RefreshCw, 
   Layers, ShieldAlert, HardDrive, FileText, Users, MessageSquare, Mail, 
-  Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight
+  Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight, Upload
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { db, collection, getDocs, deleteDoc, doc } from '../../lib/mongodb';
+import { db, collection, getDocs, deleteDoc, doc as mongoDoc } from '../../lib/mongodb';
+import { realFirestore, doc as firestoreDoc, setDoc } from '../../lib/realFirebase';
+import { sampleArticles } from '../../data';
 
 interface CollectionStats {
   name: string;
@@ -129,7 +131,7 @@ export function AdminDashboard() {
         const snap = await getDocs(collection(db, colName));
         setWipeLogs(prev => [...prev, isFr ? `Suppression de ${snap.size} document(s) dans "${colName}"...` : `Deleting ${snap.size} document(s) in "${colName}"...`]);
         
-        const deletePromises = snap.docs.map(docSnap => deleteDoc(doc(db, colName, docSnap.id)));
+        const deletePromises = snap.docs.map(docSnap => deleteDoc(mongoDoc(db, colName, docSnap.id)));
         await Promise.all(deletePromises);
 
         // Clear Zustand local memory state corresponding to collection
@@ -155,6 +157,25 @@ export function AdminDashboard() {
       setWipeLogs(prev => [...prev, `❌ Error during wipe: ${err.message || 'Unknown error'}`]);
     } finally {
       setIsWiping(false);
+    }
+  };
+
+  const handleSeedArticles = async () => {
+    setIsRefreshing(true);
+    setWipeLogs([isFr ? 'Démarrage de la synchronisation des articles...' : 'Starting article synchronization...']);
+    setWipeTarget('articles');
+    try {
+      for (const article of sampleArticles) {
+        await setDoc(firestoreDoc(realFirestore, "articles", article.id), article, { merge: true });
+        setWipeLogs(prev => [...prev, isFr ? `Synchronisé: ${article.id}` : `Synced: ${article.id}`]);
+      }
+      setWipeLogs(prev => [...prev, isFr ? '✅ Synchronisation terminée.' : '✅ Sync completed.']);
+      setWipeCompleted(true);
+      await checkDatabaseHealth();
+    } catch (err: any) {
+      setWipeLogs(prev => [...prev, `❌ Error during sync: ${err.message}`]);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -279,6 +300,15 @@ export function AdminDashboard() {
             >
               <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
               {isFr ? 'Tester Connexion' : 'Refresh Connection'}
+            </button>
+
+            <button
+              onClick={handleSeedArticles}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 bg-emerald-900/40 border border-emerald-500/40 hover:bg-emerald-800 text-emerald-300 hover:text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+            >
+              <Upload size={14} />
+              {isFr ? 'Sync Articles' : 'Sync Articles'}
             </button>
 
             <button
