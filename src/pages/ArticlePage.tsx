@@ -6,7 +6,7 @@ import { renderNeutralAvatar } from '../components/AccountDrawer';
 import { SharedItemCard } from '../components/SharedItemCard';
 import { InternalShareModal } from '../components/InternalShareModal';
 import { Article } from '../types';
-import { Bookmark, MessageSquare, Send, User, LogOut, Globe, ShieldCheck, Check, ThumbsUp, ThumbsDown, Edit2, Trash2, Share2, Copy, Play, Pause, Square, Volume2, Mail, Film, ExternalLink } from 'lucide-react';
+import { Bookmark, MessageSquare, Send, User, LogOut, Globe, ShieldCheck, Check, ThumbsUp, ThumbsDown, Edit2, Trash2, Share2, Copy, Play, Pause, Square, Volume2, Mail, Film, ExternalLink, ChevronDown, Landmark, TrendingUp, Users } from 'lucide-react';
 import { calculateReadingTime, formatRelativeDate, extractYoutubeId, getSafeText, formatCategory } from '../lib/utils';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -79,6 +79,9 @@ export function ArticlePage() {
 
   // Sharing local state
   const [showInternalShareModal, setShowInternalShareModal] = useState(false);
+
+  // Perspective Brief expandable state
+  const [isBriefExpanded, setIsBriefExpanded] = useState(false);
 
   // Comment Control edit states
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -501,7 +504,13 @@ export function ArticlePage() {
           <div className="flex flex-wrap items-center justify-center gap-4 text-xs font-bold uppercase tracking-widest text-brand-muted pt-4 mb-6">
             <span>{article.author}</span>
             <span className="w-1 h-1 bg-brand-primary rounded-full"></span>
-            <span>{new Date(article.date).toLocaleDateString()}</span>
+            <span>{(() => {
+              const d = new Date(article.date);
+              if (!isNaN(d.getTime())) {
+                return d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+              }
+              return formatRelativeDate(article.date, language);
+            })()}</span>
             <span className="w-1 h-1 bg-brand-primary rounded-full"></span>
             <span>{calculateReadingTime(article, language)}</span>
             <span className="hidden sm:block w-1 h-1 bg-brand-primary rounded-full"></span>
@@ -553,7 +562,7 @@ export function ArticlePage() {
                   {language === 'fr' ? 'AUDIO LIVE' : 'LIVE AUDIO'}
                 </span>
                 {isSpeaking && !isPaused && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#E85D42]" />
                 )}
               </div>
 
@@ -608,141 +617,121 @@ export function ArticlePage() {
           </div>
         </header>
 
-      {/* Featured Image & Perspective Brief - WordPress Style layout overlapping upper edge */}
-      <div className="relative w-full max-w-6xl xl:max-w-7xl mx-auto -mx-4 sm:mx-auto w-[calc(100%+2rem)] sm:w-full px-0 sm:px-4 my-8 sm:my-14">
-        
-        {/* Perspective Brief - WordPress style overlapping upper edge of article image (Mobile: Above) */}
-        {(() => {
-          const pb = article.perspectiveBrief;
-          if (!pb) return null;
+      {/* Perspective Brief - Centered in natural flow, pushing header upwards, gently overlapping top edge of image */}
+      {(() => {
+        const pb = article.perspectiveBrief;
+        if (!pb) return null;
 
-          const formatText = (val: any) => {
-            if (!val) return '';
-            if (typeof val === 'string') return val.trim();
-            if (typeof val === 'object') return (val[language] || val.fr || val.en || '').trim();
-            return String(val).trim();
-          };
+        const formatText = (val: any) => {
+          if (!val) return '';
+          if (typeof val === 'string') return val.trim();
+          if (typeof val === 'object') return (val[language] || val.fr || val.en || '').trim();
+          return String(val).trim();
+        };
 
-          const whatHappenedText = formatText(pb.whatHappened);
-          const whyItMattersText = formatText(pb.whyItMatters);
-          const watchNextText = formatText(pb.whatToWatchNext);
+        const whatHappenedText = formatText(pb.whatHappened);
+        const whyItMattersText = formatText(pb.whyItMatters);
+        const watchNextText = formatText(pb.whatToWatchNext);
 
-          if (!whatHappenedText && !whyItMattersText && !watchNextText) {
-            return null;
-          }
+        if (!whatHappenedText && !whyItMattersText && !watchNextText) {
+          return null;
+        }
 
-          return (
-            <div className="block md:hidden relative z-30 max-w-lg sm:max-w-xl mx-auto px-5 mb-6">
-              <div className="brief-box border border-zinc-200/90 dark:border-zinc-800/90 border-t-4 border-t-[#E85D42] rounded-xl sm:rounded-2xl p-5 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
-                <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '16px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
-                  <span>{t.brief}</span>
-                  <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold tracking-wider">
-                    {t.briefSubtitle}
-                  </span>
-                </h3>
-                <ul className="space-y-4">
-                  {whatHappenedText !== '' && (
-                    <li>
-                      <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whatHappened}</strong>
-                      <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                        {whatHappenedText}
-                      </span>
-                    </li>
-                  )}
-                  {whyItMattersText !== '' && (
-                    <li>
-                      <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whyItMatters}</strong>
-                      <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                        {whyItMattersText}
-                      </span>
-                    </li>
-                  )}
-                  {watchNextText !== '' && (
-                    <li>
-                      <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.watchNext}</strong>
-                      <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                        {watchNextText}
-                      </span>
-                    </li>
-                  )}
-                </ul>
+        return (
+          <div className="relative z-30 w-full max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 mt-2 sm:mt-4 -mb-5 sm:-mb-7 md:-mb-8">
+            <div className="brief-box border border-zinc-200/90 dark:border-zinc-800/90 border-t-4 border-t-[#E85D42] rounded-xl sm:rounded-2xl p-5 sm:p-6 md:p-7 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95 transition-all duration-300">
+              
+              {/* Header: Title + Small Rolling Indicator */}
+              <div 
+                onClick={() => setIsBriefExpanded(!isBriefExpanded)}
+                className="flex items-center justify-between cursor-pointer border-b border-zinc-200/90 dark:border-zinc-800/90 pb-3 mb-4 select-none group"
+              >
+                <div className="flex items-center gap-2">
+                  <h3 style={{ color: '#E85D42', fontSize: '16px' }} className="font-black uppercase tracking-widest">
+                    {language === 'fr' ? 'LE BRIEF' : 'THE BRIEF'}
+                  </h3>
+                </div>
+
+                <button 
+                  type="button"
+                  aria-label={isBriefExpanded ? 'Collapse' : 'Expand'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsBriefExpanded(!isBriefExpanded);
+                  }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[#E85D42] hover:bg-[#E85D42]/10 transition-colors cursor-pointer"
+                >
+                  <ChevronDown size={18} className={`transition-transform duration-300 ${isBriefExpanded ? 'rotate-180' : ''}`} />
+                </button>
               </div>
-            </div>
-          );
-        })()}
 
-        <img 
-          src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
-          alt="" 
-          className="w-full h-80 sm:h-[450px] md:h-[520px] lg:h-[600px] object-cover sm:rounded-2xl shadow-2xl border-y sm:border border-zinc-200 dark:border-zinc-800 transition-all" 
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
-          }}
-        />
-
-        {/* Perspective Brief - WordPress style overlapping upper edge of article image (Desktop: Overlay) */}
-        {(() => {
-          const pb = article.perspectiveBrief;
-          if (!pb) return null;
-
-          const formatText = (val: any) => {
-            if (!val) return '';
-            if (typeof val === 'string') return val.trim();
-            if (typeof val === 'object') return (val[language] || val.fr || val.en || '').trim();
-            return String(val).trim();
-          };
-
-          const whatHappenedText = formatText(pb.whatHappened);
-          const whyItMattersText = formatText(pb.whyItMatters);
-          const watchNextText = formatText(pb.whatToWatchNext);
-
-          if (!whatHappenedText && !whyItMattersText && !watchNextText) {
-            return null;
-          }
-
-          return (
-            <div className="hidden md:block absolute md:-top-16 left-0 right-0 z-30 max-w-lg sm:max-w-xl md:max-w-2xl mx-auto px-5 sm:px-6 mt-4 md:mt-0">
-            <div className="brief-box border border-zinc-200/90 dark:border-zinc-800/90 border-t-4 border-t-[#E85D42] rounded-xl sm:rounded-2xl p-5 sm:p-7 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
-              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '16px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
-                <span>{t.brief}</span>
-                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold tracking-wider">
-                  {t.briefSubtitle}
-                </span>
-              </h3>
-              <ul className="space-y-4">
+              {/* Brief Content */}
+              <div className="space-y-4">
                 {whatHappenedText !== '' && (
-                  <li>
-                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whatHappened}</strong>
-                    <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
+                  <div>
+                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">
+                      {t.whatHappened}
+                    </strong>
+                    <p className={`text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed font-sans ${!isBriefExpanded ? 'line-clamp-2 sm:line-clamp-3' : ''}`}>
                       {whatHappenedText}
-                    </span>
-                  </li>
+                    </p>
+                  </div>
                 )}
-                {whyItMattersText !== '' && (
-                  <li>
-                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.whyItMatters}</strong>
-                    <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                      {whyItMattersText}
-                    </span>
-                  </li>
-                )}
-                {watchNextText !== '' && (
-                  <li>
-                    <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">{t.watchNext}</strong>
-                    <span className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed block font-sans">
-                      {watchNextText}
-                    </span>
-                  </li>
-                )}
-              </ul>
+
+                {/* Animated expandable section */}
+                <AnimatePresence>
+                  {isBriefExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.25 }}
+                      className="space-y-4 overflow-hidden pt-1"
+                    >
+                      {whyItMattersText !== '' && (
+                        <div>
+                          <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">
+                            {t.whyItMatters}
+                          </strong>
+                          <p className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed font-sans">
+                            {whyItMattersText}
+                          </p>
+                        </div>
+                      )}
+
+                      {watchNextText !== '' && (
+                        <div>
+                          <strong style={{ color: '#E85D42' }} className="block text-[11px] uppercase tracking-widest font-black mb-1">
+                            {t.watchNext}
+                          </strong>
+                          <p className="text-xs sm:text-sm font-bold text-black dark:text-white leading-relaxed font-sans">
+                            {watchNextText}
+                          </p>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         );
       })()}
+
+      {/* Featured Image - Clean, full visibility directly under the brief box */}
+      <div className="relative z-10 w-full max-w-6xl xl:max-w-7xl mx-auto px-0 sm:px-4 mb-8 sm:mb-14">
+        <img 
+          src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
+          alt="" 
+          className="w-full h-80 sm:h-[480px] md:h-[540px] lg:h-[620px] object-cover sm:rounded-2xl shadow-2xl border-y sm:border border-zinc-200 dark:border-zinc-800 transition-all" 
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
+          }}
+        />
       </div>
 
       {/* Main Content Box - WordPress style overlap on desktop */}
-      <div className="max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 relative z-20 mt-6 sm:mt-10 mb-20">
+      <div className="max-w-xl sm:max-w-2xl md:max-w-3xl mx-auto px-4 sm:px-6 relative z-20 mt-6 sm:mt-10 mb-14">
         <div className="w-full -mt-16 sm:-mt-24 relative z-40">
           {/* Main Article Content */}
           <div 
@@ -782,6 +771,140 @@ export function ArticlePage() {
             <img src={adImage} alt="Ad" className="w-full h-auto max-h-[150px] object-cover" />
           </a>
         </div>
+      )}
+
+      {/* Deep-Dive Analysis: Key Actors, Chronology & Structural Forces - Right under article box before comments */}
+      {((article.keyActors && article.keyActors.length > 0) || 
+        (article.timeline && article.timeline.length > 0) || 
+        (article.structuralForces && typeof article.structuralForces === 'object')) && (
+        <section className="max-w-4xl mx-auto mb-16 px-4 space-y-8">
+          
+          {/* Key Actors & Timeline Grid */}
+          {((article.keyActors && article.keyActors.length > 0) || (article.timeline && article.timeline.length > 0)) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Key Actors */}
+              {article.keyActors && article.keyActors.length > 0 && (
+                <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
+                  <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+                    <span>{t.actors}</span>
+                    <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
+                      {article.keyActors.length} {language === 'fr' ? 'PROTAGONISTES' : 'FIGURES'}
+                    </span>
+                  </h3>
+                  <div className="space-y-4">
+                    {article.keyActors.map((actor, i) => (
+                      <div 
+                        key={i} 
+                        onClick={() => setSelectedActor(actor)}
+                        className="p-4 bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-[#E85D42] dark:hover:border-[#E85D42] cursor-pointer transition-all duration-300 group relative overflow-hidden"
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <h4 className="font-black text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] dark:group-hover:text-[#E85D42] transition-colors mb-0.5">
+                              {actor.name}
+                            </h4>
+                            <div className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-2">
+                              {actor.role}
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-mono font-bold uppercase text-[#E85D42] bg-[#E85D42]/10 border border-[#E85D42]/20 px-1.5 py-0.5 tracking-wider opacity-70 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
+                            {language === 'fr' ? 'EXPLORER' : 'EXPLORE'} →
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed mt-1 font-medium font-sans">
+                          {typeof actor.significance === 'object'
+                            ? ((actor.significance as any)[language] || (actor.significance as any).fr || (actor.significance as any).en || '')
+                            : (actor.significance || '')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline (Chronologie) */}
+              {article.timeline && article.timeline.length > 0 && (
+                <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
+                  <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+                    <span>{t.timeline}</span>
+                    <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
+                      {article.timeline.length} {language === 'fr' ? 'REPÈRES' : 'EVENTS'}
+                    </span>
+                  </h3>
+                  <div className="border-l-2 border-[#E85D42] pl-4 space-y-4 relative ml-2">
+                    {article.timeline.map((event, i) => (
+                      <div key={i} className="relative">
+                        <div className="absolute w-3 h-3 bg-[#E85D42] rounded-full -left-[23px] top-1 border-2 border-white dark:border-zinc-950"></div>
+                        <div className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-1 font-mono">
+                          {event.date}
+                        </div>
+                        <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 bg-zinc-50/80 dark:bg-zinc-900/60 p-3 border border-zinc-200/80 dark:border-zinc-800/80 leading-relaxed font-sans">
+                          {typeof event.description === 'object'
+                            ? ((event.description as any)[language] || (event.description as any).fr || (event.description as any).en || '')
+                            : (event.description || '')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Structural Forces (Forces Structurelles) */}
+          {article.structuralForces && (() => {
+            const sf = article.structuralForces as any;
+            const pol = typeof sf.political === 'object' ? (sf.political[language] || sf.political.fr || sf.political.en || '') : (sf.political || '');
+            const eco = typeof sf.economic === 'object' ? (sf.economic[language] || sf.economic.fr || sf.economic.en || '') : (sf.economic || '');
+            const soc = typeof sf.social === 'object' ? (sf.social[language] || sf.social.fr || sf.social.en || '') : (sf.social || '');
+            const intl = typeof sf.international === 'object' ? (sf.international[language] || sf.international.fr || sf.international.en || '') : (sf.international || '');
+
+            const forcesList = [
+              { key: 'political', title: language === 'fr' ? 'Politique & Institutionnel' : 'Political & Institutional', icon: Landmark, text: String(pol).trim() },
+              { key: 'economic', title: language === 'fr' ? 'Économique & Financier' : 'Economic & Financial', icon: TrendingUp, text: String(eco).trim() },
+              { key: 'social', title: language === 'fr' ? 'Social & Sociétal' : 'Social & Demographics', icon: Users, text: String(soc).trim() },
+              { key: 'international', title: language === 'fr' ? 'International & Géopolitique' : 'International & Geopolitical', icon: Globe, text: String(intl).trim() }
+            ].filter(f => f.text !== '' && f.text !== '[object Object]');
+
+            if (forcesList.length === 0) return null;
+
+            return (
+              <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white bg-white/95 dark:bg-zinc-900/95">
+                <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
+                  <span>{t.forces}</span>
+                  <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
+                    {forcesList.length} {language === 'fr' ? 'PILIERS D’IMPACT' : 'IMPACT PILLARS'}
+                  </span>
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {forcesList.map((force) => {
+                    const ForceIcon = force.icon;
+                    return (
+                      <div 
+                        key={force.key}
+                        className="p-4 bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-[#E85D42] dark:hover:border-[#E85D42] transition-all duration-300 group"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="p-1.5 rounded-sm bg-[#E85D42]/10 text-[#E85D42]">
+                            <ForceIcon size={14} />
+                          </div>
+                          <h4 className="font-black text-xs uppercase tracking-wider text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors">
+                            {force.title}
+                          </h4>
+                        </div>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed font-medium font-sans">
+                          {force.text}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+        </section>
       )}
 
       {/* Comment Section */}
@@ -894,7 +1017,7 @@ export function ArticlePage() {
                         <div className="text-xs text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-950 p-3.5 leading-relaxed border-l-2 border-[#E85D42] rounded-none border border-zinc-200/60 dark:border-zinc-800/60">
                           <p>"{getSafeText(c.text, language)}"</p>
                           {!c.isApproved && (
-                            <span className="block mt-1 text-[8px] text-amber-500 font-bold uppercase tracking-wider animate-pulse">
+                            <span className="block mt-1 text-[8px] text-amber-500 font-bold uppercase tracking-wider">
                               ({language === 'fr' ? 'En attente de modération' : 'Awaiting moderation'})
                             </span>
                           )}
@@ -1312,7 +1435,7 @@ export function ArticlePage() {
       </div>
       )}
 
-      {/* After Article: Actors & Timeline */}
+       {/* After Article: Carousel */}
        {/* Similar Articles Carousel (placed right after comments) */}
        {carouselRelated.length > 0 && (
           <div className="max-w-6xl mx-auto mb-16">
@@ -1324,75 +1447,6 @@ export function ArticlePage() {
              </div>
           </div>
        )}
-
-      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8 mb-16 px-4">
-          {/* Key Actors */}
-          {article.keyActors && article.keyActors.length > 0 && (
-            <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
-              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
-                <span>{t.actors}</span>
-                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
-                  {article.keyActors.length} {language === 'fr' ? 'PROTAGONISTES' : 'FIGURES'}
-                </span>
-              </h3>
-              <div className="space-y-4">
-                 {article.keyActors.map((actor, i) => (
-                  <div 
-                    key={i} 
-                    onClick={() => setSelectedActor(actor)}
-                    className="p-4 bg-zinc-50/80 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-[#E85D42] dark:hover:border-[#E85D42] cursor-pointer transition-all duration-300 group relative overflow-hidden"
-                  >
-                    <div className="flex justify-between items-start gap-2">
-                      <div>
-                        <h4 className="font-black text-sm text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] dark:group-hover:text-[#E85D42] transition-colors mb-0.5">
-                          {actor.name}
-                        </h4>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-2">
-                          {actor.role}
-                        </div>
-                      </div>
-                      <span className="text-[9px] font-mono font-bold uppercase text-[#E85D42] bg-[#E85D42]/10 border border-[#E85D42]/20 px-1.5 py-0.5 tracking-wider opacity-70 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
-                        {language === 'fr' ? 'EXPLORER' : 'EXPLORE'} →
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed mt-1 font-medium font-sans">
-                      {typeof actor.significance === 'object'
-                        ? ((actor.significance as any)[language] || (actor.significance as any).fr || (actor.significance as any).en || '')
-                        : (actor.significance || '')}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Timeline */}
-          {article.timeline && article.timeline.length > 0 && (
-            <div className="brief-box border border-zinc-200/80 dark:border-zinc-800/80 border-t-4 border-t-[#E85D42] p-6 shadow-2xl backdrop-blur-md text-black dark:text-white">
-              <h3 style={{ color: '#E85D42', textAlign: 'left', fontSize: '17px' }} className="font-black uppercase tracking-widest mb-4 border-b border-zinc-200/90 dark:border-zinc-800/90 pb-2 flex items-center justify-between">
-                <span>{t.timeline}</span>
-                <span className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 font-bold">
-                  {article.timeline.length} {language === 'fr' ? 'REPÈRES' : 'EVENTS'}
-                </span>
-              </h3>
-              <div className="border-l-2 border-[#E85D42] pl-4 space-y-4 relative ml-2">
-                {article.timeline.map((event, i) => (
-                  <div key={i} className="relative">
-                    <div className="absolute w-3 h-3 bg-[#E85D42] rounded-full -left-[23px] top-1 border-2 border-white dark:border-zinc-950"></div>
-                    <div className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-1 font-mono">
-                      {event.date}
-                    </div>
-                    <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 bg-zinc-50/80 dark:bg-zinc-900/60 p-3 border border-zinc-200/80 dark:border-zinc-800/80 leading-relaxed font-sans">
-                      {typeof event.description === 'object'
-                        ? ((event.description as any)[language] || (event.description as any).fr || (event.description as any).en || '')
-                        : (event.description || '')}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-      </div>
 
       {/* Selected Actor Modal Dialog */}
       <AnimatePresence>

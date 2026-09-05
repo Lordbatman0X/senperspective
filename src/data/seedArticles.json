@@ -71,8 +71,8 @@
     ],
     "structuralForces": {},
     "relatedArticleIds": [],
-    "isPublished": false,
-    "isFeatured": false,
+    "isPublished": true,
+    "isFeatured": true,
     "views": 0,
     "sourceName": "APS (Agence de Presse Sénégalaise)",
     "sourceDomain": "aps.sn",
@@ -82,7 +82,8 @@
     "originalUrl": "https://aps.sn/marche-du-doublage-la-voix-senegalaise-en-quete-de-sa-signature/?utm_source=rss&#038;utm_medium=rss&#038;utm_campaign=marche-du-doublage-la-voix-senegalaise-en-quete-de-sa-signature",
     "engineUsed": "Groq (qwen/qwen3.8-27b)",
     "failoverTriggered": true,
-    "failoverReason": " | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 2200 tokens, but can only afford 242. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account"
+    "failoverReason": " | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 2200 tokens, but can only afford 242. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account",
+    "isTrending": true
   },
   {
     "id": "art-rss-1787838173134-irk8ntv-370928",
@@ -105,7 +106,7 @@
     "publishedAt": "2026-08-27T13:42:53.134Z",
     "featuredImage": "https://images.unsplash.com/photo-1591696429277-c93144886b66?auto=format&fit=crop&w=1200&q=80",
     "imageUrl": "https://images.unsplash.com/photo-1591696429277-c93144886b66?auto=format&fit=crop&w=1200&q=80",
-    "isFeatured": false,
+    "isFeatured": true,
     "isBreaking": false,
     "readTime": "4 min",
     "tags": [
@@ -191,7 +192,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787838157192-2qq7ie6-562824",
@@ -214,7 +216,7 @@
     "publishedAt": "2026-08-27T13:42:37.192Z",
     "featuredImage": "https://images.unsplash.com/photo-1580519542036-c47de61968e4?auto=format&fit=crop&w=1200&q=80",
     "imageUrl": "https://images.unsplash.com/photo-1580519542036-c47de61968e4?auto=format&fit=crop&w=1200&q=80",
-    "isFeatured": false,
+    "isFeatured": true,
     "isBreaking": false,
     "readTime": "3 min",
     "tags": [
@@ -300,7 +302,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787838140125-44vjgbo-157637",
@@ -323,7 +326,7 @@
     "publishedAt": "2026-08-27T13:42:20.125Z",
     "featuredImage": "https://images.unsplash.com/photo-1523800503107-5bc3ba0a6f81?auto=format&fit=crop&w=1200&q=80",
     "imageUrl": "https://images.unsplash.com/photo-1523800503107-5bc3ba0a6f81?auto=format&fit=crop&w=1200&q=80",
-    "isFeatured": false,
+    "isFeatured": true,
     "isBreaking": false,
     "readTime": "3 min",
     "tags": [
@@ -409,7 +412,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787838124050-geiirna-122102",
@@ -432,7 +436,7 @@
     "publishedAt": "2026-08-27T13:42:04.050Z",
     "featuredImage": "https://images.unsplash.com/photo-1522069213448-443a614da9b6?auto=format&fit=crop&w=1200&q=80",
     "imageUrl": "https://images.unsplash.com/photo-1522069213448-443a614da9b6?auto=format&fit=crop&w=1200&q=80",
-    "isFeatured": false,
+    "isFeatured": true,
     "isBreaking": false,
     "readTime": "3 min",
     "tags": [
@@ -493,7 +497,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787838108231-6zw2xbi-877703",
@@ -516,7 +521,7 @@
     "publishedAt": "2026-08-27T13:41:48.231Z",
     "featuredImage": "https://i.guim.co.uk/img/media/d3ed0d7f79733a9985c59c487ee4d8b4a01a8509/0_0_4583_3667/master/4583.jpg?width=140&quality=85&auto=format&fit=max&s=93c1f7b971705ffc45fac5be68162924",
     "imageUrl": "https://i.guim.co.uk/img/media/d3ed0d7f79733a9985c59c487ee4d8b4a01a8509/0_0_4583_3667/master/4583.jpg?width=140&quality=85&auto=format&fit=max&s=93c1f7b971705ffc45fac5be68162924",
-    "isFeatured": false,
+    "isFeatured": true,
     "isBreaking": false,
     "readTime": "3 min",
     "tags": [
@@ -603,7 +608,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787838090913-94ul5er-126592",
@@ -687,7 +693,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: Gemini timeout on gemini-3.7-flash (7s)",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787834429190-aakyh46-44719",
@@ -771,7 +778,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787834413941-fgdcm4f-49289",
@@ -881,7 +889,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787834396536-6w5d203-730529",
@@ -991,7 +1000,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787834379292-5nwqi98-825737",
@@ -1075,7 +1085,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787834364080-ad3s0ho-840949",
@@ -1185,7 +1196,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": true
   },
   {
     "id": "art-rss-1787834347356-ki29yiy-933526",
@@ -1295,7 +1307,8 @@
     "engineUsed": "Gemini (gemini-3.1-flash-lite)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787756397054-f9gt6ob-662599",
@@ -1388,7 +1401,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 242. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787756388626-oqdpqxx-592821",
@@ -1481,7 +1495,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 242. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787752752273-9wmk9kl-80493",
@@ -1574,7 +1589,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787752742130-216ktdl-681111",
@@ -1667,7 +1683,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787752731684-24z5lc8-388752",
@@ -1760,7 +1777,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787752720792-obo6hsy-988000",
@@ -1853,7 +1871,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787752709161-yoawef2-358000",
@@ -1946,7 +1965,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787752698466-jmm6fvu-999742",
@@ -2039,7 +2059,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787749068148-2oyh13s-286166",
@@ -2132,7 +2153,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787749057853-nqgtqm2-145630",
@@ -2225,7 +2247,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787749046457-sn18jeq-942397",
@@ -2318,7 +2341,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787749036366-kh218pe-793588",
@@ -2411,7 +2435,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787749025000-ymulozq-486709",
@@ -2504,7 +2529,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787749010212-wuwx039-785809",
@@ -2597,7 +2623,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787745374835-h4z98qx-484199",
@@ -2690,7 +2717,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787745364955-mtgqwp2-197850",
@@ -2783,7 +2811,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787745354803-xzu2uis-100365",
@@ -2876,7 +2905,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787745344132-1cfp2r6-756662",
@@ -2969,7 +2999,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787745332696-dlxp7in-203595",
@@ -3062,7 +3093,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787745320408-go3tfnv-698116",
@@ -3155,7 +3187,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787741700034-miohtuj-956190",
@@ -3248,7 +3281,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787741689866-c7gp6d8-138516",
@@ -3341,7 +3375,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787741679779-k0wiaaq-743932",
@@ -3434,7 +3469,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787741669019-a6rz7r3-225211",
@@ -3527,7 +3563,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787741658793-pbhnuuk-158824",
@@ -3620,7 +3657,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787738024015-nrb99xe-165502",
@@ -3713,7 +3751,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787738012862-l3sgl6d-492437",
@@ -3806,7 +3845,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787738000490-kppaej8-220058",
@@ -3899,7 +3939,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787737991145-2yulzxd-135338",
@@ -3992,7 +4033,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787737979879-x743tpw-27307",
@@ -4085,7 +4127,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787737969455-qdtcdte-137611",
@@ -4178,7 +4221,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787734345875-mgca6sw-953952",
@@ -4248,7 +4292,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787734328765-e30u7q3-121561",
@@ -4320,7 +4365,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787734312520-660cj7o-707230",
@@ -4413,7 +4459,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787734283601-4fug37u-835313",
@@ -4483,7 +4530,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787734264021-opakwhe-37872",
@@ -4576,7 +4624,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787734235253-4ksaf07-973887",
@@ -4669,7 +4718,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787730581912-x6mx559-698006",
@@ -4763,7 +4813,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787730562319-mx9webl-230175",
@@ -4857,7 +4908,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787730540896-n4hpc3v-561898",
@@ -4928,7 +4980,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787730523778-9c5s24z-612066",
@@ -5022,7 +5075,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787730503356-ty7kaan-29425",
@@ -5090,7 +5144,8 @@
     "engineUsed": "Gemini (gemini-2.5-flash)",
     "failoverTriggered": false,
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787726866377-9t58tsh-30457",
@@ -5183,7 +5238,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787726856049-oeay5z9-117688",
@@ -5276,7 +5332,8 @@
     "failoverTriggered": true,
     "failoverReason": " | Gemini: {\"error\":{\"code\":404,\"message\":\"models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.\",\"status\":\"NOT_FOUND\"}} | Groq: 400 The model `llama-3.2-1b-preview` has been decommissioned and is no longer supported. Please refer to https://console.groq.com/docs/deprecations for a recommendation on which model to use instead. | OpenRouter: 402 This request requires more credits, or fewer max_tokens. You requested up to 3500 tokens, but can only afford 243. To increase, visit https://openrouter.ai/settings/credits and upgrade to a paid account | OpenAI: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, read the docs: https://platform.openai.com/docs/guides/error-codes/api-errors.",
     "views": 0,
-    "isPublished": false
+    "isPublished": true,
+    "isTrending": false
   },
   {
     "id": "art-rss-1787726844523-b4e9x7o-643072",
@@ -5317,6 +5374,8 @@
         "fr": "Impact direct sur la gouvernance, les flux économiques et la stabilité en Afrique de l'Ouest.",
         "en": "Direct impact on governance, economic flows, and stability in West Africa."
       }
-    }
+    },
+    "isPublished": true,
+    "isTrending": false
   }
 ]

@@ -7,7 +7,8 @@ import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
 import { ImageCropModal } from './ImageCropModal';
-import { getAuthHeaders } from '../../lib/apiUtils';
+import { getAuthHeaders, safeFetchJson } from '../../lib/apiUtils';
+import { clientRewriteArticle, clientGenerateTimeline } from '../../lib/clientAiEngine';
 
 interface ArticleEditorTabProps {
   article: Article | null;
@@ -184,9 +185,9 @@ export function ArticleEditorTab({
 
     setIsGeneratingAiImage(true);
     try {
-      const res = await fetch('/api/ai/generate-article-image', {
+      const { ok, data, error } = await safeFetchJson('/api/ai/generate-article-image', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: activeTitle,
           excerpt: activeExcerpt,
@@ -198,15 +199,19 @@ export function ArticleEditorTab({
         })
       });
 
-      const data = await res.json();
-      if (res.ok && data?.imageUrl) {
+      if (ok && data?.imageUrl) {
         setImageUrl(data.imageUrl);
         if (data.modelUsed) {
           setAiStatusMsg(language === 'fr' ? `Image sélectionnée/générée avec succès : ${data.modelUsed}` : `Image retrieved/generated: ${data.modelUsed}`);
           setTimeout(() => setAiStatusMsg(null), 5000);
         }
       } else {
-        throw new Error(data?.error || 'Échec de génération');
+        // Fallback to high quality editorial Unsplash photo if server is unavailable or static hosting detected
+        const keywords = (activeTitle || category || 'dakar senegal economy').replace(/[^\w\s]/gi, '').split(/\s+/).slice(0, 2).join(',');
+        const fallbackUrl = `https://images.unsplash.com/photo-1577962917302-cd874c4e31d2?auto=format&fit=crop&w=1200&q=80`;
+        setImageUrl(fallbackUrl);
+        setAiStatusMsg(language === 'fr' ? 'Photo d\'illustration éditoriale assignée.' : 'Editorial photo assigned.');
+        setTimeout(() => setAiStatusMsg(null), 5000);
       }
     } catch (err: any) {
       console.error('Image AI Gen Error:', err);
@@ -518,17 +523,17 @@ export function ArticleEditorTab({
     
     setIsGeneratingTimeline(true);
     try {
-      const res = await fetch('/api/generate-timeline', {
+      const { ok, data } = await safeFetchJson('/api/generate-timeline', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           title: titleFr || titleEn,
           excerpt: excerptFr || excerptEn,
           language
         })
       });
-      const data = await res.json();
-      if (data.success && data.events) {
+
+      if (ok && data?.success && data?.events) {
         const newEvents = data.events.map((evt: any) => ({
           date: evt.date || '',
           description: {
@@ -538,7 +543,14 @@ export function ArticleEditorTab({
         }));
         setTimeline(newEvents);
       } else {
-        throw new Error(data.error || "Failed to generate timeline");
+        // Direct Client Fallback
+        const clientRes = await clientGenerateTimeline(titleFr || titleEn, excerptFr || excerptEn, language);
+        if (clientRes.success && clientRes.events) {
+          setTimeline(clientRes.events.map(evt => ({
+            date: evt.date,
+            description: { fr: evt.descriptionFr, en: evt.descriptionEn }
+          })));
+        }
       }
     } catch (err: any) {
       console.error(err);
@@ -585,9 +597,13 @@ export function ArticleEditorTab({
         tags
       };
 
-      const res = await fetch('/api/ai/rewrite-article', {
+      let rewritten: any = null;
+      let engineUsed = '';
+
+      // 1. Try Backend API first
+      const { ok, data, isStaticFallback } = await safeFetchJson('/api/ai/rewrite-article', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           article: currentDraftPayload,
           prompt: aiPrompt,
@@ -597,12 +613,31 @@ export function ArticleEditorTab({
         })
       });
 
-      const data = await res.json();
-      if (!data.success || !data.article) {
-        throw new Error(data.error || 'Erreur lors de la réécriture.');
+      if (ok && data?.success && data?.article) {
+        rewritten = data.article;
+        engineUsed = data.engineUsed || 'Serveur AI';
+      } else {
+        // 2. Client-Side Direct Fallback using stored API keys
+        console.warn('[AI REWRITE] Server unreachable or static hosting detected. Running client-side AI rewrite...');
+        const clientRes = await clientRewriteArticle({
+          article: currentDraftPayload,
+          prompt: aiPrompt,
+          category,
+          type: aiTargetType || type,
+          preferredEngine: aiPreferredEngine
+        });
+
+        if (clientRes.success && clientRes.article) {
+          rewritten = clientRes.article;
+          engineUsed = clientRes.engineUsed;
+        } else {
+          throw new Error(clientRes.error || 'Erreur lors de la réécriture.');
+        }
       }
 
-      const rewritten = data.article;
+      if (!rewritten) {
+        throw new Error('Erreur lors de la réécriture.');
+      }
 
       // Apply rewritten fields
       if (rewritten.title) {

@@ -256,7 +256,7 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
-  const { articles, addArticle, updateArticle, deleteArticle, syncFromMongoDB, language } = useStore();
+  const { articles, setArticles, addArticle, updateArticle, deleteArticle, syncFromMongoDB, language } = useStore();
   const isFr = language === 'fr';
 
   // Active Newsroom Tab
@@ -961,10 +961,12 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     
     try {
       showStatus(isFr ? 'Purge en cours...' : 'Purging drafts...');
+      // Immediately clear drafts locally to eliminate UI lag on large batches
+      setArticles(articles.filter(a => a.isPublished));
       const { ok, data, error } = await safeFetchJson('/api/articles/purge', { method: 'POST' });
       if (ok && data?.success) {
         await syncFromMongoDB();
-        showStatus(isFr ? 'File des brouillons purgée.' : 'Draft queue purged.');
+        showStatus(isFr ? 'File des brouillons purgée avec succès.' : 'Draft queue purged successfully.');
       } else {
         throw new Error(error || data?.error || 'Failed to purge drafts');
       }

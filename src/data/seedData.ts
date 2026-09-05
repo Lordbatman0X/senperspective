@@ -1,8 +1,9 @@
 // Pre-packaged Seed Data for SEN PERSPECTIVE (Vercel & Offline Ready)
 // Auto-generated from workspace snapshot to guarantee zero-data loss on Vercel deployment.
 import { Article, Match } from '../types';
+import rawSeedArticles from './seedArticles.json';
 
-export const seedArticles: Article[] = [];
+export const seedArticles: Article[] = rawSeedArticles as Article[];
 
 export const seedComments = [];
 

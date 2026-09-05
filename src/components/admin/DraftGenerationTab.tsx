@@ -19,9 +19,16 @@ export function DraftGenerationTab({ onEditArticle, onRefreshArticles }: DraftGe
     if (onRefreshArticles) onRefreshArticles();
   };
 
-  const handlePurgeDrafts = () => {
+  const handlePurgeDrafts = async () => {
     if (!window.confirm(isFr ? 'Supprimer tous les brouillons ?' : 'Delete all drafts?')) return;
-    draftArticles.forEach(a => deleteArticle(a.id));
+    
+    // Batch deletion to avoid overloading the API
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < draftArticles.length; i += BATCH_SIZE) {
+      const batch = draftArticles.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(a => deleteArticle(a.id)));
+    }
+    
     if (onRefreshArticles) onRefreshArticles();
   };
 

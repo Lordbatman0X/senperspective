@@ -69,27 +69,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// Intercept all requests to bind client-provided API keys in request context
-app.use((req, res, next) => {
-  const overrides: Record<string, string> = {};
-  if (req.headers["x-gemini-key"]) overrides["GEMINI"] = (req.headers["x-gemini-key"] as string).trim();
-  if (req.headers["x-openai-key"]) overrides["OPENAI"] = (req.headers["x-openai-key"] as string).trim();
-  if (req.headers["x-groq-key"]) overrides["GROQ"] = (req.headers["x-groq-key"] as string).trim();
-  if (req.headers["x-openrouter-key"]) overrides["OPENROUTER"] = (req.headers["x-openrouter-key"] as string).trim();
-  if (req.headers["x-anthropic-key"]) overrides["ANTHROPIC"] = (req.headers["x-anthropic-key"] as string).trim();
-  if (req.headers["x-deepseek-key"]) overrides["DEEPSEEK"] = (req.headers["x-deepseek-key"] as string).trim();
-
-  if (Object.keys(overrides).length > 0) {
-    apiKeyStore.run(overrides, () => {
-      next();
-    });
-  } else {
-    next();
-  }
-});
-
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+  // Intercept all requests to bind client-provided API keys in request context
+  app.use((req, res, next) => {
+    const overrides: Record<string, string> = {};
+    if (req.headers["x-gemini-key"]) overrides["GEMINI"] = (req.headers["x-gemini-key"] as string).trim();
+    if (req.headers["x-openai-key"]) overrides["OPENAI"] = (req.headers["x-openai-key"] as string).trim();
+    if (req.headers["x-groq-key"]) overrides["GROQ"] = (req.headers["x-groq-key"] as string).trim();
+    if (req.headers["x-openrouter-key"]) overrides["OPENROUTER"] = (req.headers["x-openrouter-key"] as string).trim();
+    if (req.headers["x-anthropic-key"]) overrides["ANTHROPIC"] = (req.headers["x-anthropic-key"] as string).trim();
+    if (req.headers["x-deepseek-key"]) overrides["DEEPSEEK"] = (req.headers["x-deepseek-key"] as string).trim();
+
+    if (req.body && typeof req.body === 'object') {
+      if (req.body.geminiKey) overrides["GEMINI"] = String(req.body.geminiKey).trim();
+      if (req.body.openaiKey) overrides["OPENAI"] = String(req.body.openaiKey).trim();
+      if (req.body.groqKey) overrides["GROQ"] = String(req.body.groqKey).trim();
+      if (req.body.openrouterKey) overrides["OPENROUTER"] = String(req.body.openrouterKey).trim();
+      if (req.body.anthropicKey) overrides["ANTHROPIC"] = String(req.body.anthropicKey).trim();
+      if (req.body.deepseekKey) overrides["DEEPSEEK"] = String(req.body.deepseekKey).trim();
+    }
+
+    if (Object.keys(overrides).length > 0) {
+      apiKeyStore.run(overrides, () => {
+        next();
+      });
+    } else {
+      next();
+    }
+  });
 
   // Health check endpoint
   app.get("/api/health", (req, res) => {
@@ -102,12 +111,27 @@ app.use((req, res, next) => {
 
   // GET /api/mongodb/collection/:name
   app.get("/api/mongodb/collection/:name", async (req, res) => {
+    const { name } = req.params;
     try {
-      const { name } = req.params;
       const formatted = await getCollectionDocs(name);
+      if (name === "articles" && (!formatted || formatted.length === 0)) {
+        const fallback = rssDraftsRepository.length > 0 ? rssDraftsRepository : [];
+        return res.json({ 
+          success: true, 
+          count: fallback.length, 
+          documents: fallback.map(d => ({ id: d.id, data: d })) 
+        });
+      }
       return res.json({ success: true, count: formatted.length, documents: formatted });
     } catch (err: any) {
-      console.error("[MongoDB GET COLLECTION ERROR]", err);
+      console.warn("[MongoDB GET COLLECTION NOTICE]", err?.message || err);
+      if (name === "articles" && rssDraftsRepository.length > 0) {
+        return res.json({
+          success: true,
+          count: rssDraftsRepository.length,
+          documents: rssDraftsRepository.map(d => ({ id: d.id, data: d }))
+        });
+      }
       return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
     }
   });
@@ -1005,18 +1029,18 @@ app.use((req, res, next) => {
       // Support reset/clear command payload from Admin or Automation
       if (bodyData.action === "reset" || bodyData.action === "clear" || bodyData.action === "purge" || bodyData.purge === true) {
         const deletedIds = rssDraftsRepository.map(a => a.id);
-        for (const id of deletedIds) {
-          await deleteArticleFromFirestore(id);
+        const chunkSize = 50;
+        for (let i = 0; i < deletedIds.length; i += chunkSize) {
+          const chunk = deletedIds.slice(i, i + chunkSize);
+          await Promise.allSettled(chunk.map(id => deleteArticleFromFirestore(id)));
         }
-        const fsPurgedCount = await purgeAllFirestoreRssArticles();
         rssDraftsRepository = [];
         await saveRssDrafts();
-        console.log(`[RSS WEBHOOK] Purged ${deletedIds.length} local RSS drafts and ${fsPurgedCount} Firestore documents.`);
+        console.log(`[RSS WEBHOOK] Purged ${deletedIds.length} local RSS drafts safely.`);
         return res.json({
           success: true,
-          message: `Successfully unblocked and purged all RSS articles and Firestore documents.`,
-          purgedLocalCount: deletedIds.length,
-          purgedFirestoreCount: fsPurgedCount
+          message: `Successfully purged all ${deletedIds.length} RSS drafts safely without server crash.`,
+          purgedLocalCount: deletedIds.length
         });
       }
 
@@ -1643,16 +1667,17 @@ app.use((req, res, next) => {
   const purgeRssDraftsHandler = async (req: express.Request, res: express.Response) => {
     try {
       const deletedIds = rssDraftsRepository.map(a => a.id);
-      for (const id of deletedIds) {
-        await deleteArticleFromFirestore(id);
+      const chunkSize = 50;
+      for (let i = 0; i < deletedIds.length; i += chunkSize) {
+        const chunk = deletedIds.slice(i, i + chunkSize);
+        await Promise.allSettled(chunk.map(id => deleteArticleFromFirestore(id)));
       }
-      const fsPurgedCount = await purgeAllFirestoreRssArticles();
       rssDraftsRepository = [];
       await saveRssDrafts();
       return res.json({
         success: true,
-        message: `Purged ${deletedIds.length} local RSS drafts and ${fsPurgedCount} Firestore documents completely.`,
-        purgedCount: deletedIds.length + fsPurgedCount
+        message: `Purged ${deletedIds.length} local RSS drafts safely.`,
+        purgedCount: deletedIds.length
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });

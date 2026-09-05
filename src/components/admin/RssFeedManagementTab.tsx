@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { safeFetchJson } from '../../lib/apiUtils';
+import { clientFetchRssFeed, clientRewriteArticle } from '../../lib/clientAiEngine';
 import { ALL_RELIABLE_RSS_FEEDS, ensureValidUrl, normalizeRssFeedUrl } from './RssAutomationTab';
 
 interface RssFeedManagementTabProps {
@@ -152,17 +153,29 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
     setFeedItemSearch('');
 
     try {
+      let loadedItems: any[] = [];
+
+      // 1. Try Backend API first
       const { ok, data, error } = await safeFetchJson('/api/rss/preview-items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ feedUrl: feed.url, feedName: feed.name })
       });
 
-      if (ok && data?.success && Array.isArray(data.items)) {
-        setFeedItems(data.items);
+      if (ok && data?.success && Array.isArray(data.items) && data.items.length > 0) {
+        loadedItems = data.items;
       } else {
-        throw new Error(error || data?.error || (isFr ? 'Impossible de récupérer les articles du flux.' : 'Failed to fetch wire articles.'));
+        // 2. Direct client-side RSS fetch using CORS proxy bridges
+        console.warn('[RSS INSPECT] Backend not reachable or static SPA detected. Fetching RSS directly on client...');
+        const clientRes = await clientFetchRssFeed(feed.url, feed.name);
+        if (clientRes.success && Array.isArray(clientRes.items) && clientRes.items.length > 0) {
+          loadedItems = clientRes.items;
+        } else {
+          throw new Error(error || (isFr ? 'Impossible de récupérer les articles du flux.' : 'Failed to fetch wire articles.'));
+        }
       }
+
+      setFeedItems(loadedItems);
     } catch (err: any) {
       setFeedItemsError(err?.message || (isFr ? 'Erreur de connexion au flux RSS' : 'Error connecting to wire feed'));
     } finally {
@@ -205,7 +218,35 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         if (onRefreshArticles) onRefreshArticles();
         showStatus(isFr ? `Article rédigé avec succès via ${data.engineUsed || 'l\'IA'} !` : `Article successfully scripted via ${data.engineUsed || 'AI'}!`);
       } else {
-        throw new Error(error || data?.error || 'Échec de la rédaction');
+        // Fallback to client-side AI rewrite
+        console.warn('[RSS SINGLE GEN] Backend unavailable. Falling back to client-side AI generation...');
+        const clientRes = await clientRewriteArticle({
+          article: item,
+          prompt: cfg.customPrompt || `Rédige un article d'actualité complet à partir de cette dépêche de presse : "${item.title}". Source : ${inspectFeed?.name || 'Dépêche'}.`,
+          category: cfg.category,
+          type: cfg.type,
+          preferredEngine: cfg.engine
+        });
+
+        if (clientRes.success && clientRes.article) {
+          const newArt = {
+            ...clientRes.article,
+            id: 'art-wire-' + Date.now(),
+            slug: 'wire-' + (item.title || 'article').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) + '-' + Date.now(),
+            publishedAt: new Date().toISOString(),
+            isPublished: false,
+            sourceFeed: inspectFeed?.url,
+            sourceName: inspectFeed?.name,
+            sourceUrl: item.link || inspectFeed?.url,
+            author: 'Perspective Newsroom'
+          };
+          setGeneratedResults(prev => ({ ...prev, [itemKey]: newArt }));
+          addArticle(newArt);
+          if (onRefreshArticles) onRefreshArticles();
+          showStatus(isFr ? `Article rédigé avec succès via ${clientRes.engineUsed} !` : `Article successfully scripted via ${clientRes.engineUsed}!`);
+        } else {
+          throw new Error(error || data?.error || clientRes.error || 'Échec de la rédaction');
+        }
       }
     } catch (err: any) {
       showStatus(err?.message || 'Erreur lors de la génération', 'error');
@@ -367,26 +408,55 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   const handleCheckFeedHealth = async (feed: any) => {
     setTestingFeedUrl(feed.url);
     try {
-      const { ok, data, status } = await safeFetchJson(`/api/rss/fetch?url=${encodeURIComponent(feed.url)}`);
+      const { ok, data, status, isStaticFallback } = await safeFetchJson(`/api/rss/fetch?url=${encodeURIComponent(feed.url)}`);
       
+      let isHealthy = ok && data?.success;
+      let count = data?.items?.length || 0;
+      let errDetail = (ok && data?.success) ? undefined : (data?.error || `HTTP ${status}`);
+
+      // If backend is unavailable or static hosting fallback detected, test via client CORS bridge
+      if (!isHealthy) {
+        try {
+          const clientRes = await clientFetchRssFeed(feed.url, feed.name);
+          if (clientRes.success && clientRes.count > 0) {
+            isHealthy = true;
+            count = clientRes.count;
+            errDetail = undefined;
+          }
+        } catch (_) {
+          // keep original error
+        }
+      }
+
       const newHealth: FeedHealthRecord = {
         lastChecked: new Date().toISOString(),
-        status: (ok && data?.success) ? 'healthy' : 'error',
-        itemCount: data?.items?.length || 0,
-        errorDetail: (ok && data?.success) ? undefined : (data?.error || `HTTP ${status}`)
+        status: isHealthy ? 'healthy' : 'error',
+        itemCount: count,
+        errorDetail: errDetail
       };
 
       const updatedMap = { ...feedHealthMap, [feed.url]: newHealth };
       setFeedHealthMap(updatedMap);
       localStorage.setItem('perspective_rss_health', JSON.stringify(updatedMap));
     } catch (e: any) {
+      // Try client RSS fetch before flagging error
+      let fallbackSuccess = false;
+      let fallbackCount = 0;
+      try {
+        const clientRes = await clientFetchRssFeed(feed.url, feed.name);
+        if (clientRes.success && clientRes.count > 0) {
+          fallbackSuccess = true;
+          fallbackCount = clientRes.count;
+        }
+      } catch (_) {}
+
       const errorMap = {
         ...feedHealthMap,
         [feed.url]: {
           lastChecked: new Date().toISOString(),
-          status: 'error' as const,
-          itemCount: 0,
-          errorDetail: e?.message || 'Network Timeout'
+          status: (fallbackSuccess ? 'healthy' : 'error') as 'healthy' | 'error',
+          itemCount: fallbackCount,
+          errorDetail: fallbackSuccess ? undefined : (e?.message || 'Network Timeout')
         }
       };
       setFeedHealthMap(errorMap);

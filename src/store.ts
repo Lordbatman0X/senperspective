@@ -98,6 +98,7 @@ export interface ReaderProfile {
   emailVerified?: boolean;
   mfaEnabled?: boolean;
   isMongoDB?: boolean;
+  isFirebaseAuthSession?: boolean;
   coverPhotoUrl?: string;
   streak?: number;
   readingTime?: number;
@@ -430,13 +431,32 @@ export const useStore = create<AppState>()(
             const fetchedArticles: Article[] = [];
             snapshot.forEach((docSnap) => {
               const data = docSnap.data();
-              if (data) {
+              if (data && data.id) {
                 fetchedArticles.push(data as Article);
               }
             });
             if (fetchedArticles.length > 0) {
-              fetchedArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-              set({ articles: fetchedArticles });
+              const existingIds = new Set(fetchedArticles.map(a => a.id));
+              const missingSeeds = (seedArticles || []).filter(a => !existingIds.has(a.id));
+              const combined = [...fetchedArticles, ...missingSeeds].sort(
+                (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+              );
+              set({ articles: combined });
+            }
+          } else {
+            // Firestore is currently empty (e.g. freshly deployed instance)
+            const current = get().articles;
+            if (!current || current.length === 0) {
+              set({ articles: seedArticles });
+            }
+            // Seed the initial articles to Firestore in the background
+            if (seedArticles && seedArticles.length > 0) {
+              for (const art of seedArticles.slice(0, 25)) {
+                try {
+                  const clean = await sanitizeFirestorePayload(art as any);
+                  await setDoc(doc(db, "articles", art.id), clean, { merge: true });
+                } catch (_) {}
+              }
             }
           }
 
@@ -453,7 +473,11 @@ export const useStore = create<AppState>()(
             }
           }
         } catch (err) {
-          console.error("Failed to sync from MongoDB:", err);
+          console.warn("Notice: Firestore sync fallback to resilient local seed articles:", err);
+          const current = get().articles;
+          if (!current || current.length === 0) {
+            set({ articles: seedArticles });
+          }
         }
       },
       addArticle: async (article) => {
