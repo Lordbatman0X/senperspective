@@ -1,8 +1,10 @@
+import { db, doc, getDoc, setDoc } from './firebase';
+
 /**
  * Client-Side AI and RSS Engine
  * Allows the Perspective Group frontend (when hosted statically on Firebase/Vercel/Cloudflare)
  * to perform AI rewriting, timeline generation, RSS feed reading, and provider diagnostics
- * directly from the browser using user API keys stored in localStorage.
+ * directly from the browser using user API keys stored in localStorage and Firestore.
  */
 
 export interface ClientRewriteOptions {
@@ -33,15 +35,154 @@ export interface ClientRssItem {
 }
 
 /**
- * Gets the cleanest available API key from localStorage
+ * In-memory cache for API keys synced from Firestore
+ */
+let cachedFirestoreKeys: Record<string, string> = {};
+let hasLoadedFromFirestore = false;
+
+/**
+ * Loads API keys from Firestore system_config/api_keys into memory and localStorage
+ */
+export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const snap = await getDoc(doc(db, 'system_config', 'api_keys'));
+    if (snap && snap.exists()) {
+      const data = snap.data() || {};
+      cachedFirestoreKeys = { ...data };
+      hasLoadedFromFirestore = true;
+      // Sync into localStorage if not already set locally
+      if (window.localStorage) {
+        for (const [k, v] of Object.entries(data)) {
+          if (typeof v === 'string' && v.trim()) {
+            const lower = k.toLowerCase();
+            const upper = k.toUpperCase();
+            if (!localStorage.getItem(`api_key_${lower}`)) {
+              localStorage.setItem(`api_key_${lower}`, v.trim());
+            }
+            if (!localStorage.getItem(`${upper}_API_KEY`)) {
+              localStorage.setItem(`${upper}_API_KEY`, v.trim());
+            }
+          }
+        }
+      }
+      return cachedFirestoreKeys;
+    }
+  } catch (e) {
+    console.warn('[Client AI] Note: Could not fetch keys from Firestore:', e);
+  }
+  return cachedFirestoreKeys;
+}
+
+// Auto-trigger load on client initialization
+if (typeof window !== 'undefined') {
+  loadClientApiKeysFromFirestore().catch(() => {});
+}
+
+/**
+ * Gets the cleanest available API key from localStorage or Firestore cache
  */
 export function getClientApiKey(provider: string): string | null {
-  if (typeof window === 'undefined' || !window.localStorage) return null;
+  if (typeof window === 'undefined') return null;
   const p = provider.toLowerCase();
-  const val = localStorage.getItem(`api_key_${p}`) || localStorage.getItem(`${p.toUpperCase()}_API_KEY`);
-  if (!val) return null;
-  const trimmed = val.replace(/^["']|["']$/g, '').trim();
-  return trimmed && trimmed !== 'undefined' && trimmed !== 'null' ? trimmed : null;
+  const P = provider.toUpperCase();
+
+  // 1. Check browser localStorage
+  if (window.localStorage) {
+    const val = localStorage.getItem(`api_key_${p}`) || localStorage.getItem(`${P}_API_KEY`);
+    if (val) {
+      const trimmed = val.replace(/^["']|["']$/g, '').trim();
+      if (trimmed && trimmed !== 'undefined' && trimmed !== 'null') return trimmed;
+    }
+  }
+
+  // 2. Check cached Firestore keys
+  if (cachedFirestoreKeys[P]) return cachedFirestoreKeys[P];
+  if (cachedFirestoreKeys[p]) return cachedFirestoreKeys[p];
+  if (cachedFirestoreKeys[`${p}_api_key`]) return cachedFirestoreKeys[`${p}_api_key`];
+  if (cachedFirestoreKeys[`api_key_${p}`]) return cachedFirestoreKeys[`api_key_${p}`];
+
+  return null;
+}
+
+/**
+ * Checks if ANY AI provider API key is currently available
+ */
+export function hasAnyClientApiKey(): boolean {
+  const providers = ['gemini', 'groq', 'openai', 'openrouter', 'anthropic', 'deepseek'];
+  return providers.some(p => !!getClientApiKey(p));
+}
+
+/**
+ * Saves an API key to localStorage AND Firestore so it persists across all devices
+ */
+export async function saveClientApiKey(provider: string, key: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const p = provider.toLowerCase();
+  const P = provider.toUpperCase();
+  const cleanKey = (key || '').replace(/^["']|["']$/g, '').trim();
+
+  // 1. Save in localStorage
+  if (window.localStorage) {
+    if (cleanKey) {
+      localStorage.setItem(`api_key_${p}`, cleanKey);
+      localStorage.setItem(`${P}_API_KEY`, cleanKey);
+    } else {
+      localStorage.removeItem(`api_key_${p}`);
+      localStorage.removeItem(`${P}_API_KEY`);
+    }
+  }
+
+  // 2. Cache in memory
+  if (cleanKey) {
+    cachedFirestoreKeys[P] = cleanKey;
+  } else {
+    delete cachedFirestoreKeys[P];
+  }
+
+  // 3. Persist to Firestore system_config/api_keys
+  try {
+    await setDoc(doc(db, 'system_config', 'api_keys'), { [P]: cleanKey }, { merge: true });
+    console.log(`[Client AI] Successfully saved ${P} API key to Firestore database.`);
+  } catch (err) {
+    console.warn(`[Client AI] Could not sync ${P} key to Firestore:`, err);
+  }
+}
+
+/**
+ * Returns a high-definition thematic editorial image based on category and title
+ */
+export function getEditorialFallbackImage(category: string = 'Économie', titleText: string = ''): string {
+  const title = (titleText || '').toLowerCase();
+  
+  if (title.includes('football') || title.includes('sport') || title.includes('stade') || title.includes('can') || title.includes('caf') || title.includes('seed') || title.includes('samoura')) {
+    return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=1200';
+  }
+  if (title.includes('dakar') || title.includes('sénégal') || title.includes('senegal')) {
+    if (title.includes('port') || title.includes('pêche') || title.includes('mer')) {
+      return 'https://images.unsplash.com/photo-1518241353330-0f7941c2d9b5?auto=format&fit=crop&q=80&w=1200';
+    }
+    if (title.includes('ter') || title.includes('brt') || title.includes('transport') || title.includes('train')) {
+      return 'https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&q=80&w=1200';
+    }
+    if (title.includes('pétrole') || title.includes('gaz') || title.includes('énergie') || title.includes('sangomar')) {
+      return 'https://images.unsplash.com/photo-1513836279014-a89f7a76ae86?auto=format&fit=crop&q=80&w=1200';
+    }
+  }
+  if (title.includes('politique') || title.includes('gouvernement') || title.includes('président') || title.includes('ministre') || title.includes('assemblée')) {
+    return 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&q=80&w=1200';
+  }
+  if (title.includes('tech') || title.includes('ia') || title.includes('numérique') || title.includes('digital') || title.includes('startup')) {
+    return 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=1200';
+  }
+
+  const cat = (category || '').toLowerCase();
+  if (cat.includes('sport')) return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&q=80&w=1200';
+  if (cat.includes('politique')) return 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&q=80&w=1200';
+  if (cat.includes('tech') || cat.includes('innovation')) return 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=1200';
+  if (cat.includes('culture') || cat.includes('société')) return 'https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&q=80&w=1200';
+  if (cat.includes('international') || cat.includes('monde')) return 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&q=80&w=1200';
+  return 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&q=80&w=1200';
 }
 
 /**
@@ -274,31 +415,45 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
 
   let rawContent = '';
   let modelUsed = '';
+  let lastError = '';
 
-  if (engine === 'gemini') {
-    if (!geminiKey) throw new Error('Clé Gemini manquante.');
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      })
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error?.message || `Erreur Gemini HTTP ${res.status}`);
+  // Helper to query Gemini with model fallback
+  const callGeminiDirect = async (apiKey: string) => {
+    const candidateModels = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.0-flash'];
+    for (const model of candidateModels) {
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: promptText }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (content && content.trim()) {
+            return { content, model: `Gemini ${model} (Client Direct)` };
+          }
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          console.warn(`[Client AI] Gemini ${model} returned HTTP ${res.status}:`, errJson?.error?.message);
+        }
+      } catch (err: any) {
+        console.warn(`[Client AI] Gemini ${model} fetch failed:`, err.message);
+      }
     }
-    const data = await res.json();
-    rawContent = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    modelUsed = 'Gemini 2.5 Flash (Client Direct)';
-  } else if (engine === 'groq') {
-    if (!groqKey) throw new Error('Clé Groq manquante.');
+    throw new Error('Les modèles Gemini sont temporairement saturés ou la clé API est restreinte.');
+  };
+
+  // Helper to query Groq
+  const callGroqDirect = async (apiKey: string) => {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${groqKey}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
@@ -311,15 +466,17 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
       throw new Error(errJson?.error?.message || `Erreur Groq HTTP ${res.status}`);
     }
     const data = await res.json();
-    rawContent = data?.choices?.[0]?.message?.content || '';
-    modelUsed = 'Groq Llama 3.3 70B (Client Direct)';
-  } else if (engine === 'openai') {
-    if (!openaiKey) throw new Error('Clé OpenAI manquante.');
+    const content = data?.choices?.[0]?.message?.content || '';
+    return { content, model: 'Groq Llama 3.3 70B (Client Direct)' };
+  };
+
+  // Helper to query OpenAI
+  const callOpenAIDirect = async (apiKey: string) => {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiKey}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -332,10 +489,64 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
       throw new Error(errJson?.error?.message || `Erreur OpenAI HTTP ${res.status}`);
     }
     const data = await res.json();
-    rawContent = data?.choices?.[0]?.message?.content || '';
-    modelUsed = 'OpenAI GPT-4o Mini (Client Direct)';
+    const content = data?.choices?.[0]?.message?.content || '';
+    return { content, model: 'OpenAI GPT-4o Mini (Client Direct)' };
+  };
+
+  // Execution flow with intelligent auto-failover
+  if (engine === 'gemini' || (engine === 'auto' && geminiKey)) {
+    try {
+      if (!geminiKey) throw new Error('Clé Gemini non configurée.');
+      const res = await callGeminiDirect(geminiKey);
+      rawContent = res.content;
+      modelUsed = res.model;
+    } catch (e: any) {
+      lastError = e.message;
+      if (engine === 'auto' && groqKey) {
+        console.warn('[Client AI Failover] Gemini failed, failing over to Groq Llama 3.3...');
+        try {
+          const res = await callGroqDirect(groqKey);
+          rawContent = res.content;
+          modelUsed = `${res.model} (Failover Gemini -> Groq)`;
+        } catch (groqErr: any) {
+          lastError = groqErr.message;
+        }
+      } else if (engine === 'auto' && openaiKey) {
+        console.warn('[Client AI Failover] Gemini failed, failing over to OpenAI...');
+        try {
+          const res = await callOpenAIDirect(openaiKey);
+          rawContent = res.content;
+          modelUsed = `${res.model} (Failover Gemini -> OpenAI)`;
+        } catch (oErr: any) {
+          lastError = oErr.message;
+        }
+      } else {
+        throw new Error(lastError);
+      }
+    }
+  } else if (engine === 'groq' || (engine === 'auto' && groqKey)) {
+    try {
+      if (!groqKey) throw new Error('Clé Groq non configurée.');
+      const res = await callGroqDirect(groqKey);
+      rawContent = res.content;
+      modelUsed = res.model;
+    } catch (e: any) {
+      lastError = e.message;
+      if (engine === 'auto' && openaiKey) {
+        const res = await callOpenAIDirect(openaiKey);
+        rawContent = res.content;
+        modelUsed = `${res.model} (Failover Groq -> OpenAI)`;
+      } else {
+        throw new Error(lastError);
+      }
+    }
+  } else if (engine === 'openai' || (engine === 'auto' && openaiKey)) {
+    if (!openaiKey) throw new Error('Clé OpenAI non configurée.');
+    const res = await callOpenAIDirect(openaiKey);
+    rawContent = res.content;
+    modelUsed = res.model;
   } else if (engine === 'openrouter') {
-    if (!openrouterKey) throw new Error('Clé OpenRouter manquante.');
+    if (!openrouterKey) throw new Error('Clé OpenRouter non configurée.');
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -367,6 +578,13 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
   } catch (e: any) {
     throw new Error('Le modèle IA n\'a pas renvoyé un format JSON valide: ' + e.message);
   }
+
+  // Ensure high-definition image is assigned
+  const itemImg = typeof article === 'object' ? (article.imageUrl || article.featuredImage || article.image || article.enclosure?.url) : null;
+  if (!parsedArticle.featuredImage || parsedArticle.featuredImage.includes('photo-1504711434969-e33886168f5c')) {
+    parsedArticle.featuredImage = itemImg || getEditorialFallbackImage(category, parsedArticle.title?.fr || parsedArticle.title?.en || (typeof article === 'object' ? article.title : ''));
+  }
+  parsedArticle.imageUrl = parsedArticle.featuredImage;
 
   return {
     success: true,

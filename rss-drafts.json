@@ -1,5 +1,88 @@
 [
   {
+    "id": "art-rss-1788714967329-kv0c",
+    "slug": "analyse-des-indicateurs-economiques-vers-une-nouvelle-trajectoire-de-croissance-6691",
+    "category": "Économie",
+    "type": "News",
+    "title": {
+      "fr": "Analyse des indicateurs économiques : Vers une nouvelle trajectoire de croissance",
+      "en": "Economic Indicator Analysis: Charting a New Growth Trajectory"
+    },
+    "excerpt": {
+      "fr": "Le ministère de l'Économie, du Plan et de la Coopération a publié ses dernières données sur les performances macroéconomiques nationales. Ces chiffres marquent une étape décisive pour la planification budgétaire du prochain trimestre.",
+      "en": "The Ministry of Economy, Planning and Cooperation has released its latest data on national macroeconomic performance. These figures mark a decisive step for the next quarter's budgetary planning."
+    },
+    "body": {
+      "fr": "Dans les bureaux feutrés du ministère à Dakar, l'analyse des récents indicateurs économiques révèle une dynamique de résilience malgré les vents contraires sur les marchés internationaux. Les données consolidées soulignent une stabilisation des prix à la consommation, soutenue par une gestion prudente de la politique monétaire régionale.\n\n## Stabilité et Perspectives\nLa trajectoire actuelle suggère que les efforts de diversification industrielle commencent à porter leurs fruits. Les secteurs de l'agro-industrie et des services numériques affichent des taux de croissance supérieurs aux prévisions initiales, offrant une base solide pour le renforcement des investissements directs étrangers.\n\n> \"La priorité demeure la consolidation de nos acquis budgétaires tout en favorisant un environnement propice à l'entrepreneuriat local,\" a déclaré un porte-parole du ministère lors du point presse hebdomadaire.\n\nCette approche méthodique vise à réduire la dépendance aux importations de produits de première nécessité, renforçant ainsi la souveraineté économique du pays face aux fluctuations des chaînes d'approvisionnement mondiales.",
+      "en": "Within the hushed offices of the ministry in Dakar, the analysis of recent economic indicators reveals a dynamic of resilience despite headwinds in international markets. Consolidated data highlight a stabilization of consumer prices, supported by prudent management of regional monetary policy.\n\n## Stability and Outlook\nThe current trajectory suggests that industrial diversification efforts are beginning to yield results. The agribusiness and digital services sectors are posting growth rates exceeding initial forecasts, providing a solid foundation for strengthening foreign direct investment.\n\n> \"The priority remains the consolidation of our budgetary gains while fostering an environment conducive to local entrepreneurship,\" stated a ministry spokesperson during the weekly press briefing.\n\nThis methodical approach aims to reduce reliance on imports of essential goods, thereby strengthening the country's economic sovereignty in the face of global supply chain fluctuations."
+    },
+    "featuredImage": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Danse_traditionnelle_Bafilo_%28Togo_%3B_Afrique_de_l%27Ouest%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "imageUrl": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Danse_traditionnelle_Bafilo_%28Togo_%3B_Afrique_de_l%27Ouest%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+    "author": "Rédaction Perspective",
+    "date": "2026-09-06T17:16:07.330Z",
+    "readingTime": 3,
+    "tags": [
+      "Sénégal",
+      "Afrique de l'Ouest",
+      "Perspective",
+      "Économie"
+    ],
+    "perspectiveBrief": {
+      "whatHappened": {
+        "fr": "Le ministère de l'Économie a publié des données confirmant une stabilisation des indicateurs macroéconomiques nationaux malgré un contexte international complexe.",
+        "en": "The Ministry of Economy released data confirming the stabilization of national macroeconomic indicators despite a complex international context."
+      }
+    },
+    "timeline": [
+      {
+        "date": "2026-09-06",
+        "description": {
+          "fr": "Développement majeur documenté : Analyse des indicateurs économiques : Vers une nouvelle trajectoire de croissance",
+          "en": "Major development documented: Economic Indicator Analysis: Charting a New Growth Trajectory"
+        }
+      }
+    ],
+    "keyActors": [
+      {
+        "name": "Ministère de l'Économie, du Plan et de la Coopération",
+        "role": "Institution gouvernementale de pilotage économique",
+        "significance": {
+          "fr": "Responsable de la collecte, de l'analyse et de la publication des données macroéconomiques nationales.",
+          "en": "Responsible for the collection, analysis, and publication of national macroeconomic data."
+        }
+      },
+      {
+        "name": "Alioune Sall",
+        "role": "Ministre de la Communication, des Télécommunications et du Numérique",
+        "significance": {
+          "fr": "Impulsion de la stratégie technologique, de la connectivité nationale et de l'économie numérique.",
+          "en": "Steering technological strategy, national connectivity, and digital economy growth."
+        }
+      },
+      {
+        "name": "Ministère des Finances et du Budget",
+        "role": "Tutelle Budgétaire",
+        "significance": {
+          "fr": "Gestion des finances publiques et du cadre macroéconomique national.",
+          "en": "Management of public finances and macroeconomic stability."
+        }
+      }
+    ],
+    "structuralForces": {},
+    "relatedArticleIds": [],
+    "isPublished": false,
+    "isFeatured": false,
+    "views": 0,
+    "sourceName": "Test Feed",
+    "sourceDomain": "",
+    "sourceCountry": "International",
+    "sourceFlag": "🌐",
+    "sourceRegion": "International & Global",
+    "originalUrl": "",
+    "engineUsed": "Gemini (gemini-3.1-flash-lite)",
+    "failoverTriggered": false
+  },
+  {
     "id": "art-rss-1787838601988-qvje",
     "slug": "dakar-l-emergence-d-un-ecosysteme-de-voix-off-et-de-doublage-numerique-1987",
     "category": "Tech & Innovation",

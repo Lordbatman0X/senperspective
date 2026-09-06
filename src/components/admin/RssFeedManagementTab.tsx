@@ -3,11 +3,21 @@ import {
   Zap, Copy, Check, Send, Sparkles, Globe, Terminal, FileCode2, 
   CheckCircle2, AlertCircle, RefreshCw, ExternalLink, ShieldCheck, 
   Layers, BookOpen, Bot, Trash2, Clock, Search, Plus, Play, ShieldAlert, Wifi, Sliders,
-  ListStart, FileText, CheckCircle, Edit3, X, ChevronRight, Newspaper, ArrowRight, Eye
+  ListStart, FileText, CheckCircle, Edit3, X, ChevronRight, Newspaper, ArrowRight, Eye,
+  Key, AlertTriangle, EyeOff
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { safeFetchJson } from '../../lib/apiUtils';
-import { clientFetchRssFeed, clientRewriteArticle } from '../../lib/clientAiEngine';
+import { 
+  clientFetchRssFeed, 
+  clientRewriteArticle, 
+  clientProcessFeedAndGenerate,
+  hasAnyClientApiKey, 
+  getClientApiKey, 
+  saveClientApiKey, 
+  loadClientApiKeysFromFirestore,
+  getEditorialFallbackImage
+} from '../../lib/clientAiEngine';
 import { ALL_RELIABLE_RSS_FEEDS, ensureValidUrl, normalizeRssFeedUrl } from './RssAutomationTab';
 
 interface RssFeedManagementTabProps {
@@ -91,6 +101,23 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   const [generatedResults, setGeneratedResults] = useState<Record<string, any>>({});
   const [itemConfig, setItemConfig] = useState<Record<string, { category: string; type: string; engine: string; customPrompt: string }>>({});
   const [feedItemSearch, setFeedItemSearch] = useState('');
+
+  // Quick Key Setup Modal States
+  const [showQuickKeyModal, setShowQuickKeyModal] = useState(false);
+  const [quickKeyProvider, setQuickKeyProvider] = useState<'gemini' | 'groq' | 'openai'>('gemini');
+  const [quickKeyValue, setQuickKeyValue] = useState('');
+  const [showKeySecret, setShowKeySecret] = useState(false);
+  const [quickKeySaving, setQuickKeySaving] = useState(false);
+  const [pendingItemToGenerate, setPendingItemToGenerate] = useState<{ item: any; index: number } | null>(null);
+  const [hasApiKey, setHasApiKey] = useState(() => hasAnyClientApiKey());
+
+  // Check and sync keys from Firestore and localStorage
+  useEffect(() => {
+    setHasApiKey(hasAnyClientApiKey());
+    loadClientApiKeysFromFirestore().then(() => {
+      setHasApiKey(hasAnyClientApiKey());
+    });
+  }, []);
 
   // Filters for feed monitor
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +221,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
     };
 
     setGeneratingItemKey(itemKey);
+    console.log('[DEBUG] Generating item:', item);
     try {
       showStatus(isFr ? `Rédaction IA en cours pour : "${item.title?.slice(0, 45)}..."` : `AI writing story: "${item.title?.slice(0, 45)}..."`);
 
@@ -212,6 +240,8 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         })
       });
 
+      console.log('[DEBUG] Generation response:', { ok, data, error });
+      
       if (ok && data?.success && data.article) {
         setGeneratedResults(prev => ({ ...prev, [itemKey]: data.article }));
         addArticle(data.article);
@@ -219,7 +249,18 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         showStatus(isFr ? `Article rédigé avec succès via ${data.engineUsed || 'l\'IA'} !` : `Article successfully scripted via ${data.engineUsed || 'AI'}!`);
       } else {
         // Fallback to client-side AI rewrite
-        console.warn('[RSS SINGLE GEN] Backend unavailable. Falling back to client-side AI generation...');
+        if (!hasAnyClientApiKey()) {
+          console.warn('[RSS SINGLE GEN] No client AI key configured. Opening quick setup...');
+          setPendingItemToGenerate({ item, index });
+          setQuickKeyValue(getClientApiKey(quickKeyProvider) || '');
+          setShowQuickKeyModal(true);
+          showStatus(isFr ? "Configurez votre clé IA pour générer sur senperspective.com." : "Configure your AI key to draft stories on senperspective.com.", 'error');
+          return;
+        }
+
+        console.log('[RSS SINGLE GEN] Backend API offline/static. Falling back to direct client-side AI engine...');
+        showStatus(isFr ? `Rédaction en cours via l'IA directe du navigateur...` : `Drafting via direct browser AI...`);
+
         const clientRes = await clientRewriteArticle({
           article: item,
           prompt: cfg.customPrompt || `Rédige un article d'actualité complet à partir de cette dépêche de presse : "${item.title}". Source : ${inspectFeed?.name || 'Dépêche'}.`,
@@ -229,6 +270,9 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         });
 
         if (clientRes.success && clientRes.article) {
+          const itemImg = item.imageUrl || item.image || item.enclosure?.url;
+          const assignedImg = itemImg || clientRes.article.featuredImage || getEditorialFallbackImage(cfg.category, item.title);
+
           const newArt = {
             ...clientRes.article,
             id: 'art-wire-' + Date.now(),
@@ -238,14 +282,18 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
             sourceFeed: inspectFeed?.url,
             sourceName: inspectFeed?.name,
             sourceUrl: item.link || inspectFeed?.url,
-            author: 'Perspective Newsroom'
+            author: 'Perspective Newsroom',
+            featuredImage: assignedImg,
+            imageUrl: assignedImg,
+            aiGenerated: true,
+            aiModelUsed: clientRes.engineUsed
           };
           setGeneratedResults(prev => ({ ...prev, [itemKey]: newArt }));
           addArticle(newArt);
           if (onRefreshArticles) onRefreshArticles();
           showStatus(isFr ? `Article rédigé avec succès via ${clientRes.engineUsed} !` : `Article successfully scripted via ${clientRes.engineUsed}!`);
         } else {
-          throw new Error(error || data?.error || clientRes.error || 'Échec de la rédaction');
+          throw new Error(clientRes.error || 'Échec de la rédaction par l\'IA.');
         }
       }
     } catch (err: any) {
@@ -278,7 +326,32 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         showStatus(isFr ? `1 article rédigé avec succès depuis "${feedObj.name}" !` : `1 story successfully scripted from "${feedObj.name}"!`);
         if (onRefreshArticles) onRefreshArticles();
       } else {
-        throw new Error(error || data?.error || 'Erreur lors de la génération');
+        // Fallback to clientProcessFeedAndGenerate
+        if (!hasAnyClientApiKey()) {
+          setShowQuickKeyModal(true);
+          setQuickKeyValue(getClientApiKey(quickKeyProvider) || '');
+          throw new Error(isFr ? "Configurez votre clé IA pour générer sur senperspective.com." : "Configure your AI key to draft on senperspective.com.");
+        }
+
+        showStatus(isFr ? `Rédaction directe via l'IA du navigateur...` : `Drafting directly via browser AI...`);
+        const clientRes = await clientProcessFeedAndGenerate({
+          feedUrl: feedObj.url,
+          feedName: feedObj.name,
+          category: feedObj.category || 'Économie',
+          maxItems: 1,
+          type: 'News',
+          preferredEngine: 'auto'
+        });
+
+        if (clientRes.success && clientRes.articles.length > 0) {
+          for (const art of clientRes.articles) {
+            addArticle(art);
+          }
+          if (onRefreshArticles) onRefreshArticles();
+          showStatus(isFr ? `1 article rédigé avec succès via ${clientRes.engineUsed} !` : `1 story successfully drafted via ${clientRes.engineUsed}!`);
+        } else {
+          throw new Error(clientRes.error || error || data?.error || 'Erreur lors de la génération');
+        }
       }
     } catch (err: any) {
       showStatus(err?.message || 'Erreur lors de la génération', 'error');
@@ -486,7 +559,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
     try {
       showStatus(isFr ? `Traitement IA du flux "${feedObj.name}" démarré...` : `AI parsing started for "${feedObj.name}"...`);
       
-      const res = await fetch('/api/rss/fetch-and-generate', {
+      const { ok, data } = await safeFetchJson('/api/rss/fetch-and-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -498,12 +571,36 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         })
       });
 
-      const result = await res.json();
-      if (res.ok && result?.success) {
-        showStatus(isFr ? `Traitement terminé : ${result.draftsCreated} brouillons rédigés !` : `Finished! ${result.draftsCreated} drafts scripted.`);
+      if (ok && data?.success) {
+        showStatus(isFr ? `Traitement terminé : ${data.draftsCreated} brouillons rédigés !` : `Finished! ${data.draftsCreated} drafts scripted.`);
         if (onRefreshArticles) onRefreshArticles();
       } else {
-        throw new Error(result?.error || 'Failed processing feed');
+        // Fallback to clientProcessFeedAndGenerate
+        if (!hasAnyClientApiKey()) {
+          setShowQuickKeyModal(true);
+          setQuickKeyValue(getClientApiKey(quickKeyProvider) || '');
+          throw new Error(isFr ? "Configurez votre clé IA pour générer sur senperspective.com." : "AI key required to generate on senperspective.com.");
+        }
+
+        showStatus(isFr ? `Rédaction en cours via l'IA directe du navigateur...` : `Drafting via direct browser AI...`);
+        const clientRes = await clientProcessFeedAndGenerate({
+          feedUrl,
+          feedName: feedObj.name,
+          category: cat,
+          maxItems: 2,
+          type: 'News',
+          preferredEngine: 'auto'
+        });
+
+        if (clientRes.success && clientRes.articles.length > 0) {
+          for (const art of clientRes.articles) {
+            addArticle(art);
+          }
+          if (onRefreshArticles) onRefreshArticles();
+          showStatus(isFr ? `Traitement terminé : ${clientRes.articles.length} articles rédigés via ${clientRes.engineUsed} !` : `Finished! ${clientRes.articles.length} stories drafted via ${clientRes.engineUsed}.`);
+        } else {
+          throw new Error(clientRes.error || 'Erreur lors du traitement du flux');
+        }
       }
     } catch (err: any) {
       showStatus(err.message || 'Error occurred', 'error');
@@ -524,7 +621,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
       
       for (const feed of activeFeeds) {
         try {
-          const res = await fetch('/api/rss/fetch-and-generate', {
+          const { ok, data } = await safeFetchJson('/api/rss/fetch-and-generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -536,9 +633,23 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
               preferredEngine: 'auto'
             })
           });
-          const r = await res.json();
-          if (res.ok && r?.success) {
-            totalCreated += r.draftsCreated || 0;
+          if (ok && data?.success) {
+            totalCreated += data.draftsCreated || 0;
+          } else if (hasAnyClientApiKey()) {
+            const clientRes = await clientProcessFeedAndGenerate({
+              feedUrl: feed.url,
+              feedName: feed.name,
+              category: feed.category || 'Économie',
+              maxItems: 1,
+              type: 'News',
+              preferredEngine: 'auto'
+            });
+            if (clientRes.success && clientRes.articles.length > 0) {
+              for (const art of clientRes.articles) {
+                addArticle(art);
+              }
+              totalCreated += clientRes.articles.length;
+            }
           }
         } catch (e) {
           console.warn(`Pipeline skip for ${feed.name}:`, e);
@@ -1708,6 +1819,47 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                               </select>
                             </div>
 
+                            {/* Key / Browser Direct Engine Status Badge */}
+                            <div className="pt-1">
+                              {hasApiKey ? (
+                                <div className="flex items-center justify-between text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 rounded-lg px-2.5 py-1.5">
+                                  <span className="flex items-center gap-1.5 font-mono">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    <span>{isFr ? 'IA Directe Prête' : 'Direct AI Ready'}</span>
+                                  </span>
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      setPendingItemToGenerate({ item, index: idx });
+                                      setQuickKeyValue(getClientApiKey(quickKeyProvider) || '');
+                                      setShowQuickKeyModal(true);
+                                    }}
+                                    className="text-zinc-400 hover:text-zinc-200 underline font-mono text-[9px] cursor-pointer"
+                                  >
+                                    {isFr ? 'Gérer clé' : 'Manage key'}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-between text-[10px] text-amber-300 bg-amber-950/40 border border-amber-900/60 rounded-lg px-2.5 py-1.5">
+                                  <span className="flex items-center gap-1.5 font-mono">
+                                    <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                                    <span>{isFr ? 'Clé IA requise' : 'AI Key required'}</span>
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPendingItemToGenerate({ item, index: idx });
+                                      setQuickKeyValue(getClientApiKey(quickKeyProvider) || '');
+                                      setShowQuickKeyModal(true);
+                                    }}
+                                    className="text-amber-400 hover:text-amber-300 font-bold underline font-mono text-[9px] cursor-pointer ml-1"
+                                  >
+                                    {isFr ? '⚡ Configurer ↗' : '⚡ Setup ↗'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
                             {/* Trigger Button */}
                             <button
                               onClick={() => handleGenerateSingleItem(item, idx)}
@@ -1810,6 +1962,236 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                 className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-bold rounded-xl cursor-pointer"
               >
                 {isFr ? 'Fermer le Studio' : 'Close Studio'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick AI Key Setup Modal for Static Hosting & Direct Browser Generation */}
+      {showQuickKeyModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-700 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-zinc-800 bg-zinc-950 flex justify-between items-start">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-orange-500/10 border border-orange-500/30 rounded-lg text-orange-400">
+                    <Key size={18} />
+                  </div>
+                  <h3 className="font-bold text-white text-base">
+                    {isFr ? "Clé API IA pour senperspective.com" : "AI API Key for senperspective.com"}
+                  </h3>
+                </div>
+                <p className="text-xs text-zinc-400">
+                  {isFr 
+                    ? "Permet à l'IA de rédiger vos dépêches en illimité directement depuis votre navigateur, sans dépendre d'un serveur backend."
+                    : "Enables direct unlimited story generation from your browser without requiring a backend server."}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowQuickKeyModal(false);
+                  setPendingItemToGenerate(null);
+                }}
+                className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              {/* Provider Selection Tabs */}
+              <div>
+                <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block mb-2 font-bold">
+                  {isFr ? "1. Choisissez votre fournisseur IA" : "1. Choose your AI provider"}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickKeyProvider('gemini');
+                      setQuickKeyValue(getClientApiKey('gemini') || '');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                      quickKeyProvider === 'gemini'
+                        ? 'bg-orange-500/15 border-orange-500/80 text-orange-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">✨ Google Gemini</div>
+                    <div className="text-[10px] text-emerald-400 font-mono mt-0.5">{isFr ? 'Gratuit • Recommandé' : 'Free • Recommended'}</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickKeyProvider('groq');
+                      setQuickKeyValue(getClientApiKey('groq') || '');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                      quickKeyProvider === 'groq'
+                        ? 'bg-orange-500/15 border-orange-500/80 text-orange-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">🚀 Groq Llama</div>
+                    <div className="text-[10px] text-emerald-400 font-mono mt-0.5">{isFr ? 'Gratuit • Ultra-rapide' : 'Free • Blazing Fast'}</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuickKeyProvider('openai');
+                      setQuickKeyValue(getClientApiKey('openai') || '');
+                    }}
+                    className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                      quickKeyProvider === 'openai'
+                        ? 'bg-orange-500/15 border-orange-500/80 text-orange-300'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                    }`}
+                  >
+                    <div className="font-bold text-xs">⚡ OpenAI</div>
+                    <div className="text-[10px] text-zinc-400 font-mono mt-0.5">GPT-4o Mini</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Key Input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider font-bold">
+                    {isFr ? `2. Clé API ${quickKeyProvider.toUpperCase()}` : `2. ${quickKeyProvider.toUpperCase()} API Key`}
+                  </label>
+                  {quickKeyProvider === 'gemini' && (
+                    <a
+                      href="https://aistudio.google.com/app/apikey"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-mono text-orange-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>{isFr ? "Obtenir gratuitement sur Google AI Studio" : "Get free key on Google AI Studio"}</span>
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
+                  {quickKeyProvider === 'groq' && (
+                    <a
+                      href="https://console.groq.com/keys"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] font-mono text-orange-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>{isFr ? "Créer une clé gratuite sur Groq Console" : "Get free key on Groq Console"}</span>
+                      <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showKeySecret ? 'text' : 'password'}
+                    value={quickKeyValue}
+                    onChange={(e) => setQuickKeyValue(e.target.value)}
+                    placeholder={quickKeyProvider === 'gemini' ? 'AIzaSy...' : quickKeyProvider === 'groq' ? 'gsk_...' : 'sk-...'}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs text-zinc-200 placeholder-zinc-600 font-mono focus:outline-none focus:border-orange-500 pr-20"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowKeySecret(!showKeySecret)}
+                      className="p-1 text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                    >
+                      {showKeySecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const text = await navigator.clipboard.readText();
+                          if (text) setQuickKeyValue(text.trim());
+                        } catch (_) {}
+                      }}
+                      className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-[10px] font-mono text-zinc-300 rounded cursor-pointer"
+                    >
+                      Coller
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-zinc-500 leading-relaxed">
+                  {isFr
+                    ? "Votre clé est enregistrée de manière sécurisée dans la base Firestore et votre navigateur pour être réutilisée automatiquement sur tous vos appareils."
+                    : "Your key is safely stored in Firestore and your browser for automatic reuse across all your devices."}
+                </p>
+              </div>
+
+              {pendingItemToGenerate && (
+                <div className="p-3 bg-orange-950/30 border border-orange-800/40 rounded-xl space-y-1">
+                  <div className="text-[10px] font-mono uppercase text-orange-400 font-bold">
+                    {isFr ? "Dépêche en attente de rédaction :" : "Story queued for generation:"}
+                  </div>
+                  <p className="text-xs text-white font-medium line-clamp-1">
+                    "{pendingItemToGenerate.item?.title}"
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-zinc-950 border-t border-zinc-800 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickKeyModal(false);
+                  setPendingItemToGenerate(null);
+                }}
+                className="px-4 py-2 text-xs text-zinc-400 hover:text-white font-bold cursor-pointer"
+              >
+                {isFr ? "Annuler" : "Cancel"}
+              </button>
+
+              <button
+                type="button"
+                disabled={!quickKeyValue.trim() || quickKeySaving}
+                onClick={async () => {
+                  if (!quickKeyValue.trim()) return;
+                  setQuickKeySaving(true);
+                  try {
+                    await saveClientApiKey(quickKeyProvider, quickKeyValue.trim());
+                    setHasApiKey(true);
+                    setShowQuickKeyModal(false);
+                    showStatus(isFr ? `Clé ${quickKeyProvider.toUpperCase()} enregistrée avec succès !` : `${quickKeyProvider.toUpperCase()} key saved successfully!`);
+
+                    // If an item was waiting for this key, generate it immediately!
+                    if (pendingItemToGenerate) {
+                      const { item, index } = pendingItemToGenerate;
+                      setPendingItemToGenerate(null);
+                      handleGenerateSingleItem(item, index);
+                    }
+                  } catch (e: any) {
+                    showStatus(e?.message || "Erreur lors de l'enregistrement", 'error');
+                  } finally {
+                    setQuickKeySaving(false);
+                  }
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
+              >
+                {quickKeySaving ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>{isFr ? "Enregistrement..." : "Saving..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} />
+                    <span>
+                      {pendingItemToGenerate 
+                        ? (isFr ? "⚡ Enregistrer et rédiger cet article" : "⚡ Save and generate story")
+                        : (isFr ? "Enregistrer la clé" : "Save key")}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>
