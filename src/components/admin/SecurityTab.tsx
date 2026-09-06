@@ -5,7 +5,7 @@ import {
   ShieldCheck, Lock, Key, Mail, User, Eye, EyeOff, RefreshCw, CheckCircle2, 
   AlertTriangle, Shield, UserPlus, Edit3, Trash2, ShieldAlert, Check, Sparkles, Sliders
 } from 'lucide-react';
-import { db, safeOnSnapshot, collection, doc, setDoc, deleteDoc } from '../../lib/mongodb';
+import { db, safeOnSnapshot, collection, doc, setDoc, deleteDoc } from '../../lib/firebase';
 
 export function SecurityTab() {
   const { language, siteSettings, updateSiteSettings, readerProfile, users: storeUsers, updateUserPassword, updateUserRole, deleteUser } = useStore();

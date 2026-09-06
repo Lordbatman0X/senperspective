@@ -1,4 +1,4 @@
-import { auth, GoogleAuthProvider, signInWithPopup } from "./mongodb";
+import { auth, GoogleAuthProvider, signInWithPopup } from './firebase';
 
 type User = any;
 

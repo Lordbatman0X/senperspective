@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store';
 import { useAuth } from '../contexts/AuthContext';
-import { db, safeOnSnapshot, collection } from '../lib/mongodb';
+import { db, safeOnSnapshot, collection } from '../lib/firebase';
 import { SharedAttachment } from './SharedItemCard';
 
 interface InternalShareModalProps {

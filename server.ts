@@ -18,11 +18,11 @@ import {
   getEffectiveApiKey,
   getGeminiClient,
   saveApiKey,
-  loadKeysFromMongo,
   getProviderStatus,
   resetAllProviderRateLimits,
   resetSingleProviderRateLimit,
-  testProviderPing
+  testProviderPing,
+  loadKeysFromFirestore
 } from "./server/aiNewsroomEngine";
 import { 
   generateArticleImageWithAI, 
@@ -30,7 +30,6 @@ import {
   DEFAULT_EDITORIAL_IMAGE 
 } from "./server/aiImageGenerator";
 import { 
-  connectMongo, 
   getCollectionDocs, 
   getDocument, 
   saveDocument, 
@@ -39,24 +38,19 @@ import {
   registerUser, 
   loginUser,
   updateUserPasswordServer,
-  saveAnalyticsEventMongo,
-  saveUserConsentMongo,
-  getAnalyticsEventsMongo,
-  getUserConsentsMongo,
-  wipeAnalyticsMongo,
-  isMongoConnected
-} from "./src/lib/mongoServer";
+  saveAnalyticsEvent,
+  saveUserConsent,
+  getAnalyticsEvents,
+  getUserConsents,
+  wipeAnalytics
+} from "./src/lib/firestoreServer";
 
 export const app = express();
 const PORT = 3000;
 
-// Connect to MongoDB on server startup
-connectMongo()
-  .then(() => {
-    console.log("[MongoDB Setup] Connection established.");
-    return loadKeysFromMongo();
-  })
-  .catch((err) => console.warn("[MongoDB Startup Warning]", err));
+// Connect to Firestore (implicitly initialized via firebase-admin)
+console.log("[Firestore Setup] Connection initialized.");
+loadKeysFromFirestore().then(() => console.log("[Firestore Setup] API Keys loaded."));
 
 // Enable CORS for webhooks and API clients
 app.use((req, res, next) => {
@@ -146,8 +140,8 @@ app.use((req, res, next) => {
       }
       return res.json({ success: true, id: doc.id, data: doc.data });
     } catch (err: any) {
-      console.error("[MongoDB GET DOC ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+      console.error("[Firestore GET DOC ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur Firestore" });
     }
   });
 
@@ -159,8 +153,8 @@ app.use((req, res, next) => {
       const updated = await saveDocument(collection, id, data, merge ?? true);
       return res.json({ success: true, id: updated.id, data: updated.data });
     } catch (err: any) {
-      console.error("[MongoDB POST DOC ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+      console.error("[Firestore POST DOC ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur Firestore" });
     }
   });
 
@@ -169,10 +163,10 @@ app.use((req, res, next) => {
     try {
       const { collection, id } = req.params;
       await deleteDocument(collection, id);
-      return res.json({ success: true, message: `Document ${id} supprimé de MongoDB.` });
+      return res.json({ success: true, message: `Document ${id} supprimé de Firestore.` });
     } catch (err: any) {
-      console.error("[MongoDB DELETE DOC ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+      console.error("[Firestore DELETE DOC ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur Firestore" });
     }
   });
 
@@ -183,12 +177,12 @@ app.use((req, res, next) => {
       const deletedCount = await wipeCollection(name);
       return res.json({ success: true, message: `Collection ${name} purgée (${deletedCount} documents).` });
     } catch (err: any) {
-      console.error("[MongoDB WIPE COLLECTION ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
+      console.error("[Firestore WIPE COLLECTION ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur Firestore" });
     }
   });
 
-  // AUTH ENDPOINTS FOR MONGODB
+  // AUTH ENDPOINTS
   app.post("/api/mongodb/auth/register", async (req, res) => {
     try {
       const { email, password, name } = req.body || {};
@@ -198,8 +192,8 @@ app.use((req, res, next) => {
       const userData = await registerUser(email, password, name);
       return res.json({ success: true, user: userData });
     } catch (err: any) {
-      console.error("[MongoDB AUTH REGISTER ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Erreur d'inscription MongoDB" });
+      console.error("[Firestore AUTH REGISTER ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur d'inscription" });
     }
   });
 
@@ -212,13 +206,13 @@ app.use((req, res, next) => {
       const userData = await loginUser(email, password);
       return res.json({ success: true, user: userData });
     } catch (err: any) {
-      console.error("[MongoDB AUTH LOGIN ERROR]", err);
-      return res.status(500).json({ success: false, error: err?.message || "Erreur de connexion MongoDB" });
+      console.error("[Firestore AUTH LOGIN ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur de connexion" });
     }
   });
 
   app.post("/api/mongodb/auth/logout", async (_req, res) => {
-    return res.json({ success: true, message: "Déconnexion MongoDB réussie." });
+    return res.json({ success: true, message: "Déconnexion réussie." });
   });
 
   app.post("/api/mongodb/auth/reset-password", async (req, res) => {
@@ -235,7 +229,7 @@ app.use((req, res, next) => {
       const result = await updateUserPasswordServer(email, password);
       return res.json({ success: true, message: `Mot de passe mis à jour pour ${email}`, result });
     } catch (err: any) {
-      console.error("[MongoDB UPDATE PASSWORD ERROR]", err);
+      console.error("[Firestore UPDATE PASSWORD ERROR]", err);
       return res.status(500).json({ success: false, error: err?.message || "Erreur de mise à jour" });
     }
   });
@@ -2398,9 +2392,9 @@ app.use((req, res, next) => {
       userConsentsRepository.unshift(consentRecord);
       await saveAnalyticsData();
       try {
-        await saveUserConsentMongo(consentRecord);
+        await saveUserConsent(consentRecord);
       } catch (e) {
-        console.warn("[MongoDB Analytics] saveUserConsentMongo notice:", e);
+        console.warn("[Firestore Analytics] saveUserConsent notice:", e);
       }
       await syncUserConsentToFirestore(consentRecord);
       await syncToAnalyticsArchiveInFirestore(consentRecord, true);
@@ -2437,9 +2431,9 @@ app.use((req, res, next) => {
       analyticsEventsRepository.unshift(eventRecord);
       await saveAnalyticsData();
       try {
-        await saveAnalyticsEventMongo(eventRecord);
+        await saveAnalyticsEvent(eventRecord);
       } catch (e) {
-        console.warn("[MongoDB Analytics] saveAnalyticsEventMongo notice:", e);
+        console.warn("[Firestore Analytics] saveAnalyticsEvent notice:", e);
       }
       await syncAnalyticsEventToFirestore(eventRecord);
       await syncToAnalyticsArchiveInFirestore(eventRecord, false);
@@ -2461,9 +2455,9 @@ app.use((req, res, next) => {
       let isConnected = false;
 
       try {
-        isConnected = isMongoConnected();
-        mongoEventsList = await getAnalyticsEventsMongo();
-        mongoConsentsList = await getUserConsentsMongo();
+        isConnected = true;
+        mongoEventsList = await getAnalyticsEvents();
+        mongoConsentsList = await getUserConsents();
       } catch (mErr) {
         console.warn("[MongoDB Dashboard Fetch Warning]", mErr);
       }
@@ -2654,7 +2648,7 @@ app.use((req, res, next) => {
       analyticsEventsRepository = [];
       userConsentsRepository = [];
       await saveAnalyticsData();
-      await wipeAnalyticsMongo();
+      await wipeAnalytics();
       return res.json({ success: true, message: "Toutes les données analytics ont été réinitialisées dans MongoDB et en mémoire." });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });

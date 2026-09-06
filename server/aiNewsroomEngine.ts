@@ -23,7 +23,7 @@ export function extractString(val: any): string {
 const baseStorageDir = process.cwd();
 const apiKeysFile = path.join(baseStorageDir, "api-keys.json");
 
-import { saveDocument, getDocument } from "../src/lib/mongoServer";
+import { saveDocument, getDocument } from "../src/lib/firestoreServer";
 
 // Circuit Breaker & Rate Limit tracker with automatic 3-minute cooldown reset
 interface ProviderHealth {
@@ -163,17 +163,17 @@ export function recordProviderSuccess(provider: string) {
   h.rateLimitedUntil = 0;
 }
 
-export let cachedMongoKeys: Record<string, string> = {};
+export let cachedFirestoreKeys: Record<string, string> = {};
 
-export async function loadKeysFromMongo() {
+export async function loadKeysFromFirestore() {
   try {
     const doc = await getDocument("system_config", "api_keys");
     if (doc && doc.data) {
-      cachedMongoKeys = doc.data as Record<string, string>;
-      console.log("[MongoDB Setup] Loaded API Keys from database:", Object.keys(cachedMongoKeys));
+      cachedFirestoreKeys = doc.data as Record<string, string>;
+      console.log("[Firestore Setup] Loaded API Keys from database:", Object.keys(cachedFirestoreKeys));
     }
   } catch (err) {
-    console.warn("[MongoDB Setup Warning] Could not load API keys from MongoDB:", err);
+    console.warn("[Firestore Setup Warning] Could not load API keys from Firestore:", err);
   }
 }
 
@@ -192,12 +192,12 @@ export async function saveApiKey(provider: string, key: string) {
     fs.writeFileSync(apiKeysFile, JSON.stringify(keys, null, 2), "utf-8");
   } catch (e) {}
 
-  cachedMongoKeys[normProvider] = cleanKey;
+  cachedFirestoreKeys[normProvider] = cleanKey;
   try {
-    await saveDocument("system_config", "api_keys", cachedMongoKeys, false);
-    console.log(`[MongoDB Sync Success] Saved API key for ${normProvider} to MongoDB`);
+    await saveDocument("system_config", "api_keys", cachedFirestoreKeys, false);
+    console.log(`[Firestore Sync Success] Saved API key for ${normProvider} to Firestore`);
   } catch (err) {
-    console.error(`[MongoDB Sync Error] Failed to save API key for ${normProvider}:`, err);
+    console.error(`[Firestore Sync Error] Failed to save API key for ${normProvider}:`, err);
   }
 }
 
@@ -232,10 +232,10 @@ export function getEffectiveApiKey(provider: string): string | undefined {
     console.error(`Error reading apiKeyStore for ${p}:`, err);
   }
 
-  // 2. MongoDB Cached Keys
-  const mongoMatch = cachedMongoKeys[p] || cachedMongoKeys[provider] || cachedMongoKeys[provider.toLowerCase()];
-  const cleanMongo = cleanKeyVal(mongoMatch);
-  if (cleanMongo) return cleanMongo;
+  // 2. Firestore Cached Keys
+  const firestoreMatch = cachedFirestoreKeys[p] || cachedFirestoreKeys[provider] || cachedFirestoreKeys[provider.toLowerCase()];
+  const cleanFirestore = cleanKeyVal(firestoreMatch);
+  if (cleanFirestore) return cleanFirestore;
 
   // 3. Local JSON Storage File
   try {

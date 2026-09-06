@@ -6,7 +6,7 @@ import {
 import { useStore } from '../../store';
 import { trackPageView } from '../../lib/telemetry';
 import { safeFetchJson } from '../../lib/apiUtils';
-import { db, safeOnSnapshot, collection, doc, setDoc } from '../../lib/mongodb';
+import { db, safeOnSnapshot, collection, doc, setDoc } from '../../lib/firebase';
 
 export function AudienceAnalyticsTab() {
   const { language, articles, subscribers, friends, interactions, comments, ads } = useStore();

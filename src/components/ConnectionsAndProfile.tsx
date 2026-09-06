@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
-import { db, doc, deleteDoc } from "../lib/mongodb";
+import { db, doc, deleteDoc } from '../lib/firebase';
 import { 
   Search, 
   X, 

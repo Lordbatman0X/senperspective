@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
-import { db, collection, safeOnSnapshot } from "../lib/mongodb";
+import { db, collection, safeOnSnapshot } from '../lib/firebase';
 import { useAuth } from "../contexts/AuthContext";
 import { Bot, MessageSquare, X, Send, Trash2, Paperclip, Check, ChevronDown, Sparkles, RefreshCw, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";

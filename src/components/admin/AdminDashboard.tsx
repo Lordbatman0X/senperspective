@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight, Upload
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { db, collection, getDocs, deleteDoc, doc as mongoDoc } from '../../lib/mongodb';
+import { db, collection, getDocs, deleteDoc, doc as mongoDoc } from '../../lib/firebase';
 import { realFirestore, doc as firestoreDoc, setDoc } from '../../lib/realFirebase';
 import { sampleArticles } from '../../data';
 
