@@ -237,27 +237,19 @@ export function FlashesAndCurationTab() {
     showToast(language === 'fr' ? 'Proverbe du jour mis à jour et enregistré définitivement !' : 'Daily wisdom updated and permanently saved!');
   };
 
-  // 6. Curation des Sections Latérales (Trendings, Latest News & Dossiers)
+  // 6. Curation des Sections Latérales (Trendings & Latest News)
   const [curatedTrendingIds, setCuratedTrendingIds] = useState<string[]>(
     siteSettings?.curatedTrendingArticleIds || []
   );
   const [curatedLatestIds, setCuratedLatestIds] = useState<string[]>(
     siteSettings?.curatedLatestNewsArticleIds || []
   );
-  const [curatedDossierIds, setCuratedDossierIds] = useState<string[]>(
-    siteSettings?.curatedDossierArticleIds || []
-  );
 
   const [selectedTrendingToAdd, setSelectedTrendingToAdd] = useState('');
   const [selectedLatestToAdd, setSelectedLatestToAdd] = useState('');
-  const [selectedDossierToAdd, setSelectedDossierToAdd] = useState('');
 
   const handleAddTrendingArticle = () => {
     if (!selectedTrendingToAdd) return;
-    if (curatedTrendingIds.length >= 6) {
-      showToast(language === 'fr' ? 'Limite maximale de 6 articles atteinte pour les Tendances !' : 'Maximum limit of 6 articles reached for Trendings!');
-      return;
-    }
     if (curatedTrendingIds.includes(selectedTrendingToAdd)) {
       showToast(language === 'fr' ? 'Cet article est déjà dans la section Tendances.' : 'Article is already in Trendings.');
       return;
@@ -266,7 +258,7 @@ export function FlashesAndCurationTab() {
     setCuratedTrendingIds(updated);
     updateSiteSettings({ curatedTrendingArticleIds: updated });
     setSelectedTrendingToAdd('');
-    showToast(language === 'fr' ? 'Article ajouté aux Tendances (max 6) !' : 'Article added to Trendings (max 6)!');
+    showToast(language === 'fr' ? 'Article ajouté aux Tendances !' : 'Article added to Trendings!');
   };
 
   const handleRemoveTrendingArticle = (id: string) => {
@@ -298,10 +290,6 @@ export function FlashesAndCurationTab() {
 
   const handleAddLatestArticle = () => {
     if (!selectedLatestToAdd) return;
-    if (curatedLatestIds.length >= 10) {
-      showToast(language === 'fr' ? 'Limite maximale de 10 articles atteinte pour Dernières Actualités !' : 'Maximum limit of 10 articles reached for Latest News!');
-      return;
-    }
     if (curatedLatestIds.includes(selectedLatestToAdd)) {
       showToast(language === 'fr' ? 'Cet article est déjà dans Dernières Actualités.' : 'Article is already in Latest News.');
       return;
@@ -310,7 +298,7 @@ export function FlashesAndCurationTab() {
     setCuratedLatestIds(updated);
     updateSiteSettings({ curatedLatestNewsArticleIds: updated });
     setSelectedLatestToAdd('');
-    showToast(language === 'fr' ? 'Article ajouté aux Dernières Actualités (max 10) !' : 'Article added to Latest News (max 10)!');
+    showToast(language === 'fr' ? 'Article ajouté aux Dernières Actualités !' : 'Article added to Latest News!');
   };
 
   const handleRemoveLatestArticle = (id: string) => {
@@ -338,50 +326,6 @@ export function FlashesAndCurationTab() {
     setCuratedLatestIds(updated);
     updateSiteSettings({ curatedLatestNewsArticleIds: updated });
     showToast(language === 'fr' ? 'Article remplacé dans Dernières Actualités !' : 'Article replaced in Latest News!');
-  };
-
-  const handleAddDossierArticle = () => {
-    if (!selectedDossierToAdd) return;
-    if (curatedDossierIds.length >= 4) {
-      showToast(language === 'fr' ? 'Limite maximale de 4 dossiers atteinte pour Dossiers & Enquêtes !' : 'Maximum limit of 4 dossiers reached for Dossiers & Investigations!');
-      return;
-    }
-    if (curatedDossierIds.includes(selectedDossierToAdd)) {
-      showToast(language === 'fr' ? 'Ce dossier est déjà sélectionné.' : 'Dossier is already selected.');
-      return;
-    }
-    const updated = [...curatedDossierIds, selectedDossierToAdd];
-    setCuratedDossierIds(updated);
-    updateSiteSettings({ curatedDossierArticleIds: updated });
-    setSelectedDossierToAdd('');
-    showToast(language === 'fr' ? 'Dossier ajouté avec succès (max 4) !' : 'Dossier added successfully (max 4)!');
-  };
-
-  const handleRemoveDossierArticle = (id: string) => {
-    const updated = curatedDossierIds.filter(i => i !== id);
-    setCuratedDossierIds(updated);
-    updateSiteSettings({ curatedDossierArticleIds: updated });
-    showToast(language === 'fr' ? 'Dossier retiré.' : 'Dossier removed.');
-  };
-
-  const handleMoveDossier = (index: number, direction: 'up' | 'down') => {
-    const newIndex = direction === 'up' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= curatedDossierIds.length) return;
-    const updated = [...curatedDossierIds];
-    const temp = updated[index];
-    updated[index] = updated[newIndex];
-    updated[newIndex] = temp;
-    setCuratedDossierIds(updated);
-    updateSiteSettings({ curatedDossierArticleIds: updated });
-  };
-
-  const handleReplaceDossier = (index: number, newId: string) => {
-    if (!newId) return;
-    const updated = [...curatedDossierIds];
-    updated[index] = newId;
-    setCuratedDossierIds(updated);
-    updateSiteSettings({ curatedDossierArticleIds: updated });
-    showToast(language === 'fr' ? 'Dossier remplacé !' : 'Dossier replaced!');
   };
 
   return (
@@ -998,24 +942,24 @@ export function FlashesAndCurationTab() {
         </form>
       </div>
 
-      {/* SECTION 6: Curation des Articles de la Barre Latérale (Trendings, Dernières Actualités & Dossiers) */}
+      {/* SECTION 6: Curation des Articles de la Barre Latérale (Trendings & Dernières Actualités) */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 shadow-xl space-y-8">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
           <TrendingUp className="text-[#E85D42]" size={20} />
           <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100">
-            {language === 'fr' ? '6. Curation des Articles & Dossiers de la Barre Latérale' : '6. Sidebar Articles & Dossiers Curation'}
+            {language === 'fr' ? '6. Curation des Articles de la Barre Latérale (Trendings & Dernières Actualités)' : '6. Sidebar Articles Curation (Trendings & Latest News)'}
           </h3>
         </div>
 
-        {/* 6A. Tendances (Trendings - Max 6) */}
+        {/* 6A. Tendances (Trendings) */}
         <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
               <TrendingUp size={16} />
-              {language === 'fr' ? 'Section Tendances (Max 6 articles)' : 'Trendings Section (Max 6 articles)'}
+              {language === 'fr' ? 'Section Tendances (Trendings Sidebar)' : 'Trendings Section'}
             </h4>
-            <span className="text-xs font-mono font-bold text-[#E85D42] bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
-              {curatedTrendingIds.length} / 6 {language === 'fr' ? 'sélectionné(s)' : 'selected'}
+            <span className="text-xs font-mono text-zinc-400">
+              {curatedTrendingIds.length} {language === 'fr' ? 'article(s) sélectionné(s)' : 'article(s) selected'}
             </span>
           </div>
 
@@ -1025,7 +969,7 @@ export function FlashesAndCurationTab() {
               onChange={e => setSelectedTrendingToAdd(e.target.value)}
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
-              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Tendances (max 6) --' : '-- Choose article to add to Trendings (max 6) --'}</option>
+              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Tendances --' : '-- Choose article to add to Trendings --'}</option>
               {articles.map(art => (
                 <option key={art.id} value={art.id}>
                   {art.title?.[language] || art.title?.fr || art.id}
@@ -1034,8 +978,7 @@ export function FlashesAndCurationTab() {
             </select>
             <button
               onClick={handleAddTrendingArticle}
-              disabled={curatedTrendingIds.length >= 6}
-              className="px-4 py-2.5 bg-[#E85D42] disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
+              className="px-4 py-2.5 bg-[#E85D42] text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
             >
               <Plus size={14} />
               <span>{language === 'fr' ? 'Ajouter' : 'Add'}</span>
@@ -1103,15 +1046,15 @@ export function FlashesAndCurationTab() {
           </div>
         </div>
 
-        {/* 6B. Dernières Actualités (Latest News - Max 10) */}
+        {/* 6B. Dernières Actualités (Latest News) */}
         <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
               <Zap size={16} />
-              {language === 'fr' ? 'Section Dernières Actualités (Max 10 articles)' : 'Latest News Section (Max 10 articles)'}
+              {language === 'fr' ? 'Section Dernières Actualités (Latest News Sidebar)' : 'Latest News Section'}
             </h4>
-            <span className="text-xs font-mono font-bold text-[#E85D42] bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
-              {curatedLatestIds.length} / 10 {language === 'fr' ? 'sélectionné(s)' : 'selected'}
+            <span className="text-xs font-mono text-zinc-400">
+              {curatedLatestIds.length} {language === 'fr' ? 'article(s) sélectionné(s)' : 'article(s) selected'}
             </span>
           </div>
 
@@ -1121,7 +1064,7 @@ export function FlashesAndCurationTab() {
               onChange={e => setSelectedLatestToAdd(e.target.value)}
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
-              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Dernières Actualités (max 10) --' : '-- Choose article to add to Latest News (max 10) --'}</option>
+              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Dernières Actualités --' : '-- Choose article to add to Latest News --'}</option>
               {articles.map(art => (
                 <option key={art.id} value={art.id}>
                   {art.title?.[language] || art.title?.fr || art.id}
@@ -1130,8 +1073,7 @@ export function FlashesAndCurationTab() {
             </select>
             <button
               onClick={handleAddLatestArticle}
-              disabled={curatedLatestIds.length >= 10}
-              className="px-4 py-2.5 bg-[#E85D42] disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
+              className="px-4 py-2.5 bg-[#E85D42] text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
             >
               <Plus size={14} />
               <span>{language === 'fr' ? 'Ajouter' : 'Add'}</span>
@@ -1187,118 +1129,6 @@ export function FlashesAndCurationTab() {
                     </button>
                     <button
                       onClick={() => handleRemoveLatestArticle(artId)}
-                      className="p-1.5 bg-rose-950/60 text-rose-400 hover:bg-rose-900/80 rounded cursor-pointer"
-                      title={language === 'fr' ? 'Supprimer' : 'Remove'}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 6C. Dossiers & Enquêtes (Max 4 dossiers) */}
-        <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
-              <FolderKanban size={16} />
-              {language === 'fr' ? 'Section Dossiers & Enquêtes (Max 4 dossiers)' : 'Dossiers & Investigations Section (Max 4 dossiers)'}
-            </h4>
-            <span className="text-xs font-mono font-bold text-[#E85D42] bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
-              {curatedDossierIds.length} / 4 {language === 'fr' ? 'sélectionné(s)' : 'selected'}
-            </span>
-          </div>
-
-          <div className="flex gap-2">
-            <select
-              value={selectedDossierToAdd}
-              onChange={e => setSelectedDossierToAdd(e.target.value)}
-              className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
-            >
-              <option value="">{language === 'fr' ? '-- Choisir un dossier / article à ajouter (max 4) --' : '-- Choose dossier / article to add (max 4) --'}</option>
-              {/* Combine custom dossiers and articles for selection */}
-              {dossiersList.map((dos: any) => (
-                <option key={dos.id} value={dos.id}>
-                  📁 [Dossier] {dos.titleFr || dos.titleEn || dos.id}
-                </option>
-              ))}
-              {articles.map(art => (
-                <option key={art.id} value={art.id}>
-                  📰 [Article] {art.title?.[language] || art.title?.fr || art.id}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleAddDossierArticle}
-              disabled={curatedDossierIds.length >= 4}
-              className="px-4 py-2.5 bg-[#E85D42] disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
-            >
-              <Plus size={14} />
-              <span>{language === 'fr' ? 'Ajouter' : 'Add'}</span>
-            </button>
-          </div>
-
-          {/* List of Curated Dossiers */}
-          <div className="space-y-2 mt-4">
-            {curatedDossierIds.map((dosId, idx) => {
-              const customDos = dossiersList.find((d: any) => d.id === dosId);
-              const foundArt = articles.find(a => a.id === dosId || a.slug === dosId);
-              const title = customDos ? customDos.titleFr : (foundArt ? (foundArt.title?.[language] || foundArt.title?.fr) : `Dossier ID: ${dosId}`);
-              
-              return (
-                <div key={`${dosId}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className="font-mono text-xs font-extrabold text-[#E85D42] w-6 shrink-0">0{idx + 1}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-zinc-100 truncate">
-                        {title}
-                      </p>
-                      <p className="text-[10px] text-zinc-500 font-mono">
-                        {customDos ? 'Dossier Spécial' : (foundArt?.category || 'Investigation')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <select
-                      value=""
-                      onChange={e => handleReplaceDossier(idx, e.target.value)}
-                      className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] p-1.5 rounded focus:outline-none focus:border-[#E85D42]"
-                      title={language === 'fr' ? 'Remplacer ce dossier' : 'Replace dossier'}
-                    >
-                      <option value="">{language === 'fr' ? 'Remplacer...' : 'Replace...'}</option>
-                      {dossiersList.map((d: any) => (
-                        <option key={d.id} value={d.id}>
-                          📁 {d.titleFr}
-                        </option>
-                      ))}
-                      {articles.map(a => (
-                        <option key={a.id} value={a.id}>
-                          📰 {a.title?.[language] || a.title?.fr}
-                        </option>
-                      ))}
-                    </select>
-
-                    <button
-                      onClick={() => handleMoveDossier(idx, 'up')}
-                      disabled={idx === 0}
-                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded cursor-pointer"
-                      title={language === 'fr' ? 'Monter' : 'Move up'}
-                    >
-                      <ArrowUp size={12} />
-                    </button>
-                    <button
-                      onClick={() => handleMoveDossier(idx, 'down')}
-                      disabled={idx === curatedDossierIds.length - 1}
-                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded cursor-pointer"
-                      title={language === 'fr' ? 'Descendre' : 'Move down'}
-                    >
-                      <ArrowDown size={12} />
-                    </button>
-                    <button
-                      onClick={() => handleRemoveDossierArticle(dosId)}
                       className="p-1.5 bg-rose-950/60 text-rose-400 hover:bg-rose-900/80 rounded cursor-pointer"
                       title={language === 'fr' ? 'Supprimer' : 'Remove'}
                     >
