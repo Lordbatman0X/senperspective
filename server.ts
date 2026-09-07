@@ -1798,7 +1798,7 @@ app.use((req, res, next) => {
       gemini: {
         ...geminiInfo,
         maskedKey: getMaskedKey('GEMINI'),
-        models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]
+        models: ["gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-flash-latest"]
       },
       openai: {
         ...openAiInfo,
@@ -1813,7 +1813,7 @@ app.use((req, res, next) => {
       openrouter: {
         ...openRouterInfo,
         maskedKey: getMaskedKey('OPENROUTER'),
-        models: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-chat", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-2.0-flash", "openai/gpt-4o-mini"]
+        models: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-chat", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct", "google/gemini-flash-1.5", "openai/gpt-4o-mini"]
       },
       anthropic: {
         ...anthropicInfo,
@@ -3019,7 +3019,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"];
+          const modelsToTry = ["gemini-3.8-flash", "gemini-3.1-pro-preview", "gemini-3.1-flash-lite", "gemini-flash-latest"];
           for (const model of modelsToTry) {
             try {
               const apiCall = ai.models.generateContent({
@@ -3106,7 +3106,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
           "anthropic/claude-3.5-sonnet",
           "deepseek/deepseek-r1",
           "meta-llama/llama-3.3-70b-instruct",
-          "google/gemini-2.0-flash"
+          "google/gemini-flash-1.5"
         ];
         for (const model of openRouterModels) {
           try {
@@ -3224,7 +3224,7 @@ Respond ONLY with a JSON array of objects. Each object must have:
 Do not wrap the response in markdown blocks (like \`\`\`json). Just the raw JSON array.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        model: 'gemini-3.8-flash',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],

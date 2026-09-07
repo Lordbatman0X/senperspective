@@ -37,6 +37,14 @@ import {
 } from "lucide-react";
 import { NotificationSetupPanel } from "./NotificationSetupPanel";
 import { motion, AnimatePresence } from "motion/react";
+import { 
+  MessengerA11yToolbar, 
+  A11ySpeechButton, 
+  A11yCopyButton, 
+  A11yVoiceInputButton, 
+  A11yMessageReactions 
+} from './MessengerA11yControls';
+import { Bot } from 'lucide-react';
 
 // Inline helper for neutral avatar rendering matching app design standards
 export function renderNeutralAvatar(urlOrPreset: string | undefined, name: string = "User", size: number = 40) {
@@ -847,6 +855,17 @@ export function AccountDrawer({
                             });
                           }
 
+                          // Official AI Companion: Abdel
+                          const abdelEmail = "abdel@perspective.sn";
+                          if (!contactMap.has(abdelEmail) && myEmail !== abdelEmail) {
+                            contactMap.set(abdelEmail, {
+                              email: abdelEmail,
+                              name: language === "fr" ? "Abdel (IA Éditoriale)" : "Abdel (Editorial AI)",
+                              avatarUrl: "preset-male",
+                              role: language === "fr" ? "Intelligence Rédactionnelle" : "Editorial Intelligence"
+                            });
+                          }
+
                           const rawContacts = Array.from(contactMap.values());
                           // Sort friends to top
                           rawContacts.sort((a, b) => {
@@ -883,6 +902,7 @@ export function AccountDrawer({
                                 key={contact.email}
                                 onClick={() => {
                                   setSelectedChatUser(contact.email);
+                                  useStore.getState().setActiveMessengerContact(contact.email);
                                   setAttachedMaterialType("none");
                                   setAttachedMaterialId("");
                                 }}
@@ -947,11 +967,21 @@ export function AccountDrawer({
                         );
                       })()}
 
+                      {/* Accessibility Toolbar: Text Scaling & Voice Narration */}
+                      <MessengerA11yToolbar compact />
+
                       {/* Chat Messages Body (Messenger Speech Bubbles) */}
                       <div className="flex-grow overflow-y-auto p-4 space-y-2.5 bg-zinc-50/40 dark:bg-zinc-950/80 scrollbar-thin">
                         {(() => {
                           const myEmailLow = (readerProfile?.email || "").toLowerCase().trim();
                           const activeUserLow = (selectedChatUser || "").toLowerCase().trim();
+                          const messengerTextScale = useStore.getState().messengerTextScale || 'normal';
+                          const textScaleClass = messengerTextScale === 'xlarge' 
+                            ? 'text-base leading-relaxed' 
+                            : messengerTextScale === 'large' 
+                              ? 'text-sm leading-relaxed' 
+                              : 'text-xs leading-relaxed';
+
                           const activeConversation = (directMessages || []).filter(
                             (dm) => {
                               const sLow = (dm.sender || "").toLowerCase().trim();
@@ -989,7 +1019,7 @@ export function AccountDrawer({
                                       <div className="text-3xl py-1 px-2 animate-bounce">👍</div>
                                     ) : (
                                       <div 
-                                        className={`px-3.5 py-2 text-xs leading-relaxed transition-all shadow-xs ${
+                                        className={`group relative px-3.5 py-2 transition-all shadow-xs ${textScaleClass} ${
                                           isMe
                                             ? "text-white rounded-2xl rounded-br-xs"
                                             : "bg-zinc-200/90 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-2xl rounded-bl-xs"
@@ -1002,8 +1032,22 @@ export function AccountDrawer({
                                         {dm.attachment && (
                                           <SharedItemCard attachment={dm.attachment} compact />
                                         )}
+
+                                        {/* Accessibility actions */}
+                                        <div className="flex items-center gap-1 mt-1 pt-1 border-t border-black/10 dark:border-white/10 opacity-75 group-hover:opacity-100 transition-opacity">
+                                          <A11ySpeechButton messageId={dm.id} text={dm.text} compact />
+                                          <A11yCopyButton text={dm.text} />
+                                        </div>
                                       </div>
                                     )}
+
+                                    {/* Message Reactions */}
+                                    <A11yMessageReactions
+                                      messageId={dm.id}
+                                      reactions={dm.reactions}
+                                      userEmail={readerProfile?.email}
+                                    />
+
                                     <span className={`text-[8.5px] text-zinc-400 mt-0.5 px-1 ${isMe ? "text-right" : "text-left"}`}>
                                       {dm.date || "Aujourd'hui"}
                                     </span>
@@ -1039,6 +1083,13 @@ export function AccountDrawer({
                           >
                             <Share2 size={16} />
                           </button>
+
+                          {/* Voice Input Microphone Button */}
+                          <A11yVoiceInputButton
+                            onTranscript={(txt) => {
+                              setNewMessageText(newMessageText ? `${newMessageText} ${txt}` : txt);
+                            }}
+                          />
 
                           <input
                             type="text"

@@ -4,9 +4,17 @@ import { useStore } from '../store';
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText } from '../lib/utils';
+import { getMessengerContacts, MessengerContact } from '../lib/messengerContacts';
+import { 
+  MessengerA11yToolbar, 
+  A11ySpeechButton, 
+  A11yCopyButton, 
+  A11yVoiceInputButton, 
+  A11yMessageReactions 
+} from '../components/MessengerA11yControls';
 import { 
   MessageSquare, Send, Paperclip, Search, User, Check, CheckCheck, 
-  Sparkles, ExternalLink, Newspaper, Phone, Video, Trash2, ArrowLeft
+  Sparkles, ExternalLink, Newspaper, Phone, Video, Trash2, ArrowLeft, Bot
 } from 'lucide-react';
 
 export const DiscussionPage: React.FC = () => {
@@ -23,7 +31,10 @@ export const DiscussionPage: React.FC = () => {
     language, 
     siteSettings, 
     articles,
-    friends
+    friends,
+    activeMessengerContact,
+    setActiveMessengerContact,
+    messengerTextScale
   } = useStore();
 
   const auth = useAuth();
@@ -32,84 +43,39 @@ export const DiscussionPage: React.FC = () => {
   useSEO({
     title: 'Messenger',
     description: language === 'fr' 
-      ? 'Messagerie directe et échanges avec le réseau Perspective.'
-      : 'Direct messaging and dispatches with the Perspective network.'
+      ? 'Messagerie directe et échanges synchronisés avec le réseau Perspective.'
+      : 'Direct messaging and synchronized exchanges with the Perspective network.'
   });
 
   const userEmail = readerProfile?.email || "visitor@perspective.sn";
   const myEmailLower = userEmail.toLowerCase().trim();
 
-  // Construct contacts list from real users database + friends list + default contacts
-  const contactMap = new Map<string, { email: string; name: string; role: string; avatar: string; isOnline: boolean }>();
+  // Get contacts synchronized across all 3 messenger interfaces
+  const contacts = getMessengerContacts(allUsers, friends, userEmail, language);
 
-  // Registered Firestore users
-  allUsers.forEach(u => {
-    const emailLow = u.email.toLowerCase().trim();
-    if (emailLow && emailLow !== myEmailLower) {
-      contactMap.set(emailLow, {
-        email: u.email,
-        name: u.name || emailLow.split("@")[0],
-        role: u.role || "Member",
-        avatar: (u.name || "U").charAt(0).toUpperCase(),
-        isOnline: Boolean(u.isOnline)
-      });
-    }
-  });
+  // Synchronized active contact state
+  const activeContactEmail = activeMessengerContact || contacts[0]?.email || "contact@perspective.sn";
+  const activeContactEmailLow = activeContactEmail.toLowerCase().trim();
 
-  // Friends list
-  (friends || []).forEach(f => {
-    const emailLow = f.email.toLowerCase().trim();
-    if (emailLow && emailLow !== myEmailLower && !contactMap.has(emailLow)) {
-      contactMap.set(emailLow, {
-        email: f.email,
-        name: f.name || emailLow.split("@")[0],
-        role: f.role || "Member",
-        avatar: (f.name || "U").charAt(0).toUpperCase(),
-        isOnline: Boolean((f as any).isOnline)
-      });
-    }
-  });
-
-  // Default Editorial / Support contacts (Admin Rédaction is online)
-  const defaultContacts = [
-    { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", isOnline: true }
-  ];
-
-  defaultContacts.forEach(dc => {
-    const emailLow = dc.email.toLowerCase().trim();
-    if (emailLow !== myEmailLower && !contactMap.has(emailLow)) {
-      contactMap.set(emailLow, dc);
-    }
-  });
-
-  const contacts = Array.from(contactMap.values());
-
-  const [activeContactEmail, setActiveContactEmail] = useState<string>(contacts[0]?.email || "contact@perspective.sn");
   const [mobileTab, setMobileTab] = useState<'list' | 'chat'>('list');
   const [searchQuery, setSearchQuery] = useState("");
   const [inputText, setInputText] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState("");
   const [showArticlePicker, setShowArticlePicker] = useState(false);
 
-  // Sync active contact if search or list updates
-  useEffect(() => {
-    if (contacts.length > 0 && !contacts.some(c => c.email.toLowerCase() === activeContactEmail.toLowerCase())) {
-      setActiveContactEmail(contacts[0].email);
-    }
-  }, [allUsers, friends]);
-
-  const activeContact = contacts.find(c => c.email.toLowerCase() === activeContactEmail.toLowerCase()) || contacts[0] || {
-    email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", isOnline: true
+  const activeContact: MessengerContact = contacts.find(c => c.email.toLowerCase().trim() === activeContactEmailLow) || contacts[0] || {
+    email: "contact@perspective.sn", 
+    name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", 
+    role: "Perspective Group", 
+    avatar: "P", 
+    isOnline: true
   };
-
-  const myUserEmailLow = (userEmail || "").toLowerCase().trim();
-  const activeContactEmailLow = (activeContact.email || "").toLowerCase().trim();
 
   const conversation = (directMessages || []).filter(dm => {
     const sLow = (dm.sender || "").toLowerCase().trim();
     const rLow = (dm.receiver || "").toLowerCase().trim();
-    return (sLow === myUserEmailLow && rLow === activeContactEmailLow) ||
-           (sLow === activeContactEmailLow && rLow === myUserEmailLow);
+    return (sLow === myEmailLower && rLow === activeContactEmailLow) ||
+           (sLow === activeContactEmailLow && rLow === myEmailLower);
   });
 
   useEffect(() => {
@@ -156,87 +122,121 @@ export const DiscussionPage: React.FC = () => {
     setShowArticlePicker(false);
   };
 
+  const currentAccent = siteSettings?.accentColor || "#E85D42";
+
+  const textScaleClass = messengerTextScale === 'xlarge' 
+    ? 'text-base sm:text-lg leading-relaxed' 
+    : messengerTextScale === 'large' 
+      ? 'text-sm sm:text-base leading-relaxed' 
+      : 'text-xs sm:text-sm leading-relaxed';
+
+  // Filter contacts by search query
   const filteredContacts = contacts.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const currentAccent = siteSettings?.accentColor || "#E85D42";
-
   return (
-    <div className="min-h-[calc(100vh-140px)] bg-zinc-950 text-zinc-100 flex flex-col font-sans">
-      {/* Top Banner Navigation */}
-      <div className="bg-zinc-900 border-b border-zinc-800 p-4 px-6 flex items-center justify-between">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pt-16">
+      {/* Top Messenger Breadcrumb & Switcher */}
+      <div className="bg-zinc-900/90 border-b border-zinc-800 px-4 sm:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button 
             onClick={() => navigate(-1)}
-            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1 text-xs font-mono font-bold"
+            className="p-1.5 rounded-lg bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            aria-label={language === 'fr' ? 'Retour' : 'Back'}
           >
             <ArrowLeft size={16} />
-            <span>{language === 'fr' ? 'Retour' : 'Back'}</span>
           </button>
-          <div>
-            <h1 className="text-xl font-serif font-black uppercase tracking-wider text-white">
-              Messenger
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#E85D42] animate-pulse" />
+            <h1 className="text-sm font-bold tracking-tight text-white uppercase font-mono">
+              {language === 'fr' ? 'Messagerie Réseau Synchrone' : 'Synchronous Network Messenger'}
             </h1>
           </div>
         </div>
+
+        <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
+          <span className="hidden sm:inline">{userEmail}</span>
+          <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
+            {language === 'fr' ? 'Temps Réel Cloud' : 'Cloud Realtime'}
+          </span>
+        </div>
       </div>
 
-      {/* Main Grid Layout */}
-      <div className="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 md:grid-cols-12 bg-zinc-950 border-x border-zinc-900 overflow-hidden min-h-[600px]">
-        {/* Left Contacts Sidebar (Visible on desktop or when mobileTab is 'list') */}
-        <div className={`md:col-span-4 border-r border-zinc-800/80 bg-zinc-900/60 flex flex-col ${mobileTab === 'chat' ? 'hidden md:flex' : 'flex'}`}>
-          <div className="p-4 border-b border-zinc-800/80 space-y-3">
+      {/* Main Split Grid (Sidebar Contacts + Active Chat) */}
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 max-w-7xl w-full mx-auto border-x border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden min-h-[calc(100vh-120px)]">
+        
+        {/* Left Sidebar Directory (Visible on desktop or when mobileTab is 'list') */}
+        <div className={`md:col-span-4 border-r border-zinc-800 flex flex-col bg-zinc-950 ${mobileTab === 'chat' ? 'hidden md:flex' : 'flex'}`}>
+          {/* Contacts Search Bar */}
+          <div className="p-3 border-b border-zinc-800 bg-zinc-900/60">
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-3 text-zinc-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
               <input
                 type="text"
+                placeholder={language === 'fr' ? "Rechercher un contact..." : "Search contacts..."}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder={language === 'fr' ? 'Rechercher un interlocuteur...' : 'Search contacts...'}
-                className="w-full pl-9 pr-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-xs font-sans text-white focus:outline-none focus:border-[#E85D42]"
+                className="w-full bg-zinc-900 border border-zinc-800 text-xs text-white pl-9 pr-3 py-2 rounded-xl focus:outline-none focus:border-[#E85D42] transition-colors"
               />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-zinc-800/40">
+          {/* Contacts List */}
+          <div 
+            role="tablist"
+            aria-label={language === 'fr' ? 'Annuaire des contacts' : 'Contacts directory'}
+            className="flex-1 overflow-y-auto divide-y divide-zinc-800/40"
+          >
             {filteredContacts.map(c => {
-              const lastMsg = (directMessages || []).filter(
-                dm => (dm.sender === userEmail && dm.receiver === c.email) ||
-                      (dm.sender === c.email && dm.receiver === userEmail)
-              ).slice(-1)[0];
-
+              const isSelected = c.email.toLowerCase().trim() === activeContactEmailLow;
               const contactUnread = (directMessages || []).filter(
-                dm => dm.sender.toLowerCase() === c.email.toLowerCase() && dm.receiver.toLowerCase() === userEmail.toLowerCase() && !dm.read
+                dm => (dm.sender || '').toLowerCase().trim() === c.email.toLowerCase().trim() &&
+                      (dm.receiver || '').toLowerCase().trim() === myEmailLower &&
+                      !dm.read
               ).length;
 
-              const isSelected = activeContactEmail === c.email;
+              const lastMsg = (directMessages || []).filter(
+                dm => ((dm.sender || '').toLowerCase().trim() === c.email.toLowerCase().trim() && (dm.receiver || '').toLowerCase().trim() === myEmailLower) ||
+                      ((dm.sender || '').toLowerCase().trim() === myEmailLower && (dm.receiver || '').toLowerCase().trim() === c.email.toLowerCase().trim())
+              ).slice(-1)[0];
 
               return (
                 <button
                   key={c.email}
+                  role="tab"
+                  aria-selected={isSelected}
                   onClick={() => {
-                    setActiveContactEmail(c.email);
+                    setActiveMessengerContact(c.email);
                     setMobileTab('chat');
                   }}
-                  className={`w-full p-3.5 text-left transition-all cursor-pointer flex items-center gap-3 ${isSelected ? "bg-zinc-800/90 border-l-4 border-[#E85D42]" : "hover:bg-zinc-800/40"}`}
+                  className={`w-full p-3.5 flex items-center gap-3 transition-colors text-left cursor-pointer ${
+                    isSelected ? "bg-zinc-800/90 border-l-4 border-[#E85D42]" : "hover:bg-zinc-900/60"
+                  }`}
                 >
                   <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-[#E85D42] text-white font-black text-sm font-mono flex items-center justify-center shadow-md">
-                      {c.avatar}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs ${
+                      c.isAi ? 'bg-purple-600 text-white' : 'bg-[#E85D42] text-white'
+                    }`}>
+                      {c.isAi ? <Bot size={18} /> : c.avatar}
                     </div>
                     {c.isOnline && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-zinc-950" />
+                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-zinc-950" />
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex justify-between items-baseline mb-0.5">
-                      <h4 className="text-xs font-bold text-white truncate">{c.name}</h4>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white truncate flex items-center gap-1.5">
+                        <span>{c.name}</span>
+                        {c.isAi && (
+                          <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 text-[9px] font-mono">IA</span>
+                        )}
+                      </span>
                       {lastMsg && (
-                        <span className="text-[9px] font-mono text-zinc-500 shrink-0">{lastMsg.date}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono shrink-0 ml-1">{lastMsg.date}</span>
                       )}
                     </div>
                     <p className="text-[11px] text-zinc-400 font-mono truncate">{c.role}</p>
@@ -259,22 +259,28 @@ export const DiscussionPage: React.FC = () => {
         {/* Right Active Discussion Area (Visible on desktop or when mobileTab is 'chat') */}
         <div className={`md:col-span-8 flex flex-col bg-[#0b0b0d] ${mobileTab === 'list' ? 'hidden md:flex' : 'flex'}`}>
           {/* Active Contact Header */}
-          <div className="p-4 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
+          <div className="p-3.5 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               {/* Back button on mobile */}
               <button
+                type="button"
                 onClick={() => setMobileTab('list')}
                 className="md:hidden p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 cursor-pointer"
-                title="Back to contacts"
+                aria-label="Retour aux contacts"
               >
                 ←
               </button>
-              <div className="w-10 h-10 rounded-full bg-[#E85D42] text-white font-black text-sm font-mono flex items-center justify-center shadow-md">
-                {activeContact.avatar}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-md ${
+                activeContact.isAi ? 'bg-purple-600 text-white' : 'bg-[#E85D42] text-white'
+              }`}>
+                {activeContact.isAi ? <Bot size={16} /> : activeContact.avatar}
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <span>{activeContact.name}</span>
+                  {activeContact.isAi && (
+                    <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-400 text-[9px] font-mono">IA Abdel</span>
+                  )}
                   {activeContact.isOnline && (
                     <span className="text-[10px] font-mono font-normal text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
                       {language === "fr" ? "En ligne" : "Online"}
@@ -286,6 +292,7 @@ export const DiscussionPage: React.FC = () => {
             </div>
             {activeContact.email && (
               <button
+                type="button"
                 onClick={() => navigate(`/profile/${encodeURIComponent(activeContact.email)}`)}
                 className="px-3 py-1.5 bg-zinc-800 hover:bg-[#E85D42] text-white text-xs font-mono font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer flex items-center gap-1 shrink-0"
               >
@@ -295,8 +302,18 @@ export const DiscussionPage: React.FC = () => {
             )}
           </div>
 
+          {/* Accessibility Toolbar: Text Scaling & Narration */}
+          <MessengerA11yToolbar />
+
           {/* Messages Stream */}
-          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#08080a]">
+          <div 
+            ref={messagesContainerRef} 
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-label={language === 'fr' ? `Messages avec ${activeContact.name}` : `Messages with ${activeContact.name}`}
+            className="flex-1 overflow-y-auto p-6 space-y-4 bg-[#08080a]"
+          >
             {conversation.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-8 text-zinc-500 space-y-3">
                 <MessageSquare size={40} className="text-zinc-700" />
@@ -304,18 +321,22 @@ export const DiscussionPage: React.FC = () => {
                   {language === 'fr' ? 'Début de la conversation' : 'Start of conversation'}
                 </h3>
                 <p className="text-xs text-zinc-500 max-w-sm">
-                  {language === 'fr' 
-                    ? 'Transmettez directement vos analyses, questions ou pièces jointes au bureau de rédaction.' 
-                    : 'Send your analysis, inquiries, or attachments directly to the editorial team.'}
+                  {activeContact.isAi
+                    ? (language === 'fr' 
+                        ? 'Abdel est votre assistant éditorial IA. Posez vos questions sur la géopolitique, l\'économie et la culture africaine.'
+                        : 'Abdel is your editorial AI assistant. Ask questions on African geopolitics, economics, and culture.')
+                    : (language === 'fr' 
+                        ? 'Transmettez directement vos analyses, questions ou pièces jointes en temps réel.' 
+                        : 'Send your analysis, inquiries, or attachments directly in real-time.')}
                 </p>
               </div>
             ) : (
               conversation.map(dm => {
-                const isMe = dm.sender === readerProfile.email;
+                const isMe = (dm.sender || '').toLowerCase().trim() === myEmailLower;
                 return (
-                  <div
+                  <article
                     key={dm.id}
-                    className={`flex flex-col max-w-[75%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
+                    className={`flex flex-col max-w-[78%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
                   >
                     <span className="text-[10px] font-mono text-zinc-500 mb-1 px-1">
                       {isMe ? (language === "fr" ? "Vous" : "You") : dm.sender.split("@")[0]} • {dm.date}
@@ -323,7 +344,9 @@ export const DiscussionPage: React.FC = () => {
 
                     <div className="relative group">
                       <div
-                        className={`p-4 text-xs sm:text-sm leading-relaxed transition-all ${isMe ? "text-white rounded-2xl rounded-br-xs shadow-md" : "bg-zinc-900 text-zinc-100 rounded-2xl rounded-bl-xs border border-zinc-800 shadow-md"}`}
+                        className={`p-4 transition-all shadow-md ${textScaleClass} ${
+                          isMe ? "text-white rounded-2xl rounded-br-xs" : "bg-zinc-900 text-zinc-100 rounded-2xl rounded-bl-xs border border-zinc-800"
+                        }`}
                         style={isMe ? { backgroundColor: currentAccent } : {}}
                       >
                         <p className="whitespace-pre-wrap break-words">{getSafeText(dm.text, language)}</p>
@@ -340,6 +363,7 @@ export const DiscussionPage: React.FC = () => {
                                 : (dm.attachment.title || '')}
                             </p>
                             <button
+                              type="button"
                               onClick={() => {
                                 if (dm.attachment?.link) navigate(dm.attachment.link);
                               }}
@@ -350,16 +374,33 @@ export const DiscussionPage: React.FC = () => {
                             </button>
                           </div>
                         )}
+
+                        {/* Accessibility Actions */}
+                        <div className="flex items-center gap-1.5 mt-2 pt-1.5 border-t border-white/10 opacity-80 group-hover:opacity-100 transition-opacity">
+                          <A11ySpeechButton messageId={dm.id} text={dm.text} />
+                          <A11yCopyButton text={dm.text} />
+                        </div>
                       </div>
+
+                      {/* Message Reactions */}
+                      <A11yMessageReactions
+                        messageId={dm.id}
+                        reactions={dm.reactions}
+                        userEmail={userEmail}
+                      />
+
+                      {/* Delete button */}
                       <button
+                        type="button"
                         onClick={() => deleteDirectMessage(dm.id)}
                         className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 bg-zinc-800/80 hover:bg-rose-600 text-zinc-300 hover:text-white rounded-full transition-all cursor-pointer ${isMe ? "-left-7" : "-right-7"}`}
                         title={language === "fr" ? "Supprimer" : "Delete"}
+                        aria-label="Supprimer le message"
                       >
                         <Trash2 size={12} />
                       </button>
                     </div>
-                  </div>
+                  </article>
                 );
               })
             )}
@@ -371,7 +412,7 @@ export const DiscussionPage: React.FC = () => {
             <div className="p-3 bg-zinc-900 border-t border-zinc-800 max-h-48 overflow-y-auto space-y-1 shrink-0 animate-fadeIn">
               <div className="flex justify-between items-center text-xs font-mono text-zinc-400 mb-2 px-1">
                 <span>{language === "fr" ? "Sélectionnez un article de la rédaction à joindre :" : "Select article to attach:"}</span>
-                <button onClick={() => setShowArticlePicker(false)} className="text-zinc-400 hover:text-white">
+                <button type="button" onClick={() => setShowArticlePicker(false)} className="text-zinc-400 hover:text-white">
                   ✕
                 </button>
               </div>
@@ -379,6 +420,7 @@ export const DiscussionPage: React.FC = () => {
                 {articles.slice(0, 8).map(art => (
                   <button
                     key={art.id}
+                    type="button"
                     onClick={() => {
                       setSelectedArticleId(art.id);
                       setShowArticlePicker(false);
@@ -392,22 +434,31 @@ export const DiscussionPage: React.FC = () => {
             </div>
           )}
 
-          {/* Message Composer Input */}
-          <form onSubmit={handleSend} className="p-4 bg-zinc-900 border-t border-zinc-800 flex items-center gap-3 shrink-0">
+          {/* Message Composer Input with Accessibility Controls */}
+          <form onSubmit={handleSend} className="p-4 bg-zinc-900 border-t border-zinc-800 flex items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={() => setShowArticlePicker(!showArticlePicker)}
               className={`p-3 rounded-xl transition-all cursor-pointer shrink-0 flex items-center gap-1.5 text-xs font-mono font-bold ${selectedArticleId ? "bg-[#E85D42] text-white" : "bg-zinc-800 text-zinc-300 hover:text-white"}`}
+              title={language === 'fr' ? 'Joindre un article' : 'Attach an article'}
             >
               <Paperclip size={16} />
               <span className="hidden sm:inline">{selectedArticleId ? (language === 'fr' ? 'Article Joint' : 'Article Attached') : (language === 'fr' ? 'Joindre Article' : 'Attach')}</span>
             </button>
 
+            {/* Voice Input Microphone Button */}
+            <A11yVoiceInputButton
+              onTranscript={(transcript) => {
+                setInputText(prev => prev ? `${prev} ${transcript}` : transcript);
+              }}
+            />
+
             <input
               type="text"
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              placeholder={language === "fr" ? "Rédigez votre message..." : "Type your message..."}
+              placeholder={language === "fr" ? `Écrire à ${activeContact.name}...` : `Message ${activeContact.name}...`}
+              aria-label={language === "fr" ? `Message pour ${activeContact.name}` : `Message for ${activeContact.name}`}
               className="flex-1 bg-zinc-950 border border-zinc-800 text-sm font-sans text-white px-4 py-3 rounded-xl focus:outline-none focus:border-[#E85D42] transition-colors"
             />
 
@@ -415,6 +466,7 @@ export const DiscussionPage: React.FC = () => {
               type="submit"
               disabled={!inputText.trim() && !selectedArticleId}
               className="px-5 py-3 bg-[#E85D42] hover:bg-[#d04a30] disabled:opacity-40 text-white font-mono font-bold uppercase tracking-wider text-xs rounded-xl transition-all cursor-pointer shrink-0 shadow-md flex items-center gap-2"
+              aria-label={language === "fr" ? "Envoyer le message" : "Send message"}
             >
               <span>{language === "fr" ? "Envoyer" : "Send"}</span>
               <Send size={15} />

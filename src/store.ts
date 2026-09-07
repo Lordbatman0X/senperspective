@@ -143,7 +143,9 @@ export interface DirectMessage {
   receiver: string; // email
   text: string;
   date: string;
+  timestamp?: number;
   read?: boolean;
+  reactions?: Record<string, string[]>;
   attachment?: {
     type: 'article' | 'match' | 'comment' | 'dispatch' | 'profile' | 'general' | string;
     id: string;
@@ -229,6 +231,12 @@ interface AppState {
   sendDirectMessage: (msg: Omit<DirectMessage, 'id' | 'date'>) => void;
   deleteDirectMessage: (id: string) => void;
   markDirectMessagesAsRead: (contactEmail: string, userEmail: string) => void;
+  activeMessengerContact: string;
+  setActiveMessengerContact: (email: string) => void;
+  messengerTextScale: 'normal' | 'large' | 'xlarge';
+  setMessengerTextScale: (scale: 'normal' | 'large' | 'xlarge') => void;
+  reactToDirectMessage: (messageId: string, reaction: string, userEmail?: string) => void;
+  syncPreferencesToFirebase: (customPrefs?: any) => Promise<void>;
   friends: FriendContact[];
   addFriend: (friend: FriendContact) => void;
   deleteFriend: (email: string) => void;
@@ -389,13 +397,89 @@ interface AppState {
   deleteMatch: (matchId: string) => void;
 }
 
+export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmail?: string) => {
+  try {
+    const store = useStore.getState();
+    const email = explicitEmail || store.readerProfile?.email;
+    const currentPrefs = {
+      theme: store.theme,
+      language: store.language,
+      savedArticles: store.savedArticles,
+      notificationPreferences: store.notificationPreferences,
+      messengerTextScale: store.messengerTextScale || 'normal',
+      ...customPrefs
+    };
+
+    if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
+      const cleanEmail = email.toLowerCase().trim();
+      const userRef = doc(db, "users", cleanEmail);
+      await setDoc(userRef, { preferences: currentPrefs }, { merge: true });
+    } else {
+      let deviceId = '';
+      if (typeof window !== 'undefined' && window.localStorage) {
+        deviceId = localStorage.getItem('perspective_device_id') || '';
+        if (!deviceId) {
+          deviceId = 'dev_' + Math.random().toString(36).substring(2, 12);
+          localStorage.setItem('perspective_device_id', deviceId);
+        }
+        localStorage.setItem('perspective_preferences', JSON.stringify(currentPrefs));
+      }
+      if (deviceId) {
+        const guestRef = doc(db, "guest_preferences", deviceId);
+        await setDoc(guestRef, { ...currentPrefs, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.warn("[Preferences] Sync notice:", err);
+  }
+};
+
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
       theme: 'light',
-      toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
+      toggleTheme: () => {
+        const next = get().theme === 'light' ? 'dark' : 'light';
+        set({ theme: next });
+        syncPreferencesToFirestore({ theme: next });
+      },
       language: 'fr',
-      setLanguage: (lang) => set({ language: lang }),
+      setLanguage: (lang) => {
+        set({ language: lang });
+        syncPreferencesToFirestore({ language: lang });
+      },
+      activeMessengerContact: 'contact@perspective.sn',
+      setActiveMessengerContact: (email: string) => set({ activeMessengerContact: (email || '').toLowerCase().trim() }),
+      messengerTextScale: 'normal',
+      setMessengerTextScale: (scale: 'normal' | 'large' | 'xlarge') => {
+        set({ messengerTextScale: scale });
+        syncPreferencesToFirestore({ messengerTextScale: scale });
+      },
+      reactToDirectMessage: (messageId: string, reaction: string, userEmail?: string) => {
+        const dms = get().directMessages || [];
+        const cleanEmail = (userEmail || get().readerProfile?.email || 'visitor@perspective.sn').toLowerCase().trim();
+        let updatedReactions: Record<string, string[]> = {};
+        const updatedDms = dms.map(dm => {
+          if (dm.id === messageId) {
+            const reactions = { ...(dm.reactions || {}) };
+            const currentUsers = reactions[reaction] || [];
+            if (currentUsers.includes(cleanEmail)) {
+              reactions[reaction] = currentUsers.filter(e => e !== cleanEmail);
+              if (reactions[reaction].length === 0) delete reactions[reaction];
+            } else {
+              reactions[reaction] = [...currentUsers, cleanEmail];
+            }
+            updatedReactions = reactions;
+            return { ...dm, reactions };
+          }
+          return dm;
+        });
+        set({ directMessages: updatedDms });
+        setDoc(doc(db, "messages", messageId), { reactions: updatedReactions }, { merge: true }).catch(() => {});
+      },
+      syncPreferencesToFirebase: async (customPrefs?: any) => {
+        await syncPreferencesToFirestore(customPrefs);
+      },
       showSignUpModal: false,
       setShowSignUpModal: (show) => set({ showSignUpModal: show }),
       authTab: 'login',
@@ -407,11 +491,14 @@ export const useStore = create<AppState>()(
         const email = get().readerProfile?.email || 'anonymous';
         const art = get().articles.find(a => a.id === id);
         
+        let nextSaved: string[];
         if (saved.includes(id)) {
-          set({ savedArticles: saved.filter((s) => s !== id) });
+          nextSaved = saved.filter((s) => s !== id);
         } else {
-          set({ savedArticles: [...saved, id] });
+          nextSaved = [...saved, id];
         }
+        set({ savedArticles: nextSaved });
+        syncPreferencesToFirestore({ savedArticles: nextSaved });
 
         if (art && email !== 'anonymous') {
           get().addInteraction(
@@ -752,6 +839,57 @@ export const useStore = create<AppState>()(
           isRead: false,
           category: 'messages'
         });
+
+        // If message is directed to Abdel (Official AI Assistant in Messenger), generate response
+        if (cleanReceiver === 'abdel@perspective.sn') {
+          setTimeout(async () => {
+            try {
+              let replyText = "";
+              const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  message: newMsg.text,
+                  language: get().language,
+                  history: (get().directMessages || [])
+                    .filter(m => (m.sender === cleanSender && m.receiver === 'abdel@perspective.sn') || (m.sender === 'abdel@perspective.sn' && m.receiver === cleanSender))
+                    .slice(-6)
+                    .map(m => ({
+                      role: m.sender === 'abdel@perspective.sn' ? 'assistant' : 'user',
+                      content: m.text
+                    }))
+                })
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                replyText = data.response || data.text || "";
+              }
+
+              if (!replyText) {
+                replyText = get().language === 'en'
+                  ? "I am listening closely to your editorial insights. How else can I assist your reading of Perspective Group today?"
+                  : "Je suis à votre écoute avec attention. Quels autres points ou analyses de Perspective Group souhaitez-vous approfondir ?";
+              }
+
+              const abdelMsgId = 'dm-' + Date.now().toString() + '-abdel';
+              const abdelMsg = {
+                id: abdelMsgId,
+                sender: 'abdel@perspective.sn',
+                receiver: cleanSender,
+                text: replyText,
+                date: new Date().toISOString().split('T')[0],
+                timestamp: Date.now(),
+                read: false
+              };
+
+              set(state => ({ directMessages: [...(state.directMessages || []), abdelMsg] }));
+              await setDoc(doc(db, "messages", abdelMsgId), abdelMsg);
+            } catch (err) {
+              console.warn("[Abdel Messenger] Direct AI response notice:", err);
+            }
+          }, 600);
+        }
       },
       deleteDirectMessage: (id) => {
         const dms = get().directMessages || [];
@@ -1193,10 +1331,14 @@ export const useStore = create<AppState>()(
         if (currentProfile) {
           const updatedProfile = { ...currentProfile, notificationPreferences: updated };
           set({ notificationPreferences: updated, readerProfile: updatedProfile });
-          setDoc(doc(db, "users", currentProfile.id || currentProfile.email), updatedProfile, { merge: true }).catch(() => {});
+          const userKey = (currentProfile.email || currentProfile.id || '').toLowerCase().trim();
+          if (userKey) {
+            setDoc(doc(db, "users", userKey), updatedProfile, { merge: true }).catch(() => {});
+          }
         } else {
           set({ notificationPreferences: updated });
         }
+        syncPreferencesToFirestore({ notificationPreferences: updated });
       },
       addNotification: (notification) => {
         // Check category preferences
@@ -1997,6 +2139,8 @@ export const useStore = create<AppState>()(
         theme: state.theme,
         language: state.language, 
         savedArticles: state.savedArticles,
+        activeMessengerContact: state.activeMessengerContact,
+        messengerTextScale: state.messengerTextScale,
         articles: state.articles,
         media: state.media,
         ads: state.ads,

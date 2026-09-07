@@ -22,10 +22,27 @@
         "hidePersonalInfo": { "type": "boolean" },
         "bio": { "type": "string" },
         "accolades": { "type": "array" },
+        "preferences": { "type": "object" },
         "registeredAt": { "type": "string" },
         "lastLoginAt": { "type": "string" }
       },
       "required": ["email", "name"]
+    },
+    "DirectMessage": {
+      "title": "Direct Message",
+      "description": "Cross-device synchronized direct and messenger chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sender": { "type": "string" },
+        "receiver": { "type": "string" },
+        "text": { "type": "string" },
+        "date": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "read": { "type": "boolean" },
+        "attachment": { "type": "object" }
+      },
+      "required": ["sender", "receiver", "text"]
     },
     "AnalyticsEvent": {
       "title": "Analytics Telemetry Event",
@@ -90,6 +107,10 @@
     "/users/{userEmail}": {
       "schema": "User",
       "description": "Collection of all registered profiles and account related details"
+    },
+    "/messages/{messageId}": {
+      "schema": "DirectMessage",
+      "description": "Direct chat and Messenger messages synchronized across all devices"
     },
     "/analytics_events/{eventId}": {
       "schema": "AnalyticsEvent",

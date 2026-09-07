@@ -318,8 +318,9 @@ export async function generateArticleImageWithAI(options: ImageGenerationOptions
     const ai = getGeminiClient();
     if (ai) {
       const modelsToTry = [
-        "imagen-3.0-generate-002",
-        "gemini-2.0-flash"
+        "gemini-3.1-flash-lite-image",
+        "gemini-3.1-flash-image",
+        "imagen-3.0-generate-002"
       ];
 
       for (const model of modelsToTry) {

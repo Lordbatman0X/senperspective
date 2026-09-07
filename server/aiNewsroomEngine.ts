@@ -798,10 +798,10 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
 
   // Current production model cascade for fast inference and strict JSON response
   const models = [
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-2.0-flash-lite"
+    "gemini-3.8-flash",
+    "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest"
   ];
   let lastErr: any = null;
 
