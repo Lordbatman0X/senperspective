@@ -1036,12 +1036,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       isFirebaseAuthSession: firebaseAuthSuccess
     };
 
+    // Track whether we actually persisted the account durably.
+    // If BOTH Firebase Auth and the Firestore write fail, this account
+    // would vanish on the next load / other device (the recurring bug).
+    let firestoreDurable = false;
+    let firestoreErrMsg = "";
     try {
       const safeProfile = await sanitizeFirestorePayload(profileData);
       await setDoc(doc(db, "users", cleanEmail), safeProfile, { merge: true });
+      firestoreDurable = true;
       console.log(`[AUTH LOG] User profile successfully committed to Firestore: ${cleanEmail}`);
-    } catch (fsErr) {
-      console.warn("Firestore setDoc notice for user registration:", fsErr);
+    } catch (fsErr: any) {
+      firestoreErrMsg = fsErr?.message || String(fsErr);
+      console.warn("[AUTH LOG] Firestore setDoc notice for user registration:", fsErr?.message || fsErr);
+    }
+
+    if ((!firebaseAuthSuccess && !firestoreDurable) && cleanEmail !== "kadersdiaz3@gmail.com") {
+      // No durable record exists anywhere -> the account would be lost.
+      const appLang = useStore.getState().language || 'fr';
+      console.error(
+        `[AUTH LOG] ACCOUNT CREATION ERROR for ${cleanEmail}: firebaseAuthSuccess=${firebaseAuthSuccess}, firestoreDurable=${firestoreDurable}. ` +
+        `Firestore error: ${firestoreErrMsg}`
+      );
+      throw new Error(
+        appLang === 'fr'
+          ? "Impossible de créer le compte : le backend Firebase est injoignable ou mal configuré. " +
+            "Vérifiez la configuration du projet (firebase-applet-config.json) et activez l'authentification Email / Mot de passe, puis réessayez."
+          : "Unable to create the account: the Firebase backend is unreachable or misconfigured. " +
+            "Check the project config (firebase-applet-config.json) and ensure Email/Password auth is enabled, then retry."
+      );
     }
 
     // Save in local Zustand store users list
