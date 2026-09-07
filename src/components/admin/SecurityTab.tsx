@@ -53,8 +53,25 @@ export function SecurityTab() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Sync users list from Firestore
+  // Sync users list from Central Server API and Firestore
   useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/users");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.users)) {
+            setFirestoreUsers(data.users);
+          }
+        }
+      } catch (err) {
+        // silent catch
+      }
+    };
+
+    fetchUsers();
+    const interval = setInterval(fetchUsers, 4000);
+
     const usersRef = collection(db, "users");
     const unsubscribe = safeOnSnapshot(usersRef, (snapshot) => {
       const list: any[] = [];
@@ -70,11 +87,17 @@ export function SecurityTab() {
           password: data.password || ''
         });
       });
-      setFirestoreUsers(list);
+      if (list.length > 0) {
+        setFirestoreUsers(list);
+      }
     }, (err) => {
       console.warn("Firestore users sync notice:", err);
     });
-    return () => unsubscribe();
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, []);
 
   // Default seed admin accounts to ensure administrators are always present and manageable

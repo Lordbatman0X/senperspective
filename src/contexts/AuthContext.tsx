@@ -157,21 +157,78 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     cleanOldMockData();
 
-    // Subscribe to Firestore users collection in real time
+    // 1. Synchronize users continuously from Central Server API and Firestore
+    const syncUsersFromCentralAPI = async () => {
+      try {
+        const res = await fetch("/api/users");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && Array.isArray(data.users)) {
+          const formatted: FirestoreUser[] = data.users.map((u: any) => {
+            const email = (u.email || u.id || "").toLowerCase().trim();
+            const lastActiveTime = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
+            const isOnlineCalculated = Boolean(u.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
+            const isSuperAdmin = email === "kadersdiaz3@gmail.com";
+
+            return {
+              email: email,
+              name: u.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
+              avatarUrl: u.avatarUrl || "preset-male",
+              role: isSuperAdmin ? "Admin" : (u.role || "Member"),
+              isOnline: isOnlineCalculated,
+              lastActiveAt: u.lastActiveAt || undefined,
+              coverPhotoUrl: u.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              streak: u.streak !== undefined ? u.streak : 1,
+              readingTime: u.readingTime !== undefined ? u.readingTime : 0,
+              hidePersonalInfo: u.hidePersonalInfo || false,
+              hideEmail: u.hideEmail || false,
+              bio: u.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
+              accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (u.accolades || ["verified_identity"])
+            };
+          });
+
+          // Ensure Super Admin kadersdiaz3@gmail.com is ALWAYS present
+          if (!formatted.some(u => u.email === "kadersdiaz3@gmail.com")) {
+            formatted.unshift({
+              email: "kadersdiaz3@gmail.com",
+              name: "Kader S. Diaz",
+              avatarUrl: "preset-male",
+              role: "Admin",
+              isOnline: true,
+              streak: 15,
+              readingTime: 480,
+              bio: "Super Administrateur & Fondateur Perspective Group",
+              accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"]
+            });
+          }
+
+          setAllUsers(formatted);
+          useStore.setState({ users: formatted as any });
+        }
+      } catch (err) {
+        console.warn("[Central Users Sync notice]", err);
+      }
+    };
+
+    // Initial fetch and periodic polling
+    syncUsersFromCentralAPI();
+    const usersInterval = setInterval(syncUsersFromCentralAPI, 4000);
+
+    // Subscribe to Firestore users collection as auxiliary real-time channel
     const unsubscribeUsers = firestoreOnSnapshot(collection(db, "users"), (snapshot) => {
       const usersList: FirestoreUser[] = [];
       snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
-        const email = data.email || docSnap.id;
+        const email = (data.email || docSnap.id || "").toLowerCase().trim();
         const lastActiveTime = data.lastActiveAt ? new Date(data.lastActiveAt).getTime() : 0;
-        // User is online if explicitly set to true OR active in the last 3 minutes
-        const isOnlineCalculated = Boolean(data.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 3 * 60 * 1000));
+        const isOnlineCalculated = Boolean(data.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
+        const isSuperAdmin = email === "kadersdiaz3@gmail.com";
 
         usersList.push({
           email: email,
-          name: data.name || "Anonymous",
+          name: data.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
           avatarUrl: data.avatarUrl || "preset-male",
-          role: data.role || "Member",
+          role: isSuperAdmin ? "Admin" : (data.role || "Member"),
           isOnline: isOnlineCalculated,
           lastActiveAt: data.lastActiveAt || undefined,
           coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
@@ -179,23 +236,72 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           readingTime: data.readingTime !== undefined ? data.readingTime : 0,
           hidePersonalInfo: data.hidePersonalInfo || false,
           hideEmail: data.hideEmail || false,
-          bio: data.bio || "",
-          accolades: data.accolades || ["verified_identity"]
+          bio: data.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
+          accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (data.accolades || ["verified_identity"])
         });
       });
 
-      setAllUsers(usersList);
-      useStore.setState({ users: usersList as any });
+      if (usersList.length > 0) {
+        if (!usersList.some(u => u.email === "kadersdiaz3@gmail.com")) {
+          usersList.unshift({
+            email: "kadersdiaz3@gmail.com",
+            name: "Kader S. Diaz",
+            avatarUrl: "preset-male",
+            role: "Admin",
+            isOnline: true,
+            streak: 15,
+            readingTime: 480,
+            bio: "Super Administrateur & Fondateur Perspective Group",
+            accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"]
+          });
+        }
+        setAllUsers(usersList);
+        useStore.setState({ users: usersList as any });
+      }
     }, (error) => {
-      console.warn("[Firestore Users] Notice listening to users (using local state fallback):", error?.message || error);
+      console.warn("[Firestore Users] Notice listening to users (central server sync is active):", error?.message || error);
     });
 
-    return () => unsubscribeUsers();
+    return () => {
+      clearInterval(usersInterval);
+      unsubscribeUsers();
+    };
   }, []);
 
-  // Real-time synchronization of Direct Messages via Firestore
+  // Real-time synchronization of Direct Messages via Central Server API + Firestore
   useEffect(() => {
-    // Listen to messages collection in real-time
+    const syncMessagesFromCentralAPI = async () => {
+      try {
+        const res = await fetch("/api/mongodb/collection/messages");
+        if (!res.ok) return;
+        const data = await res.json();
+        const rawList = data.documents || [];
+        if (Array.isArray(rawList) && rawList.length > 0) {
+          const messagesList = rawList.map((d: any) => {
+            const item = d.data || d;
+            return {
+              id: d.id || item.id,
+              sender: (item.sender || "").toLowerCase().trim(),
+              receiver: (item.receiver || "").toLowerCase().trim(),
+              text: item.text || "",
+              date: item.date || new Date().toISOString().split('T')[0],
+              timestamp: item.timestamp || Date.now(),
+              read: Boolean(item.read),
+              attachment: item.attachment || undefined
+            };
+          });
+          messagesList.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+          useStore.setState({ directMessages: messagesList });
+        }
+      } catch (err) {
+        // Silent catch for message polling
+      }
+    };
+
+    syncMessagesFromCentralAPI();
+    const msgInterval = setInterval(syncMessagesFromCentralAPI, 4000);
+
+    // Listen to messages collection in real-time via Firestore when available
     const unsubscribeMessages = firestoreOnSnapshot(collection(db, "messages"), (snapshot) => {
       const messagesList: any[] = [];
       snapshot.forEach((docSnap: any) => {
@@ -238,10 +344,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Update the Zustand store
       useStore.setState({ directMessages: messagesList });
     }, (error) => {
-      console.warn("[Firestore Messages] Notice listening to messages (using local state fallback):", error?.message || error);
+      console.warn("[Firestore Messages] Notice listening to messages (central server sync active):", error?.message || error);
     });
 
-    return () => unsubscribeMessages();
+    return () => {
+      clearInterval(msgInterval);
+      unsubscribeMessages();
+    };
   }, []);
 
   // Real-time synchronization of Comments via Firestore
@@ -850,6 +959,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.warn("[AUTH LOG] Notice querying Firestore user record:", fsErr);
     }
 
+    // 4b. Check Central Server Database API for cross-device accounts
+    try {
+      const srvRes = await fetch(`/api/mongodb/doc/users/${encodeURIComponent(cleanEmail)}`);
+      if (srvRes.ok) {
+        const srvData = await srvRes.json();
+        if (srvData && srvData.data) {
+          const u = srvData.data;
+          const isPassValid = firebaseAuthSuccess || await verifyPassword(pass, u.passwordHash, u.password, u.pin);
+          if (isPassValid) {
+            const isSuperAdmin = cleanEmail === "kadersdiaz3@gmail.com";
+            const profileObj = {
+              id: u.id || stableUserId(cleanEmail),
+              name: u.name || (isSuperAdmin ? "Kader S. Diaz" : cleanEmail.split("@")[0]),
+              email: cleanEmail,
+              avatarUrl: u.avatarUrl || "preset-male",
+              role: isSuperAdmin ? "Admin" : (u.role || "Member"),
+              emailVerified: true,
+              mfaEnabled: u.twoFactorEnabled || false,
+              isMongoDB: true,
+              isFirebaseAuthSession: firebaseAuthSuccess,
+              coverPhotoUrl: u.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              streak: u.streak || 1,
+              readingTime: u.readingTime || 0,
+              hidePersonalInfo: u.hidePersonalInfo || false,
+              bio: u.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
+              accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (u.accolades || ["verified_identity"])
+            };
+            localStorage.setItem('perspective_auth_session', JSON.stringify(profileObj));
+            setReaderProfile(profileObj);
+            console.log(`[AUTH LOG] Central server DB sign-in completed for: ${cleanEmail}`);
+            return;
+          }
+        }
+      }
+    } catch (sErr) {
+      console.warn("[AUTH LOG] Central server login check notice:", sErr);
+    }
+
     // 5. Check local store registered accounts
     const storeUsers = useStore.getState().users || [];
     const localMatched = storeUsers.find(u => u.email.toLowerCase().trim() === cleanEmail);
@@ -1037,8 +1184,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     // Track whether we actually persisted the account durably.
-    // If BOTH Firebase Auth and the Firestore write fail, this account
-    // would vanish on the next load / other device (the recurring bug).
     let firestoreDurable = false;
     let firestoreErrMsg = "";
     try {
@@ -1051,21 +1196,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.warn("[AUTH LOG] Firestore setDoc notice for user registration:", fsErr?.message || fsErr);
     }
 
-    if ((!firebaseAuthSuccess && !firestoreDurable) && cleanEmail !== "kadersdiaz3@gmail.com") {
+    // Persist to Central Server Database API (guarantees cross-device network visibility)
+    let serverDurable = false;
+    try {
+      const safeProfile = await sanitizeFirestorePayload(profileData);
+      const sRes = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...safeProfile, password: pass })
+      });
+      if (sRes.ok) {
+        serverDurable = true;
+        console.log(`[AUTH LOG] User profile committed to Central Server Database: ${cleanEmail}`);
+      }
+    } catch (sErr) {
+      console.warn("[AUTH LOG] Central server user persistence notice:", sErr);
+    }
+
+    if ((!firebaseAuthSuccess && !firestoreDurable && !serverDurable) && cleanEmail !== "kadersdiaz3@gmail.com") {
       // No durable record exists anywhere -> the account would be lost.
       const appLang = useStore.getState().language || 'fr';
       console.error(
-        `[AUTH LOG] ACCOUNT CREATION ERROR for ${cleanEmail}: firebaseAuthSuccess=${firebaseAuthSuccess}, firestoreDurable=${firestoreDurable}. ` +
+        `[AUTH LOG] ACCOUNT CREATION ERROR for ${cleanEmail}: firebaseAuthSuccess=${firebaseAuthSuccess}, firestoreDurable=${firestoreDurable}, serverDurable=${serverDurable}. ` +
         `Firestore error: ${firestoreErrMsg}`
       );
       throw new Error(
         appLang === 'fr'
-          ? "Impossible de créer le compte : le backend Firebase est injoignable ou mal configuré. " +
-            "Vérifiez la configuration du projet (firebase-applet-config.json) et activez l'authentification Email / Mot de passe, puis réessayez."
-          : "Unable to create the account: the Firebase backend is unreachable or misconfigured. " +
-            "Check the project config (firebase-applet-config.json) and ensure Email/Password auth is enabled, then retry."
+          ? "Impossible d'enregistrer le compte sur le serveur. Veuillez vérifier votre connexion et réessayer."
+          : "Unable to register the account on the server. Please check your connection and retry."
       );
     }
+
+    // Immediately update allUsers in state so other components reflect the new member
+    setAllUsers(prev => {
+      const withoutSelf = prev.filter(u => u.email.toLowerCase().trim() !== cleanEmail);
+      return [...withoutSelf, {
+        email: cleanEmail,
+        name: cleanName,
+        avatarUrl: profileData.avatarUrl,
+        role: assignedRole,
+        isOnline: true,
+        streak: 1,
+        readingTime: 0,
+        bio: profileData.bio || "",
+        accolades: profileData.accolades || ["verified_identity"]
+      }];
+    });
 
     // Save in local Zustand store users list
     const currentUsers = useStore.getState().users || [];
@@ -1115,14 +1291,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logoutUser = async () => {
     const activeEmail = user?.email || useStore.getState().readerProfile?.email;
     if (activeEmail) {
+      const cleanActive = activeEmail.toLowerCase().trim();
       try {
-        await setDoc(doc(db, "users", activeEmail.toLowerCase().trim()), {
+        await setDoc(doc(db, "users", cleanActive), {
           isOnline: false,
           lastActiveAt: new Date().toISOString()
         }, { merge: true });
       } catch (err) {
         console.warn("Failed updating logout status in Firestore:", err);
       }
+      // Update central server database
+      try {
+        fetch("/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: cleanActive, isOnline: false, lastActiveAt: new Date().toISOString() })
+        }).catch(() => {});
+      } catch {}
     }
     try {
       localStorage.removeItem('perspective_auth_session');

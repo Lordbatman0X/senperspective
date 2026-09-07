@@ -1,1 +1,0 @@
-sed -i 's/const { title, excerpt, bodyText, category, keyActors, tags, styleHint, forceAiGeneration } = req.body || {};/const { title, excerpt, bodyText, category, keyActors, tags, styleHint, forceAiGeneration, customPrompt } = req.body || {};/g' server.ts

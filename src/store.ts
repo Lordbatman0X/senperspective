@@ -817,14 +817,22 @@ export const useStore = create<AppState>()(
         };
         set({ directMessages: [...dms, newMsg] });
 
-        // Save to Firestore
+        // Save to Firestore and Central Server Backend
         try {
           const cleanMsg = JSON.parse(JSON.stringify(newMsg));
           setDoc(doc(db, "messages", msgId), cleanMsg).catch(err => {
-            console.error("Failed to write message to Firestore:", err);
+            console.warn("Firestore message notice:", err?.message || err);
+          });
+          // Dual persistence: central server database for uninterrupted cross-device sync
+          fetch(`/api/mongodb/doc/messages/${msgId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: cleanMsg, merge: true })
+          }).catch(err => {
+            console.warn("Central DB message notice:", err);
           });
         } catch (err) {
-          console.warn("Firestore write failed, falling back to local only:", err);
+          console.warn("Message sync notice:", err);
         }
 
         // Trigger notification for receiver

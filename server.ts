@@ -234,6 +234,46 @@ app.use((req, res, next) => {
     }
   });
 
+  // DEDICATED CENTRAL USERS API
+  app.get("/api/users", async (_req, res) => {
+    try {
+      const users = await getCollectionDocs("users");
+      return res.json({ success: true, count: users.length, users });
+    } catch (err: any) {
+      console.error("[GET /api/users ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur chargement utilisateurs" });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const profile = req.body || {};
+      const email = String(profile.email || "").toLowerCase().trim();
+      if (!email) {
+        return res.status(400).json({ success: false, error: "Email requis" });
+      }
+      const saved = await saveDocument("users", email, profile, true);
+      return res.json({ success: true, user: saved.data });
+    } catch (err: any) {
+      console.error("[POST /api/users ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur sauvegarde utilisateur" });
+    }
+  });
+
+  app.delete("/api/users/:email", async (req, res) => {
+    try {
+      const email = String(req.params.email || "").toLowerCase().trim();
+      if (email === "kadersdiaz3@gmail.com") {
+        return res.status(403).json({ success: false, error: "Le Super Administrateur ne peut pas être supprimé." });
+      }
+      await deleteDocument("users", email);
+      return res.json({ success: true, message: `Utilisateur ${email} supprimé.` });
+    } catch (err: any) {
+      console.error("[DELETE /api/users ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur suppression" });
+    }
+  });
+
   // Persistent RSS Drafts Storage File
   const baseStorageDir = process.cwd();
   const rssFile = path.join(baseStorageDir, "rss-drafts.json");

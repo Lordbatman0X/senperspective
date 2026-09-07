@@ -459,11 +459,12 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
               {(() => {
                 const myEmail = readerProfile?.email?.toLowerCase().trim() || "";
                 // Filter out self
-                const members = allUsers.filter(u => u.email.toLowerCase().trim() !== myEmail);
+                const members = allUsers.filter(u => u && u.email && u.email.toLowerCase().trim() !== myEmail);
+                const query = (networkSearchQuery || "").toLowerCase().trim();
                 const filteredMembers = members.filter(m => 
-                  m.name.toLowerCase().includes(networkSearchQuery.toLowerCase()) ||
-                  m.email.toLowerCase().includes(networkSearchQuery.toLowerCase()) ||
-                  (m.role || "").toLowerCase().includes(networkSearchQuery.toLowerCase())
+                  (m.name || "").toLowerCase().includes(query) ||
+                  (m.email || "").toLowerCase().includes(query) ||
+                  (m.role || "").toLowerCase().includes(query)
                 );
 
                 if (filteredMembers.length === 0) {
