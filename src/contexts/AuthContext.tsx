@@ -605,6 +605,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 
 
+  // Deterministic, cross-device-stable user id derived from the email.
+  // Guarantees the SAME account resolves to the SAME id on every device/browser,
+  // even when Firebase Auth is momentarily unavailable (avoids divergent per-device ids).
+  const stableUserId = (email: string): string => {
+    const e = (email || '').toLowerCase().trim();
+    let h = 0;
+    for (let i = 0; i < e.length; i++) {
+      h = (Math.imul(31, h) + e.charCodeAt(i)) | 0;
+    }
+    const safeEmail = e.replace(/[^a-z0-9]/g, '_');
+    return 'usr_' + Math.abs(h).toString(36) + '_' + safeEmail;
+  };
+
   const loginWithEmail = async (email: string, pass: string, remember: boolean = true) => {
     let cleanEmail = email.toLowerCase().trim();
     if (cleanEmail === "admin") cleanEmail = "admin@perspective.sn";
@@ -677,7 +690,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const preset = presetAccounts[cleanEmail];
       console.log(`[AUTH LOG] Signing in via preset platform account: ${cleanEmail}`);
       const presetProfile = {
-        id: authUserUid || ("usr_" + Date.now()),
+        id: authUserUid || useStore.getState().users?.[0]?.id || stableUserId(cleanEmail),
         name: preset.name,
         email: cleanEmail,
         avatarUrl: preset.avatarUrl,
@@ -718,7 +731,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const finalRole = isAdminUser ? "Admin" : (data.role || "Member");
 
         const profileObj = {
-          id: authUserUid || data.id || ("usr_" + Date.now()),
+          id: authUserUid || data.id || stableUserId(cleanEmail),
           name: data.name || cleanEmail.split("@")[0],
           email: cleanEmail,
           avatarUrl: data.avatarUrl || "preset-male",
@@ -749,7 +762,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (firebaseAuthSuccess) {
       const fallbackProfile = {
-        id: authUserUid || ("usr_" + Date.now()),
+        id: authUserUid || stableUserId(cleanEmail),
         name: cleanEmail.split("@")[0].replace(/[._-]/g, ' '),
         email: cleanEmail,
         avatarUrl: "preset-male",
@@ -778,7 +791,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log(`[AUTH LOG] Creating initial profile for first-time login: ${cleanEmail}`);
       const isAdminUser = cleanEmail === 'kadersdiaz3@gmail.com' || cleanEmail === 'admin@perspective.sn' || cleanEmail.includes('admin');
       const fallbackProfile = {
-        id: authUserUid || ("usr_" + Date.now()),
+        id: authUserUid || stableUserId(cleanEmail),
         name: cleanEmail.split("@")[0].replace(/[._-]/g, ' '),
         email: cleanEmail,
         avatarUrl: "preset-male",
@@ -820,7 +833,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     twoFactorEnabled: boolean = false
   ) => {
     const cleanEmail = email.toLowerCase().trim();
-    let authUid = "usr_" + Date.now();
+    let authUid = stableUserId(cleanEmail);
     let firebaseAuthSuccess = false;
 
     try {
