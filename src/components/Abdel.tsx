@@ -206,12 +206,31 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
       if (ok && data?.response) {
         setMessages((prev) => [...prev, { role: "abdel", text: data.response }]);
       } else {
-        setMessages((prev) => [...prev, {
-          role: "abdel",
-          text: data?.response || (language === "fr"
-            ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
-            : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment.")
-        }]);
+        // Client-side fallback using clientAbdelChat
+        try {
+          const clientReply = await clientAbdelChat({
+            message: text,
+            language,
+            contextArticle: contextArticle || undefined
+          });
+          if (clientReply && typeof clientReply === 'string' && clientReply.trim()) {
+            setMessages((prev) => [...prev, { role: "abdel", text: clientReply }]);
+          } else {
+            setMessages((prev) => [...prev, {
+              role: "abdel",
+              text: language === "fr"
+                ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
+                : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment."
+            }]);
+          }
+        } catch (clientErr) {
+          setMessages((prev) => [...prev, {
+            role: "abdel",
+            text: language === "fr"
+              ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
+              : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment."
+          }]);
+        }
       }
     } catch (e) {
       setMessages((prev) => [...prev, {
@@ -250,10 +269,10 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
         <AnimatePresence>
           {isOpen && (
             <motion.div
-              initial={{ opacity: 0, y: 100, scale: 1 }}
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 100, scale: 1 }}
-              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300, mass: 0.8 }}
               className="fixed inset-x-4 bottom-24 glass border border-white/45 dark:border-zinc-800/80 shadow-2xl flex flex-col overflow-hidden leading-relaxed z-[100] rounded-2xl"
               style={{ height: "460px" }}
             >
@@ -317,8 +336,8 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                       <Sparkles size={10} />
                       <span className="truncate max-w-[220px]">{currentSectionLabel}</span>
                     </div>
-                    <div className="text-xs text-black leading-relaxed font-sans bg-white dark:bg-white p-3.5 rounded-xl border border-zinc-200 shadow-md text-left abdel-response-bubble">
-                      <div className="markdown-body abdel-text-content text-xs text-black">
+                    <div className="text-xs text-zinc-900 dark:text-zinc-100 leading-relaxed font-sans bg-white dark:bg-zinc-800 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-600 shadow-md text-left abdel-response-bubble">
+                      <div className="markdown-body abdel-text-content text-xs text-zinc-900 dark:text-zinc-100">
                         <Markdown invertInDark={false}>{currentGreeting}</Markdown>
                       </div>
                     </div>
@@ -329,7 +348,7 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                     <div className={`max-w-[85%] p-3.5 text-sm border shadow-md relative group rounded-xl ${
                       m.role === "user" 
                         ? "bg-[#E85D42] text-white border-[#E85D42] shadow-sm font-sans" 
-                        : "bg-white dark:bg-white text-black dark:text-black border border-zinc-200/90 font-medium abdel-response-bubble"
+                        : "bg-zinc-50 text-zinc-900 border-zinc-200 font-medium abdel-response-bubble"
                     }`}>
                       {m.role === "abdel" ? (
                          <>
@@ -352,9 +371,9 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                 ))}
                 {loading && (
                   <div className="flex justify-start">
-                    <div className="max-w-[85%] p-3 text-sm border bg-white dark:bg-white text-black dark:text-black border-zinc-200/90 shadow-md flex items-center gap-2 rounded-xl abdel-response-bubble">
+                    <div className="max-w-[85%] p-3 text-sm border bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 border-zinc-200 dark:border-zinc-700 shadow-md flex items-center gap-2 rounded-xl abdel-response-bubble">
                       <RefreshCw className="animate-spin text-[#E85D42]" size={14} />
-                      <span className="text-xs font-semibold text-black uppercase tracking-wider">
+                      <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">
                         {language === "fr" ? "Analyse..." : "Analyzing..."}
                       </span>
                     </div>
@@ -441,10 +460,10 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
         >
           <motion.div
             animate={{
-              y: [0, -8, 0],
+              y: [0, -4, 0],
             }}
             transition={{
-              duration: 4,
+              duration: 3,
               repeat: Infinity,
               ease: "easeInOut",
             }}
@@ -486,10 +505,10 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
+            initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            transition={{ type: "spring", damping: 25, stiffness: 300, mass: 0.8 }}
             className="glass border border-white/45 dark:border-zinc-800/80 shadow-2xl flex flex-col overflow-hidden leading-relaxed z-[100]"
             style={getCardStyle()}
           >
@@ -550,8 +569,8 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                     <Sparkles size={10} />
                     <span className="truncate max-w-[240px]">{currentSectionLabel}</span>
                   </div>
-                  <div className="text-xs text-black leading-relaxed font-sans bg-white dark:bg-white p-3.5 rounded-xl border border-zinc-200 shadow-md text-left abdel-response-bubble">
-                    <div className="markdown-body abdel-text-content text-xs text-black">
+                  <div className="text-xs text-zinc-900 dark:text-zinc-100 leading-relaxed font-sans bg-white dark:bg-zinc-800 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-600 shadow-md text-left abdel-response-bubble">
+                    <div className="markdown-body abdel-text-content text-xs text-zinc-900 dark:text-zinc-100">
                       <Markdown invertInDark={false}>{currentGreeting}</Markdown>
                     </div>
                   </div>
@@ -562,11 +581,11 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                   <div className={`max-w-[85%] p-3.5 text-sm border shadow-md relative group rounded-xl ${
                     m.role === "user" 
                       ? "bg-[#E85D42] text-white border-[#E85D42] shadow-sm font-sans" 
-                      : "bg-white dark:bg-white text-black dark:text-black border border-zinc-200/90 font-medium abdel-response-bubble"
+                      : "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-600 font-medium abdel-response-bubble"
                   }`}>
                     {m.role === "abdel" ? (
                        <>
-                         <div className="markdown-body abdel-text-content text-black font-sans">
+                         <div className="markdown-body abdel-text-content text-zinc-900 dark:text-zinc-100 font-sans">
                            <Markdown invertInDark={false}>{typeof m.text === 'string' ? m.text : getSafeText(m.text, language)}</Markdown>
                          </div>
                          <button 
@@ -585,9 +604,9 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="max-w-[85%] p-3 text-sm border bg-white dark:bg-white text-black dark:text-black border-zinc-200/90 shadow-md flex items-center gap-2 rounded-xl abdel-response-bubble">
+                  <div className="max-w-[85%] p-3 text-sm border bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-200 dark:border-zinc-600 shadow-md flex items-center gap-2 rounded-xl abdel-response-bubble">
                     <RefreshCw className="animate-spin text-[#E85D42]" size={14} />
-                    <span className="text-xs font-semibold text-black uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
                       {language === "fr" ? "Analyse..." : "Analyzing..."}
                     </span>
                   </div>

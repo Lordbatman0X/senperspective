@@ -77,6 +77,14 @@ export interface Article {
   
   relatedArticleIds?: string[]; // IDs of related articles
   
+  // SEO Metadata
+  seoMetaTitle?: string;
+  seoMetaDescription?: string;
+  seoKeywords?: string;
+  seoCanonicalUrl?: string;
+  seoOgImage?: string;
+  seoRobotsMeta?: string;
+  
   isPublished: boolean;
   isFeatured: boolean;
   isTrending?: boolean;

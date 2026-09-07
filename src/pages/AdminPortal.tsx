@@ -669,7 +669,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     <div className="dark min-h-screen text-zinc-100 flex flex-col md:flex-row font-sans relative bg-zinc-950">
       {/* Toast Alert */}
       {toastMessage && (
-        <div className="fixed top-5 right-5 z-50 bg-orange-600 text-white px-5 py-3 shadow-2xl font-mono text-xs font-black uppercase tracking-widest border border-white/20 animate-pulse">
+        <div className="fixed top-5 right-5 z-50 bg-orange-600 text-white px-5 py-3 shadow-2xl font-mono text-xs font-black uppercase tracking-widest border border-white/20 transition-all duration-300 ease-in-out">
           ✓ {toastMessage}
         </div>
       )}

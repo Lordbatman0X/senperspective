@@ -345,8 +345,11 @@ export function ArticlePage() {
   }, [id]);
 
   useSEO({
-    title: article ? `${article.title?.[language] || article.title?.fr || 'Article'} | The Perspective Group` : 'Perspective Journal Article',
-    description: article ? (article.excerpt?.[language] || article.excerpt?.fr) : undefined,
+    title: article ? (article.seoMetaTitle || `${article.title?.[language] || article.title?.fr || 'Article'} | The Perspective Group`) : 'Perspective Journal Article',
+    description: article ? (article.seoMetaDescription || article.excerpt?.[language] || article.excerpt?.fr) : undefined,
+    keywords: article?.seoKeywords,
+    ogImage: article?.seoOgImage || article?.featuredImage || article?.imageUrl,
+    canonical: article?.seoCanonicalUrl,
   });
 
   const handleCommentSubmit = (e: React.FormEvent) => {

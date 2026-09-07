@@ -54,6 +54,14 @@ export function ArticleEditorTab({
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
 
+  // SEO Meta states
+  const [seoMetaTitle, setSeoMetaTitle] = useState('');
+   const [seoMetaDescription, setSeoMetaDescription] = useState('');
+   const [seoKeywords, setSeoKeywords] = useState('');
+   const [seoOgImage, setSeoOgImage] = useState('');
+   const [seoCanonicalUrl, setSeoCanonicalUrl] = useState('');
+   const [seoRobotsMeta, setSeoRobotsMeta] = useState('index, follow');
+
   // Bilingual strings
   const [titleFr, setTitleFr] = useState('');
   const [titleEn, setTitleEn] = useState('');
@@ -175,9 +183,10 @@ export function ArticleEditorTab({
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
   const [aiImagePrompt, setAiImagePrompt] = useState("");
 
+  // SEO Article-Level State (kept from initial declaration above)
+
   const handleGenerateAiCoverImage = async () => {
     const activeTitle = titleFr || titleEn || '';
-    const activeExcerpt = excerptFr || excerptEn || '';
     if (!activeTitle.trim()) {
       alert(language === 'fr' ? 'Veuillez renseigner le titre de l\'article pour guider la génération de l\'image.' : 'Please enter an article title to guide AI image generation.');
       return;
@@ -190,7 +199,7 @@ export function ArticleEditorTab({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: activeTitle,
-          excerpt: activeExcerpt,
+          excerpt: excerptFr || excerptEn || '',
           bodyText: bodyFr || bodyEn || '',
           category: category || 'Économie',
           keyActors: Array.isArray(keyActors) ? keyActors.map((a: any) => a.name).filter(Boolean) : [],
@@ -263,6 +272,16 @@ export function ArticleEditorTab({
       setForceSocEn(sf?.social?.en || '');
       setForceIntFr(sf?.international?.fr || '');
       setForceIntEn(sf?.international?.en || '');
+       setForceIntFr(sf?.international?.fr || '');
+       setForceIntEn(sf?.international?.en || '');
+
+       // SEO fields initialization
+       setSeoMetaTitle((article as any).seoMetaTitle || '');
+       setSeoMetaDescription((article as any).seoMetaDescription || '');
+       setSeoKeywords((article as any).seoKeywords || '');
+       setSeoOgImage((article as any).seoOgImage || '');
+       setSeoCanonicalUrl((article as any).seoCanonicalUrl || '');
+       setSeoRobotsMeta((article as any).seoRobotsMeta || 'index, follow');
 
       setRelatedIds(article.relatedArticleIds || []);
     } else {
@@ -411,6 +430,12 @@ export function ArticleEditorTab({
         author: authorName.trim() || 'Perspective Staff',
         readingTime: Math.max(1, Math.round(wordCount.fr / 200)),
         tags,
+        seoMetaTitle: seoMetaTitle.trim() || undefined,
+        seoMetaDescription: seoMetaDescription.trim() || undefined,
+        seoKeywords: seoKeywords.trim() || undefined,
+        seoCanonicalUrl: seoCanonicalUrl.trim() || undefined,
+        seoOgImage: seoOgImage.trim() || undefined,
+        seoRobotsMeta: seoRobotsMeta || undefined,
         title: { fr: titleFr || titleEn, en: titleEn || titleFr },
         excerpt: { fr: excerptFr || excerptEn, en: excerptEn || excerptFr },
         body: { fr: bodyFr || bodyEn, en: bodyEn || bodyFr },
@@ -704,6 +729,14 @@ export function ArticleEditorTab({
         setTags(rewritten.tags);
       }
 
+      // Apply SEO fields from rewrite
+      if (rewritten.seoMetaTitle) setSeoMetaTitle(stripHtmlTags(rewritten.seoMetaTitle));
+      if (rewritten.seoMetaDescription) setSeoMetaDescription(stripHtmlTags(rewritten.seoMetaDescription));
+      if (rewritten.seoKeywords) setSeoKeywords(stripHtmlTags(rewritten.seoKeywords));
+      if (rewritten.seoCanonicalUrl) setSeoCanonicalUrl(stripHtmlTags(rewritten.seoCanonicalUrl));
+      if (rewritten.seoOgImage) setSeoOgImage(stripHtmlTags(rewritten.seoOgImage));
+      if (rewritten.seoRobotsMeta) setSeoRobotsMeta(rewritten.seoRobotsMeta);
+
       setAiStatusMsg(`✨ Réécriture réussie via ${data.engineUsed || 'IA Dual-Engine'}${data.failoverTriggered ? ' (Basculement actif)' : ''} ! Les champs de l'éditeur ont été mis à jour.`);
       setTimeout(() => setShowAiRewriteModal(false), 2000);
     } catch (err: any) {
@@ -987,6 +1020,215 @@ export function ArticleEditorTab({
                     className="w-full text-[11px] font-mono bg-zinc-950 border border-zinc-700/80 p-1.5 text-zinc-100 rounded-md"
                   />
                 </div>
+              </div>
+            </div>
+          </div>
+
+
+           {/* SEO Meta Section */}
+           <details className="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 shadow-xl rounded-lg overflow-hidden">
+             <summary className="text-xs font-black uppercase tracking-widest text-[#E85D42] p-4 cursor-pointer hover:bg-zinc-800/50 border-b border-zinc-800 flex items-center gap-1.5 list-none">
+               <Search size={14} /> SEO & Distribution Meta (Optionnel)
+               <span className="ml-auto text-zinc-500 text-[10px] font-normal normal-case">Cliquer pour ouvrir</span>
+             </summary>
+             <div className="p-4 space-y-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                   <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Title (SEO)</label>
+                   <input type="text" value={seoMetaTitle} onChange={e => setSeoMetaTitle(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Titre optimisé pour les moteurs de recherche (60 caractères max)" />
+                   <p className="text-[10px] text-zinc-500 mt-1">{seoMetaTitle.length}/60 caractères</p>
+                 </div>
+                 <div>
+                   <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">OG Image (Réseaux Sociaux)</label>
+                   <input type="text" value={seoOgImage} onChange={e => setSeoOgImage(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="URL de l'image pour le partage social (1200x630px)" />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Description (SEO)</label>
+                 <textarea value={seoMetaDescription} onChange={e => setSeoMetaDescription(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs resize-none focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Description optimisée pour les moteurs de recherche (150-160 caractères)" rows={2} />
+                 <p className="text-[10px] text-zinc-500 mt-1">{seoMetaDescription.length}/160 caractères</p>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                   <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">SEO Keywords</label>
+                   <input type="text" value={seoKeywords} onChange={e => setSeoKeywords(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="mots-clé1, mot-clé2, mot-clé3" />
+                 </div>
+                 <div>
+                   <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
+                   <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug-personnalisé" />
+                 </div>
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Robots Meta</label>
+                 <select value={seoRobotsMeta} onChange={e => setSeoRobotsMeta(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] rounded-md">
+                   <option value="index, follow">Index, Follow (par défaut)</option>
+                   <option value="noindex, follow">NoIndex, Follow</option>
+                   <option value="index, nofollow">Index, NoFollow</option>
+                   <option value="noindex, nofollow">NoIndex, NoFollow</option>
+                 </select>
+               </div>
+             </div>
+           </details>
+
+           {/* SEO Meta Section */}
+           <div className="bg-zinc-900/80 backdrop-blur-md p-6 border border-zinc-800 shadow-xl space-y-4 rounded-lg">
+             <h3 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-2 flex items-center gap-1.5">
+               <Search size={14} /> SEO & Distribution Meta
+             </h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Title (SEO)</label>
+                 <input type="text" value={seoMetaTitle} onChange={e => setSeoMetaTitle(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Titre optimise (60 car. max)" />
+                 <p className="text-[10px] text-zinc-500 mt-1">{seoMetaTitle.length}/60</p>
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">OG Image</label>
+                 <input type="text" value={seoOgImage} onChange={e => setSeoOgImage(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="URL 1200x630px" />
+               </div>
+             </div>
+             <div>
+               <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Description</label>
+               <textarea value={seoMetaDescription} onChange={e => setSeoMetaDescription(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs resize-none focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" rows={2} placeholder="Description SEO (150-160 car.)" />
+               <p className="text-[10px] text-zinc-500 mt-1">{seoMetaDescription.length}/160</p>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">SEO Keywords</label>
+                 <input type="text" value={seoKeywords} onChange={e => setSeoKeywords(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="mot-cle1, mot-cle2" />
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
+                 <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug" />
+               </div>
+             </div>
+           </div>
+
+           {/* SEO Meta Section */}
+           <div className="bg-zinc-900/80 backdrop-blur-md p-6 border border-zinc-800 shadow-xl space-y-4 rounded-lg">
+             <h3 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-2 flex items-center gap-1.5">
+               <Search size={14} /> SEO & Distribution Meta
+             </h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Title (SEO)</label>
+                 <input 
+                   type="text" 
+                   value={seoMetaTitle}
+                   onChange={e => setSeoMetaTitle(e.target.value)}
+                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
+                   placeholder="Titre optimisé pour les moteurs de recherche (60 caractères max)" 
+                 />
+                 <p className="text-[10px] text-zinc-500 mt-1">{seoMetaTitle.length}/60 caractères</p>
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">OG Image (Réseaux Sociaux)</label>
+                 <input 
+                   type="text" 
+                   value={seoOgImage}
+                   onChange={e => setSeoOgImage(e.target.value)}
+                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
+                   placeholder="URL de l'image pour le partage social (1200x630px)" 
+                 />
+               </div>
+             </div>
+             <div>
+               <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Description (SEO)</label>
+               <textarea 
+                 value={seoMetaDescription}
+                 onChange={e => setSeoMetaDescription(e.target.value)}
+                 className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs resize-none focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
+                 placeholder="Description optimisée pour les moteurs de recherche (150-160 caractères)" 
+                 rows={2}
+               />
+               <p className="text-[10px] text-zinc-500 mt-1">{seoMetaDescription.length}/160 caractères</p>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">SEO Keywords</label>
+                 <input 
+                   type="text" 
+                   value={seoKeywords}
+                   onChange={e => setSeoKeywords(e.target.value)}
+                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
+                   placeholder="mots-clé1, mot-clé2, mot-clé3" 
+                 />
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
+                 <input 
+                   type="text" 
+                   value={seoCanonicalUrl}
+                   onChange={e => setSeoCanonicalUrl(e.target.value)}
+                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
+                   placeholder="https://perspective.sn/article/slug-personnalisé" 
+                 />
+               </div>
+             </div>
+           </div>
+
+
+           {/* SEO Meta Section */}
+           <div className="bg-zinc-900/80 backdrop-blur-md p-6 border border-zinc-800 shadow-xl space-y-4 rounded-lg">
+             <h3 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-2 flex items-center gap-1.5">
+               <Search size={14} /> SEO & Distribution Meta
+             </h3>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Title (SEO)</label>
+                 <input type="text" value={seoMetaTitle} onChange={e => setSeoMetaTitle(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Titre optimise pour les moteurs de recherche (60 caracteres max)" />
+                 <p className="text-[10px] text-zinc-500 mt-1">{seoMetaTitle.length}/60 caracteres</p>
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">OG Image (Reseaux Sociaux)</label>
+                 <input type="text" value={seoOgImage} onChange={e => setSeoOgImage(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="URL de l'image pour le partage social (1200x630px)" />
+               </div>
+             </div>
+             <div>
+               <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Description (SEO)</label>
+               <textarea value={seoMetaDescription} onChange={e => setSeoMetaDescription(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs resize-none focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Description optimisee pour les moteurs de recherche (150-160 caracteres)" rows={2} />
+               <p className="text-[10px] text-zinc-500 mt-1">{seoMetaDescription.length}/160 caracteres</p>
+             </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">SEO Keywords</label>
+                 <input type="text" value={seoKeywords} onChange={e => setSeoKeywords(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="mot-cle1, mot-cle2, mot-cle3" />
+               </div>
+               <div>
+                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
+                 <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug-personnalise" />
+               </div>
+             </div>
+           </div>
+
+          {/* SEO Meta Section */}
+          <div className="bg-zinc-900/80 backdrop-blur-md p-6 border border-zinc-800 shadow-xl space-y-4 rounded-lg">
+            <h3 className="text-xs font-black uppercase tracking-widest text-[#E85D42] border-b border-zinc-800 pb-2 flex items-center gap-1.5">
+              <Search size={14} /> SEO & Distribution Meta
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Title (SEO)</label>
+                <input type="text" value={seoMetaTitle} onChange={e => setSeoMetaTitle(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Titre optimise pour les moteurs de recherche (60 caracteres max)" />
+                <p className="text-[10px] text-zinc-500 mt-1">{seoMetaTitle.length}/60 caracteres</p>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">OG Image (Reseaux Sociaux)</label>
+                <input type="text" value={seoOgImage} onChange={e => setSeoOgImage(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="URL de l'image pour le partage social (1200x630px)" />
+              </div>
+            </div>
+            <div>
+              <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Meta Description (SEO)</label>
+              <textarea value={seoMetaDescription} onChange={e => setSeoMetaDescription(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs resize-none focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="Description optimisee pour les moteurs de recherche (150-160 caracteres)" rows={2} />
+              <p className="text-[10px] text-zinc-500 mt-1">{seoMetaDescription.length}/160 caracteres</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">SEO Keywords</label>
+                <input type="text" value={seoKeywords} onChange={e => setSeoKeywords(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="mot-cle1, mot-cle2, mot-cle3" />
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
+                <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug-personnalise" />
               </div>
             </div>
           </div>
@@ -1825,9 +2067,8 @@ export function ArticleEditorTab({
                     if (!surveillanceSearch.trim()) return true;
                     const q = surveillanceSearch.toLowerCase();
                     const tFr = (a.title?.fr || '').toLowerCase();
-                    const tEn = (a.title?.en || '').toLowerCase();
                     const cat = (a.category || '').toLowerCase();
-                    return tFr.includes(q) || tEn.includes(q) || cat.includes(q) || a.id.toLowerCase().includes(q);
+                    return tFr.includes(q) || (a.title?.en || '').toLowerCase().includes(q) || cat.includes(q) || a.id.toLowerCase().includes(q);
                   })
                   .map(a => {
                     const isChecked = relatedIds.includes(a.id);

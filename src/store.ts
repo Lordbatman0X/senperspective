@@ -441,28 +441,27 @@ export const useStore = create<AppState>()(
               }
             });
             if (fetchedArticles.length > 0) {
-              const existingIds = new Set(fetchedArticles.map(a => a.id));
-              const missingSeeds = (seedArticles || []).filter(a => !existingIds.has(a.id));
-              const combined = [...fetchedArticles, ...missingSeeds].sort(
+              // Centralize: only keep articles published between yesterday and today
+              const now = new Date();
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const yesterday = new Date(today);
+              yesterday.setDate(yesterday.getDate() - 1);
+              
+              const filteredArticles = fetchedArticles.filter(a => {
+                if (!a.date) return false;
+                const articleDate = new Date(a.date);
+                return articleDate >= yesterday && articleDate <= now;
+              });
+              
+              // Only use filtered articles - don't add seeds back
+              const combined = [...filteredArticles].sort(
                 (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
               );
               set({ articles: combined });
             }
           } else {
-            // Firestore is currently empty (e.g. freshly deployed instance)
-            const current = get().articles;
-            if (!current || current.length === 0) {
-              set({ articles: seedArticles });
-            }
-            // Seed the initial articles to Firestore in the background
-            if (seedArticles && seedArticles.length > 0) {
-              for (const art of seedArticles.slice(0, 25)) {
-                try {
-                  const clean = await sanitizeFirestorePayload(art as any);
-                  setDoc(doc(db, "articles", art.id), clean, { merge: true }).catch(() => {});
-                } catch (_) {}
-              }
-            }
+            // Firestore is currently empty - don't seed, just set empty
+            set({ articles: [] });
           }
 
           // Sync Ads
@@ -477,7 +476,7 @@ export const useStore = create<AppState>()(
             }
           }
 
-          // Sync Users
+          // Sync Users - Fuse accounts with same email
           if (userSnapshot && !userSnapshot.empty) {
             const fetchedUsers: any[] = [];
             userSnapshot.forEach((docSnap) => {
@@ -485,7 +484,21 @@ export const useStore = create<AppState>()(
               if (data) fetchedUsers.push(data);
             });
             if (fetchedUsers.length > 0) {
-              set({ users: fetchedUsers });
+              // Fuse accounts with same email into one
+              const emailMap = new Map<string, any>();
+              fetchedUsers.forEach(user => {
+                const email = (user.email || '').toLowerCase().trim();
+                if (!email) return;
+                if (emailMap.has(email)) {
+                  // Merge data into existing account
+                  const existing = emailMap.get(email);
+                  emailMap.set(email, { ...existing, ...user, email });
+                } else {
+                  emailMap.set(email, user);
+                }
+              });
+              const fusedUsers = Array.from(emailMap.values());
+              set({ users: fusedUsers });
             }
           }
         } catch (err) {
@@ -777,6 +790,93 @@ export const useStore = create<AppState>()(
       friends: [],
       addFriend: (friend) => set(state => ({ friends: [...(state.friends || []), friend] })),
       deleteFriend: (email) => set(state => ({ friends: (state.friends || []).filter(f => f.email !== email) })),
+      // Fuse accounts with the same email into one account
+      fuseAccounts: async () => {
+        const allUsers = get().users || [];
+        const emailMap = new Map<string, any>();
+        const duplicates: any[] = [];
+        
+        for (const u of allUsers as any[]) {
+          const user = u as any;
+          const email = (user.email || '').toLowerCase().trim();
+          if (!email) continue;
+          
+          if (emailMap.has(email)) {
+            // Merge data from duplicate into the original
+            const original = emailMap.get(email) as any;
+            // Keep the most recent data, merge arrays
+            if (user.interactions && Array.isArray(user.interactions)) {
+              original.interactions = [...(original.interactions || []), ...user.interactions];
+            }
+            if (user.comments && Array.isArray(user.comments)) {
+              original.comments = [...(original.comments || []), ...user.comments];
+            }
+            if (user.subscriptions && Array.isArray(user.subscriptions)) {
+              original.subscriptions = [...(original.subscriptions || []), ...user.subscriptions];
+            }
+            // Keep the most recent lastLogin
+            if (user.lastLogin && (!original.lastLogin || user.lastLogin > original.lastLogin)) {
+              original.lastLogin = user.lastLogin;
+            }
+            // Keep the most complete profile
+            if (user.name && !original.name) original.name = user.name;
+            if (user.avatar && !original.avatar) original.avatar = user.avatar;
+            duplicates.push(user);
+          } else {
+            emailMap.set(email, { ...user });
+          }
+        }
+        
+        const fusedUsers = Array.from(emailMap.values());
+        if (duplicates.length > 0) {
+          set({ users: fusedUsers });
+          // Sync to Firestore - delete duplicates, update originals
+          for (const dup of duplicates) {
+            try {
+              await deleteDoc(doc(db, "users", dup.id)).catch(() => {});
+            } catch (_) {}
+          }
+          for (const user of fusedUsers) {
+            try {
+              const clean = await sanitizeFirestorePayload(user);
+              await setDoc(doc(db, "users", user.id), clean, { merge: true }).catch(() => {});
+            } catch (_) {}
+          }
+          console.log(`Fused ${duplicates.length} duplicate accounts. Total users: ${fusedUsers.length}`);
+        }
+        return { fused: duplicates.length, total: fusedUsers.length };
+      },
+      // Remove fake/test accounts
+      removeFakeAccounts: async () => {
+        const allUsers = get().users || [];
+        const fakePatterns = ['test', 'fake', 'demo', 'example', 'sample', 'admin@', 'user@', 'foo@', 'bar@'];
+        const realUsers: any[] = [];
+        const removedUsers: any[] = [];
+        
+        for (const user of allUsers) {
+          const email = (user.email || '').toLowerCase();
+          const name = (user.name || '').toLowerCase();
+          const isFake = fakePatterns.some(pattern => email.includes(pattern) || name.includes(pattern));
+          
+          if (isFake) {
+            removedUsers.push(user);
+          } else {
+            realUsers.push(user);
+          }
+        }
+        
+        if (removedUsers.length > 0) {
+          set({ users: realUsers });
+          // Delete fake accounts from Firestore
+          for (const user of removedUsers) {
+            try {
+              await deleteDoc(doc(db, "users", user.id)).catch(() => {});
+            } catch (_) {}
+          }
+          console.log(`Removed ${removedUsers.length} fake accounts. Total users: ${realUsers.length}`);
+        }
+        return { removed: removedUsers.length, total: realUsers.length };
+      },
       abdelPrompts: {
         fr: [
           "Quelles sont les actualités majeures aujourd'hui sur Perspective ?",
