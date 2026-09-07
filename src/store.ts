@@ -1652,7 +1652,7 @@ export const useStore = create<AppState>()(
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
         seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
-        databaseProvider: 'mongodb',
+        databaseProvider: 'firestore',
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
@@ -2144,39 +2144,27 @@ export const useStore = create<AppState>()(
       name: 'perspective-group-storage',
       storage: createJSONStorage(() => idbStorage),
       partialize: (state) => ({ 
+        // Centralized data store: only persist USER-SPECIFIC preferences locally.
+        // Shared content (articles, ads, comments, messages, subscribers, matches,
+        // siteSettings, media, users, interactions) lives ONLY in Firestore so every
+        // device/browser sees the SAME database — no more separate/localized copies.
         theme: state.theme,
         language: state.language, 
         savedArticles: state.savedArticles,
         activeMessengerContact: state.activeMessengerContact,
         messengerTextScale: state.messengerTextScale,
-        articles: state.articles,
-        media: state.media,
-        ads: state.ads,
-        comments: state.comments,
-        directMessages: state.directMessages,
-        notifications: state.notifications,
         notificationPreferences: state.notificationPreferences,
         notificationResponses: state.notificationResponses,
-        subscribers: state.subscribers,
-        readerProfile: state.readerProfile,
-        users: state.users,
-        interactions: state.interactions,
-        siteSettings: state.siteSettings,
-        matches: state.matches
+        readerProfile: state.readerProfile
       }),
       onRehydrateStorage: () => (state) => {
+        // Note: Shared content is centralized in Firestore and NOT persisted locally.
+        // `syncFromMongoDB()` (run in App.tsx) loads the authoritative Firestore data.
+        // We only seed a minimal offline placeholder so the shell doesn't flash empty
+        // while the Firestore sync resolves — it is overwritten by the Firestore truth.
         if (state) {
-          if (!state.articles || state.articles.length < 10) {
+          if (!state.articles || state.articles.length === 0) {
             state.articles = seedArticles;
-          }
-          if (!state.media || state.media.length === 0) {
-            state.media = seedMedia as MediaItem[];
-          }
-          if (!state.comments || state.comments.length === 0) {
-            state.comments = seedComments as CommentItem[];
-          }
-          if (!state.directMessages || state.directMessages.length === 0) {
-            state.directMessages = seedMessages as DirectMessage[];
           }
         }
       }
