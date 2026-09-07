@@ -437,7 +437,7 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
 
   // Helper to query Gemini with model fallback
   const callGeminiDirect = async (apiKey: string) => {
-    const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-lite'];
+    const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'];
     for (const model of candidateModels) {
       try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -509,6 +509,29 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     const data = await res.json();
     const content = data?.choices?.[0]?.message?.content || '';
     return { content, model: 'OpenAI GPT-4o Mini (Client Direct)' };
+  };
+
+  // Helper to query DeepSeek
+  const callDeepSeekDirect = async (apiKey: string) => {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: promptText }],
+        response_format: { type: 'json_object' }
+      })
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson?.error?.message || `Erreur DeepSeek HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    const content = data?.choices?.[0]?.message?.content || '';
+    return { content, model: 'DeepSeek Chat (Client Direct)' };
   };
 
   // Execution flow with intelligent auto-failover
@@ -584,8 +607,20 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     const data = await res.json();
     rawContent = data?.choices?.[0]?.message?.content || '';
     modelUsed = 'OpenRouter Llama 3.3 (Client Direct)';
+  } else if (engine === 'deepseek' || (engine === 'auto' && deepseekKey)) {
+    if (!deepseekKey) throw new Error('Clé DeepSeek non configurée.');
+    const res = await callDeepSeekDirect(deepseekKey);
+    rawContent = res.content;
+    modelUsed = res.model;
+  } else if (engine === 'anthropic') {
+    throw new Error("Anthropic (Claude) nécessite un backend proxy CORS — utilisez Gemini, Groq, OpenAI, OpenRouter ou DeepSeek pour la réécriture directe navigateur.");
   } else {
     throw new Error(`Moteur IA ${engine} non disponible pour la réécriture directe.`);
+  }
+
+  // Guard: if every engine attempt failed silently, surface the real error
+  if (!rawContent || !rawContent.trim()) {
+    throw new Error(lastError || "Aucun moteur IA n'a pu produire une réponse. Vérifiez vos clés API dans l'onglet Diagnostics.");
   }
 
   // Parse JSON response safely with resilient multi-pass recovery
@@ -607,6 +642,31 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     } else {
       throw new Error('Format de réponse JSON incomplet renvoyé par le modèle.');
     }
+  }
+
+  // Normalize keyActors: models may return significance as a string, but the editor expects {fr, en}
+  if (Array.isArray(parsedArticle.keyActors)) {
+    parsedArticle.keyActors = parsedArticle.keyActors.map((a: any) => {
+      if (!a) return a;
+      let sig = a.significance;
+      if (typeof sig === 'string') {
+        sig = { fr: sig, en: sig };
+      } else if (!sig || typeof sig !== 'object') {
+        sig = { fr: '', en: '' };
+      }
+      return { ...a, significance: sig };
+    });
+  }
+
+  // Normalize timeline descriptions to bilingual shape
+  if (Array.isArray(parsedArticle.timeline)) {
+    parsedArticle.timeline = parsedArticle.timeline.map((t: any) => {
+      if (!t) return t;
+      let desc = t.description;
+      if (typeof desc === 'string') desc = { fr: desc, en: desc };
+      else if (!desc || typeof desc !== 'object') desc = { fr: '', en: '' };
+      return { ...t, description: desc };
+    });
   }
 
   // Ensure high-definition image is assigned: ALWAYS prioritize original article / RSS feed image

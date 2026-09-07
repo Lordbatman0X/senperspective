@@ -177,7 +177,7 @@ export function ArticleEditorTab({
   const [showAiRewriteModal, setShowAiRewriteModal] = useState(false);
   const [isRewritingWithAi, setIsRewritingWithAi] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
-  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai' | 'anthropic' | 'deepseek'>('groq');
+  const [aiPreferredEngine, setAiPreferredEngine] = useState<'auto' | 'gemini' | 'groq' | 'openrouter' | 'openai' | 'anthropic' | 'deepseek'>('auto');
   const [aiTargetType, setAiTargetType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null);
   const [isGeneratingAiImage, setIsGeneratingAiImage] = useState(false);
@@ -737,7 +737,7 @@ export function ArticleEditorTab({
       if (rewritten.seoOgImage) setSeoOgImage(stripHtmlTags(rewritten.seoOgImage));
       if (rewritten.seoRobotsMeta) setSeoRobotsMeta(rewritten.seoRobotsMeta);
 
-      setAiStatusMsg(`✨ Réécriture réussie via ${data.engineUsed || 'IA Dual-Engine'}${data.failoverTriggered ? ' (Basculement actif)' : ''} ! Les champs de l'éditeur ont été mis à jour.`);
+      setAiStatusMsg(`✨ Réécriture réussie via ${engineUsed} ! Les champs de l'éditeur ont été mis à jour.`);
       setTimeout(() => setShowAiRewriteModal(false), 2000);
     } catch (err: any) {
       console.error('AI Rewrite error:', err);
