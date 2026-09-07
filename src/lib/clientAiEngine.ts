@@ -438,6 +438,7 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
   // Helper to query Gemini with model fallback
   const callGeminiDirect = async (apiKey: string) => {
     const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash-lite'];
+    const errors: string[] = [];
     for (const model of candidateModels) {
       try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -445,24 +446,34 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
+            generationConfig: {
+              responseMimeType: 'application/json',
+              maxOutputTokens: 16384,
+              // Gemini 2.5 "thinking" consumes the output budget and truncates JSON — disable it
+              ...(model.startsWith('gemini-2.5') ? { thinkingConfig: { thinkingBudget: 0 } } : {})
+            }
           })
         });
         if (res.ok) {
           const data = await res.json();
-          const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          const candidate = data?.candidates?.[0];
+          const content = candidate?.content?.parts?.map((p: any) => p?.text || '').join('') || '';
           if (content && content.trim()) {
             return { content, model: `Gemini ${model} (Client Direct)` };
           }
+          errors.push(`${model}: réponse vide (finishReason=${candidate?.finishReason || 'inconnu'})`);
         } else {
           const errJson = await res.json().catch(() => ({}));
-          console.warn(`[Client AI] Gemini ${model} returned HTTP ${res.status}:`, errJson?.error?.message);
+          const msg = errJson?.error?.message || `HTTP ${res.status}`;
+          errors.push(`${model}: ${msg}`);
+          console.warn(`[Client AI] Gemini ${model} returned HTTP ${res.status}:`, msg);
         }
       } catch (err: any) {
+        errors.push(`${model}: ${err.message}`);
         console.warn(`[Client AI] Gemini ${model} fetch failed:`, err.message);
       }
     }
-    throw new Error('Les modèles Gemini sont temporairement saturés ou la clé API est restreinte.');
+    throw new Error('Gemini indisponible (' + errors.join(' | ') + ')');
   };
 
   // Helper to query Groq
@@ -511,6 +522,43 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     return { content, model: 'OpenAI GPT-4o Mini (Client Direct)' };
   };
 
+  // Helper to query OpenRouter
+  const callOpenRouterDirect = async (apiKey: string) => {
+    const candidateModels = ['google/gemini-2.0-flash-001', 'meta-llama/llama-3.3-70b-instruct', 'openai/gpt-4o-mini'];
+    const errors: string[] = [];
+    for (const model of candidateModels) {
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content: promptText }],
+            response_format: { type: 'json_object' }
+          })
+        });
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          const msg = errJson?.error?.message || `HTTP ${res.status}`;
+          errors.push(`${model}: ${msg}`);
+          continue;
+        }
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content || '';
+        if (content && content.trim()) {
+          return { content, model: `OpenRouter ${model} (Client Direct)` };
+        }
+        errors.push(`${model}: réponse vide`);
+      } catch (err: any) {
+        errors.push(`${model}: ${err.message}`);
+      }
+    }
+    throw new Error('OpenRouter indisponible (' + errors.join(' | ') + ')');
+  };
+
   // Helper to query DeepSeek
   const callDeepSeekDirect = async (apiKey: string) => {
     const res = await fetch('https://api.deepseek.com/chat/completions', {
@@ -534,89 +582,59 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     return { content, model: 'DeepSeek Chat (Client Direct)' };
   };
 
-  // Execution flow with intelligent auto-failover
-  if (engine === 'gemini' || (engine === 'auto' && geminiKey)) {
-    try {
+  // Unified failover chain: try the preferred engine first (or first available), then EVERY other configured provider
+  const chainOrder = ['gemini', 'groq', 'openai', 'openrouter', 'deepseek'];
+  const engineHandlers: Record<string, () => Promise<{ content: string; model: string }>> = {
+    gemini: () => {
       if (!geminiKey) throw new Error('Clé Gemini non configurée.');
-      const res = await callGeminiDirect(geminiKey);
-      rawContent = res.content;
-      modelUsed = res.model;
-    } catch (e: any) {
-      lastError = e.message;
-      if (engine === 'auto' && groqKey) {
-        console.warn('[Client AI Failover] Gemini failed, failing over to Groq Llama 3.3...');
-        try {
-          const res = await callGroqDirect(groqKey);
-          rawContent = res.content;
-          modelUsed = `${res.model} (Failover Gemini -> Groq)`;
-        } catch (groqErr: any) {
-          lastError = groqErr.message;
-        }
-      } else if (engine === 'auto' && openaiKey) {
-        console.warn('[Client AI Failover] Gemini failed, failing over to OpenAI...');
-        try {
-          const res = await callOpenAIDirect(openaiKey);
-          rawContent = res.content;
-          modelUsed = `${res.model} (Failover Gemini -> OpenAI)`;
-        } catch (oErr: any) {
-          lastError = oErr.message;
-        }
-      } else {
-        throw new Error(lastError);
-      }
-    }
-  } else if (engine === 'groq' || (engine === 'auto' && groqKey)) {
-    try {
+      return callGeminiDirect(geminiKey);
+    },
+    groq: () => {
       if (!groqKey) throw new Error('Clé Groq non configurée.');
-      const res = await callGroqDirect(groqKey);
+      return callGroqDirect(groqKey);
+    },
+    openai: () => {
+      if (!openaiKey) throw new Error('Clé OpenAI non configurée.');
+      return callOpenAIDirect(openaiKey);
+    },
+    openrouter: () => {
+      if (!openrouterKey) throw new Error('Clé OpenRouter non configurée.');
+      return callOpenRouterDirect(openrouterKey);
+    },
+    deepseek: () => {
+      if (!deepseekKey) throw new Error('Clé DeepSeek non configurée.');
+      return callDeepSeekDirect(deepseekKey);
+    }
+  };
+
+  // Build ordered list: preferred engine first, then the rest
+  let ordered: string[];
+  if (engine !== 'auto' && chainOrder.includes(engine)) {
+    ordered = [engine, ...chainOrder.filter(e => e !== engine)];
+  } else {
+    ordered = chainOrder;
+  }
+
+  if (!ordered.some(e => engineHandlers[e])) {
+    throw new Error("Aucune clé API IA disponible. Rendez-vous dans l'onglet Diagnostics pour renseigner vos clés.");
+  }
+
+  const chainErrors: string[] = [];
+  for (const e of ordered) {
+    if (!engineHandlers[e]) continue;
+    try {
+      const res = await engineHandlers[e]();
       rawContent = res.content;
       modelUsed = res.model;
-    } catch (e: any) {
-      lastError = e.message;
-      if (engine === 'auto' && openaiKey) {
-        const res = await callOpenAIDirect(openaiKey);
-        rawContent = res.content;
-        modelUsed = `${res.model} (Failover Groq -> OpenAI)`;
-      } else {
-        throw new Error(lastError);
-      }
+      if (ordered[0] !== e) console.warn(`[Client AI Failover] ${ordered[0]} failed -> succeeded via ${res.model}`);
+      break;
+    } catch (e2: any) {
+      chainErrors.push(`${e}: ${e2.message}`);
+      console.warn(`[Client AI Failover] ${e} failed: ${e2.message}`);
     }
-  } else if (engine === 'openai' || (engine === 'auto' && openaiKey)) {
-    if (!openaiKey) throw new Error('Clé OpenAI non configurée.');
-    const res = await callOpenAIDirect(openaiKey);
-    rawContent = res.content;
-    modelUsed = res.model;
-  } else if (engine === 'openrouter') {
-    if (!openrouterKey) throw new Error('Clé OpenRouter non configurée.');
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openrouterKey}`
-      },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct',
-        messages: [{ role: 'user', content: promptText }],
-        response_format: { type: 'json_object' }
-      })
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error?.message || `Erreur OpenRouter HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    rawContent = data?.choices?.[0]?.message?.content || '';
-    modelUsed = 'OpenRouter Llama 3.3 (Client Direct)';
-  } else if (engine === 'deepseek' || (engine === 'auto' && deepseekKey)) {
-    if (!deepseekKey) throw new Error('Clé DeepSeek non configurée.');
-    const res = await callDeepSeekDirect(deepseekKey);
-    rawContent = res.content;
-    modelUsed = res.model;
-  } else if (engine === 'anthropic') {
-    throw new Error("Anthropic (Claude) nécessite un backend proxy CORS — utilisez Gemini, Groq, OpenAI, OpenRouter ou DeepSeek pour la réécriture directe navigateur.");
-  } else {
-    throw new Error(`Moteur IA ${engine} non disponible pour la réécriture directe.`);
   }
+  lastError = chainErrors.join(' | ');
+
 
   // Guard: if every engine attempt failed silently, surface the real error
   if (!rawContent || !rawContent.trim()) {
