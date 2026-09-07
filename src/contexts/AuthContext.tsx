@@ -801,8 +801,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // 4. Flexible fallback sign-in for any valid email if account didn't exist yet
-    if (cleanEmail && cleanEmail.includes("@")) {
+        // 4. Formerly a passwordless "flexible fallback" that logged in ANY valid email.
+    // DISABLED — only real Firebase Auth accounts (or a Firestore record with a matching password) may sign in.
+    if (false && cleanEmail && cleanEmail.includes("@")) {
       console.log(`[AUTH LOG] Creating initial profile for first-time login: ${cleanEmail}`);
       const isAdminUser = cleanEmail === 'kadersdiaz3@gmail.com' || cleanEmail === 'admin@perspective.sn' || cleanEmail.includes('admin');
       const fallbackProfile = {
@@ -862,10 +863,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           authUid = loginCredential.user.uid;
           firebaseAuthSuccess = true;
         } catch (loginErr) {
-          console.warn("Could not sign in existing user during registration fallback:", loginErr);
+                    console.error("[Auth] Existing account sign-in failed during registration:", loginErr?.code || loginErr?.message);
+          // The email already exists as a Firebase Auth account but the password did not match.
+          // Surface this to the user instead of silently creating a Firestore-only "shadow" account.
+          throw new Error("Cet e-mail est déjà utilisé. Veuillez vous connecter à votre compte.");
         }
       } else {
-        console.warn("Firebase Auth createUserWithEmailAndPassword notice:", err?.code || err?.message);
+                console.error("[Auth] Firebase Auth account creation failed:", err?.code || err?.message);
+        // Do NOT silently continue: throw so the UI shows the real reason (e.g.
+        // auth/invalid-api-key, auth/operation-not-allowed, auth/weak-password, network/400).
+        throw new Error((err?.code || "auth_error") + ": " + (err?.message || "Échec de la création du compte."));
       }
     }
 
@@ -875,9 +882,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       email: cleanEmail,
       name: name.trim(),
       avatarUrl: avatarUrl || "preset-male",
-      role: role || "Member",
+            role: role || "Member",
       authType: authType || 'password',
-      password: pass,
+      // password is owned by Firebase Auth only; it is intentionally NOT stored in the Firestore profile (security)
       pin: pin || "",
       twoFactorEnabled: twoFactorEnabled || false,
       mfaEnabled: twoFactorEnabled || false,

@@ -510,7 +510,7 @@ export const useStore = create<AppState>()(
             }
           }
         } catch (err) {
-          console.warn("Notice: Firestore sync fallback to resilient local seed articles:", err);
+                    console.warn("[Offline/Local-only mode] Firestore is unreachable or unauthorized — articles/ads are loaded from local seed data and persisted to THIS browser only. Accounts and content will NOT be shared across devices until the Firestore backend is reachable. Underlying error:", err);
           const current = get().articles;
           if (!current || current.length === 0) {
             set({ articles: seedArticles });
