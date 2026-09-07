@@ -10,6 +10,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText, formatCategory } from '../lib/utils';
+import { verifyPassword, stableUserId } from '../lib/authCrypto';
 
 // Modular Tab components
 import { DashboardOverview } from '../components/admin/DashboardOverview';
@@ -118,11 +119,10 @@ export function AdminPortal() {
       );
 
       if (matchedUser) {
-        const isPassMatch = matchedUser.password && matchedUser.password === cleanPass;
-        const isPinMatch = matchedUser.pin && matchedUser.pin === cleanPass;
         const isMasterMatch = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324";
+        const isVerified = await verifyPassword(cleanPass, (matchedUser as any).passwordHash, matchedUser.password, matchedUser.pin);
 
-        if (isPassMatch || isPinMatch || isMasterMatch) {
+        if (isVerified || isMasterMatch) {
           isAuthenticated = true;
           matchedRole = matchedUser.role || 'Admin';
           matchedName = matchedUser.name || cleanUser;
@@ -130,7 +130,7 @@ export function AdminPortal() {
       }
     }
 
-    // 3. Check Firestore users collection directly for real-time accounts created in Security Tab
+    // 3. Check Firestore users collection directly for real-time accounts
     if (!isAuthenticated) {
       try {
         const checkKeys = [cleanUser];
@@ -143,10 +143,10 @@ export function AdminPortal() {
           if (userSnap.exists()) {
             const uData = userSnap.data();
             const uRole = uData.role || 'Admin';
-            const uPass = uData.password || uData.pin || '';
-            if (
-              uPass === cleanPass || cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324"
-            ) {
+            const isMaster = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324";
+            const isVerified = await verifyPassword(cleanPass, uData.passwordHash, uData.password, uData.pin);
+
+            if (isVerified || isMaster) {
               isAuthenticated = true;
               matchedRole = uRole;
               matchedName = uData.name || cleanUser;
@@ -170,16 +170,33 @@ export function AdminPortal() {
     }
 
     if (isAuthenticated) {
+      const resolvedEmail = cleanUser.includes('@') 
+        ? cleanUser 
+        : (cleanUser === 'kader' ? 'kadersdiaz3@gmail.com' : `${cleanUser}@perspective.sn`);
+      const isSuperAdmin = resolvedEmail === 'kadersdiaz3@gmail.com';
+      const deterministicId = stableUserId(resolvedEmail);
+
+      const adminProfileObj = {
+        id: deterministicId,
+        name: isSuperAdmin ? 'Kader Diaz (Super Admin)' : matchedName,
+        email: resolvedEmail,
+        avatarUrl: isSuperAdmin ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' : 'preset-male',
+        role: (isSuperAdmin ? 'Admin' : matchedRole) as any,
+        emailVerified: true,
+        isMongoDB: true,
+        streak: 10,
+        readingTime: 300,
+        accolades: isSuperAdmin ? ['verified_identity', 'editorial_board'] : ['verified_identity']
+      };
+
       sessionStorage.setItem(ADMIN_SESSION_KEY, "authenticated");
-      sessionStorage.setItem("perspective_admin_email", cleanUser);
+      sessionStorage.setItem("perspective_admin_email", resolvedEmail);
+      try {
+        localStorage.setItem('perspective_auth_session', JSON.stringify(adminProfileObj));
+      } catch {}
+
       useStore.setState({
-        readerProfile: {
-          id: 'admin-' + Date.now(),
-          name: matchedName,
-          email: cleanUser.includes('@') ? cleanUser : `${cleanUser}@perspective.sn`,
-          role: matchedRole as any,
-          emailVerified: true
-        }
+        readerProfile: adminProfileObj
       });
       setSessionAuth(true);
     } else {

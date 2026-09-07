@@ -36,9 +36,15 @@ service cloud.firestore {
     // Collection: Users (User accounts, profiles & cross-device preferences)
     match /users/{userEmail} {
       allow read: if true; // Public profile viewing & cross-device preference loading
-      allow create: if true; // User registration
+      allow create: if true; // User registration across all devices
       allow update: if true; // Allow user preference updates & profile syncing across devices
-      allow delete: if isSignedIn() && (isOwnerByEmail(userEmail) || isAdmin());
+      // Protected account: kadersdiaz3@gmail.com cannot be deleted
+      allow delete: if userEmail.toLowerCase() != "kadersdiaz3@gmail.com" && isSignedIn() && (isOwnerByEmail(userEmail) || isAdmin());
+    }
+
+    // Collection: Reports (Safety & Moderation)
+    match /reports/{reportId} {
+      allow read, write: if true;
     }
 
     // Collection: Guest Preferences (Anonymous device-level sync)

@@ -2151,6 +2151,7 @@ export const useStore = create<AppState>()(
         notificationResponses: state.notificationResponses,
         subscribers: state.subscribers,
         readerProfile: state.readerProfile,
+        users: state.users,
         interactions: state.interactions,
         siteSettings: state.siteSettings,
         matches: state.matches

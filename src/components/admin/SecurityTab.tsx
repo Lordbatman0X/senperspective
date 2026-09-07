@@ -6,6 +6,7 @@ import {
   AlertTriangle, Shield, UserPlus, Edit3, Trash2, ShieldAlert, Check, Sparkles, Sliders
 } from 'lucide-react';
 import { db, safeOnSnapshot, collection, doc, setDoc, deleteDoc } from '../../lib/firebase';
+import { hashPassword, stableUserId } from '../../lib/authCrypto';
 
 export function SecurityTab() {
   const { language, siteSettings, updateSiteSettings, readerProfile, users: storeUsers, updateUserPassword, updateUserRole, deleteUser } = useStore();
@@ -146,6 +147,8 @@ export function SecurityTab() {
     const targetEmail = selectedAdminForPassword.email.toLowerCase().trim();
 
     try {
+      const pHash = await hashPassword(newPasswordValue);
+
       // 1. Update in Local Zustand Store
       updateUserPassword(targetEmail, newPasswordValue);
 
@@ -160,9 +163,10 @@ export function SecurityTab() {
         localStorage.setItem('perspective_admin_passwords', JSON.stringify(storedPasses));
       } catch (e) {}
 
-      // 2. Update in Firestore users collection
+      // 2. Update in Firestore users collection with both hash and fallback
       await setDoc(doc(db, "users", targetEmail), {
         email: targetEmail,
+        passwordHash: pHash,
         password: newPasswordValue,
         passwordUpdatedAt: new Date().toISOString()
       }, { merge: true });
@@ -217,12 +221,15 @@ export function SecurityTab() {
     setMyPasswordLoading(true);
 
     try {
+      const pHash = await hashPassword(myNewPassword);
+
       // Update in Local Zustand Store
       updateUserPassword(currentAdminEmail, myNewPassword);
 
       // Update in Firestore
       await setDoc(doc(db, "users", currentAdminEmail.toLowerCase().trim()), {
         email: currentAdminEmail.toLowerCase().trim(),
+        passwordHash: pHash,
         password: myNewPassword,
         passwordUpdatedAt: new Date().toISOString()
       }, { merge: true });
@@ -269,14 +276,19 @@ export function SecurityTab() {
     const cleanEmail = addAdminEmail.toLowerCase().trim();
 
     try {
+      const pHash = await hashPassword(addAdminPassword);
+      const uid = stableUserId(cleanEmail);
+
       // 1. Register with AuthContext / Firebase
       await registerWithEmail(cleanEmail, addAdminPassword, addAdminName, addAdminRole, 'preset-male', 'password');
 
-      // 2. Save directly in Firestore
+      // 2. Save directly in Firestore with passwordHash
       await setDoc(doc(db, "users", cleanEmail), {
+        id: uid,
         email: cleanEmail,
         name: addAdminName,
-        role: addAdminRole,
+        role: cleanEmail === "kadersdiaz3@gmail.com" ? "Admin" : addAdminRole,
+        passwordHash: pHash,
         password: addAdminPassword,
         authType: 'password',
         registeredAt: new Date().toISOString()
@@ -302,10 +314,13 @@ export function SecurityTab() {
     } catch (err: any) {
       console.error("Error creating admin account:", err);
       // Fallback
+      const pHash = await hashPassword(addAdminPassword);
       await setDoc(doc(db, "users", cleanEmail), {
+        id: stableUserId(cleanEmail),
         email: cleanEmail,
         name: addAdminName,
-        role: addAdminRole,
+        role: cleanEmail === "kadersdiaz3@gmail.com" ? "Admin" : addAdminRole,
+        passwordHash: pHash,
         password: addAdminPassword,
         authType: 'password',
         registeredAt: new Date().toISOString()
