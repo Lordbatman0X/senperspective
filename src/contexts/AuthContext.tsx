@@ -522,6 +522,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribeSubscribers();
   }, []);
 
+  // Real-time synchronization of Interactions via Firestore
+  useEffect(() => {
+    const unsubscribeInteractions = firestoreOnSnapshot(collection(db, "interactions"), (snapshot) => {
+      if (snapshot.empty) return;
+      const interactionsList: any[] = [];
+      snapshot.forEach((docSnap: any) => {
+        interactionsList.push(docSnap.data());
+      });
+      interactionsList.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+      useStore.setState({ interactions: interactionsList });
+    }, (error) => {
+      console.warn("[Firestore Interactions] Notice listening to interactions:", error?.message || error);
+    });
+
+    return () => unsubscribeInteractions();
+  }, []);
+
   // Listen to Auth State
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (mongoUser) => {
@@ -533,6 +550,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userDoc.exists()) {
             const data = userDoc.data();
             const isAdminUser = mongoUser.email === "kadersdiaz3@gmail.com" || mongoUser.email === "admin@perspective.sn" || data.role === "Admin" || mongoUser.email.includes("admin");
+            
+            // Sync user preferences into Store
+            if (data.savedArticles && Array.isArray(data.savedArticles)) {
+              useStore.setState({ savedArticles: data.savedArticles });
+            }
+            if (data.preferredLanguage) {
+              useStore.setState({ language: data.preferredLanguage });
+            }
+            if (data.preferredTheme) {
+              useStore.setState({ theme: data.preferredTheme });
+            }
+
             setReaderProfile({
               id: mongoUser.uid,
               name: data.name || mongoUser.displayName || "Anonymous",

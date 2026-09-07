@@ -371,6 +371,9 @@ interface AppState {
     };
     trendingCount: number;
     mostReadCount: number;
+    curatedTrendingArticleIds?: string[];
+    curatedLatestNewsArticleIds?: string[];
+    curatedDossierArticleIds?: string[];
   };
   updateSiteSettings: (settings: Partial<AppState['siteSettings']>) => void;
   deleteUser: (email: string) => void;
@@ -390,9 +393,22 @@ export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
       theme: 'light',
-      toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
+      toggleTheme: () => {
+        const nextTheme = get().theme === 'light' ? 'dark' : 'light';
+        set({ theme: nextTheme });
+        const email = get().readerProfile?.email;
+        if (email && email !== 'anonymous') {
+          setDoc(doc(db, "users", email.toLowerCase().trim()), { preferredTheme: nextTheme }, { merge: true }).catch(() => {});
+        }
+      },
       language: 'fr',
-      setLanguage: (lang) => set({ language: lang }),
+      setLanguage: (lang) => {
+        set({ language: lang });
+        const email = get().readerProfile?.email;
+        if (email && email !== 'anonymous') {
+          setDoc(doc(db, "users", email.toLowerCase().trim()), { preferredLanguage: lang }, { merge: true }).catch(() => {});
+        }
+      },
       showSignUpModal: false,
       setShowSignUpModal: (show) => set({ showSignUpModal: show }),
       authTab: 'login',
@@ -404,10 +420,15 @@ export const useStore = create<AppState>()(
         const email = get().readerProfile?.email || 'anonymous';
         const art = get().articles.find(a => a.id === id);
         
-        if (saved.includes(id)) {
-          set({ savedArticles: saved.filter((s) => s !== id) });
-        } else {
-          set({ savedArticles: [...saved, id] });
+        const updatedSaved = saved.includes(id) 
+          ? saved.filter((s) => s !== id) 
+          : [...saved, id];
+
+        set({ savedArticles: updatedSaved });
+
+        if (email && email !== 'anonymous') {
+          const cleanEmail = email.toLowerCase().trim();
+          setDoc(doc(db, "users", cleanEmail), { savedArticles: updatedSaved }, { merge: true }).catch(() => {});
         }
 
         if (art && email !== 'anonymous') {
@@ -1332,7 +1353,7 @@ export const useStore = create<AppState>()(
         }
         return false;
       },
-      addInteraction: (email, type, detail, link) => {
+      addInteraction: async (email, type, detail, link) => {
         const interactions = get().interactions || [];
         const newInteraction: UserInteraction = {
           id: 'int-' + Date.now() + '-' + Math.random().toString(36).substring(4),
@@ -1342,13 +1363,31 @@ export const useStore = create<AppState>()(
           detail,
           link
         };
-        set({ interactions: [newInteraction, ...interactions] });
+        const updatedList = [newInteraction, ...interactions];
+        set({ interactions: updatedList });
+
+        try {
+          const cleanEmail = (email || '').toLowerCase().trim();
+          if (cleanEmail && cleanEmail !== 'anonymous') {
+            const sanitized = await sanitizeFirestorePayload(newInteraction as any);
+            await setDoc(doc(db, "interactions", newInteraction.id), sanitized, { merge: true });
+            await setDoc(doc(db, "users", cleanEmail), {
+              lastInteractionAt: new Date().toISOString(),
+              lastInteractionType: type
+            }, { merge: true });
+          }
+        } catch (err) {
+          console.warn("[Firestore Interaction] Error saving interaction:", err);
+        }
       },
       siteSettings: {
         isMaintenanceMode: false,
         maintenanceMessageFr: "Notre site est actuellement en cours de maintenance et de mise à jour technique. Nous serons de retour très rapidement.",
         maintenanceMessageEn: "Our platform is currently undergoing scheduled maintenance and updates. We will be back online shortly.",
         siteName: 'Perspective',
+        curatedTrendingArticleIds: [],
+        curatedLatestNewsArticleIds: [],
+        curatedDossierArticleIds: [],
         abdelIntroMessageFr: "Bonjour ! Je suis Abdel, votre guide d'actualité sur Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?",
         abdelIntroMessageEn: "Hello! I am Abdel, your news guide on Perspective Group. What would you like to unpack today?",
         dossiers: [

@@ -606,9 +606,9 @@ export function HomePage() {
                 const curatedList = curatedIds
                   .map(id => articles.find(a => a.id === id || a.slug === id))
                   .filter((a): a is any => Boolean(a));
-                const listToRender = curatedList.length > 0
+                const listToRender = (curatedList.length > 0
                   ? curatedList
-                  : articles.slice(1, (currentSettings.trendingCount || 4));
+                  : articles.slice(0, 6)).slice(0, 6);
 
                 return listToRender.map((article, idx) => (
                   <Link 
