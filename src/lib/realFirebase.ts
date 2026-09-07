@@ -29,7 +29,8 @@ import {
   sendPasswordResetEmail, 
   setPersistence, 
   browserLocalPersistence, 
-  browserSessionPersistence 
+  browserSessionPersistence,
+  signInAnonymously 
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -57,6 +58,27 @@ async function testConnection() {
   }
 }
 testConnection().catch(() => {});
+
+// Boot-time Anonymous auth fallback.
+// If the project has Anonymous sign-in enabled, this gives the Firestore
+// client a valid token so all reads/writes work even before the user logs in
+// (Fixing the case where neither Email/Password nor Anonymous was enabled,
+// which previously left the client unable to reach ANY Firestore data).
+try {
+  signInAnonymously(realFirebaseAuth)
+    .then((cred) => {
+      console.log(`[FIREBASE BOOT] Anonymous auth established (${cred.user.uid.slice(0, 8)}...) — Firestore online.`);
+    })
+    .catch((ae: any) => {
+      console.warn(
+        `[FIREBASE BOOT] Anonymous sign-in unavailable (${ae?.code || ae?.message}). ` +
+        `If the store appears local-only / not shared across devices, ` +
+        `enable "Anonymous" OR "Email/Password" in Firebase console → Authentication → Sign-in method.`
+      );
+    });
+} catch (e) {
+  // Never block boot
+}
 
 export enum OperationType {
   CREATE = 'create',
