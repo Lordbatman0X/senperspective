@@ -258,6 +258,7 @@ export function FlashesAndCurationTab() {
 
   const [selectedTrendingToAdd, setSelectedTrendingToAdd] = useState('');
   const [selectedLatestToAdd, setSelectedLatestToAdd] = useState('');
+  const [selectedDossierToAdd, setSelectedDossierToAdd] = useState('');
 
   const handleAddTrendingArticle = () => {
     if (!selectedTrendingToAdd) return;

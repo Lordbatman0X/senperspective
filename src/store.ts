@@ -371,6 +371,9 @@ interface AppState {
     };
     trendingCount: number;
     mostReadCount: number;
+    curatedTrendingArticleIds?: string[];
+    curatedLatestNewsArticleIds?: string[];
+    curatedDossierArticleIds?: string[];
   };
   updateSiteSettings: (settings: Partial<AppState['siteSettings']>) => void;
   deleteUser: (email: string) => void;
