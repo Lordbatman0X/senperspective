@@ -1177,42 +1177,48 @@ RÈGLES D'EXPRESSION STRICTES :
     userContext = `[ARTICLE EN CONTEXTE: "${contextArticle.title?.[language] || contextArticle.title?.fr || 'Sans titre'}" | Catégorie: ${contextArticle.category || 'Général'}]\nExtrait: ${(contextArticle.excerpt?.[language] || contextArticle.excerpt?.fr || '').slice(0, 300)}\n\n` + userContext;
   }
 
-  // 1. Try Gemini
+  // 1. Try Gemini (with model failover)
   if (geminiKey) {
-    try {
-      const contents: any[] = [];
-      for (const h of history.slice(-6)) {
-        contents.push({
-          role: h.role === 'abdel' ? 'model' : 'user',
-          parts: [{ text: h.text }]
-        });
-      }
+    const geminiModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-flash-lite'];
+    const contents: any[] = [];
+    for (const h of history.slice(-6)) {
       contents.push({
-        role: 'user',
-        parts: [{ text: userContext }]
+        role: h.role === 'abdel' ? 'model' : 'user',
+        parts: [{ text: h.text }]
       });
+    }
+    contents.push({
+      role: 'user',
+      parts: [{ text: userContext }]
+    });
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 600
+    for (const model of geminiModels) {
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 600
+            }
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
           }
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        } else if (res.status === 429) {
+          // Rate limited on this key — skip straight to next provider
+          break;
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   // 2. Try Groq
@@ -1271,6 +1277,43 @@ RÈGLES D'EXPRESSION STRICTES :
         },
         body: JSON.stringify({
           model: 'meta-llama/llama-3.3-70b-instruct',
+          messages,
+          temperature: 0.7,
+          max_tokens: 600
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) {
+          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 4. Try OpenAI
+  const openaiKey = getClientApiKey('openai');
+  if (openaiKey) {
+    try {
+      const messages: any[] = [{ role: 'system', content: systemPrompt }];
+      for (const h of history.slice(-6)) {
+        messages.push({
+          role: h.role === 'abdel' ? 'assistant' : 'user',
+          content: h.text
+        });
+      }
+      messages.push({ role: 'user', content: userContext });
+
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
           messages,
           temperature: 0.7,
           max_tokens: 600
