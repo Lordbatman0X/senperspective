@@ -655,20 +655,20 @@ app.use((req, res, next) => {
         if (!u || typeof u !== "string") return false;
         const s = u.trim().toLowerCase();
         if (!s.startsWith("http://") && !s.startsWith("https://") && !s.startsWith("data:image/")) return false;
-        if (s.includes("feedburner.com/~r/") || s.includes("pixel.wp.com") || s.includes("1x1") || s.includes("doubleclick") || s.includes("/emoji/")) return false;
+        if (s.includes("feedburner.com/~r/") || s.includes("pixel.wp.com") || s.includes("1x1") || s.includes("doubleclick") || s.includes("/emoji/") || s.includes("gravatar.com")) return false;
         return true;
       };
 
       const cleanRssImg = (u: string) => u.replace(/&amp;/g, "&").trim();
 
-      // 1. media:content & media:thumbnail
-      const mediaContentMatch = itemXml.match(/<media:content[^>]*url=["']([^"']+)["']/i);
-      const mediaThumbMatch = itemXml.match(/<media:thumbnail[^>]*url=["']([^"']+)["']/i);
-      const enclosureMatch = itemXml.match(/<enclosure[^>]*url=["']([^"']+)["']/i);
-      const itunesImgMatch = itemXml.match(/<itunes:image[^>]*href=["']([^"']+)["']/i) || itemXml.match(/<itunes:image[^>]*url=["']([^"']+)["']/i);
+      // 1. Comprehensive image extraction across RSS 2.0, Media RSS, Atom, and WordPress formats
+      const mediaContentMatch = itemXml.match(/<(?:media:)?content[^>]+(?:url|href)=["']([^"']+)["']/i);
+      const mediaThumbMatch = itemXml.match(/<(?:media:)?thumbnail[^>]+(?:url|href)=["']([^"']+)["']/i);
+      const enclosureMatch = itemXml.match(/<enclosure[^>]+(?:url|href)=["']([^"']+)["']/i);
+      const itunesImgMatch = itemXml.match(/<(?:itunes:)?image[^>]+(?:href|url)=["']([^"']+)["']/i);
       const atomImgTag = itemXml.match(/<image[^>]*>\s*<url>([^<]+)<\/url>/i) || itemXml.match(/<image>([^<]+)<\/image>/i);
       const wpImgMatch = itemXml.match(/<(?:wp:attachment_url|featuredImage|featured_image|post-thumbnail|thumbnail)[^>]*>([^<]+)<\//i);
-      const linkEnclosureMatch = itemXml.match(/<link[^>]*rel=["']enclosure["'][^>]*href=["']([^"']+)["']/i);
+      const linkEnclosureMatch = itemXml.match(/<link[^>]+(?:rel=["'](?:enclosure|image_src)["'][^>]+href=["']([^"']+)["']|href=["']([^"']+)["'][^>]+rel=["'](?:enclosure|image_src)["'])/i);
 
       if (mediaContentMatch && isValidRssImg(mediaContentMatch[1])) {
         imageUrl = cleanRssImg(mediaContentMatch[1]);
@@ -685,9 +685,9 @@ app.use((req, res, next) => {
       } else if (linkEnclosureMatch && isValidRssImg(linkEnclosureMatch[1])) {
         imageUrl = cleanRssImg(linkEnclosureMatch[1]);
       } else {
-        // Fallback: search for <img> inside itemXml, description, or content
+        // Fallback: search for <img>, data-src, or picture inside itemXml, description, or content
         const combinedHtml = `${itemXml} ${description || ""}`;
-        const imgTagMatch = combinedHtml.match(/<img[^>]+src=["'](https?:\/\/[^"'\s>]+)["']/i);
+        const imgTagMatch = combinedHtml.match(/<img[^>]+(?:src|data-src|data-orig-file|data-large-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
         if (imgTagMatch && isValidRssImg(imgTagMatch[1])) {
           imageUrl = cleanRssImg(imgTagMatch[1]);
         }
@@ -724,6 +724,67 @@ app.use((req, res, next) => {
     items.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     return items;
+  };
+
+  // In-memory cache for Open Graph images extracted from original article links
+  const ogImageCache = new Map<string, string>();
+
+  /**
+   * Fetches the original article webpage to extract high-definition Open Graph / Twitter image
+   */
+  const extractOriginalArticleOgImage = async (articleUrl: string): Promise<string | null> => {
+    if (!articleUrl || typeof articleUrl !== "string" || !articleUrl.startsWith("http")) return null;
+    const cleanUrl = articleUrl.trim();
+    if (ogImageCache.has(cleanUrl)) {
+      return ogImageCache.get(cleanUrl) || null;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3800);
+      const res = await fetch(cleanUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 PerspectiveNewsBot/2.0",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return null;
+
+      // Read only first 80KB where HTML <head> metadata resides
+      const reader = res.body?.getReader();
+      if (!reader) return null;
+      let html = "";
+      let bytesRead = 0;
+      while (bytesRead < 80000) {
+        const { done, value } = await reader.read();
+        if (done || !value) break;
+        bytesRead += value.length;
+        html += new TextDecoder("utf-8").decode(value);
+        if (html.includes("</head>") || html.includes("<body")) break;
+      }
+      reader.cancel().catch(() => {});
+
+      const ogMatch = html.match(/<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["']/i) ||
+                      html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["']/i) ||
+                      html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i);
+
+      if (ogMatch && ogMatch[1]) {
+        let candidate = ogMatch[1].replace(/&amp;/g, "&").trim();
+        if (candidate.startsWith("//")) candidate = "https:" + candidate;
+        if (candidate.startsWith("http")) {
+          const lower = candidate.toLowerCase();
+          if (!lower.includes("pixel") && !lower.includes("favicon") && !lower.includes("1x1") && !lower.includes("avatar")) {
+            ogImageCache.set(cleanUrl, candidate);
+            return candidate;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   };
 
   const normalizeRssFeedUrl = (rawUrl: string, feedName?: string): string => {
@@ -796,6 +857,16 @@ app.use((req, res, next) => {
         const xmlText = await res.text();
         items = parseRssXmlFeed(xmlText);
         if (items.length > 0) {
+          // Asynchronously enrich top items missing images by extracting OG image from original article page
+          const missingImgs = items.slice(0, 6).filter(it => !it.imageUrl && it.link && it.link.startsWith("http"));
+          if (missingImgs.length > 0) {
+            await Promise.allSettled(
+              missingImgs.map(async (it) => {
+                const og = await extractOriginalArticleOgImage(it.link);
+                if (og) it.imageUrl = og;
+              })
+            );
+          }
           const latencyMs = Date.now() - startTime;
           return { items, statusCode, status: (latencyMs > 4000 ? "degraded" : "healthy") as "healthy" | "degraded" | "error", latencyMs, isFallbackBridge: false };
         }
@@ -825,6 +896,15 @@ app.use((req, res, next) => {
         const xmlText = await gnRes.text();
         items = parseRssXmlFeed(xmlText);
         if (items.length > 0) {
+          const missingImgs = items.slice(0, 6).filter(it => !it.imageUrl && it.link && it.link.startsWith("http"));
+          if (missingImgs.length > 0) {
+            await Promise.allSettled(
+              missingImgs.map(async (it) => {
+                const og = await extractOriginalArticleOgImage(it.link);
+                if (og) it.imageUrl = og;
+              })
+            );
+          }
           const latencyMs = Date.now() - startTime;
           return {
             items,
@@ -1357,11 +1437,25 @@ app.use((req, res, next) => {
 
     const originMeta = getFeedOriginMetadata(cleanOrigLink || feedCategory || "", srcName);
 
-    // Image resolution: RSS wire image or AI-generated context visual
+    // Image resolution: Original RSS wire image, original article OG image, or AI context visual
     let draftImage = (item.imageUrl || item.featuredImage || item.image || enriched.featuredImage || "").trim();
-    const isCustomValidDraftImg = draftImage && 
+    let isCustomValidDraftImg = draftImage && 
       (draftImage.startsWith("http://") || draftImage.startsWith("https://") || draftImage.startsWith("data:image/")) && 
       !draftImage.includes("photo-1504711434969-e33886168f5c");
+
+    // If no direct image in RSS, extract the original article's real image from its webpage
+    if (!isCustomValidDraftImg) {
+      const origArticleLink = cleanOrigLink || item.link || item.sourceUrl;
+      if (origArticleLink) {
+        try {
+          const ogImg = await extractOriginalArticleOgImage(origArticleLink);
+          if (ogImg) {
+            draftImage = ogImg;
+            isCustomValidDraftImg = true;
+          }
+        } catch (_) {}
+      }
+    }
 
     if (!isCustomValidDraftImg) {
       try {
@@ -1704,7 +1798,7 @@ app.use((req, res, next) => {
       gemini: {
         ...geminiInfo,
         maskedKey: getMaskedKey('GEMINI'),
-        models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash", "gemini-3.7-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-3.1-pro-preview"]
+        models: ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"]
       },
       openai: {
         ...openAiInfo,
@@ -2094,11 +2188,25 @@ app.use((req, res, next) => {
 
       const originMeta = getFeedOriginMetadata(cleanOrigLink || feedUrl || category || "", srcName);
 
-      // Image resolution: Use extracted RSS image if available, else AI-generated image
+      // Image resolution: Original RSS image, original article webpage OG image, or AI context image
       let singleArtImage = (typeof rssItem === "object" ? (rssItem.imageUrl || rssItem.featuredImage || rssItem.image) : "") || enriched.featuredImage || "";
-      const isValidSingleImg = singleArtImage && 
+      let isValidSingleImg = singleArtImage && 
         (singleArtImage.startsWith("http://") || singleArtImage.startsWith("https://") || singleArtImage.startsWith("data:image/")) && 
         !singleArtImage.includes("photo-1504711434969-e33886168f5c");
+
+      // Check original article URL for real OG image
+      if (!isValidSingleImg) {
+        const origArticleLink = cleanOrigLink || (typeof rssItem === "object" ? (rssItem.link || rssItem.sourceUrl) : "");
+        if (origArticleLink) {
+          try {
+            const ogImg = await extractOriginalArticleOgImage(origArticleLink);
+            if (ogImg) {
+              singleArtImage = ogImg;
+              isValidSingleImg = true;
+            }
+          } catch (_) {}
+        }
+      }
 
       if (!isValidSingleImg) {
         try {
@@ -2255,11 +2363,25 @@ app.use((req, res, next) => {
 
           const originMeta = getFeedOriginMetadata(cleanOrigLink || feedUrl || "", srcName);
 
-          // Image resolution: RSS image or AI context generated image
+          // Image resolution: Original RSS image, original article OG image, or AI context image
           let batchItemImage = (item.imageUrl || item.featuredImage || item.image || enriched.featuredImage || "").trim();
-          const isValidBatchImg = batchItemImage && 
+          let isValidBatchImg = batchItemImage && 
             (batchItemImage.startsWith("http://") || batchItemImage.startsWith("https://") || batchItemImage.startsWith("data:image/")) && 
             !batchItemImage.includes("photo-1504711434969-e33886168f5c");
+
+          // Extract original article webpage OG image if missing
+          if (!isValidBatchImg) {
+            const origArticleLink = (item.link || item.sourceUrl || "").trim();
+            if (origArticleLink) {
+              try {
+                const ogImg = await extractOriginalArticleOgImage(origArticleLink);
+                if (ogImg) {
+                  batchItemImage = ogImg;
+                  isValidBatchImg = true;
+                }
+              } catch (_) {}
+            }
+          }
 
           if (!isValidBatchImg) {
             try {
@@ -2897,7 +3019,7 @@ Context Details: ${JSON.stringify(locationInfo)}`;
             apiKey: geminiKey,
             httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
           });
-          const modelsToTry = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro", "gemini-1.5-flash"];
+          const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-lite"];
           for (const model of modelsToTry) {
             try {
               const apiCall = ai.models.generateContent({
@@ -3102,7 +3224,7 @@ Respond ONLY with a JSON array of objects. Each object must have:
 Do not wrap the response in markdown blocks (like \`\`\`json). Just the raw JSON array.`;
 
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.0-flash',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],

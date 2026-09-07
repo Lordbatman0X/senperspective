@@ -172,6 +172,27 @@ export async function loadKeysFromFirestore() {
       cachedFirestoreKeys = doc.data as Record<string, string>;
       console.log("[Firestore Setup] Loaded API Keys from database:", Object.keys(cachedFirestoreKeys));
     }
+    // Ensure environment keys are synced to Firestore so direct client/CDN frontends can access them
+    let needsUpdate = false;
+    if (process.env.GEMINI_API_KEY && (!cachedFirestoreKeys['GEMINI'] || !cachedFirestoreKeys['gemini'])) {
+      cachedFirestoreKeys['GEMINI'] = process.env.GEMINI_API_KEY;
+      cachedFirestoreKeys['gemini'] = process.env.GEMINI_API_KEY;
+      needsUpdate = true;
+    }
+    if (process.env.GROQ_API_KEY && (!cachedFirestoreKeys['GROQ'] || !cachedFirestoreKeys['groq'])) {
+      cachedFirestoreKeys['GROQ'] = process.env.GROQ_API_KEY;
+      cachedFirestoreKeys['groq'] = process.env.GROQ_API_KEY;
+      needsUpdate = true;
+    }
+    if (process.env.OPENAI_API_KEY && (!cachedFirestoreKeys['OPENAI'] || !cachedFirestoreKeys['openai'])) {
+      cachedFirestoreKeys['OPENAI'] = process.env.OPENAI_API_KEY;
+      cachedFirestoreKeys['openai'] = process.env.OPENAI_API_KEY;
+      needsUpdate = true;
+    }
+    if (needsUpdate) {
+      await saveDocument("system_config", "api_keys", cachedFirestoreKeys, true);
+      console.log("[Firestore Setup] Synced environment API keys to Firestore database.");
+    }
   } catch (err) {
     console.warn("[Firestore Setup Warning] Could not load API keys from Firestore:", err);
   }
@@ -564,15 +585,55 @@ export function getDeepSeekClient(): OpenAI | null {
  */
 
 function extractJsonFromText(text: string): any {
-  try {
-    return JSON.parse(text);
-  } catch (e) {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) {
-      return JSON.parse(match[0]);
-    }
-    throw new Error("Could not extract JSON from response: " + text.slice(0, 100));
+  if (!text || typeof text !== "string") {
+    throw new Error("Empty text provided for JSON extraction");
   }
+
+  // 1. First attempt: clean standard markdown code blocks
+  let cleaned = text
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*$/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {}
+
+  // 2. Second attempt: find outer braces { ... }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    let jsonCandidate = text.substring(firstBrace, lastBrace + 1);
+    
+    // Remove trailing commas before closing braces/brackets
+    jsonCandidate = jsonCandidate.replace(/,(\s*[}\]])/g, "$1");
+
+    try {
+      return JSON.parse(jsonCandidate);
+    } catch (_) {}
+
+    // Clean control characters that break JSON parsing
+    try {
+      const sanitized = jsonCandidate
+        .replace(/[\u0000-\u001F]+/g, (match) => (match === "\n" || match === "\r" || match === "\t" ? match : ""));
+      return JSON.parse(sanitized);
+    } catch (_) {}
+  }
+
+  // 3. Third attempt: regex extraction for essential fields
+  try {
+    const titleMatch = text.match(/"title"\s*:\s*(\{[^}]+\}|"[^"]+")/i);
+    const bodyMatch = text.match(/"body"\s*:\s*(\{[^}]+\}|"[^"]+")/i);
+    if (titleMatch) {
+      return {
+        title: titleMatch[1].startsWith("{") ? JSON.parse(titleMatch[1]) : { fr: JSON.parse(titleMatch[1]), en: JSON.parse(titleMatch[1]) },
+        body: bodyMatch ? (bodyMatch[1].startsWith("{") ? JSON.parse(bodyMatch[1]) : { fr: JSON.parse(bodyMatch[1]), en: JSON.parse(bodyMatch[1]) }) : undefined
+      };
+    }
+  } catch (_) {}
+
+  throw new Error("Could not extract JSON from response: " + text.slice(0, 100));
 }
 
 export function buildEditorialSystemPrompt(
@@ -737,9 +798,10 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
 
   // Current production model cascade for fast inference and strict JSON response
   const models = [
-    "gemini-2.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-3.7-flash"
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-2.0-flash-lite"
   ];
   let lastErr: any = null;
 
@@ -758,7 +820,7 @@ export async function generateWithGemini(userPrompt: string, systemInstruction: 
       });
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Gemini timeout on ${model} (45s)`)), 45000)
+        setTimeout(() => reject(new Error(`Gemini timeout on ${model} (15s)`)), 15000)
       );
 
       const response = await Promise.race([apiCall, timeoutPromise]);
@@ -1438,7 +1500,24 @@ export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallback
     date: new Date().toISOString(),
     readingTime,
     tags: Array.isArray(rawJson.tags) && rawJson.tags.length > 0 ? rawJson.tags : ["Sénégal", "Actualité", "Perspective"],
-    featuredImage: rawJson.featuredImage || rawJson.imageUrl || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+    featuredImage: (() => {
+      const rawOrigImg = typeof sourceItem === "object" && sourceItem ? (sourceItem.imageUrl || sourceItem.featuredImage || sourceItem.image || sourceItem.enclosure?.url || sourceItem.thumbnail) : "";
+      const origRssImg = typeof rawOrigImg === "string" && rawOrigImg.startsWith("http") ? rawOrigImg.trim() : "";
+      let resolved = (rawJson.featuredImage || rawJson.imageUrl || "").trim();
+      if (origRssImg && (!resolved || resolved.includes("photo-1504711434969-e33886168f5c"))) {
+        return origRssImg;
+      }
+      return resolved || origRssImg || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80";
+    })(),
+    imageUrl: (() => {
+      const rawOrigImg = typeof sourceItem === "object" && sourceItem ? (sourceItem.imageUrl || sourceItem.featuredImage || sourceItem.image || sourceItem.enclosure?.url || sourceItem.thumbnail) : "";
+      const origRssImg = typeof rawOrigImg === "string" && rawOrigImg.startsWith("http") ? rawOrigImg.trim() : "";
+      let resolved = (rawJson.imageUrl || rawJson.featuredImage || "").trim();
+      if (origRssImg && (!resolved || resolved.includes("photo-1504711434969-e33886168f5c"))) {
+        return origRssImg;
+      }
+      return resolved || origRssImg || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80";
+    })(),
     perspectiveBrief,
     timeline,
     keyActors,

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
-import { Zap, Globe, Quote, Plus, Trash2, Edit2, Check, X, Sparkles, Clock, AlertCircle, FolderKanban, Megaphone, Upload } from 'lucide-react';
+import { Zap, Globe, Quote, Plus, Trash2, Edit2, Check, X, Sparkles, Clock, AlertCircle, FolderKanban, Megaphone, Upload, TrendingUp, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 
 export function FlashesAndCurationTab() {
-  const { siteSettings, updateSiteSettings, language, media } = useStore();
+  const { siteSettings, updateSiteSettings, language, media, articles } = useStore();
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -235,6 +235,97 @@ export function FlashesAndCurationTab() {
     };
     updateSiteSettings({ dailyWisdom: updatedWisdom });
     showToast(language === 'fr' ? 'Proverbe du jour mis à jour et enregistré définitivement !' : 'Daily wisdom updated and permanently saved!');
+  };
+
+  // 6. Curation des Sections Latérales (Trendings & Latest News)
+  const [curatedTrendingIds, setCuratedTrendingIds] = useState<string[]>(
+    siteSettings?.curatedTrendingArticleIds || []
+  );
+  const [curatedLatestIds, setCuratedLatestIds] = useState<string[]>(
+    siteSettings?.curatedLatestNewsArticleIds || []
+  );
+
+  const [selectedTrendingToAdd, setSelectedTrendingToAdd] = useState('');
+  const [selectedLatestToAdd, setSelectedLatestToAdd] = useState('');
+
+  const handleAddTrendingArticle = () => {
+    if (!selectedTrendingToAdd) return;
+    if (curatedTrendingIds.includes(selectedTrendingToAdd)) {
+      showToast(language === 'fr' ? 'Cet article est déjà dans la section Tendances.' : 'Article is already in Trendings.');
+      return;
+    }
+    const updated = [...curatedTrendingIds, selectedTrendingToAdd];
+    setCuratedTrendingIds(updated);
+    updateSiteSettings({ curatedTrendingArticleIds: updated });
+    setSelectedTrendingToAdd('');
+    showToast(language === 'fr' ? 'Article ajouté aux Tendances !' : 'Article added to Trendings!');
+  };
+
+  const handleRemoveTrendingArticle = (id: string) => {
+    const updated = curatedTrendingIds.filter(i => i !== id);
+    setCuratedTrendingIds(updated);
+    updateSiteSettings({ curatedTrendingArticleIds: updated });
+    showToast(language === 'fr' ? 'Article retiré des Tendances.' : 'Article removed from Trendings.');
+  };
+
+  const handleMoveTrending = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= curatedTrendingIds.length) return;
+    const updated = [...curatedTrendingIds];
+    const temp = updated[index];
+    updated[index] = updated[newIndex];
+    updated[newIndex] = temp;
+    setCuratedTrendingIds(updated);
+    updateSiteSettings({ curatedTrendingArticleIds: updated });
+  };
+
+  const handleReplaceTrending = (index: number, newArticleId: string) => {
+    if (!newArticleId) return;
+    const updated = [...curatedTrendingIds];
+    updated[index] = newArticleId;
+    setCuratedTrendingIds(updated);
+    updateSiteSettings({ curatedTrendingArticleIds: updated });
+    showToast(language === 'fr' ? 'Article remplacé dans les Tendances !' : 'Article replaced in Trendings!');
+  };
+
+  const handleAddLatestArticle = () => {
+    if (!selectedLatestToAdd) return;
+    if (curatedLatestIds.includes(selectedLatestToAdd)) {
+      showToast(language === 'fr' ? 'Cet article est déjà dans Dernières Actualités.' : 'Article is already in Latest News.');
+      return;
+    }
+    const updated = [...curatedLatestIds, selectedLatestToAdd];
+    setCuratedLatestIds(updated);
+    updateSiteSettings({ curatedLatestNewsArticleIds: updated });
+    setSelectedLatestToAdd('');
+    showToast(language === 'fr' ? 'Article ajouté aux Dernières Actualités !' : 'Article added to Latest News!');
+  };
+
+  const handleRemoveLatestArticle = (id: string) => {
+    const updated = curatedLatestIds.filter(i => i !== id);
+    setCuratedLatestIds(updated);
+    updateSiteSettings({ curatedLatestNewsArticleIds: updated });
+    showToast(language === 'fr' ? 'Article retiré des Dernières Actualités.' : 'Article removed from Latest News.');
+  };
+
+  const handleMoveLatest = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= curatedLatestIds.length) return;
+    const updated = [...curatedLatestIds];
+    const temp = updated[index];
+    updated[index] = updated[newIndex];
+    updated[newIndex] = temp;
+    setCuratedLatestIds(updated);
+    updateSiteSettings({ curatedLatestNewsArticleIds: updated });
+  };
+
+  const handleReplaceLatest = (index: number, newArticleId: string) => {
+    if (!newArticleId) return;
+    const updated = [...curatedLatestIds];
+    updated[index] = newArticleId;
+    setCuratedLatestIds(updated);
+    updateSiteSettings({ curatedLatestNewsArticleIds: updated });
+    showToast(language === 'fr' ? 'Article remplacé dans Dernières Actualités !' : 'Article replaced in Latest News!');
   };
 
   return (
@@ -849,6 +940,206 @@ export function FlashesAndCurationTab() {
             </button>
           </div>
         </form>
+      </div>
+
+      {/* SECTION 6: Curation des Articles de la Barre Latérale (Trendings & Dernières Actualités) */}
+      <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 shadow-xl space-y-8">
+        <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
+          <TrendingUp className="text-[#E85D42]" size={20} />
+          <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100">
+            {language === 'fr' ? '6. Curation des Articles de la Barre Latérale (Trendings & Dernières Actualités)' : '6. Sidebar Articles Curation (Trendings & Latest News)'}
+          </h3>
+        </div>
+
+        {/* 6A. Tendances (Trendings) */}
+        <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
+              <TrendingUp size={16} />
+              {language === 'fr' ? 'Section Tendances (Trendings Sidebar)' : 'Trendings Section'}
+            </h4>
+            <span className="text-xs font-mono text-zinc-400">
+              {curatedTrendingIds.length} {language === 'fr' ? 'article(s) sélectionné(s)' : 'article(s) selected'}
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <select
+              value={selectedTrendingToAdd}
+              onChange={e => setSelectedTrendingToAdd(e.target.value)}
+              className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
+            >
+              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Tendances --' : '-- Choose article to add to Trendings --'}</option>
+              {articles.map(art => (
+                <option key={art.id} value={art.id}>
+                  {art.title?.[language] || art.title?.fr || art.id}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddTrendingArticle}
+              className="px-4 py-2.5 bg-[#E85D42] text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
+            >
+              <Plus size={14} />
+              <span>{language === 'fr' ? 'Ajouter' : 'Add'}</span>
+            </button>
+          </div>
+
+          {/* List of Curated Trendings */}
+          <div className="space-y-2 mt-4">
+            {curatedTrendingIds.map((artId, idx) => {
+              const foundArt = articles.find(a => a.id === artId || a.slug === artId);
+              return (
+                <div key={`${artId}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="font-mono text-xs font-extrabold text-[#E85D42] w-6 shrink-0">#{idx + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-zinc-100 truncate">
+                        {foundArt ? (foundArt.title?.[language] || foundArt.title?.fr) : `Article ID: ${artId}`}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 font-mono">{foundArt?.category || 'General'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      value=""
+                      onChange={e => handleReplaceTrending(idx, e.target.value)}
+                      className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] p-1.5 rounded focus:outline-none focus:border-[#E85D42]"
+                      title={language === 'fr' ? 'Remplacer cet article' : 'Replace article'}
+                    >
+                      <option value="">{language === 'fr' ? 'Remplacer...' : 'Replace...'}</option>
+                      {articles.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.title?.[language] || a.title?.fr}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => handleMoveTrending(idx, 'up')}
+                      disabled={idx === 0}
+                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded cursor-pointer"
+                      title={language === 'fr' ? 'Monter' : 'Move up'}
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleMoveTrending(idx, 'down')}
+                      disabled={idx === curatedTrendingIds.length - 1}
+                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded cursor-pointer"
+                      title={language === 'fr' ? 'Descendre' : 'Move down'}
+                    >
+                      <ArrowDown size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleRemoveTrendingArticle(artId)}
+                      className="p-1.5 bg-rose-950/60 text-rose-400 hover:bg-rose-900/80 rounded cursor-pointer"
+                      title={language === 'fr' ? 'Supprimer' : 'Remove'}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 6B. Dernières Actualités (Latest News) */}
+        <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
+              <Zap size={16} />
+              {language === 'fr' ? 'Section Dernières Actualités (Latest News Sidebar)' : 'Latest News Section'}
+            </h4>
+            <span className="text-xs font-mono text-zinc-400">
+              {curatedLatestIds.length} {language === 'fr' ? 'article(s) sélectionné(s)' : 'article(s) selected'}
+            </span>
+          </div>
+
+          <div className="flex gap-2">
+            <select
+              value={selectedLatestToAdd}
+              onChange={e => setSelectedLatestToAdd(e.target.value)}
+              className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
+            >
+              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Dernières Actualités --' : '-- Choose article to add to Latest News --'}</option>
+              {articles.map(art => (
+                <option key={art.id} value={art.id}>
+                  {art.title?.[language] || art.title?.fr || art.id}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddLatestArticle}
+              className="px-4 py-2.5 bg-[#E85D42] text-white font-bold text-xs uppercase tracking-wider rounded hover:bg-[#d04930] transition-colors shrink-0 cursor-pointer flex items-center gap-1"
+            >
+              <Plus size={14} />
+              <span>{language === 'fr' ? 'Ajouter' : 'Add'}</span>
+            </button>
+          </div>
+
+          {/* List of Curated Latest */}
+          <div className="space-y-2 mt-4">
+            {curatedLatestIds.map((artId, idx) => {
+              const foundArt = articles.find(a => a.id === artId || a.slug === artId);
+              return (
+                <div key={`${artId}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <span className="font-mono text-xs font-extrabold text-[#E85D42] w-6 shrink-0">0{idx + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-zinc-100 truncate">
+                        {foundArt ? (foundArt.title?.[language] || foundArt.title?.fr) : `Article ID: ${artId}`}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 font-mono">{foundArt?.category || 'General'}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      value=""
+                      onChange={e => handleReplaceLatest(idx, e.target.value)}
+                      className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] p-1.5 rounded focus:outline-none focus:border-[#E85D42]"
+                      title={language === 'fr' ? 'Remplacer cet article' : 'Replace article'}
+                    >
+                      <option value="">{language === 'fr' ? 'Remplacer...' : 'Replace...'}</option>
+                      {articles.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.title?.[language] || a.title?.fr}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => handleMoveLatest(idx, 'up')}
+                      disabled={idx === 0}
+                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded cursor-pointer"
+                      title={language === 'fr' ? 'Monter' : 'Move up'}
+                    >
+                      <ArrowUp size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleMoveLatest(idx, 'down')}
+                      disabled={idx === curatedLatestIds.length - 1}
+                      className="p-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 text-zinc-300 rounded cursor-pointer"
+                      title={language === 'fr' ? 'Descendre' : 'Move down'}
+                    >
+                      <ArrowDown size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleRemoveLatestArticle(artId)}
+                      className="p-1.5 bg-rose-950/60 text-rose-400 hover:bg-rose-900/80 rounded cursor-pointer"
+                      title={language === 'fr' ? 'Supprimer' : 'Remove'}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

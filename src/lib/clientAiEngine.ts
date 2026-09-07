@@ -32,6 +32,8 @@ export interface ClientRssItem {
   guid?: string;
   category?: string;
   enclosure?: { url: string; type?: string };
+  imageUrl?: string;
+  featuredImage?: string;
 }
 
 /**
@@ -39,39 +41,48 @@ export interface ClientRssItem {
  */
 let cachedFirestoreKeys: Record<string, string> = {};
 let hasLoadedFromFirestore = false;
+let loadPromise: Promise<Record<string, string>> | null = null;
 
 /**
  * Loads API keys from Firestore system_config/api_keys into memory and localStorage
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
   if (typeof window === 'undefined') return {};
-  try {
-    const snap = await getDoc(doc(db, 'system_config', 'api_keys'));
-    if (snap && snap.exists()) {
-      const data = snap.data() || {};
-      cachedFirestoreKeys = { ...data };
-      hasLoadedFromFirestore = true;
-      // Sync into localStorage if not already set locally
-      if (window.localStorage) {
-        for (const [k, v] of Object.entries(data)) {
-          if (typeof v === 'string' && v.trim()) {
-            const lower = k.toLowerCase();
-            const upper = k.toUpperCase();
-            if (!localStorage.getItem(`api_key_${lower}`)) {
-              localStorage.setItem(`api_key_${lower}`, v.trim());
-            }
-            if (!localStorage.getItem(`${upper}_API_KEY`)) {
-              localStorage.setItem(`${upper}_API_KEY`, v.trim());
+  if (loadPromise) return loadPromise;
+
+  loadPromise = (async () => {
+    try {
+      const snap = await getDoc(doc(db, 'system_config', 'api_keys'));
+      if (snap && snap.exists()) {
+        const data = snap.data() || {};
+        cachedFirestoreKeys = { ...data };
+        hasLoadedFromFirestore = true;
+        // Sync into localStorage if not already set locally
+        if (window.localStorage) {
+          for (const [k, v] of Object.entries(data)) {
+            if (typeof v === 'string' && v.trim()) {
+              const lower = k.toLowerCase();
+              const upper = k.toUpperCase();
+              if (!localStorage.getItem(`api_key_${lower}`)) {
+                localStorage.setItem(`api_key_${lower}`, v.trim());
+              }
+              if (!localStorage.getItem(`${upper}_API_KEY`)) {
+                localStorage.setItem(`${upper}_API_KEY`, v.trim());
+              }
             }
           }
         }
+        return cachedFirestoreKeys;
       }
-      return cachedFirestoreKeys;
+    } catch (e) {
+      console.warn('[Client AI] Note: Could not fetch keys from Firestore:', e);
+    } finally {
+      loadPromise = null;
     }
-  } catch (e) {
-    console.warn('[Client AI] Note: Could not fetch keys from Firestore:', e);
-  }
-  return cachedFirestoreKeys;
+    return cachedFirestoreKeys;
+  })();
+
+  return loadPromise;
 }
 
 // Auto-trigger load on client initialization
@@ -194,6 +205,9 @@ export async function clientTestProvider(provider: string): Promise<{
   message: string;
   modelUsed?: string;
 }> {
+  if (!hasLoadedFromFirestore) {
+    await loadClientApiKeysFromFirestore();
+  }
   const p = provider.toUpperCase();
   const startTime = Date.now();
 
@@ -201,7 +215,7 @@ export async function clientTestProvider(provider: string): Promise<{
     if (p === 'GEMINI') {
       const key = getClientApiKey('gemini');
       if (!key) throw new Error('Clé API Gemini non configurée dans le navigateur.');
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,8 +229,8 @@ export async function clientTestProvider(provider: string): Promise<{
       return {
         success: true,
         latencyMs: Date.now() - startTime,
-        message: 'Google Gemini 2.5 Flash opérationnel (Test direct navigateur)',
-        modelUsed: 'gemini-2.5-flash'
+        message: 'Google Gemini 2.0 Flash opérationnel (Test direct navigateur)',
+        modelUsed: 'gemini-2.0-flash'
       };
     }
 
@@ -355,6 +369,10 @@ export async function clientTestProvider(provider: string): Promise<{
 export async function clientRewriteArticle(options: ClientRewriteOptions): Promise<ClientRewriteResult> {
   const { article, prompt, category = 'Économie', type = 'Analysis', preferredEngine = 'auto' } = options;
 
+  if (!hasLoadedFromFirestore) {
+    await loadClientApiKeysFromFirestore();
+  }
+
   const geminiKey = getClientApiKey('gemini');
   const groqKey = getClientApiKey('groq');
   const openaiKey = getClientApiKey('openai');
@@ -419,7 +437,7 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
 
   // Helper to query Gemini with model fallback
   const callGeminiDirect = async (apiKey: string) => {
-    const candidateModels = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.0-flash'];
+    const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash-lite'];
     for (const model of candidateModels) {
       try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -570,21 +588,38 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     throw new Error(`Moteur IA ${engine} non disponible pour la réécriture directe.`);
   }
 
-  // Parse JSON response safely
+  // Parse JSON response safely with resilient multi-pass recovery
   let parsedArticle: any = null;
+  let cleaned = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim();
+
   try {
-    const cleaned = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim();
     parsedArticle = JSON.parse(cleaned);
-  } catch (e: any) {
-    throw new Error('Le modèle IA n\'a pas renvoyé un format JSON valide: ' + e.message);
+  } catch (_) {
+    const firstBrace = cleaned.indexOf('{');
+    const lastBrace = cleaned.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      try {
+        const candidate = cleaned.substring(firstBrace, lastBrace + 1).replace(/,(\s*[}\]])/g, '$1');
+        parsedArticle = JSON.parse(candidate);
+      } catch (e2: any) {
+        throw new Error('Le modèle IA n\'a pas renvoyé un format JSON valide: ' + e2.message);
+      }
+    } else {
+      throw new Error('Format de réponse JSON incomplet renvoyé par le modèle.');
+    }
   }
 
-  // Ensure high-definition image is assigned
-  const itemImg = typeof article === 'object' ? (article.imageUrl || article.featuredImage || article.image || article.enclosure?.url) : null;
-  if (!parsedArticle.featuredImage || parsedArticle.featuredImage.includes('photo-1504711434969-e33886168f5c')) {
-    parsedArticle.featuredImage = itemImg || getEditorialFallbackImage(category, parsedArticle.title?.fr || parsedArticle.title?.en || (typeof article === 'object' ? article.title : ''));
+  // Ensure high-definition image is assigned: ALWAYS prioritize original article / RSS feed image
+  const itemImg = typeof article === 'object' ? (article.imageUrl || article.featuredImage || article.image || article.enclosure?.url || article.thumbnail) : null;
+  if (itemImg && typeof itemImg === 'string' && itemImg.startsWith('http')) {
+    parsedArticle.featuredImage = itemImg;
+    parsedArticle.imageUrl = itemImg;
+  } else if (!parsedArticle.featuredImage || parsedArticle.featuredImage.includes('photo-1504711434969-e33886168f5c')) {
+    parsedArticle.featuredImage = getEditorialFallbackImage(category, parsedArticle.title?.fr || parsedArticle.title?.en || (typeof article === 'object' ? article.title : ''));
+    parsedArticle.imageUrl = parsedArticle.featuredImage;
+  } else {
+    parsedArticle.imageUrl = parsedArticle.featuredImage;
   }
-  parsedArticle.imageUrl = parsedArticle.featuredImage;
 
   return {
     success: true,
@@ -616,7 +651,7 @@ Réponds UNIQUEMENT par un tableau JSON d'objets :
 
   let raw = '';
   if (geminiKey) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -698,18 +733,24 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
-        const items: ClientRssItem[] = data.items.map((it: any) => ({
-          title: (it.title || '').trim(),
-          link: it.link || it.guid || cleanUrl,
-          description: (it.description || it.content || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
-          pubDate: it.pubDate || new Date().toISOString(),
-          source: feedName || data.feed?.title || 'Agence de Presse',
-          guid: it.guid || it.link || `rss-${Date.now()}-${Math.random()}`,
-          category: it.categories?.[0] || 'Actualité',
-          enclosure: it.enclosure?.link 
-            ? { url: it.enclosure.link, type: it.enclosure.type } 
-            : (it.thumbnail ? { url: it.thumbnail } : undefined)
-        }));
+        const items: ClientRssItem[] = data.items.map((it: any) => {
+          const rawContent = `${it.description || ''} ${it.content || ''}`;
+          const imgMatch = rawContent.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
+          const resolvedImg = (it.enclosure?.link || it.thumbnail || it.image || it.banner_image || (imgMatch ? imgMatch[1] : undefined) || '').trim();
+
+          return {
+            title: (it.title || '').trim(),
+            link: it.link || it.guid || cleanUrl,
+            description: (it.description || it.content || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
+            pubDate: it.pubDate || new Date().toISOString(),
+            source: feedName || data.feed?.title || 'Agence de Presse',
+            guid: it.guid || it.link || `rss-${Date.now()}-${Math.random()}`,
+            category: it.categories?.[0] || 'Actualité',
+            enclosure: resolvedImg ? { url: resolvedImg, type: it.enclosure?.type } : undefined,
+            imageUrl: resolvedImg || undefined,
+            featuredImage: resolvedImg || undefined
+          };
+        });
 
         if (items.length > 0) {
           return {
@@ -733,16 +774,24 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.items) && data.items.length > 0) {
-        const items: ClientRssItem[] = data.items.map((it: any) => ({
-          title: (it.title || '').trim(),
-          link: it.url || it.id || cleanUrl,
-          description: (it.summary || it.content_html || it.content_text || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
-          pubDate: it.date_published || it.date_modified || new Date().toISOString(),
-          source: feedName || data.title || 'Agence de Presse',
-          guid: it.id || it.url || `rss-${Date.now()}-${Math.random()}`,
-          category: 'Actualité',
-          enclosure: it.image ? { url: it.image } : (it.banner_image ? { url: it.banner_image } : undefined)
-        }));
+        const items: ClientRssItem[] = data.items.map((it: any) => {
+          const rawContent = `${it.summary || ''} ${it.content_html || ''} ${it.content_text || ''}`;
+          const imgMatch = rawContent.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
+          const resolvedImg = (it.image || it.banner_image || (imgMatch ? imgMatch[1] : undefined) || '').trim();
+
+          return {
+            title: (it.title || '').trim(),
+            link: it.url || it.id || cleanUrl,
+            description: (it.summary || it.content_html || it.content_text || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
+            pubDate: it.date_published || it.date_modified || new Date().toISOString(),
+            source: feedName || data.title || 'Agence de Presse',
+            guid: it.id || it.url || `rss-${Date.now()}-${Math.random()}`,
+            category: 'Actualité',
+            enclosure: resolvedImg ? { url: resolvedImg } : undefined,
+            imageUrl: resolvedImg || undefined,
+            featuredImage: resolvedImg || undefined
+          };
+        });
 
         if (items.length > 0) {
           return {
@@ -812,14 +861,30 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
         const guid = node.querySelector('guid')?.textContent?.trim() || link;
         const category = node.querySelector('category')?.textContent?.trim() || 'Actualité';
 
-        let enclosure: { url: string; type?: string } | undefined;
+        let encUrl = '';
         const encNode = node.querySelector('enclosure');
         if (encNode && encNode.getAttribute('url')) {
-          enclosure = {
-            url: encNode.getAttribute('url') || '',
-            type: encNode.getAttribute('type') || undefined
-          };
+          encUrl = encNode.getAttribute('url') || '';
         }
+        if (!encUrl) {
+          const mediaContent = node.getElementsByTagNameNS('*', 'content')[0];
+          if (mediaContent?.getAttribute('url')) encUrl = mediaContent.getAttribute('url') || '';
+        }
+        if (!encUrl) {
+          const mediaThumb = node.getElementsByTagNameNS('*', 'thumbnail')[0];
+          if (mediaThumb?.getAttribute('url')) encUrl = mediaThumb.getAttribute('url') || '';
+        }
+        if (!encUrl) {
+          const itunesImg = node.getElementsByTagNameNS('*', 'image')[0];
+          if (itunesImg?.getAttribute('href')) encUrl = itunesImg.getAttribute('href') || '';
+        }
+        if (!encUrl) {
+          const combinedHtml = `${desc} ${contentEncoded || ''}`;
+          const imgMatch = combinedHtml.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
+          if (imgMatch) encUrl = imgMatch[1];
+        }
+
+        encUrl = encUrl.trim();
 
         if (title) {
           items.push({
@@ -830,7 +895,9 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
             source: feedName || 'Agence de Presse',
             guid,
             category,
-            enclosure
+            enclosure: encUrl ? { url: encUrl } : undefined,
+            imageUrl: encUrl || undefined,
+            featuredImage: encUrl || undefined
           });
         }
       });
@@ -844,6 +911,20 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
         const updated = node.querySelector('updated')?.textContent?.trim() || node.querySelector('published')?.textContent?.trim() || new Date().toISOString();
         const id = node.querySelector('id')?.textContent?.trim() || link;
 
+        let encUrl = '';
+        const encLink = node.querySelector('link[rel="enclosure"]');
+        if (encLink?.getAttribute('href')) encUrl = encLink.getAttribute('href') || '';
+        if (!encUrl) {
+          const mediaContent = node.getElementsByTagNameNS('*', 'content')[0];
+          if (mediaContent?.getAttribute('url')) encUrl = mediaContent.getAttribute('url') || '';
+        }
+        if (!encUrl) {
+          const imgMatch = summary.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
+          if (imgMatch) encUrl = imgMatch[1];
+        }
+
+        encUrl = encUrl.trim();
+
         if (title) {
           items.push({
             title,
@@ -851,7 +932,10 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
             description: summary.replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
             pubDate: updated,
             source: feedName || 'Dépêche Atom',
-            guid: id
+            guid: id,
+            enclosure: encUrl ? { url: encUrl } : undefined,
+            imageUrl: encUrl || undefined,
+            featuredImage: encUrl || undefined
           });
         }
       });
@@ -939,6 +1023,9 @@ export async function clientProcessFeedAndGenerate(options: {
   } = options;
 
   try {
+    if (!hasLoadedFromFirestore) {
+      await loadClientApiKeysFromFirestore();
+    }
     // 1. Fetch RSS items via client bridge
     const feedResult = await clientFetchRssFeed(feedUrl, feedName);
     if (!feedResult.success || !Array.isArray(feedResult.items) || feedResult.items.length === 0) {
@@ -994,4 +1081,161 @@ export async function clientProcessFeedAndGenerate(options: {
       error: err?.message || 'Erreur lors du traitement du flux'
     };
   }
+}
+
+/**
+ * Direct client-side Abdel AI chat fallback
+ * Engages when the Express backend is inaccessible or deployed statically
+ */
+export async function clientAbdelChat(params: {
+  message: string;
+  language?: string;
+  history?: Array<{ role: string; text: string }>;
+  contextArticle?: any;
+  locationInfo?: any;
+}): Promise<string> {
+  const { message, language = 'fr', history = [], contextArticle } = params;
+
+  await loadClientApiKeysFromFirestore();
+
+  const geminiKey = getClientApiKey('gemini');
+  const groqKey = getClientApiKey('groq');
+  const openrouterKey = getClientApiKey('openrouter');
+
+  const isFrench = language === 'fr';
+
+  const systemPrompt = `Tu es Abdel, l'intelligence éditoriale et compagnon de réflexion de Perspective Group, média indépendant ouest-africain basé à Dakar.
+Ta mission est d'éclairer le lecteur avec pertinence, esprit critique, rigueur intellectuelle et courtoisie.
+RÈGLES D'EXPRESSION STRICTES :
+1. Reste court, percutant et précis. Pas de bavardage inutile.
+2. N'UTILISE JAMAIS d'astérisques de gras (aucun "**" ou "*").
+3. Si un article est en contexte, appuie-toi sur ses faits clés.
+4. Réponds toujours dans la langue du lecteur (${isFrench ? 'Français' : 'English'}).`;
+
+  let userContext = `Message du lecteur : ${message}`;
+  if (contextArticle) {
+    userContext = `[ARTICLE EN CONTEXTE: "${contextArticle.title?.[language] || contextArticle.title?.fr || 'Sans titre'}" | Catégorie: ${contextArticle.category || 'Général'}]\nExtrait: ${(contextArticle.excerpt?.[language] || contextArticle.excerpt?.fr || '').slice(0, 300)}\n\n` + userContext;
+  }
+
+  // 1. Try Gemini
+  if (geminiKey) {
+    try {
+      const contents: any[] = [];
+      for (const h of history.slice(-6)) {
+        contents.push({
+          role: h.role === 'abdel' ? 'model' : 'user',
+          parts: [{ text: h.text }]
+        });
+      }
+      contents.push({
+        role: 'user',
+        parts: [{ text: userContext }]
+      });
+
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 600
+          }
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 2. Try Groq
+  if (groqKey) {
+    try {
+      const messages: any[] = [{ role: 'system', content: systemPrompt }];
+      for (const h of history.slice(-6)) {
+        messages.push({
+          role: h.role === 'abdel' ? 'assistant' : 'user',
+          content: h.text
+        });
+      }
+      messages.push({ role: 'user', content: userContext });
+
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages,
+          temperature: 0.7,
+          max_tokens: 600
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) {
+          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Try OpenRouter
+  if (openrouterKey) {
+    try {
+      const messages: any[] = [{ role: 'system', content: systemPrompt }];
+      for (const h of history.slice(-6)) {
+        messages.push({
+          role: h.role === 'abdel' ? 'assistant' : 'user',
+          content: h.text
+        });
+      }
+      messages.push({ role: 'user', content: userContext });
+
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openrouterKey}`
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.3-70b-instruct',
+          messages,
+          temperature: 0.7,
+          max_tokens: 600
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (text) {
+          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Graceful contextual response if keys are not ready
+  if (contextArticle) {
+    const title = contextArticle.title?.[language] || contextArticle.title?.fr || 'cet article';
+    return isFrench
+      ? `Sur « ${title} », les points d'ancrage essentiels résident dans l'analyse des arbitrages stratégiques et leurs impacts directs sur le terrain.`
+      : `Regarding "${title}", the pivotal elements center on strategic trade-offs and their immediate field impacts.`;
+  }
+
+  return isFrench
+    ? "Je suis à votre écoute pour analyser l'actualité ou approfondir un dossier."
+    : "I am at your service to analyze ongoing developments or unpack any story.";
 }

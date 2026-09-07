@@ -276,11 +276,16 @@ export function ProfilePage() {
     return () => unsub();
   }, [decodedEmail]);
 
-  const fallbackUser = allUsers.find(u => u.email.toLowerCase().trim() === decodedEmail);
+  const fallbackUser = allUsers.find(u => {
+    const uEmail = (u.email || "").toLowerCase().trim();
+    const uId = ((u as any).id || "").toLowerCase().trim();
+    return uEmail === decodedEmail || uId === decodedEmail || encodeURIComponent(uEmail) === decodedEmail;
+  });
+
   const targetUser = targetUserData ? {
     ...fallbackUser,
     ...targetUserData,
-    email: targetUserData.email || decodedEmail,
+    email: targetUserData.email || fallbackUser?.email || decodedEmail,
     hideEmail: targetUserData.hideEmail !== undefined ? targetUserData.hideEmail : fallbackUser?.hideEmail,
     hidePersonalInfo: targetUserData.hidePersonalInfo !== undefined ? targetUserData.hidePersonalInfo : fallbackUser?.hidePersonalInfo
   } : fallbackUser;
@@ -291,36 +296,6 @@ export function ProfilePage() {
       setEditedBio(targetUser.bio || "");
     }
   }, [targetUser?.bio]);
-
-  if (!readerProfile) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-20 text-center animate-fadeIn">
-        <div className="square-card p-10 bg-brand-soft/30 border border-brand-border/40 max-w-xl mx-auto rounded-none text-left">
-          <div className="w-14 h-14 bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-600 mb-6 rounded-none">
-            <LockKeyhole size={28} />
-          </div>
-          <h2 className="text-2xl font-black uppercase tracking-widest text-brand-dark font-mono mb-4">
-            {language === "fr" ? "ACCÈS RESTREINT" : "RESTRICTED ACCESS"}
-          </h2>
-          <p className="text-xs text-brand-muted font-serif leading-relaxed mb-8">
-            {language === "fr" 
-              ? "La consultation des dossiers d'analyse et des profils des membres du réseau Perspective est réservée aux abonnés authentifiés. Veuillez vous connecter pour accéder à l'annuaire."
-              : "Access to intelligence dossiers and Perspective network user profiles is restricted to authenticated subscribers. Please authenticate to view the ledger."}
-          </p>
-          <button
-            onClick={() => {
-              setAuthTab("login");
-              setShowSignUpModal(true);
-            }}
-            className="px-6 py-3 font-mono text-[10px] font-black uppercase tracking-widest text-white transition-all cursor-pointer border-none"
-            style={{ backgroundColor: accentColor }}
-          >
-            {language === "fr" ? "SE CONNECTER / S'INSCRIRE" : "LOG IN / REGISTER"}
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   if (!targetUser) {
     return (
@@ -346,17 +321,24 @@ export function ProfilePage() {
     );
   }
 
-  const isSelf = readerProfile.email.toLowerCase().trim() === decodedEmail;
-  const isFriend = friends.includes(decodedEmail);
-  const isAdmin = readerProfile.email === "kadersdiaz3@gmail.com" || 
-                  readerProfile.email === "admin@perspective.sn" || 
-                  readerProfile.email?.toLowerCase().includes("admin");
+  const userEmailLow = readerProfile?.email ? readerProfile.email.toLowerCase().trim() : "";
+  const targetEmailLow = (targetUser.email || decodedEmail).toLowerCase().trim();
+  const isSelf = userEmailLow.length > 0 && userEmailLow === targetEmailLow;
+  const isFriend = friends.includes(targetEmailLow) || friends.includes(decodedEmail);
+  const isAdmin = userEmailLow === "kadersdiaz3@gmail.com" || 
+                  userEmailLow === "admin@perspective.sn" || 
+                  userEmailLow.includes("admin");
 
-  // Privacy gate rule
-  const canViewDetails = !targetUser.hidePersonalInfo || isSelf || isFriend || isAdmin;
+  // Privacy gate rule (Always show public badges/bio, hide personal email if requested)
+  const canViewDetails = true;
 
   // Toggle friendship action
   const handleFriendship = async () => {
+    if (!readerProfile?.email) {
+      setAuthTab("login");
+      setShowSignUpModal(true);
+      return;
+    }
     const myEmail = readerProfile.email.toLowerCase().trim();
     const targetEmail = targetUser.email.toLowerCase().trim();
     if (myEmail === targetEmail) return;
@@ -384,6 +366,11 @@ export function ProfilePage() {
 
   // Follow/Unfollow action
   const handleFollow = async () => {
+    if (!readerProfile?.email) {
+      setAuthTab("login");
+      setShowSignUpModal(true);
+      return;
+    }
     const myEmail = readerProfile.email.toLowerCase().trim();
     const targetEmail = targetUser.email.toLowerCase().trim();
     if (myEmail === targetEmail) return;
@@ -413,6 +400,11 @@ export function ProfilePage() {
 
   // Block/Unblock action
   const handleBlock = async () => {
+    if (!readerProfile?.email) {
+      setAuthTab("login");
+      setShowSignUpModal(true);
+      return;
+    }
     const myEmail = readerProfile.email.toLowerCase().trim();
     const targetEmail = targetUser.email.toLowerCase().trim();
     if (myEmail === targetEmail) return;
@@ -442,6 +434,11 @@ export function ProfilePage() {
 
   // Mute/Unmute action
   const handleMute = async () => {
+    if (!readerProfile?.email) {
+      setAuthTab("login");
+      setShowSignUpModal(true);
+      return;
+    }
     const myEmail = readerProfile.email.toLowerCase().trim();
     const targetEmail = targetUser.email.toLowerCase().trim();
     if (myEmail === targetEmail) return;
@@ -466,6 +463,11 @@ export function ProfilePage() {
   // Submit report action
   const handleReport = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!readerProfile?.email) {
+      setAuthTab("login");
+      setShowSignUpModal(true);
+      return;
+    }
     if (!reportReason) return;
 
     const reportId = "report-" + Date.now();

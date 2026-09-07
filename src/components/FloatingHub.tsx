@@ -10,6 +10,7 @@ import { Markdown } from "./Markdown";
 import { getAbdelContextualPrompts } from "../lib/abdelPrompts";
 import { getSafeText } from "../lib/utils";
 import { safeFetchJson } from "../lib/apiUtils";
+import { clientAbdelChat } from "../lib/clientAiEngine";
 
 export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();
@@ -146,10 +147,15 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const isChatOpen = isOpen && activeTab === "chat";
   const showLauncherMessageBadge = unreadDMsCount > 0 && !isChatOpen;
 
-  const conversation = (directMessages || []).filter(
-    dm => (dm.sender === userEmail && dm.receiver === selectedContact) ||
-          (dm.sender === selectedContact && dm.receiver === userEmail)
-  );
+  const userEmailLow = (userEmail || '').toLowerCase().trim();
+  const selectedContactLow = (selectedContact || '').toLowerCase().trim();
+
+  const conversation = (directMessages || []).filter(dm => {
+    const sLow = (dm.sender || '').toLowerCase().trim();
+    const rLow = (dm.receiver || '').toLowerCase().trim();
+    return (sLow === userEmailLow && rLow === selectedContactLow) ||
+           (sLow === selectedContactLow && rLow === userEmailLow);
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -248,30 +254,57 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
       if (ok && data?.response) {
         setAbdelMessages(prev => [
           ...prev,
-          { role: "abdel", text: data.response }
+          { role: "abdel", text: data.response.replace(/\*\*/g, "").replace(/\*/g, "").trim() }
         ]);
       } else {
+        // Direct client-side Abdel fallback
+        try {
+          const directReply = await clientAbdelChat({
+            message: text,
+            language,
+            history: abdelMessages.map(m => ({ role: m.role, text: m.text })),
+            contextArticle
+          });
+          setAbdelMessages(prev => [
+            ...prev,
+            { role: "abdel", text: directReply }
+          ]);
+        } catch (_) {
+          setAbdelMessages(prev => [
+            ...prev,
+            {
+              role: "abdel",
+              text: language === "fr"
+                ? "Abdel est à votre écoute pour analyser les dossiers en cours."
+                : "Abdel is at your disposal to analyze current developments."
+            }
+          ]);
+        }
+      }
+    } catch (err: any) {
+      console.error("Abdel chat fetch error:", err);
+      try {
+        const directReply = await clientAbdelChat({
+          message: text,
+          language,
+          history: abdelMessages.map(m => ({ role: m.role, text: m.text })),
+          contextArticle
+        });
+        setAbdelMessages(prev => [
+          ...prev,
+          { role: "abdel", text: directReply }
+        ]);
+      } catch (_) {
         setAbdelMessages(prev => [
           ...prev,
           {
             role: "abdel",
-            text: data?.response || (language === "fr"
-              ? "Abdel est momentanément indisponible. Réessayez dans un instant."
-              : "Abdel is temporarily unavailable. Please try again in a moment.")
+            text: language === "fr"
+              ? "Abdel est à votre écoute pour analyser les dossiers en cours."
+              : "Abdel is at your disposal to analyze current developments."
           }
         ]);
       }
-    } catch (err: any) {
-      console.error("Abdel chat fetch error:", err);
-      setAbdelMessages(prev => [
-        ...prev,
-        {
-          role: "abdel",
-          text: language === "fr"
-            ? "Une difficulté de connexion est survenue. Veuillez réessayer dans quelques instants."
-            : "A connection issue occurred. Please try again in a few moments."
-        }
-      ]);
     } finally {
       setAbdelLoading(false);
     }
@@ -421,27 +454,34 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
             {activeTab === "abdel" ? (
               <div className="flex-1 flex flex-col overflow-hidden bg-transparent">
                 {/* Greeting banner */}
-                <div className="p-3 bg-zinc-900/80 border-b border-zinc-800/80 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#E85D42]/20 text-[#E85D42] flex items-center justify-center text-xs" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>
+                <div className="p-3 bg-zinc-900/90 border-b border-zinc-800/80 space-y-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-6 h-6 rounded-full bg-[#E85D42]/20 text-[#E85D42] flex items-center justify-center text-xs shrink-0 mt-0.5" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>
                       A
                     </div>
-                    <div>
-                      <p className="text-xs text-zinc-100" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>Abdel — {currentSectionLabel}</p>
-                      <p className="text-[10px] text-zinc-400">{currentGreeting}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs text-zinc-100" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>Abdel</span>
+                        <span className="text-[10px] text-[#E85D42] font-mono font-medium px-1.5 py-0.5 bg-[#E85D42]/10 rounded-sm">
+                          {currentSectionLabel}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-300 leading-snug mt-0.5 line-clamp-2">
+                        {(currentGreeting || "").replace(/\*\*/g, "").replace(/\*/g, "").trim()}
+                      </p>
                     </div>
                   </div>
 
                   {/* Quick Contextual Prompts */}
                   {currentPrompts.length > 0 && (
-                    <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                    <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar scroll-smooth">
                       {currentPrompts.map((p, idx) => (
                         <button
                           key={idx}
-                          onClick={() => handleSendAbdel(p)}
-                          className="shrink-0 text-[10px] bg-zinc-950 border border-zinc-800 hover:border-[#E85D42] text-zinc-300 hover:text-white px-2.5 py-1 rounded-full transition-all cursor-pointer"
+                          onClick={() => handleSendAbdel(p.replace(/\*\*/g, "").replace(/\*/g, "").trim())}
+                          className="shrink-0 text-[10px] bg-zinc-950/80 border border-zinc-800 hover:border-[#E85D42] text-zinc-300 hover:text-white px-2.5 py-1 rounded-full transition-all cursor-pointer whitespace-nowrap"
                         >
-                          {p}
+                          {p.replace(/\*\*/g, "").replace(/\*/g, "").trim()}
                         </button>
                       ))}
                     </div>

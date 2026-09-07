@@ -57,7 +57,7 @@ export function ApiDiagnosticTab() {
             configured: !!geminiKey,
             rateLimited: false,
             maskedKey: geminiKey ? `${geminiKey.slice(0, 4)}...${geminiKey.slice(-4)}` : undefined,
-            models: ['gemini-2.5-flash', 'gemini-1.5-pro'],
+            models: ['gemini-2.0-flash', 'gemini-1.5-pro'],
             successCount: geminiKey ? 1 : 0,
             errorCount: 0
           },

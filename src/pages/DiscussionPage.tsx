@@ -102,10 +102,15 @@ export const DiscussionPage: React.FC = () => {
     email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", role: "Perspective Group", avatar: "P", isOnline: true
   };
 
-  const conversation = (directMessages || []).filter(
-    dm => (dm.sender === userEmail && dm.receiver === activeContact.email) ||
-          (dm.sender === activeContact.email && dm.receiver === userEmail)
-  );
+  const myUserEmailLow = (userEmail || "").toLowerCase().trim();
+  const activeContactEmailLow = (activeContact.email || "").toLowerCase().trim();
+
+  const conversation = (directMessages || []).filter(dm => {
+    const sLow = (dm.sender || "").toLowerCase().trim();
+    const rLow = (dm.receiver || "").toLowerCase().trim();
+    return (sLow === myUserEmailLow && rLow === activeContactEmailLow) ||
+           (sLow === activeContactEmailLow && rLow === myUserEmailLow);
+  });
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -279,6 +284,15 @@ export const DiscussionPage: React.FC = () => {
                 <p className="text-xs text-zinc-400 font-mono">{activeContact.role} • {activeContact.email}</p>
               </div>
             </div>
+            {activeContact.email && (
+              <button
+                onClick={() => navigate(`/profile/${encodeURIComponent(activeContact.email)}`)}
+                className="px-3 py-1.5 bg-zinc-800 hover:bg-[#E85D42] text-white text-xs font-mono font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                <User size={12} />
+                <span>{language === 'fr' ? 'Voir Profil' : 'View Profile'}</span>
+              </button>
+            )}
           </div>
 
           {/* Messages Stream */}

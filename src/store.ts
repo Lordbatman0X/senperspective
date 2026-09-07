@@ -426,7 +426,12 @@ export const useStore = create<AppState>()(
       setArticles: (articles) => set({ articles }),
       syncFromMongoDB: async () => {
         try {
-          const snapshot = await getDocs(collection(db, "articles"));
+          const [snapshot, adsSnapshot, userSnapshot] = await Promise.all([
+            getDocs(collection(db, "articles")),
+            getDocs(collection(db, "ads")),
+            getDocs(collection(db, "users"))
+          ]);
+
           if (snapshot && !snapshot.empty) {
             const fetchedArticles: Article[] = [];
             snapshot.forEach((docSnap) => {
@@ -454,22 +459,33 @@ export const useStore = create<AppState>()(
               for (const art of seedArticles.slice(0, 25)) {
                 try {
                   const clean = await sanitizeFirestorePayload(art as any);
-                  await setDoc(doc(db, "articles", art.id), clean, { merge: true });
+                  setDoc(doc(db, "articles", art.id), clean, { merge: true }).catch(() => {});
                 } catch (_) {}
               }
             }
           }
 
-          // Fetch Ads from MongoDB
-          const adsSnapshot = await getDocs(collection(db, "ads"));
+          // Sync Ads
           if (adsSnapshot && !adsSnapshot.empty) {
-            const fetchedAds = [];
+            const fetchedAds: any[] = [];
             adsSnapshot.forEach((docSnap) => {
               const data = docSnap.data();
               if (data) fetchedAds.push(data);
             });
             if (fetchedAds.length > 0) {
               set({ ads: fetchedAds });
+            }
+          }
+
+          // Sync Users
+          if (userSnapshot && !userSnapshot.empty) {
+            const fetchedUsers: any[] = [];
+            userSnapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data) fetchedUsers.push(data);
+            });
+            if (fetchedUsers.length > 0) {
+              set({ users: fetchedUsers });
             }
           }
         } catch (err) {
@@ -686,31 +702,35 @@ export const useStore = create<AppState>()(
       sendDirectMessage: (msg) => {
         const dms = get().directMessages || [];
         const msgId = 'dm-' + Date.now().toString() + Math.random().toString(36).substring(4);
+        const cleanSender = (msg.sender || '').toLowerCase().trim();
+        const cleanReceiver = (msg.receiver || '').toLowerCase().trim();
         const newMsg = {
           ...msg,
+          sender: cleanSender,
+          receiver: cleanReceiver,
           id: msgId,
           date: new Date().toISOString().split('T')[0],
           timestamp: Date.now()
         };
         set({ directMessages: [...dms, newMsg] });
 
-        // Save to MongoDB
+        // Save to Firestore
         try {
           const cleanMsg = JSON.parse(JSON.stringify(newMsg));
           setDoc(doc(db, "messages", msgId), cleanMsg).catch(err => {
-            console.error("Failed to write message to MongoDB:", err);
+            console.error("Failed to write message to Firestore:", err);
           });
         } catch (err) {
-          console.warn("MongoDB write failed, falling back to local only:", err);
+          console.warn("Firestore write failed, falling back to local only:", err);
         }
 
-        // Trigger notification for receiver if logged in or mock alert
+        // Trigger notification for receiver
         get().addNotification({
           id: 'notif-dm-' + Date.now(),
-          email: msg.receiver,
+          email: cleanReceiver,
           text: {
-            fr: `Nouveau message de la part de ${msg.sender === 'admin@perspective.sn' ? 'l\'Administrateur' : msg.sender}.`,
-            en: `New direct message from ${msg.sender === 'admin@perspective.sn' ? 'Admin' : msg.sender}.`
+            fr: `Nouveau message de la part de ${cleanSender === 'admin@perspective.sn' ? 'l\'Administrateur' : cleanSender}.`,
+            en: `New direct message from ${cleanSender === 'admin@perspective.sn' ? 'Admin' : cleanSender}.`
           },
           date: new Date().toISOString().split('T')[0],
           isRead: false,

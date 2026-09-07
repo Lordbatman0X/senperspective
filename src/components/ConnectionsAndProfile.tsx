@@ -568,6 +568,18 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                               >
                                 <Eye size={13} />
                               </Link>
+                              {setSelectedChatUser && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedChatUser(member.email);
+                                    setActiveSubMenu("chat");
+                                  }}
+                                  className="p-1.5 border border-brand-border/30 hover:border-[#E85D42] text-brand-muted hover:text-[#E85D42] transition-all cursor-pointer flex items-center justify-center rounded-none bg-transparent"
+                                  title={language === "fr" ? "Envoyer un message" : "Send Message"}
+                                >
+                                  <MessageSquare size={13} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>

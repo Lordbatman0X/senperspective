@@ -70,11 +70,16 @@ export const FloatingChatWidget: React.FC = () => {
     return null;
   }
 
-  // Filter messages for current selected contact
-  const conversation = (directMessages || []).filter(
-    dm => (dm.sender === userEmail && dm.receiver === selectedUser) ||
-          (dm.sender === selectedUser && dm.receiver === userEmail)
-  );
+  const userEmailLower = (userEmail || '').toLowerCase().trim();
+  const selectedUserLower = (selectedUser || '').toLowerCase().trim();
+
+  // Filter messages for current selected contact with case normalization
+  const conversation = (directMessages || []).filter(dm => {
+    const sLow = (dm.sender || '').toLowerCase().trim();
+    const rLow = (dm.receiver || '').toLowerCase().trim();
+    return (sLow === userEmailLower && rLow === selectedUserLower) ||
+           (sLow === selectedUserLower && rLow === userEmailLower);
+  });
 
   // Calculate unread count strictly from database directMessages
   const unreadCount = (directMessages || []).filter(

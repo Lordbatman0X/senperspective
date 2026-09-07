@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getFirestore, 
+  setLogLevel,
   collection, 
   doc, 
   getDoc, 
@@ -11,6 +12,12 @@ import {
 } from 'firebase/firestore';
 import fs from 'fs';
 import path from 'path';
+
+try {
+  setLogLevel('error');
+} catch (e) {
+  // Ignore
+}
 
 let cachedDb: any = null;
 

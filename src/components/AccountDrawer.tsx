@@ -823,10 +823,10 @@ export function AccountDrawer({
                           const myEmail = readerProfile?.email?.toLowerCase().trim() || "";
                           const contactMap = new Map<string, { email: string; name: string; avatarUrl?: string; role?: string }>();
 
-                          // Only add friends to direct message contacts
+                          // Add all registered users + friends + support to direct message contacts
                           (allUsers || []).forEach(u => {
-                            const emailLow = u.email.toLowerCase().trim();
-                            if (emailLow && emailLow !== myEmail && friendsList.includes(emailLow)) {
+                            const emailLow = (u.email || "").toLowerCase().trim();
+                            if (emailLow && emailLow !== myEmail) {
                               contactMap.set(emailLow, {
                                 email: u.email,
                                 name: u.name || emailLow.split("@")[0],
@@ -836,7 +836,26 @@ export function AccountDrawer({
                             }
                           });
 
+                          // Always include support contact if not present
+                          const supportEmail = "contact@perspective.sn";
+                          if (!contactMap.has(supportEmail) && myEmail !== supportEmail) {
+                            contactMap.set(supportEmail, {
+                              email: supportEmail,
+                              name: language === "fr" ? "Admin Rédaction" : "Editorial Admin",
+                              avatarUrl: "preset-male",
+                              role: "Perspective Group"
+                            });
+                          }
+
                           const rawContacts = Array.from(contactMap.values());
+                          // Sort friends to top
+                          rawContacts.sort((a, b) => {
+                            const aIsFriend = friendsList.includes(a.email.toLowerCase().trim());
+                            const bIsFriend = friendsList.includes(b.email.toLowerCase().trim());
+                            if (aIsFriend && !bIsFriend) return -1;
+                            if (!aIsFriend && bIsFriend) return 1;
+                            return a.name.localeCompare(b.name);
+                          });
 
                           const filtered = rawContacts.filter(c =>
                             c.name.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
@@ -930,21 +949,32 @@ export function AccountDrawer({
 
                       {/* Chat Messages Body (Messenger Speech Bubbles) */}
                       <div className="flex-grow overflow-y-auto p-4 space-y-2.5 bg-zinc-50/40 dark:bg-zinc-950/80 scrollbar-thin">
-                        {directMessages && directMessages.filter(
-                          (dm) =>
-                            (dm.sender === readerProfile.email && dm.receiver === selectedChatUser) ||
-                            (dm.sender === selectedChatUser && dm.receiver === readerProfile.email)
-                        ).length > 0 ? (
-                          directMessages
-                            .filter(
-                              (dm) =>
-                                (dm.sender === readerProfile.email && dm.receiver === selectedChatUser) ||
-                                (dm.sender === selectedChatUser && dm.receiver === readerProfile.email)
-                            )
-                            .map((dm) => {
-                              const isMe = dm.sender === readerProfile.email;
-                              const isLikeEmoji = dm.text === "👍";
-                              const activeContact = allUsers.find(u => u.email.toLowerCase().trim() === selectedChatUser.toLowerCase().trim());
+                        {(() => {
+                          const myEmailLow = (readerProfile?.email || "").toLowerCase().trim();
+                          const activeUserLow = (selectedChatUser || "").toLowerCase().trim();
+                          const activeConversation = (directMessages || []).filter(
+                            (dm) => {
+                              const sLow = (dm.sender || "").toLowerCase().trim();
+                              const rLow = (dm.receiver || "").toLowerCase().trim();
+                              return (sLow === myEmailLow && rLow === activeUserLow) ||
+                                     (sLow === activeUserLow && rLow === myEmailLow);
+                            }
+                          );
+
+                          if (activeConversation.length === 0) {
+                            return (
+                              <div className="py-12 text-center text-zinc-400 font-sans text-xs italic">
+                                {language === "fr" 
+                                  ? "Aucun message échangé pour l'instant. Démarrer la discussion !" 
+                                  : "No messages exchanged yet. Start the conversation!"}
+                              </div>
+                            );
+                          }
+
+                          return activeConversation.map((dm) => {
+                            const isMe = (dm.sender || "").toLowerCase().trim() === myEmailLow;
+                            const isLikeEmoji = dm.text === "👍";
+                            const activeContact = allUsers.find(u => u.email.toLowerCase().trim() === activeUserLow);
 
                               return (
                                 <div key={dm.id} className={`flex items-end gap-2 max-w-[85%] ${isMe ? "ml-auto flex-row-reverse" : "mr-auto flex-row"}`}>
@@ -980,28 +1010,8 @@ export function AccountDrawer({
                                   </div>
                                 </div>
                               );
-                            })
-                        ) : (
-                          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2 text-zinc-400">
-                            <div 
-                              className="w-12 h-12 rounded-full flex items-center justify-center"
-                              style={{ 
-                                backgroundColor: (currentSettings?.accentColor || "#E85D42") + "15", 
-                                color: currentSettings?.accentColor || "#E85D42" 
-                              }}
-                            >
-                              <MessageCircle size={24} />
-                            </div>
-                            <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                              {language === "fr" ? "Démarrer la discussion" : "Start a Conversation"}
-                            </p>
-                            <p className="text-[11px] text-zinc-500 max-w-[220px]">
-                              {language === "fr" 
-                                ? "Envoyez un message pour discuter en direct avec ce membre." 
-                                : "Send a message to connect with this member directly."}
-                            </p>
-                          </div>
-                        )}
+                            });
+                        })()}
                       </div>
 
                       {/* Messenger Input Bar */}

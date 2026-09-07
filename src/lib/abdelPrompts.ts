@@ -52,21 +52,21 @@ export function getAbdelContextualPrompts(
     const category = contextArticle?.category || "Dossier";
 
     const frPrompts = [
-      `Fais-moi une synthèse claire en 3 points de « ${shortTitleFr} »`,
-      "Quels sont les enjeux géopolitiques et économiques de ce sujet ?",
-      "Qui sont les acteurs clés mentionnés et leurs motivations ?",
-      "Quel est l'impact concret de cette situation pour les citoyens ?",
-      "Explique-moi le contexte historique en termes simples",
-      "Quelles sont les perspectives et scénarios d'évolution ?"
+      "Synthèse claire en 3 points",
+      "Enjeux géopolitiques et économiques",
+      "Acteurs clés et motivations",
+      "Impact concret pour les citoyens",
+      "Contexte historique résumé",
+      "Perspectives et scénarios à venir"
     ];
 
     const enPrompts = [
-      `Give me a clear 3-point summary of "${shortTitleEn}"`,
-      "What are the key geopolitical and economic stakes here?",
-      "Who are the key players mentioned and what drives them?",
-      "What is the real-world impact of this situation on citizens?",
-      "Explain the historical background in straightforward terms",
-      "What are the most likely scenarios and future outlooks?"
+      "Clear 3-point summary",
+      "Geopolitical & economic stakes",
+      "Key players and motives",
+      "Direct impact on citizens",
+      "Brief historical background",
+      "Future outlook and scenarios"
     ];
 
     return {
@@ -77,8 +77,8 @@ export function getAbdelContextualPrompts(
       locationType: "article",
       articleContextTitle: { fr: titleFr, en: titleEn },
       greeting: {
-        fr: `Bonjour ! Je vois que vous lisez **« ${titleFr} »** (${category}). C'est une actualité marquante. Que souhaitez-vous approfondir ensemble ?`,
-        en: `Hello! I see you're reading **"${titleEn}"** (${category}). This is a key story. What would you like to unpack together?`,
+        fr: `Je suis à votre disposition pour décrypter cet article (${category}). Que souhaitez-vous approfondir ?`,
+        en: `Ready to analyze this story with you (${category}). What would you like to explore?`,
       },
       prompts: {
         fr: frPrompts,
@@ -418,8 +418,8 @@ export function getAbdelContextualPrompts(
     },
     locationType: "home",
     greeting: {
-      fr: "Bonjour ! Je suis **Abdel**, votre compagnon d'information au sein du journal *Perspective Group*. Je suis là pour vous faire un briefing, répondre à vos questions ou décrypter l'actualité avec vous. Que souhaitez-vous savoir ?",
-      en: "Hello! I am **Abdel**, your news companion at *Perspective Group*. I'm here to brief you on today's headlines, answer your questions, and analyze stories with you. What would you like to explore?",
+      fr: "Bonjour ! Je suis Abdel, votre assistant éditorial chez Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?",
+      en: "Hello! I am Abdel, your editorial assistant at Perspective Group. What would you like to explore today?",
     },
     prompts: {
       fr: defaultFr,

@@ -8,6 +8,7 @@ import { Markdown } from "../components/Markdown";
 import { getAbdelContextualPrompts } from "../lib/abdelPrompts";
 import { getSafeText } from "../lib/utils";
 import { safeFetchJson } from "../lib/apiUtils";
+import { clientAbdelChat } from "../lib/clientAiEngine";
 
 export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();

@@ -24,30 +24,47 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, margin: "-40px" }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full flex-shrink-0 group relative overflow-hidden flex flex-col md:flex-row h-[26rem] md:h-[20rem] cursor-pointer square-card" 
+        className="w-full max-w-full flex-shrink-0 group relative overflow-hidden flex flex-row h-[16rem] sm:h-[18rem] md:h-[19rem] cursor-pointer square-card bg-white dark:bg-zinc-900 border border-brand-border dark:border-zinc-800" 
         onClick={() => { navigate(`/article/${article.slug || article.id}`); }}
       >
-        <div className="relative w-full md:w-2/3 h-1/2 md:h-full overflow-hidden shrink-0 bg-brand-black">
+        {/* Left Side: Image */}
+        <div className="w-1/2 sm:w-[52%] md:w-[55%] h-full shrink-0 relative overflow-hidden bg-brand-black">
            <div 
-              className="w-full h-full bg-cover bg-center opacity-80 group-hover:scale-105 group-hover:opacity-100 transition-transform duration-700"
+              className="w-full h-full bg-cover bg-center opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-transform duration-700"
               style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
            />
-           <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-black/20 via-transparent to-transparent opacity-80" />
-           <div className="absolute top-4 left-4 bg-brand-primary text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1 shadow-md">
+           <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent opacity-80 pointer-events-none" />
+           <div className="absolute top-3 left-3 bg-brand-primary text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2.5 py-1 shadow-md z-10">
               {formatCategory(article.category, language)}
            </div>
         </div>
-        <div className="w-full md:w-1/3 flex flex-col p-6 md:p-8 justify-center h-1/2 md:h-full z-10 relative">
-           <h2 className="relative text-brand-dark font-black text-xl md:text-2xl leading-[1.1] mb-3 group-hover:text-brand-primary transition-colors line-clamp-3">
-             {getSafeText(article.title, language) || 'Sans titre'}
-           </h2>
-           <p className="relative text-brand-muted font-medium text-xs md:text-sm line-clamp-3 mb-4 leading-relaxed">
-             {getSafeText(article.excerpt, language) || ''}
-           </p>
-           <div className="mt-auto flex justify-between items-center border-t border-zinc-200 dark:border-zinc-800 pt-4 relative">
-              <span className="text-[10px] font-bold text-brand-muted uppercase tracking-widest">
+
+        {/* Right Side: Title & Content */}
+        <div className="w-1/2 sm:w-[48%] md:w-[45%] h-full shrink-0 flex flex-col justify-between p-3.5 sm:p-5 md:p-6 lg:p-7 z-10 relative bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 overflow-hidden">
+           <div className="flex-1 min-w-0 flex flex-col justify-center">
+             <h2 className="relative text-brand-dark dark:text-zinc-100 font-black text-xs sm:text-base md:text-xl lg:text-2xl leading-tight mb-1.5 sm:mb-2 group-hover:text-brand-primary transition-colors line-clamp-2 md:line-clamp-3">
+               {getSafeText(article.title, language) || 'Sans titre'}
+             </h2>
+             <p className="relative text-brand-muted dark:text-zinc-400 font-medium text-[10px] sm:text-xs md:text-sm line-clamp-2 sm:line-clamp-3 mb-2 leading-relaxed">
+               {getSafeText(article.excerpt, language) || ''}
+             </p>
+           </div>
+           <div className="mt-auto flex justify-between items-center border-t border-zinc-200 dark:border-zinc-800 pt-2.5 relative">
+              <span className="text-[9px] sm:text-[10px] font-bold text-brand-muted dark:text-zinc-400 uppercase tracking-wider truncate mr-1">
                 {article.author} • {formatRelativeDate(article.date, language)}
               </span>
+              <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSavedArticle(article.id);
+                }}
+                className={`text-brand-dark dark:text-zinc-300 hover:text-brand-primary transition-colors shrink-0 ${isSaved ? 'text-brand-primary' : ''}`}
+                title="Save article"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </button>
            </div>
         </div>
       </motion.div>
@@ -215,23 +232,25 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
   if (articles.length === 0) return null;
 
   return (
-        <section className="hidden md:block mb-10 relative group overflow-hidden bg-brand-white shadow-sm border border-brand-border" >
+        <section className="block mb-8 relative group overflow-hidden bg-white dark:bg-zinc-900 shadow-sm border border-brand-border dark:border-zinc-800" >
           {/* Navigation Arrows */}
           <button 
              onClick={(e) => { e.stopPropagation(); scrollTo(activeHero === 0 ? articles.length - 1 : activeHero - 1); }} 
-             className="absolute left-0 top-0 bottom-0 z-20 w-16 bg-black/20 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 shadow-none border-r border-white/10"
+             className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
+             aria-label="Previous slide"
           >
-             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter"><path d="m15 18-6-6 6-6"/></svg>
+             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <button 
              onClick={(e) => { e.stopPropagation(); scrollTo((activeHero + 1) % articles.length); }} 
-             className="absolute right-0 top-0 bottom-0 z-20 w-16 bg-black/20 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60 shadow-none border-l border-white/10"
+             className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
+             aria-label="Next slide"
           >
-             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" strokeLinejoin="miter"><path d="m9 18 6-6-6-6"/></svg>
+             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m9 18 6-6-6-6"/></svg>
           </button>
 
           {/* Indication Dots */}
-          <div className="absolute bottom-6 w-full z-20 flex justify-center gap-3">
+          <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 backdrop-blur-xs border border-white/20 shadow-md">
              {articles.map((_, idx) => (
                 <button 
                   key={idx}
@@ -239,7 +258,8 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
                     e.stopPropagation();
                     scrollTo(idx);
                   }}
-                  className={`w-10 h-1.5 transition-all duration-500 shadow-sm ${idx === activeHero ? 'bg-[#E85D42] shadow-md border border-black/50' : 'bg-brand-white/50 hover:bg-brand-white/90 border border-transparent'}`}
+                  className={`h-1.5 transition-all duration-300 cursor-pointer ${idx === activeHero ? 'w-6 bg-[#E85D42]' : 'w-2 bg-white/50 hover:bg-white/80'}`}
+                  aria-label={`Go to slide ${idx + 1}`}
                 />
              ))}
           </div>
@@ -247,10 +267,14 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
           <div 
              ref={containerRef}
              onScroll={handleScroll}
-             className="flex overflow-x-auto hide-scrollbar snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing"
+             className="flex w-full max-w-full overflow-x-auto hide-scrollbar snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing"
           >
              {articles.map((article, idx) => (
-                <div key={`${article.id}-${idx}`} className="min-w-full flex-shrink-0" style={{ scrollSnapAlign: 'start' }}>
+                <div 
+                  key={`${article.id}-${idx}`} 
+                  className="w-full min-w-full max-w-full shrink-0 flex-shrink-0 snap-start" 
+                  style={{ width: '100%', minWidth: '100%', maxWidth: '100%', scrollSnapAlign: 'start' }}
+                >
                   <ArticleCard article={article} large />
                 </div>
              ))}
@@ -359,7 +383,12 @@ export function HomePage() {
   };
   const [activeCoastTab, setActiveCoastTab] = useState<'tide' | 'goree' | 'meteo' | 'gale' | null>(null);
   
-  const featuredArticles = articles.filter(a => a.isFeatured).slice(0, 4);
+  let featuredArticles = articles.filter(a => a.isFeatured).slice(0, 6);
+  if (featuredArticles.length < 6) {
+    const existingIds = new Set(featuredArticles.map(a => a.id));
+    const additional = articles.filter(a => !existingIds.has(a.id)).slice(0, 6 - featuredArticles.length);
+    featuredArticles = [...featuredArticles, ...additional];
+  }
   const flashArticles = articles.filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');
   const arenaArticles = articles.filter(a => a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
   const dossierArticles = articles.filter(a => a.category === 'Dossiers' || a.category === 'Dossier' || a.category?.toLowerCase().includes('dossier'));
@@ -572,41 +601,51 @@ export function HomePage() {
             </div>
             
             <div className="space-y-3 font-sans">
-              {articles.slice(1, (currentSettings.trendingCount || 4)).map((article, idx) => (
-                <Link 
-                  key={`${article.id}-${idx}`} 
-                  to={`/article/${article.slug || article.id}`} 
-                  className="group flex gap-3 p-2 bg-zinc-50/80 dark:bg-zinc-950/20 hover:bg-white dark:hover:bg-zinc-950/60 transition-all border border-zinc-200/60 dark:border-zinc-800/40 rounded-none duration-300"
-                >
-                  <img 
-                    src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
-                    alt="" 
-                    className="w-20 h-16 object-cover bg-zinc-100 dark:bg-zinc-900 shrink-0 border border-zinc-200/50 dark:border-zinc-800/50" 
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
-                    }}
-                  />
-                  <div className="flex flex-col justify-between min-w-0 flex-grow">
-                    <div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-[#E85D42]">
-                        {formatCategory(article.category, language)}
-                      </span>
-                      <h4 
-                        className="font-black text-[11px] leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2 mt-0.5"
+              {(() => {
+                const curatedIds: string[] = currentSettings.curatedTrendingArticleIds || [];
+                const curatedList = curatedIds
+                  .map(id => articles.find(a => a.id === id || a.slug === id))
+                  .filter((a): a is any => Boolean(a));
+                const listToRender = curatedList.length > 0
+                  ? curatedList
+                  : articles.slice(1, (currentSettings.trendingCount || 4));
+
+                return listToRender.map((article, idx) => (
+                  <Link 
+                    key={`${article.id}-${idx}`} 
+                    to={`/article/${article.slug || article.id}`} 
+                    className="group flex gap-3 p-2 bg-zinc-50/80 dark:bg-zinc-950/20 hover:bg-white dark:hover:bg-zinc-950/60 transition-all border border-zinc-200/60 dark:border-zinc-800/40 rounded-none duration-300"
+                  >
+                    <img 
+                      src={getSafeImageUrl(article.featuredImage || article.imageUrl)} 
+                      alt="" 
+                      className="w-20 h-16 object-cover bg-zinc-100 dark:bg-zinc-900 shrink-0 border border-zinc-200/50 dark:border-zinc-800/50" 
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = DEFAULT_FALLBACK_IMAGE;
+                      }}
+                    />
+                    <div className="flex flex-col justify-between min-w-0 flex-grow">
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-[#E85D42]">
+                          {formatCategory(article.category, language)}
+                        </span>
+                        <h4 
+                          className="font-black text-[11px] leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2 mt-0.5"
+                          style={{ color: theme === 'dark' ? undefined : '#000000' }}
+                        >
+                          {getSafeText(article.title, language) || 'Untitled'}
+                        </h4>
+                      </div>
+                      <span 
+                        className="text-[8px] font-extrabold dark:text-zinc-400 uppercase tracking-wider mt-1 block"
                         style={{ color: theme === 'dark' ? undefined : '#000000' }}
                       >
-                        {getSafeText(article.title, language) || 'Untitled'}
-                      </h4>
+                        {article.author} • {article.readingTime} MIN
+                      </span>
                     </div>
-                    <span 
-                      className="text-[8px] font-extrabold dark:text-zinc-400 uppercase tracking-wider mt-1 block"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {article.author} • {article.readingTime} MIN
-                    </span>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                ));
+              })()}
             </div>
           </div>
 
@@ -709,10 +748,16 @@ export function HomePage() {
               </span>
             </div>
             <div className="space-y-3 font-sans">
-              {[...articles]
-                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                .slice(0, 4)
-                .map((article, i) => (
+              {(() => {
+                const curatedIds: string[] = currentSettings.curatedLatestNewsArticleIds || [];
+                const curatedList = curatedIds
+                  .map(id => articles.find(a => a.id === id || a.slug === id))
+                  .filter((a): a is any => Boolean(a));
+                const listToRender = curatedList.length > 0
+                  ? curatedList
+                  : [...articles].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 4);
+
+                return listToRender.map((article, i) => (
                   <Link key={`${article.id}-${i}`} to={`/article/${article.slug || article.id}`} className="group flex gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0">
                     <span className="text-xl font-black text-[#E85D42] group-hover:text-[#E85D42] transition-colors">0{i+1}</span>
                     <div className="flex-1 min-w-0">
@@ -725,7 +770,8 @@ export function HomePage() {
                       </h4>
                     </div>
                   </Link>
-                ))}
+                ));
+              })()}
             </div>
           </div>
 

@@ -121,7 +121,7 @@ export async function safeFetchJson<T = any>(
         ok: false,
         status: res.status,
         isStaticFallback: true,
-        error: `Serveur API Express non connecté sur ${hostname} (réponse HTML du site au lieu de l'API JSON). Vous pouvez configurer l'URL de votre serveur backend dans l'onglet Diagnostics ou utiliser les clés directes du navigateur.`
+        error: `Mode hébergement statique actif sur ${hostname} (réponse HTML du site au lieu de l'API JSON). Basculement automatique sur le moteur direct et Firestore.`
       };
     }
 

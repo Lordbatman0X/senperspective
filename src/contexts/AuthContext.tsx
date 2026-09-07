@@ -67,8 +67,6 @@ interface AuthContextType {
     pin?: string, 
     twoFactorEnabled?: boolean
   ) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
-  loginWithSocial: (providerName: 'google' | 'github' | 'apple' | 'facebook') => Promise<void>;
   logoutUser: () => Promise<void>;
   resetUserPassword: (email: string) => Promise<void>;
 }
@@ -186,6 +184,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       setAllUsers(usersList);
+      useStore.setState({ users: usersList as any });
     }, (error) => {
       console.warn("[Firestore Users] Notice listening to users (using local state fallback):", error?.message || error);
     });
@@ -202,8 +201,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const data = docSnap.data();
         messagesList.push({
           id: docSnap.id,
-          sender: data.sender || "",
-          receiver: data.receiver || "",
+          sender: (data.sender || "").toLowerCase().trim(),
+          receiver: (data.receiver || "").toLowerCase().trim(),
           text: data.text || "",
           date: data.date || new Date().toISOString().split('T')[0],
           timestamp: data.timestamp || Date.now(),
@@ -448,6 +447,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribeMedia();
   }, []);
 
+  // Real-time synchronization of Ads via Firestore
+  useEffect(() => {
+    const unsubscribeAds = firestoreOnSnapshot(collection(db, "ads"), (snapshot) => {
+      if (snapshot.empty) return;
+      const adsList: any[] = [];
+      snapshot.forEach((docSnap: any) => {
+        if (docSnap.data()) adsList.push(docSnap.data());
+      });
+      if (adsList.length > 0) {
+        useStore.setState({ ads: adsList });
+      }
+    }, (error) => {
+      console.warn("[Firestore Ads] Notice listening to ads (using local state fallback):", error?.message || error);
+    });
+
+    return () => unsubscribeAds();
+  }, []);
+
   // Real-time synchronization of Site Settings via Firestore
   useEffect(() => {
     const unsubscribeSettings = firestoreOnSnapshot(doc(db, "siteSettings", "config"), (docSnap) => {
@@ -586,100 +603,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribeAuth();
   }, [setReaderProfile]);
 
-  const loginWithSocial = async (providerName: 'google' | 'github' | 'apple' | 'facebook') => {
-    try {
-      let provider: any;
-      switch (providerName) {
-        case 'github':
-          provider = new GithubAuthProvider();
-          break;
-        case 'apple':
-          provider = new OAuthProvider('apple.com');
-          break;
-        case 'facebook':
-          provider = new FacebookAuthProvider();
-          break;
-        case 'google':
-        default:
-          provider = new GoogleAuthProvider();
-          provider.setCustomParameters({ prompt: 'select_account' });
-          break;
-      }
 
-      let u: any;
-      try {
-        const result = await signInWithPopup(auth, provider);
-        u = result.user;
-      } catch (authErr: any) {
-        console.warn(`[AUTH] Firebase Social Login notice for ${providerName}:`, authErr);
-        const appLang = useStore.getState().language || 'fr';
-        if (authErr?.code === 'auth/popup-closed-by-user' || authErr?.code === 'auth/cancelled-popup-request') {
-          throw new Error(appLang === 'fr' ? 'Connexion annulée par l\'utilisateur.' : 'Sign-in cancelled by user.');
-        }
-        // Fallback for unauthorized domain or preview sandbox
-        if (authErr?.code === 'auth/unauthorized-domain' || authErr?.code === 'auth/operation-not-allowed') {
-          u = {
-            uid: `usr_${Date.now()}`,
-            email: 'kadersdiaz3@gmail.com',
-            displayName: 'Kader Diaz',
-            photoURL: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"
-          };
-        } else {
-          throw authErr;
-        }
-      }
-      
-      const rawEmail = u.email || `${u.uid}@${providerName}.com`;
-      const cleanEmail = rawEmail.toLowerCase().trim();
-      
-      if (!cleanEmail) throw new Error("No email returned from " + providerName);
-      
-      const userDocRef = doc(db, "users", cleanEmail);
-      let existingData: any = null;
-      try {
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          existingData = userDoc.data();
-        }
-      } catch (e) {
-        console.warn("Notice fetching user doc:", e);
-      }
-      
-      const isAdminUser = cleanEmail === "kadersdiaz3@gmail.com" || cleanEmail === "admin@perspective.sn" || existingData?.role === "Admin" || cleanEmail.includes("admin");
-      
-      const profileObj = {
-        id: u.uid || existingData?.id || ("usr_" + Date.now()),
-        name: existingData?.name || u.displayName || cleanEmail.split("@")[0],
-        email: cleanEmail,
-        avatarUrl: existingData?.avatarUrl || u.photoURL || "preset-male",
-        role: isAdminUser ? "Admin" : (existingData?.role || "Member"),
-        emailVerified: true,
-        mfaEnabled: existingData?.mfaEnabled || false,
-        isMongoDB: true,
-        isFirebaseAuthSession: true,
-        coverPhotoUrl: existingData?.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-        streak: existingData?.streak || 1,
-        readingTime: existingData?.readingTime || 0,
-        hidePersonalInfo: existingData?.hidePersonalInfo || false,
-        bio: existingData?.bio || "Membre lecteur",
-        accolades: existingData?.accolades || ["verified_identity"],
-        lastLoginAt: new Date().toISOString()
-      };
-      
-      try {
-        await setDoc(userDocRef, profileObj, { merge: true });
-      } catch (fsErr) {
-        console.warn("Notice saving user profile to Firestore:", fsErr);
-      }
-      
-      setReaderProfile(profileObj);
-    } catch (err) {
-      console.error(`${providerName} sign in error:`, err);
-      throw err;
-    }
-  };
-
-  const loginWithGoogle = () => loginWithSocial('google');
 
   const loginWithEmail = async (email: string, pass: string, remember: boolean = true) => {
     let cleanEmail = email.toLowerCase().trim();
@@ -1023,8 +947,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider value={{
       user,
       loading,
-      loginWithGoogle,
-      loginWithSocial,
       allUsers,
       loginWithEmail,
       registerWithEmail,
