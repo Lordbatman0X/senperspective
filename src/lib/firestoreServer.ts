@@ -428,3 +428,32 @@ export async function updateUserPasswordServer(email: string, newPassword: strin
   return { success: true, email: normalizedEmail };
 }
 
+// Legacy unified sync state helpers (used by server.ts)
+export async function getUnifiedSyncState() {
+  const central = loadCentralDB();
+  return {
+    users: central.users || {},
+    articles: central.articles || {},
+    messages: central.messages || {},
+    comments: central.comments || {},
+    reports: central.reports || {},
+    guest_preferences: central.guest_preferences || {},
+    analytics_events: central.analytics_events || {},
+    user_consents: central.user_consents || {}
+  };
+}
+
+export async function mergeUnifiedSyncState(partial: Record<string, any>) {
+  const central = loadCentralDB();
+  if (partial.users) central.users = { ...central.users, ...partial.users };
+  if (partial.articles) central.articles = { ...central.articles, ...partial.articles };
+  if (partial.messages) central.messages = { ...central.messages, ...partial.messages };
+  if (partial.comments) central.comments = { ...central.comments, ...partial.comments };
+  if (partial.reports) central.reports = { ...central.reports, ...partial.reports };
+  if (partial.guest_preferences) central.guest_preferences = { ...central.guest_preferences, ...partial.guest_preferences };
+  if (partial.analytics_events) central.analytics_events = { ...central.analytics_events, ...partial.analytics_events };
+  if (partial.user_consents) central.user_consents = { ...central.user_consents, ...partial.user_consents };
+  saveCentralDB();
+  return getUnifiedSyncState();
+}
+
