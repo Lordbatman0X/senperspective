@@ -45,13 +45,13 @@ import {
   wipeAnalytics,
   getUnifiedSyncState,
   mergeUnifiedSyncState
-} from "./src/lib/firestoreServer";
+} from "./src/lib/centralApi";
 
 export const app = express();
 const PORT = 3000;
 
 // Connect to Supabase (server-side)
-import { getSupabaseServer } from './src/lib/firestoreServer';
+import { getSupabaseServer } from './src/lib/centralApi';
 console.log("[Supabase Setup] Initializing server connection.");
 try {
   getSupabaseServer();
@@ -366,44 +366,44 @@ app.use((req, res, next) => {
     }
   };
 
-  const syncArticleToFirestore = async (article: any) => {
+  const syncArticleToCentralApi = async (article: any) => {
     try {
-      // Exclusively Sync to MongoDB database
       await saveDocument("articles", article.id, article, false);
-      console.log(`[MONGODB SYNC SUCCESS] Synced article "${article.id}" directly to MongoDB.`);
+      console.log(`[CENTRAL SYNC SUCCESS] Synced article "${article.id}" directly to Central Database & Supabase.`);
     } catch (err) {
-      console.error("[MONGODB SYNC ERROR]", err);
+      console.error("[CENTRAL SYNC ERROR]", err);
     }
   };
+  const syncArticleToFirestore = syncArticleToCentralApi;
 
-  const deleteArticleFromFirestore = async (articleId: string) => {
+  const deleteArticleFromCentralApi = async (articleId: string) => {
     try {
-      // Exclusively delete from MongoDB database
       await deleteDocument("articles", articleId);
-      console.log(`[MONGODB DELETE SUCCESS] Deleted article "${articleId}" from MongoDB.`);
+      console.log(`[CENTRAL DELETE SUCCESS] Deleted article "${articleId}" from Central Database & Supabase.`);
     } catch (err) {
-      console.error("[MONGODB DELETE ERROR]", err);
+      console.error("[CENTRAL DELETE ERROR]", err);
     }
   };
+  const deleteArticleFromFirestore = deleteArticleFromCentralApi;
 
-  // Helper to purge all documents directly from Firestore articles collection
-  const purgeAllFirestoreRssArticles = async () => {
+  // Helper to purge all documents directly from articles collection
+  const purgeAllCentralRssArticles = async () => {
     try {
-      // Exclusively purge from MongoDB database
       const deletedCount = await wipeCollection("articles");
-      console.log(`[MONGODB PURGE SUCCESS] Successfully purged ${deletedCount} documents from MongoDB articles collection.`);
+      console.log(`[CENTRAL PURGE SUCCESS] Successfully purged ${deletedCount} documents from articles collection.`);
       return deletedCount;
     } catch (err) {
-      console.error("[MONGODB PURGE ERROR]", err);
+      console.error("[CENTRAL PURGE ERROR]", err);
     }
     return 0;
   };
+  const purgeAllFirestoreRssArticles = purgeAllCentralRssArticles;
 
   // Sync user consent decision to Supabase table 'user_consents'
   const syncUserConsentToSupabase = async (consent: any) => {
     try {
       const docId = consent.id || `consent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      const { getSupabaseServer } = await import('./src/lib/firestoreServer');
+      const { getSupabaseServer } = await import('./src/lib/centralApi');
       const client = getSupabaseServer();
       await client.from('user_consents').upsert({
         id: docId,
@@ -428,7 +428,7 @@ app.use((req, res, next) => {
   // Sync visit event to Supabase table 'analytics_events'
   const syncEventToSupabase = async (record: any, isConsent: boolean) => {
     try {
-      const { getSupabaseServer } = await import('./src/lib/firestoreServer');
+      const { getSupabaseServer } = await import('./src/lib/centralApi');
       const client = getSupabaseServer();
       const docId = record.id || (record.sessionId ? (isConsent ? `consent_${record.sessionId}` : `evt_${record.sessionId}_${Date.now()}`) : `evt_${Date.now()}`);
       const table = isConsent ? 'user_consents' : 'analytics_events';
@@ -456,7 +456,7 @@ app.use((req, res, next) => {
   // Sync analytics telemetry event to Supabase table 'analytics_events'
   const syncAnalyticsEventToSupabase = async (event: any) => {
     try {
-      const { getSupabaseServer } = await import('./src/lib/firestoreServer');
+      const { getSupabaseServer } = await import('./src/lib/centralApi');
       const client = getSupabaseServer();
       const docId = event.id || `evt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       await client.from('analytics_events').upsert({

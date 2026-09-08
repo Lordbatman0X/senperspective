@@ -5,8 +5,7 @@ import {
   getCurrentUser, 
   onAuthStateChanged,
   supabase,
-  subscribeToTable,
-  usersQuery
+  subscribeToTable
 } from '../lib/supabaseClient';
 import { useStore } from "../store";
 import { sampleArticles } from "../data";
@@ -145,50 +144,90 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Sync / listen to registered users from database
   useEffect(() => {
-    const cleanOldMockData = async () => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      try {
-        const legacyMockEmails = [
-          'fatou.diop@example.com',
-          'mamadou.sylla@example.com',
-          'amina.kane@example.com',
-          'member@perspective.sn'
-        ];
-        for (const mockEmail of legacyMockEmails) {
-          const { error } = await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('email', mockEmail);
-          if (error) {
-            console.warn(`[Users] Notice soft-deleting mock user ${mockEmail}:`, error.message);
-          }
-        }
-      } catch (err) {
-        console.warn("Clean up legacy mock data notice:", err);
-      }
-    };
-
-    cleanOldMockData();
-
     const refreshAllUsers = async () => {
       try {
-        const { data, error } = await usersQuery();
-        if (error) {
-          console.warn("[Supabase Users] Notice fetching users:", error.message);
-          return;
+        let userRecords: any[] = [];
+        const userMap = new Map<string, any>();
+
+        // 1. Fetch from Supabase
+        try {
+          const { data, error } = await supabase.from('users').select('*');
+          if (!error && Array.isArray(data) && data.length > 0) {
+            data.forEach((u: any) => {
+              const em = (u.email || u.id || "").toLowerCase().trim();
+              if (em) userMap.set(em, u);
+            });
+          }
+        } catch (supaErr) {
+          console.warn("[Supabase Users] Notice fetching users from Supabase:", supaErr);
         }
-        if (data && data.length > 0) {
-          const formatted: FirestoreUser[] = data.map((u: any) => {
+
+        // 2. Fetch from Central Server API
+        try {
+          const sRes = await fetch('/api/users');
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (sData.success && Array.isArray(sData.users)) {
+              sData.users.forEach((u: any) => {
+                const em = (u.email || u.id || "").toLowerCase().trim();
+                if (em) {
+                  const existing = userMap.get(em) || {};
+                  userMap.set(em, { ...existing, ...u });
+                }
+              });
+            }
+          }
+        } catch (serverErr) {
+          console.warn("[Central Users] Notice fetching users from server:", serverErr);
+        }
+
+        // 3. Always merge existing users from Zustand store to guarantee no accounts disappear
+        const existingStoreUsers = useStore.getState().users || [];
+        existingStoreUsers.forEach((u: any) => {
+          const em = (u.email || u.id || "").toLowerCase().trim();
+          if (em) {
+            const remote = userMap.get(em);
+            if (!remote) {
+              userMap.set(em, u);
+            } else {
+              userMap.set(em, {
+                ...u,
+                ...remote,
+                password: remote.password || u.password,
+                passwordHash: remote.passwordHash || u.passwordHash,
+                pin: remote.pin || u.pin,
+                authType: remote.authType || u.authType
+              });
+            }
+          }
+        });
+
+        userRecords = Array.from(userMap.values());
+
+        if (userRecords.length > 0) {
+          const formatted = userRecords.map((u: any) => {
             const email = (u.email || "").toLowerCase().trim();
             const lastActiveTime = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
-            const isOnlineCalculated = Boolean(u.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
+            const isOnlineCalculated = Boolean(u.isOnline || u.is_online) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
             const isSuperAdmin = email === "kadersdiaz3@gmail.com";
 
             return {
+              ...u,
+              id: u.id || stableUserId(email),
               email,
               name: u.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
-              avatarUrl: u.avatarUrl || "preset-male",
+              avatarUrl: u.avatarUrl || u.avatar_url || "preset-male",
               role: isSuperAdmin ? "Admin" : (u.role || "Member"),
+              authType: u.authType || u.auth_type || (u.pin ? 'pin' : 'password'),
+              password: u.password,
+              passwordHash: u.passwordHash || u.password_hash,
+              pin: u.pin,
+              emailVerified: u.emailVerified !== undefined ? u.emailVerified : true,
+              mfaEnabled: Boolean(u.mfaEnabled || u.twoFactorEnabled),
+              twoFactorEnabled: Boolean(u.mfaEnabled || u.twoFactorEnabled),
               isOnline: isOnlineCalculated,
               lastActiveAt: u.lastActiveAt || undefined,
-              coverPhotoUrl: u.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              coverPhotoUrl: u.coverPhotoUrl || u.cover_photo_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
               streak: u.streak !== undefined ? u.streak : 1,
               readingTime: u.readingTime !== undefined ? u.readingTime : 0,
               hidePersonalInfo: u.hidePersonalInfo || false,
@@ -200,23 +239,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           if (!formatted.some(u => u.email === "kadersdiaz3@gmail.com")) {
             formatted.unshift({
+              id: 'kadersdiaz3-admin-founder',
               email: "kadersdiaz3@gmail.com",
               name: "Kader S. Diaz",
               avatarUrl: "preset-male",
               role: "Admin",
+              authType: "password",
+              password: "Perspective2026!",
               isOnline: true,
-              streak: 15,
-              readingTime: 480,
-              bio: "Super Administrateur & Fondateur Perspective Group",
-              accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"]
+              streak: 25,
+              readingTime: 820,
+              bio: "Fondateur & Directeur de Publication — Perspective Group Sénégal",
+              accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"],
+              coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              registeredAt: new Date().toISOString()
             });
           }
 
-          setAllUsers(formatted);
+          setAllUsers(formatted as any);
           useStore.setState({ users: formatted as any });
         }
       } catch (err) {
-        console.warn("[Supabase Users] Notice fetching users:", err);
+        console.warn("[Users Refresh] Notice during user sync:", err);
       }
     };
 
@@ -673,7 +717,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (authUser.email) {
           try {
-            const { data, error } = await usersQuery().eq('email', authUser.email.toLowerCase().trim()).single();
+            const { data, error } = await supabase.from('users').select('*').eq('email', authUser.email.toLowerCase().trim()).single();
             if (data && !error) {
               const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || data.role === "Admin" || authUser.email.includes("admin");
               const updatedProfile = {
@@ -715,7 +759,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 registeredAt: new Date().toISOString(),
                 lastLoginAt: new Date().toISOString()
               };
-              await supabase.from('users').upsert({ ...fallbackProfile, email: authUser.email.toLowerCase().trim() }, { onConflict: 'email' }).eq('email', authUser.email.toLowerCase().trim());
+              await supabase.from('users').upsert({ ...fallbackProfile, email: authUser.email.toLowerCase().trim() }, { onConflict: 'email' });
               setReaderProfile({
                 ...fallbackProfile,
                 emailVerified: authUser.email_confirmed_at ? true : false,
@@ -750,19 +794,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (targetEmail) {
           const cleanEmail = targetEmail.toLowerCase().trim();
-          const { data, error } = await usersQuery().eq('email', cleanEmail).single();
+          const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).maybeSingle();
           if (data && !error) {
             const isAdminUser = cleanEmail === "kadersdiaz3@gmail.com" || cleanEmail === "admin@perspective.sn" || data.role === "Admin" || cleanEmail.includes("admin");
             const refreshedProfile = {
               id: data.id || stableUserId(cleanEmail),
               name: data.name || cleanEmail.split("@")[0],
               email: cleanEmail,
-              avatarUrl: data.avatarUrl || "preset-male",
+              avatarUrl: data.avatarUrl || data.avatar_url || "preset-male",
               role: isAdminUser ? "Admin" : (data.role || "Member"),
               emailVerified: true,
               mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
               isMongoDB: true,
-              coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              coverPhotoUrl: data.coverPhotoUrl || data.cover_photo_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
               streak: data.streak !== undefined ? data.streak : 1,
               readingTime: data.readingTime !== undefined ? data.readingTime : 0,
               hidePersonalInfo: data.hidePersonalInfo || false,
@@ -782,15 +826,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               mfaEnabled: false,
               isMongoDB: true,
               coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-              streak: 10,
-              readingTime: 300,
+              streak: 25,
+              readingTime: 820,
               hidePersonalInfo: false,
               bio: "Super Administrateur & Fondateur Perspective Group",
-              accolades: ["verified_identity", "editorial_board"]
+              accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"]
             };
-            await supabase.from('users').upsert({ ...superAdminProfile, email: cleanEmail }, { onConflict: 'email' }).eq('email', cleanEmail);
+            await supabase.from('users').upsert({ ...superAdminProfile, email: cleanEmail }, { onConflict: 'email' });
             setReaderProfile(superAdminProfile);
             localStorage.setItem('perspective_auth_session', JSON.stringify(superAdminProfile));
+          } else if (storeProfile && storeProfile.email === cleanEmail) {
+            setReaderProfile(storeProfile);
+          } else if (localSessionStr) {
+            try {
+              const parsed = JSON.parse(localSessionStr);
+              if (parsed && parsed.email === cleanEmail) {
+                setReaderProfile(parsed);
+              }
+            } catch {}
           }
         }
       } catch (err) {
@@ -883,7 +936,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const isSuperAdminPassMatch = await verifyPassword(pass, undefined, "Swiz1324", undefined);
       let docPassMatches = false;
       try {
-        const { data, error } = await usersQuery().eq('email', "kadersdiaz3@gmail.com").single();
+        const { data, error } = await supabase.from('users').select('*').eq('email', "kadersdiaz3@gmail.com").maybeSingle();
         if (data && !error) {
           docPassMatches = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         }
@@ -949,7 +1002,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: cleanEmail,
         lastLoginAt: new Date().toISOString(), 
         isOnline: true 
-      }, { onConflict: 'email' }).eq('email', cleanEmail);
+      }, { onConflict: 'email' });
 
       localStorage.setItem('perspective_auth_session', JSON.stringify(presetProfile));
       setReaderProfile(presetProfile);
@@ -958,7 +1011,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 3. Check against Supabase users table
     try {
-      const { data, error } = await usersQuery().eq('email', cleanEmail).single();
+      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).maybeSingle();
       if (data && !error) {
         console.log(`[AUTH LOG] Found Supabase user profile for: ${cleanEmail}`);
 
@@ -998,7 +1051,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           updates.passwordHash = await hashPassword(pass);
         }
 
-        await supabase.from('users').upsert(updates, { onConflict: 'email' }).eq('email', cleanEmail);
+        await supabase.from('users').upsert(updates, { onConflict: 'email' });
         localStorage.setItem('perspective_auth_session', JSON.stringify(profileObj));
         setReaderProfile(profileObj);
         console.log(`[AUTH LOG] Database sign-in completed successfully for: ${cleanEmail}`);
@@ -1080,7 +1133,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           password: pass,
           lastLoginAt: new Date().toISOString(), 
           isOnline: true 
-        }, { onConflict: 'email' }).eq('email', cleanEmail);
+        }, { onConflict: 'email' });
 
         localStorage.setItem('perspective_auth_session', JSON.stringify(localProfile));
         setReaderProfile(localProfile);
@@ -1113,7 +1166,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await supabase.from('users').upsert({ 
         ...fallbackProfile, 
         email: cleanEmail 
-      }, { onConflict: 'email' }).eq('email', cleanEmail);
+      }, { onConflict: 'email' });
 
       localStorage.setItem('perspective_auth_session', JSON.stringify(fallbackProfile));
       setReaderProfile(fallbackProfile);
@@ -1140,7 +1193,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Check if account already exists in Supabase
     try {
-      const { data, error } = await usersQuery().eq('email', cleanEmail).single();
+      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).maybeSingle();
       if (data && !error) {
         const matchesExisting = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         if (matchesExisting) {
@@ -1245,7 +1298,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let supabaseErrMsg = "";
     try {
       const safeProfile = await sanitizeFirestorePayload(profileData);
-      await supabase.from('users').upsert({ ...safeProfile, email: cleanEmail }, { onConflict: 'email' }).eq('email', cleanEmail);
+      await supabase.from('users').upsert({ ...safeProfile, email: cleanEmail }, { onConflict: 'email' });
       supabaseDurable = true;
       console.log(`[AUTH LOG] User profile successfully committed to Supabase: ${cleanEmail}`);
     } catch (fsErr: any) {

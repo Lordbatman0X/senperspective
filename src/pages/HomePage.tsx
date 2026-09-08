@@ -58,10 +58,11 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
                   e.stopPropagation();
                   toggleSavedArticle(article.id);
                 }}
-                className={`text-brand-dark dark:text-zinc-300 hover:text-brand-primary transition-colors shrink-0 ${isSaved ? 'text-brand-primary' : ''}`}
-                title="Save article"
+                className={`p-2 -mr-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-brand-dark dark:text-zinc-300 hover:text-brand-primary transition-all shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center ${isSaved ? 'text-brand-primary dark:text-brand-primary' : ''}`}
+                title={isSaved ? "Article sauvegardé" : "Sauvegarder l'article"}
+                aria-label="Save article"
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="square">
                   <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
                 </svg>
               </button>
@@ -116,8 +117,9 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
               e.preventDefault();
               toggleSavedArticle(article.id);
             }}
-            className={`text-brand-dark hover:text-brand-primary transition-colors ${isSaved ? 'text-brand-primary' : ''}`}
-            title="Save article"
+            className={`p-2 -mr-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-brand-dark dark:text-zinc-300 hover:text-brand-primary transition-all shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center ${isSaved ? 'text-brand-primary dark:text-brand-primary' : ''}`}
+            title={isSaved ? "Article sauvegardé" : "Sauvegarder l'article"}
+            aria-label="Save article"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill={isSaved ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="square">
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>

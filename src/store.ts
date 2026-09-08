@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { supabase, usersQuery } from './lib/supabaseClient';
+import { supabase } from './lib/supabaseClient';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
@@ -377,11 +377,11 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
         if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
           const cleanEmail = email.toLowerCase().trim();
           if (supabase) {
-            await supabase.from('users').upsert({ id: cleanEmail, preferences: currentPrefs }, { onConflict: 'email' }).then(({ error }) => {
+            await supabase.from('users').upsert({ email: cleanEmail, id: cleanEmail, preferences: currentPrefs }, { onConflict: 'email' }).then(({ error }) => {
               if (error) console.warn("[Supabase notice] Error syncing preferences:", error);
             }).catch(() => {});
           }
-    } else {
+        } else {
       let deviceId = '';
       if (typeof window !== 'undefined' && window.localStorage) {
         deviceId = localStorage.getItem('perspective_device_id') || '';
@@ -484,45 +484,154 @@ export const useStore = create<AppState>()(
           const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
             supabase.from('articles').select('*'),
             supabase.from('ads').select('*'),
-            usersQuery(),
+            supabase.from('users').select('*'),
             supabase.from('comments').select('*')
           ]);
 
-          if (articlesRes.data && articlesRes.data.length > 0) {
-            const fetchedArticles: Article[] = articlesRes.data as Article[];
-            const combined = [...fetchedArticles].sort(
+          let remoteArticles: Article[] = [];
+          if (articlesRes && articlesRes.data && Array.isArray(articlesRes.data) && articlesRes.data.length > 0) {
+            remoteArticles = articlesRes.data as Article[];
+          }
+
+          let remoteAds: any[] = [];
+          if (adsRes && adsRes.data && Array.isArray(adsRes.data) && adsRes.data.length > 0) {
+            remoteAds = adsRes.data as any;
+          }
+
+          let remoteUsers: any[] = [];
+          if (usersRes && usersRes.data && Array.isArray(usersRes.data) && usersRes.data.length > 0) {
+            remoteUsers = usersRes.data as any;
+          }
+
+          let remoteComments: any[] = [];
+          if (commentsRes && commentsRes.data && Array.isArray(commentsRes.data) && commentsRes.data.length > 0) {
+            remoteComments = commentsRes.data as any;
+          }
+
+          // Fallback / merge with Central Server unified sync state
+          try {
+            const sRes = await fetch('/api/sync/state');
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (sData.success) {
+                if (remoteArticles.length === 0 && Array.isArray(sData.articles) && sData.articles.length > 0) {
+                  remoteArticles = sData.articles;
+                }
+                if (remoteAds.length === 0 && Array.isArray(sData.ads) && sData.ads.length > 0) {
+                  remoteAds = sData.ads;
+                }
+                if (Array.isArray(sData.users) && sData.users.length > 0) {
+                  const uMap = new Map<string, any>();
+                  remoteUsers.forEach(u => {
+                    const em = (u.email || u.id || '').toLowerCase().trim();
+                    if (em) uMap.set(em, u);
+                  });
+                  sData.users.forEach((u: any) => {
+                    const em = (u.email || u.id || '').toLowerCase().trim();
+                    if (em && !uMap.has(em)) {
+                      uMap.set(em, u);
+                    }
+                  });
+                  remoteUsers = Array.from(uMap.values());
+                }
+              }
+            }
+          } catch (srvErr) {
+            console.warn('[Sync] Central server state fetch notice:', srvErr);
+          }
+
+          // Central Users API fallback
+          try {
+            const uRes = await fetch('/api/users');
+            if (uRes.ok) {
+              const uData = await uRes.json();
+              if (uData.success && Array.isArray(uData.users) && uData.users.length > 0) {
+                const uMap = new Map<string, any>();
+                remoteUsers.forEach(u => {
+                  const em = (u.email || u.id || '').toLowerCase().trim();
+                  if (em) uMap.set(em, u);
+                });
+                uData.users.forEach((u: any) => {
+                  const em = (u.email || u.id || '').toLowerCase().trim();
+                  if (em && !uMap.has(em)) {
+                    uMap.set(em, u);
+                  }
+                });
+                remoteUsers = Array.from(uMap.values());
+              }
+            }
+          } catch (uErr) {
+            console.warn('[Sync] Central users endpoint notice:', uErr);
+          }
+
+          if (remoteArticles.length > 0) {
+            const combined = [...remoteArticles].sort(
               (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
             );
             set({ articles: combined });
           } else {
-            set({ articles: [] });
+            const current = get().articles;
+            if (!current || current.length === 0) {
+              set({ articles: seedArticles });
+            }
           }
 
-          if (adsRes.data && adsRes.data.length > 0) {
-            set({ ads: adsRes.data as any });
+          if (remoteAds.length > 0) {
+            set({ ads: remoteAds as any });
           }
 
-          if (usersRes.data && usersRes.data.length > 0) {
-            const fetchedUsers: any[] = usersRes.data;
-            const emailMap = new Map<string, any>();
-            fetchedUsers.forEach(user => {
-              const email = (user.email || '').toLowerCase().trim();
-              if (!email) return;
-              if (emailMap.has(email)) {
-                const existing = emailMap.get(email);
-                emailMap.set(email, { ...existing, ...user, email });
-              } else {
-                emailMap.set(email, user);
-              }
+          const localUsers = get().users || [];
+          const emailMap = new Map<string, any>();
+          
+          // Seed with existing local users so accounts NEVER disappear
+          localUsers.forEach(user => {
+            const em = (user.email || user.id || '').toLowerCase().trim();
+            if (em) emailMap.set(em, user);
+          });
+
+          // Merge in remote users
+          remoteUsers.forEach(user => {
+            const email = (user.email || user.id || '').toLowerCase().trim();
+            if (!email) return;
+            if (emailMap.has(email)) {
+              const existing = emailMap.get(email);
+              emailMap.set(email, {
+                ...existing,
+                ...user,
+                email,
+                // Preserve local credentials if remote omitted them
+                password: user.password || existing.password,
+                passwordHash: user.passwordHash || existing.passwordHash,
+                pin: user.pin || existing.pin,
+                authType: user.authType || existing.authType
+              });
+            } else {
+              emailMap.set(email, user);
+            }
+          });
+
+          // Always ensure Kader S. Diaz (Super Admin) is present and protected
+          if (!emailMap.has('kadersdiaz3@gmail.com')) {
+            emailMap.set('kadersdiaz3@gmail.com', {
+              id: 'kadersdiaz3-admin-founder',
+              email: 'kadersdiaz3@gmail.com',
+              name: 'Kader S. Diaz',
+              avatarUrl: 'preset-male',
+              role: 'Admin',
+              authType: 'password',
+              password: 'Perspective2026!',
+              registeredAt: new Date().toISOString(),
+              isOnline: true
             });
-            set({ users: Array.from(emailMap.values()) });
           }
 
-          if (commentsRes.data && commentsRes.data.length > 0) {
-            set({ comments: commentsRes.data as any });
+          set({ users: Array.from(emailMap.values()) });
+
+          if (remoteComments.length > 0) {
+            set({ comments: remoteComments as any });
           }
         } catch (err) {
-          console.warn("[Offline/Local-only mode] Supabase is unreachable — articles/ads are loaded from local seed data and persisted to THIS browser only. Underlying error:", err);
+          console.warn("[Sync Notice] Remote sync note:", err);
           const current = get().articles;
           if (!current || current.length === 0) {
             set({ articles: seedArticles });
@@ -534,8 +643,13 @@ export const useStore = create<AppState>()(
         try {
           const clean = await sanitizeFirestorePayload(article as any);
           if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
+          fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: clean, merge: true })
+          }).catch(() => {});
         } catch (err) {
-          console.error("[Supabase notice] Error writing article:", err);
+          console.error("[Persistence notice] Error writing article:", err);
         }
 
         if (article.isPublished) {
@@ -561,13 +675,19 @@ export const useStore = create<AppState>()(
         try {
           const clean = await sanitizeFirestorePayload(article as any);
           if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
+          fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: clean, merge: true })
+          }).catch(() => {});
         } catch (err) {
-          console.error("[Supabase notice] Error updating article:", err);
+          console.error("[Persistence notice] Error updating article:", err);
         }
       },
       deleteArticle: (id) => {
         set({ articles: get().articles.filter(a => a.id !== id) });
         if (supabase) { supabase.from('articles').delete().eq('id', id).catch(() => {}); }
+        fetch(`/api/mongodb/doc/articles/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
       },
       purgeAllArticles: async () => {
         const currentArticles = [...(get().articles || [])];
@@ -886,7 +1006,7 @@ export const useStore = create<AppState>()(
           set({ users: fusedUsers });
           for (const dup of duplicates) {
             try {
-              if (supabase) { await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', dup.id); }
+              if (supabase) { await supabase.from('users').delete().eq('id', dup.id).catch(() => {}); }
             } catch (_) {}
           }
           for (const user of fusedUsers) {
@@ -899,19 +1019,23 @@ export const useStore = create<AppState>()(
         }
         return { fused: duplicates.length, total: fusedUsers.length };
       },
-      // Remove fake/test accounts
+      // Safe account manager - never removes legitimate, admin, or founder accounts
       removeFakeAccounts: async () => {
         const allUsers = get().users || [];
-        const fakePatterns = ['test', 'fake', 'demo', 'example', 'sample', 'admin@', 'user@', 'foo@', 'bar@'];
+        // Protected core emails that MUST never be purged
+        const protectedEmails = ['kadersdiaz3@gmail.com', 'admin@perspective.sn'];
         const realUsers: any[] = [];
         const removedUsers: any[] = [];
         
         for (const user of allUsers) {
-          const email = (user.email || '').toLowerCase();
-          const name = (user.name || '').toLowerCase();
-          const isFake = fakePatterns.some(pattern => email.includes(pattern) || name.includes(pattern));
-          
-          if (isFake) {
+          const email = (user.email || '').toLowerCase().trim();
+          if (protectedEmails.includes(email) || email.endsWith('@perspective.sn') || user.role === 'Admin') {
+            realUsers.push(user);
+            continue;
+          }
+          // Only flag explicitly corrupt or empty placeholder entries
+          const isCorrupted = !email || email === 'undefined' || email === 'null' || (email.includes('fake_temp_') && !user.name);
+          if (isCorrupted) {
             removedUsers.push(user);
           } else {
             realUsers.push(user);
@@ -922,10 +1046,9 @@ export const useStore = create<AppState>()(
           set({ users: realUsers });
           for (const user of removedUsers) {
             try {
-              if (supabase) { await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', user.id); }
+              if (supabase && user.id) { await supabase.from('users').delete().eq('id', user.id).catch(() => {}); }
             } catch (_) {}
           }
-          console.log(`Removed ${removedUsers.length} fake accounts. Total users: ${realUsers.length}`);
         }
         return { removed: removedUsers.length, total: realUsers.length };
       },
@@ -1345,7 +1468,7 @@ export const useStore = create<AppState>()(
       setReaderProfile: (profile) => set((state) => {
         const updatedUsers = (state.users || []).map(u => 
           profile && u.email.toLowerCase() === profile.email.toLowerCase()
-            ? { ...u, name: profile.name, avatarUrl: profile.avatarUrl, emailVerified: profile.emailVerified, mfaEnabled: profile.mfaEnabled }
+            ? { ...u, ...profile }
             : u
         );
         return { 
@@ -1730,7 +1853,9 @@ export const useStore = create<AppState>()(
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
         set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
-        if (supabase) { supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', normalized); }
+        if (supabase) { supabase.from('users').delete().eq('id', normalized).catch(() => {}); }
+        fetch(`/api/users/${encodeURIComponent(normalized)}`, { method: 'DELETE' }).catch(() => {});
+        fetch(`/api/mongodb/doc/users/${encodeURIComponent(normalized)}`, { method: 'DELETE' }).catch(() => {});
       },
       updateUserRole: (email, role) => {
         const normalized = email.toLowerCase().trim();
@@ -1738,6 +1863,11 @@ export const useStore = create<AppState>()(
           users: (get().users || []).map(u => u.email.toLowerCase() === normalized ? { ...u, role } : u)
         });
         if (supabase) { supabase.from('users').update({ role }).eq('id', normalized).catch(() => {}); }
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalized, role })
+        }).catch(() => {});
       },
       updateUserSecurity: (email, emailVerified, mfaEnabled) => {
         const normalized = email.toLowerCase().trim();
@@ -1752,6 +1882,11 @@ export const useStore = create<AppState>()(
           readerProfile: updatedProfile
         });
         if (supabase) { supabase.from('users').update({ emailVerified, mfaEnabled }).eq('id', normalized).catch(() => {}); }
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalized, emailVerified, mfaEnabled })
+        }).catch(() => {});
       },
       updateUserPassword: (email, password) => {
         const normalized = email.toLowerCase().trim();
@@ -1771,6 +1906,16 @@ export const useStore = create<AppState>()(
         }
         set({ users: updatedUsers });
         if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalized, password, role: 'Admin' })
+        }).catch(() => {});
+        fetch('/api/mongodb/auth/update-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalized, password })
+        }).catch(() => {});
       },
       updateUserPin: (email, pin) => {
         const normalized = email.toLowerCase().trim();
@@ -1785,6 +1930,11 @@ export const useStore = create<AppState>()(
           readerProfile: updatedProfile
         });
         if (supabase) { supabase.from('users').update({ pin, authType: 'pin', mfaEnabled: true }).eq('id', normalized).catch(() => {}); }
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: normalized, pin, authType: 'pin', mfaEnabled: true })
+        }).catch(() => {});
       },
       purgeDatabaseAndArticles: async () => {
         const articlesToDelete = get().articles || [];
@@ -1826,7 +1976,7 @@ export const useStore = create<AppState>()(
           }
           if (usersRes.data) {
             for (const row of usersRes.data) {
-              await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', row.id);
+              await supabase.from('users').delete().eq('id', row.id).catch(() => {});
             }
           }
 
@@ -2102,7 +2252,8 @@ export const useStore = create<AppState>()(
         messengerTextScale: state.messengerTextScale,
         notificationPreferences: state.notificationPreferences,
         notificationResponses: state.notificationResponses,
-        readerProfile: state.readerProfile
+        readerProfile: state.readerProfile,
+        users: state.users
       }),
       onRehydrateStorage: () => (state) => {
         // Note: Shared content is centralized in Supabase and NOT persisted locally.

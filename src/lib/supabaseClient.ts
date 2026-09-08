@@ -44,8 +44,44 @@ export function getSupabaseClientOrNull(): SupabaseClient<any> | null {
   }
 }
 
+// Safe fallback builder for when Supabase is unconfigured or unreachable
+function createSafeFallbackBuilder(): any {
+  const result = Promise.resolve({ data: null, error: { message: 'Supabase client not initialized' } });
+  const handler: ProxyHandler<any> = {
+    get(_, prop) {
+      if (prop === 'then') return result.then.bind(result);
+      if (prop === 'catch') return result.catch.bind(result);
+      if (prop === 'finally') return result.finally.bind(result);
+      return (..._args: any[]) => new Proxy(() => {}, handler);
+    },
+    apply() {
+      return new Proxy(() => {}, handler);
+    }
+  };
+  return new Proxy(() => {}, handler);
+}
+
+const safeFallbackClient: any = {
+  from: () => createSafeFallbackBuilder(),
+  auth: {
+    getSession: async () => ({ data: { session: null }, error: null }),
+    signInAnonymously: async () => ({ data: { user: null }, error: { message: 'Client not configured' } }),
+    signInWithPassword: async () => ({ data: { user: null, session: null }, error: { message: 'Client not configured' } }),
+    signUp: async () => ({ data: { user: null, session: null }, error: { message: 'Client not configured' } }),
+    signOut: async () => ({ error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } })
+  },
+  channel: () => ({
+    on: () => ({
+      subscribe: () => ({ unsubscribe() {} }),
+      on: () => ({ subscribe: () => ({ unsubscribe() {} }) })
+    }),
+    subscribe: () => ({ unsubscribe() {} })
+  })
+};
+
 // Lazy singleton via Proxy: retries initialization on each access after a failure
-export const supabase: SupabaseClient<any> = new Proxy({} as SupabaseClient<any>, {
+export const supabase: any = new Proxy({} as any, {
   get(_, prop) {
     if (initFailed) {
       initFailed = false;
@@ -54,8 +90,7 @@ export const supabase: SupabaseClient<any> = new Proxy({} as SupabaseClient<any>
       const client = getSupabaseClient();
       return (client as any)[prop];
     } catch (e) {
-      console.error(`[Supabase] Cannot access .${String(prop)}: client not initialized.`, e);
-      return undefined;
+      return safeFallbackClient[prop] || createSafeFallbackBuilder();
     }
   }
 }) as any;

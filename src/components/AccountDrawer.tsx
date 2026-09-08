@@ -380,11 +380,23 @@ export function AccountDrawer({
 
   const syncProfileToFirestore = async (updatedFields: Record<string, any>) => {
     if (readerProfile && readerProfile.email) {
+      const cleanEmail = readerProfile.email.toLowerCase().trim();
       try {
         const safeFields = await sanitizeFirestorePayload(updatedFields);
-        await supabase.from('users').update(safeFields).eq('id', readerProfile.email.toLowerCase().trim());
+        if (supabase) {
+          await supabase.from('users').update(safeFields).or(`email.eq.${cleanEmail},id.eq.${cleanEmail}`);
+        }
       } catch (err) {
-        console.error("Error syncing profile updates:", err);
+        console.error("Error syncing profile updates to Supabase:", err);
+      }
+      try {
+        await fetch('/api/central/doc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collection: 'users', id: cleanEmail, data: updatedFields, merge: true })
+        });
+      } catch (err) {
+        console.error("Error syncing profile updates to Central DB:", err);
       }
     }
   };

@@ -476,6 +476,27 @@ export function ProfilePage() {
     }
   };
 
+  // Helper to durably save user fields to Supabase and Central Database
+  const persistUserUpdate = async (userEmail: string, payload: Record<string, any>) => {
+    const cleanEmail = userEmail.toLowerCase().trim();
+    try {
+      if (supabase) {
+        await supabase.from('users').update(payload).or(`email.eq.${cleanEmail},id.eq.${cleanEmail}`);
+      }
+    } catch (err) {
+      console.warn("[Profile update notice - Supabase]:", err);
+    }
+    try {
+      await fetch('/api/central/doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collection: 'users', id: cleanEmail, data: payload, merge: true })
+      });
+    } catch (err) {
+      console.warn("[Profile update notice - Central]:", err);
+    }
+  };
+
   // Profile image changes (Avatar & Cover photo)
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "avatarUrl" | "coverPhotoUrl") => {
     const file = e.target.files?.[0];
@@ -485,7 +506,7 @@ export function ProfilePage() {
       const isCover = type === "coverPhotoUrl";
       const compressedDataUrl = await compressImageFile(file, isCover ? 800 : 400, isCover ? 500 : 400, 0.75);
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ [type]: compressedDataUrl }).eq('id', userEmail);
+      await persistUserUpdate(userEmail, { [type]: compressedDataUrl });
       
       // Update store immediately if updating self
       if (isSelf) {
@@ -509,7 +530,7 @@ export function ProfilePage() {
     try {
       const newStatus = !targetUser.hidePersonalInfo;
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ hide_personal_info: newStatus }).eq('id', userEmail);
+      await persistUserUpdate(userEmail, { hide_personal_info: newStatus, hidePersonalInfo: newStatus });
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hidePersonalInfo: newStatus });
@@ -531,7 +552,7 @@ export function ProfilePage() {
     try {
       const newStatus = !targetUser.hideEmail;
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ hide_email: newStatus }).eq('id', userEmail);
+      await persistUserUpdate(userEmail, { hide_email: newStatus, hideEmail: newStatus });
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hideEmail: newStatus });
@@ -551,7 +572,7 @@ export function ProfilePage() {
   const saveBio = async () => {
     try {
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ bio: editedBio }).eq('id', userEmail);
+      await persistUserUpdate(userEmail, { bio: editedBio });
       if (isSelf) {
         setReaderProfile({ ...readerProfile, bio: editedBio });
       }
@@ -576,7 +597,7 @@ export function ProfilePage() {
 
     try {
       const userEmail = targetUser.email.toLowerCase().trim();
-      await supabase.from('users').update({ accolades: updatedAccolades }).eq('id', userEmail);
+      await persistUserUpdate(userEmail, { accolades: updatedAccolades });
       if (isSelf) {
         setReaderProfile({ ...readerProfile, accolades: updatedAccolades });
       }
