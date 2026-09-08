@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: senperspective-api
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: MONGODB_URI
+        sync: false   # set in Render dashboard (secret)
+      - key: MONGODB_DB
+        value: perspective
+      - key: GEMINI_API_KEY
+        sync: false   # optional
+      - key: GROQ_API_KEY
+        sync: false   # optional
+      - key: OPENROUTER_API_KEY
+        sync: false   # optional

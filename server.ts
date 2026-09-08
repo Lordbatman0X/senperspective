@@ -48,7 +48,8 @@ import {
 } from "./src/lib/centralApi";
 
 export const app = express();
-const PORT = 3000;
+// Honor Render/Heroku-style dynamic port assignment
+const PORT = Number(process.env.PORT) || 3000;
 
 // Connect to MongoDB Atlas (server-side, replaces Supabase)
 console.log("[MongoDB Setup] Initializing server connection.");
