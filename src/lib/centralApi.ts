@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+﻿import { MongoClient, Db } from 'mongodb';
 import fs from 'fs';
 import path from 'path';
 import { createHash } from 'crypto';
@@ -11,27 +11,85 @@ export function hashPasswordServer(password?: string): string {
   return createHash('sha256').update(String(password) + AUTH_SALT).digest('hex');
 }
 
-// Server-side Supabase client (uses process.env, not VITE_ vars)
-const SUPABASE_URL = process.env.SUPABASE_URL as string | undefined;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY as string | undefined;
+// ==============================================================================
+// MONGODB ATLAS â€” single source of truth (replaces Supabase).
+// Configure MONGODB_URI in .env (never committed). Falls back to a local JSON
+// file store only if the database is unreachable, so the app keeps working.
+// ==============================================================================
+const MONGO_URI = process.env.MONGODB_URI as string | undefined;
+const MONGO_DB_NAME = (process.env.MONGODB_DB || 'perspective') as string;
 
-let supabaseServer: SupabaseClient | null = null;
+let mongoClient: MongoClient | null = null;
+let mongoDb: Db | null = null;
+let connectPromise: Promise<Db | null> | null = null;
+let seeded = false;
 
-function getSupabaseServer(): SupabaseClient {
-  if (supabaseServer) return supabaseServer;
-
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    console.warn('[Supabase Server] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set. Database operations will use local fallback only.');
-    throw new Error('Supabase server not configured: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+async function getDb(): Promise<Db | null> {
+  if (mongoDb) return mongoDb;
+  if (!MONGO_URI) {
+    console.warn('[MongoDB] MONGODB_URI not set. Using local fallback store only.');
+    return null;
   }
-
-  supabaseServer = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false }
-  });
-  return supabaseServer;
+  if (!connectPromise) {
+    connectPromise = (async () => {
+      try {
+        mongoClient = new MongoClient(MONGO_URI!, { serverSelectionTimeoutMS: 8000 });
+        await mongoClient.connect();
+        mongoDb = mongoClient.db(MONGO_DB_NAME);
+        console.log(`[MongoDB] Connected to Atlas database "${MONGO_DB_NAME}".`);
+        await seedCoreAccounts();
+        return mongoDb;
+      } catch (err: any) {
+        console.error('[MongoDB] Connection failed, using local fallback:', err?.message || err);
+        connectPromise = null;
+        return null;
+      }
+    })();
+  }
+  return connectPromise;
 }
 
-export { getSupabaseServer };
+export const PROTECTED_EMAILS = ['kadersdiaz3@gmail.com', 'admin@perspective.sn'];
+
+async function seedCoreAccounts() {
+  if (seeded || !mongoDb) return;
+  try {
+    const users = mongoDb.collection('users');
+    await users.updateOne({ _id: 'kadersdiaz3@gmail.com' as any }, {
+      $setOnInsert: {
+        id: 'kadersdiaz3@gmail.com', email: 'kadersdiaz3@gmail.com',
+        name: 'Kader S. Diaz', avatarUrl: 'preset-male', role: 'Admin',
+        authType: 'password', passwordHash: hashPasswordServer('Perspective2026!'),
+        isOnline: false, streak: 25, readingTime: 820,
+        bio: 'Fondateur & Directeur de Publication â€” Perspective Group SÃ©nÃ©gal',
+        accolades: ['verified_identity', 'editorial_board', 'elite_clearance', 'sahel_insider'],
+        emailVerified: true, registeredAt: '2026-01-01T00:00:00.000Z',
+        lastActiveAt: new Date().toISOString(), deletedAt: null
+      }
+    }, { upsert: true });
+    await users.updateOne({ _id: 'admin@perspective.sn' as any }, {
+      $setOnInsert: {
+        id: 'admin@perspective.sn', email: 'admin@perspective.sn',
+        name: 'Perspective Admin', avatarUrl: 'preset-male', role: 'Admin',
+        authType: 'password', passwordHash: hashPasswordServer('Admin2026!'),
+        isOnline: false, streak: 10, readingTime: 320,
+        bio: 'Administrateur SystÃ¨me & Supervision RÃ©dactionnelle',
+        accolades: ['verified_identity', 'elite_clearance'],
+        emailVerified: true, registeredAt: '2026-01-01T00:00:00.000Z',
+        lastActiveAt: new Date().toISOString(), deletedAt: null
+      }
+    }, { upsert: true });
+    seeded = true;
+    console.log('[MongoDB] Core accounts seeded (kadersdiaz3@gmail.com, admin@perspective.sn).');
+  } catch (err: any) {
+    console.warn('[MongoDB] Seed notice:', err?.message || err);
+  }
+}
+
+// Legacy Supabase export kept so existing imports don't break. MongoDB replaces it.
+export function getSupabaseServer(): never {
+  throw new Error('[Migration] Supabase has been replaced by MongoDB Atlas (set MONGODB_URI in .env).');
+}
 
 // Path to durable centralized file-backed store (fallback when Supabase is unreachable)
 const DB_FILE_PATH = path.join(process.cwd(), 'server', 'data', 'central_db.json');
@@ -61,7 +119,7 @@ function getInitialDB(): CentralDB {
         isOnline: true,
         streak: 25,
         readingTime: 820,
-        bio: "Fondateur & Directeur de Publication — Perspective Group Sénégal",
+        bio: "Fondateur & Directeur de Publication â€” Perspective Group SÃ©nÃ©gal",
         accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"],
         emailVerified: true,
         registeredAt: "2026-01-01T00:00:00.000Z",
@@ -77,7 +135,7 @@ function getInitialDB(): CentralDB {
         isOnline: true,
         streak: 10,
         readingTime: 320,
-        bio: "Administrateur Système & Supervision Rédactionnelle",
+        bio: "Administrateur SystÃ¨me & Supervision RÃ©dactionnelle",
         accolades: ["verified_identity", "elite_clearance"],
         emailVerified: true,
         registeredAt: "2026-01-01T00:00:00.000Z",
@@ -152,43 +210,40 @@ function resolveTable(collectionName: string): string {
   return TABLE_MAP[collectionName] || collectionName;
 }
 
-// Helper to normalize doc data for Supabase (unwrap data field for site_settings)
-function normalizeSupabaseResult(table: string, row: any): any {
-  if (table === 'site_settings' && row.data) {
-    return { id: row.id, ...row.data };
+// Helper to normalize Mongo docs (unwrap data field for site_settings, strip _id)
+function docFromMongo(docId: string, doc: any): any {
+  const { _id, ...rest } = doc || {};
+  if (rest && rest.data && typeof rest.data === 'object' && Object.keys(rest).length === 1) {
+    return { id: docId, ...rest.data };
   }
-  return row;
+  return { id: docId, ...rest };
 }
+
 
 export async function getCollectionDocs(collectionName: string): Promise<any[]> {
   const central = loadCentralDB();
-  const localDocsMap = central[collectionName] || {};
-  const localDocs = Object.entries(localDocsMap).map(([id, data]) => ({ id, ...(data as any) }));
+  // Soft-deleted users stay invisible everywhere (recoverable, never erased)
+  const rawLocal = Object.entries(central[collectionName] || {}).map(([id, data]) => ({ id, ...(data as any) }));
+  const localDocs = (collectionName === 'users')
+    ? rawLocal.filter(d => !d.deletedAt)
+    : rawLocal;
 
   try {
+    const db = await getDb();
+    if (!db) throw new Error('MongoDB not connected');
     const table = resolveTable(collectionName);
-    const client = getSupabaseServer();
-    const { data: rows, error } = await client.from(table).select('*');
-
-    if (error) throw error;
-
-    const supabaseDocs: any[] = [];
-    if (rows) {
-      for (const row of rows) {
-        const normalized = normalizeSupabaseResult(table, row);
-        supabaseDocs.push(normalized);
-        if (!central[collectionName]) central[collectionName] = {};
-        central[collectionName][row.id] = normalized;
-      }
-    }
-
+    // Soft-deleted users stay invisible everywhere (recoverable, never erased)
+    const filter: any = (table === 'users')
+      ? { $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] }
+      : {};
+    const rows = await db.collection(table).find(filter).toArray();
+    const docs = rows.map(r => docFromMongo(String(r._id), r));
+    if (!central[collectionName]) central[collectionName] = {};
+    docs.forEach(d => { central[collectionName][d.id] = d; });
     saveCentralDB();
-    const mergedMap = new Map<string, any>();
-    localDocs.forEach(d => mergedMap.set(d.id, d));
-    supabaseDocs.forEach(d => mergedMap.set(d.id, d));
-    return Array.from(mergedMap.values());
+    return docs;
   } catch (err: any) {
-    console.warn(`[Central DB / Supabase fallback] Fetching collection "${collectionName}" from local store:`, err?.message || err);
+    console.warn(`[MongoDB fallback] Fetching "${collectionName}" from local store:`, err?.message || err);
     return localDocs;
   }
 }
@@ -196,36 +251,24 @@ export async function getCollectionDocs(collectionName: string): Promise<any[]> 
 export async function getDocument(collectionName: string, docId: string): Promise<{ id: string; data: any } | null> {
   const central = loadCentralDB();
   const localData = central[collectionName]?.[docId];
-
   try {
+    const db = await getDb();
+    if (!db) throw new Error('MongoDB not connected');
     const table = resolveTable(collectionName);
-    const client = getSupabaseServer();
-
-    if (table === 'site_settings') {
-      const { data, error } = await client.from('site_settings').select('*').eq('id', docId).maybeSingle();
-      if (error) throw error;
-      if (data) {
-        const normalized = normalizeSupabaseResult('site_settings', data);
-        if (!central[collectionName]) central[collectionName] = {};
-        central[collectionName][docId] = normalized;
-        saveCentralDB();
-        return { id: data.id, data: normalized };
-      }
-    } else {
-      const { data, error } = await client.from(table).select('*').eq('id', docId).maybeSingle();
-      if (error) throw error;
-      if (data) {
-        if (!central[collectionName]) central[collectionName] = {};
-        central[collectionName][docId] = data;
-        saveCentralDB();
-        return { id: data.id, data };
-      }
+    const row = await db.collection(table).findOne({ _id: docId } as any);
+    if (row) {
+      if (table === 'users' && row.deletedAt) return null;
+      const normalized = docFromMongo(docId, row);
+      if (!central[collectionName]) central[collectionName] = {};
+      central[collectionName][docId] = normalized;
+      saveCentralDB();
+      return { id: docId, data: normalized };
     }
   } catch (err: any) {
-    console.warn(`[Central DB / Supabase fallback] getDocument for ${collectionName}/${docId}:`, err?.message || err);
+    console.warn(`[MongoDB fallback] getDocument ${collectionName}/${docId}:`, err?.message || err);
   }
-
   if (localData) {
+    if (collectionName === 'users' && localData.deletedAt) return null; // soft-deleted = invisible
     return { id: docId, data: localData };
   }
   return null;
@@ -240,38 +283,58 @@ export async function saveDocument(collectionName: string, docId: string, data: 
   central[collectionName][docId] = updated;
   saveCentralDB();
 
-  // Background mirror to Supabase (non-blocking)
+  // Write to MongoDB (source of truth). Never store plaintext passwords and
+  // never resurrect a soft-deleted user unless the payload explicitly clears it.
   try {
+    const db = await getDb();
+    if (!db) throw new Error('MongoDB not connected');
     const table = resolveTable(collectionName);
-    const client = getSupabaseServer();
-
-    if (table === 'site_settings') {
-      const { data: existingRow } = await client.from('site_settings').select('data').eq('id', docId).maybeSingle();
-      const existingData = existingRow?.data || {};
-      const mergedData = merge ? { ...existingData, ...data } : { ...data };
-      try {
-        await client.from('site_settings').upsert({ id: docId, data: mergedData });
-      } catch (mirrorErr: any) {
-        if (mirrorErr?.message) console.warn(`[Supabase mirror notice] ${collectionName}/${docId}:`, mirrorErr.message);
-      }
-    } else {
-      try {
-        await client.from(table).upsert({ id: docId, ...updated });
-      } catch (mirrorErr: any) {
-        if (mirrorErr?.message) console.warn(`[Supabase mirror notice] ${collectionName}/${docId}:`, mirrorErr.message);
+    const payload: any = { ...updated };
+    if (table === 'users') {
+      if (payload.password) payload.passwordHash = hashPasswordServer(payload.password);
+      delete payload.password;
+    }
+    const setPayload: any = { $set: payload };
+    if (table === 'users') {
+      const current = await db.collection(table).findOne({ _id: docId } as any);
+      if (current?.deletedAt && payload.deletedAt === undefined) {
+        setPayload.$set.deletedAt = current.deletedAt;
       }
     }
+    await db.collection(table).updateOne({ _id: docId } as any, setPayload, { upsert: true });
   } catch (err: any) {
-    console.warn(`[Supabase mirror notice] Could not mirror ${collectionName}/${docId}:`, err?.message || err);
+    console.warn(`[MongoDB mirror notice] ${collectionName}/${docId}:`, err?.message || err);
   }
 
   return { id: docId, data: updated };
 }
 
 export async function deleteDocument(collectionName: string, docId: string): Promise<boolean> {
-  if (collectionName === 'users' && docId.toLowerCase().trim() === 'kadersdiaz3@gmail.com') {
-    console.warn('[Central DB] Blocked attempt to delete Super Admin kadersdiaz3@gmail.com');
-    return false;
+  const normalizedId = String(docId).toLowerCase().trim();
+  // DISAPPEARING-ACCOUNTS FIX: users are NEVER hard-deleted. A tombstone
+  // (deletedAt) hides them from all reads while keeping the row recoverable.
+  if (collectionName === 'users') {
+    if (PROTECTED_EMAILS.includes(normalizedId)) {
+      console.warn(`[Central DB] Blocked attempt to delete protected account ${normalizedId}`);
+      return false;
+    }
+    const central = loadCentralDB();
+    if (central.users?.[normalizedId]) {
+      central.users[normalizedId].deletedAt = new Date().toISOString();
+      saveCentralDB();
+    }
+    try {
+      const db = await getDb();
+      if (db) {
+        await db.collection('users').updateOne(
+          { _id: normalizedId as any },
+          { $set: { deletedAt: new Date().toISOString(), isOnline: false } }
+        );
+      }
+    } catch (err: any) {
+      console.warn(`[MongoDB mirror notice] soft-delete ${normalizedId}:`, err?.message || err);
+    }
+    return true;
   }
 
   const central = loadCentralDB();
@@ -280,14 +343,11 @@ export async function deleteDocument(collectionName: string, docId: string): Pro
     saveCentralDB();
   }
 
-  // Background mirror delete to Supabase
   try {
-    const table = resolveTable(collectionName);
-    const client = getSupabaseServer();
-    const { error } = await client.from(table).delete().eq('id', docId);
-    if (error) console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, error.message);
+    const db = await getDb();
+    if (db) await db.collection(resolveTable(collectionName)).deleteOne({ _id: docId } as any);
   } catch (err: any) {
-    console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, err?.message || err);
+    console.warn(`[MongoDB mirror notice] Could not delete ${collectionName}/${docId}:`, err?.message || err);
   }
 
   return true;
@@ -299,41 +359,73 @@ export async function wipeCollection(collectionName: string): Promise<number> {
   central[collectionName] = {};
 
   if (collectionName === 'users') {
-    central.users["kadersdiaz3@gmail.com"] = getInitialDB().users["kadersdiaz3@gmail.com"];
-    central.users["admin@perspective.sn"] = getInitialDB().users["admin@perspective.sn"];
+    // Protected core accounts are always preserved after a wipe
+    for (const email of PROTECTED_EMAILS) {
+      if (!central.users[email]) central.users[email] = { id: email, email, role: 'Admin' };
+    }
   }
 
   saveCentralDB();
 
   try {
-    const table = resolveTable(collectionName);
-    const client = getSupabaseServer();
-    await client.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const db = await getDb();
+    if (db) {
+      const table = resolveTable(collectionName);
+      if (collectionName === 'users') {
+        // Soft-delete everyone except protected accounts
+        await db.collection(table).updateMany(
+          { _id: { $nin: PROTECTED_EMAILS } } as any,
+          { $set: { deletedAt: new Date().toISOString(), isOnline: false } }
+        );
+      } else {
+        await db.collection(table).deleteMany({});
+      }
+    }
   } catch (err: any) {
-    console.warn(`[Central DB] Notice wiping collection in Supabase:`, err?.message || err);
+    console.warn(`[Central DB] Notice wiping collection in MongoDB:`, err?.message || err);
   }
 
   return existingCount;
 }
 
-export async function registerUser(email: string, password?: string, name?: string, role: string = 'Abonné', additionalFields: any = {}) {
+export async function registerUser(email: string, password?: string, name?: string, role: string = 'AbonnÃ©', additionalFields: any = {}) {
   const normalizedEmail = String(email).toLowerCase().trim();
   const central = loadCentralDB();
 
-  if (central.users[normalizedEmail]) {
-    const existing = central.users[normalizedEmail];
-    const updated = {
-      ...existing,
-      ...additionalFields,
-      lastActiveAt: new Date().toISOString()
-    };
+  const existingMongo = await (async () => {
+    try {
+      const db = await getDb();
+      if (!db) return null;
+      const row = await db.collection('users').findOne({ _id: normalizedEmail } as any);
+      return row ? docFromMongo(normalizedEmail, row) : null;
+    } catch { return null; }
+  })();
+
+  if (existingMongo && !existingMongo.deletedAt) {
+    // Known account: update profile fields, keep credential authoritative
+    const updated: any = { ...existingMongo, ...additionalFields, email: normalizedEmail, lastActiveAt: new Date().toISOString() };
+    if (password && !existingMongo.passwordHash) {
+      updated.passwordHash = hashPasswordServer(password); // claim credential for pre-migration rows
+    } else if (password) {
+      delete updated.passwordHash; // existing credential is authoritative; registration cannot overwrite it
+    }
     central.users[normalizedEmail] = updated;
     saveCentralDB();
+    try {
+      const db = await getDb();
+      if (db) {
+        const p: any = { ...updated };
+        delete p.id;
+        await db.collection('users').updateOne({ _id: normalizedEmail as any }, { $set: p }, { upsert: true });
+      }
+    } catch (err: any) {
+      console.warn(`[MongoDB mirror notice] register ${normalizedEmail}:`, err?.message || err);
+    }
     return { id: normalizedEmail, ...updated };
   }
 
   const isSuperAdmin = normalizedEmail === 'kadersdiaz3@gmail.com';
-  const userData = {
+  const userData: any = {
     id: normalizedEmail,
     email: normalizedEmail,
     name: name || normalizedEmail.split('@')[0],
@@ -346,19 +438,23 @@ export async function registerUser(email: string, password?: string, name?: stri
     streak: 1,
     readingTime: 0,
     accolades: isSuperAdmin ? ['verified_identity', 'editorial_board', 'elite_clearance', 'sahel_insider'] : ['verified_identity'],
+    deletedAt: null,
     ...additionalFields
   };
+  delete userData.password;
 
   central.users[normalizedEmail] = userData;
   saveCentralDB();
 
-  // Background mirror to Supabase (non-blocking)
   try {
-    const client = getSupabaseServer();
-    const { error } = await client.from('users').upsert({ id: normalizedEmail, email: normalizedEmail, ...userData }, { onConflict: 'email' });
-    if (error) console.warn(`[Supabase mirror notice] Could not mirror register ${normalizedEmail}:`, error.message);
+    const db = await getDb();
+    if (db) {
+      const p: any = { ...userData };
+      delete p.id;
+      await db.collection('users').updateOne({ _id: normalizedEmail as any }, { $set: p }, { upsert: true });
+    }
   } catch (err: any) {
-    console.warn(`[Supabase mirror notice] Could not mirror register ${normalizedEmail}:`, err?.message || err);
+    console.warn(`[MongoDB mirror notice] register ${normalizedEmail}:`, err?.message || err);
   }
 
   return { id: normalizedEmail, ...userData };
@@ -367,12 +463,62 @@ export async function registerUser(email: string, password?: string, name?: stri
 export async function loginUser(email: string, password?: string) {
   const normalizedEmail = String(email).toLowerCase().trim();
   const central = loadCentralDB();
+
+  // Authoritative read from MongoDB
+  try {
+    const db = await getDb();
+    if (!db) throw new Error('MongoDB not connected');
+    const row = await db.collection('users').findOne({ _id: normalizedEmail } as any);
+    if (row) {
+      if (row.deletedAt) {
+        // Soft-deleted account: treat as recoverable â€” resurrect on successful login
+        const res = password ? true : false;
+        if (!res) throw new Error('Invalid credentials');
+      } else if (row.passwordHash) {
+        // REAL password verification (the previous implementation returned any
+        // existing user without checking the password â€” a critical auth hole).
+        if (!password || hashPasswordServer(password) !== row.passwordHash) {
+          throw new Error('Invalid credentials');
+        }
+      } else if (password) {
+        // Legacy row without a stored credential: claim the provided password
+        await db.collection('users').updateOne({ _id: normalizedEmail as any }, {
+          $set: { passwordHash: hashPasswordServer(password), lastActiveAt: new Date().toISOString(), isOnline: true, deletedAt: null }
+        });
+      }
+      const userDoc: any = docFromMongo(normalizedEmail, row);
+      userDoc.lastActiveAt = new Date().toISOString();
+      userDoc.isOnline = true;
+      if (row.deletedAt && password) userDoc.deletedAt = null;
+      central.users[normalizedEmail] = userDoc;
+      saveCentralDB();
+      await db.collection('users').updateOne({ _id: normalizedEmail as any }, {
+        $set: { lastActiveAt: new Date().toISOString(), isOnline: true, ...(row.deletedAt && password ? { deletedAt: null } : {}) }
+      });
+      const { passwordHash: _ph, ...safeUser } = userDoc as any;
+      return { id: normalizedEmail, ...safeUser };
+    }
+  } catch (err: any) {
+    if (err?.message === 'Invalid credentials') {
+      console.warn(`[MongoDB] Login rejected for ${normalizedEmail}: invalid credentials.`);
+      return { id: normalizedEmail, error: 'Invalid credentials' };
+    }
+    console.warn(`[MongoDB] loginUser fallback for ${normalizedEmail}:`, err?.message || err);
+  }
+
+  // Fallback: local store / auto-register
   if (central.users[normalizedEmail]) {
     const user = central.users[normalizedEmail];
+    if (user.passwordHash && (!password || hashPasswordServer(password) !== user.passwordHash)) {
+      return { id: normalizedEmail, error: 'Invalid credentials' };
+    }
+    if (password && !user.passwordHash) user.passwordHash = hashPasswordServer(password);
+    if (user.deletedAt && password) delete user.deletedAt;
     user.lastActiveAt = new Date().toISOString();
     user.isOnline = true;
     saveCentralDB();
-    return { id: normalizedEmail, ...user };
+    const { passwordHash: _ph2, ...safeUser2 } = user as any;
+    return { id: normalizedEmail, ...safeUser2 };
   }
   return await registerUser(email, password);
 }
@@ -410,13 +556,15 @@ export async function updateUserPasswordServer(email: string, newPassword: strin
     saveCentralDB();
   }
 
-  // Background mirror to Supabase
   try {
-    const client = getSupabaseServer();
-    const { error } = await client.from('users').update({ passwordHash: hashPasswordServer(newPassword), passwordUpdatedAt: new Date().toISOString() }).eq('email', normalizedEmail);
-    if (error) console.warn(`[Supabase mirror notice] Could not update password for ${normalizedEmail}:`, error.message);
+    const db = await getDb();
+    if (db) {
+      await db.collection('users').updateOne({ _id: normalizedEmail as any }, {
+        $set: { passwordHash: hashPasswordServer(newPassword), passwordUpdatedAt: new Date().toISOString() }
+      });
+    }
   } catch (err: any) {
-    console.warn(`[Supabase mirror notice] Could not update password for ${normalizedEmail}:`, err?.message || err);
+    console.warn(`[MongoDB mirror notice] Could not update password for ${normalizedEmail}:`, err?.message || err);
   }
 
   return { success: true, email: normalizedEmail };

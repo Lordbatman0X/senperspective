@@ -926,6 +926,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.warn(`[AUTH LOG] Supabase Auth sign-in notice: ${err?.message || err}. Continuing with database verification...`);
     }
 
+    // 0. SERVER-AUTHORITATIVE LOGIN (MongoDB Atlas — single source of truth).
+    // Passwords are verified server-side; the client never inspects credentials.
+    try {
+      const sRes = await fetch('/api/mongodb/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password: pass })
+      });
+      if (sRes.ok) {
+        const sData = await sRes.json();
+        const su = sData?.user;
+        if (su && !su.error && !su.deletedAt) {
+          console.log(`[AUTH LOG] Server (MongoDB) login successful for: ${cleanEmail}`);
+          const serverProfile = {
+            id: su.id || authUserUid || stableUserId(cleanEmail),
+            name: su.name || cleanEmail.split("@")[0],
+            email: cleanEmail,
+            avatarUrl: su.avatarUrl || "preset-male",
+            role: su.role || "Member",
+            emailVerified: su.emailVerified !== false,
+            mfaEnabled: Boolean(su.mfaEnabled || su.twoFactorEnabled),
+            isMongoDB: true,
+            isSupabaseAuthSession: supabaseAuthSuccess,
+            coverPhotoUrl: su.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+            streak: su.streak || 1,
+            readingTime: su.readingTime || 0,
+            hidePersonalInfo: Boolean(su.hidePersonalInfo),
+            bio: su.bio || "Membre actif Perspective",
+            accolades: Array.isArray(su.accolades) && su.accolades.length ? su.accolades : ["verified_identity"]
+          };
+          localStorage.setItem('perspective_auth_session', JSON.stringify(serverProfile));
+          setReaderProfile(serverProfile);
+          return;
+        }
+        if (su?.error === 'Invalid credentials') {
+          throw new Error("Mot de passe ou code PIN incorrect.");
+        }
+      }
+    } catch (srvErr: any) {
+      if (srvErr?.message === "Mot de passe ou code PIN incorrect.") {
+        throw srvErr;
+      }
+      console.warn("[AUTH LOG] Server login notice (falling back):", srvErr?.message || srvErr);
+    }
+
     // 1. Protected Super Admin (kadersdiaz3@gmail.com)
     if (cleanEmail === "kadersdiaz3@gmail.com") {
       let docPassMatches = false;

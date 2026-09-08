@@ -50,16 +50,9 @@ import {
 export const app = express();
 const PORT = 3000;
 
-// Connect to Supabase (server-side)
-import { getSupabaseServer } from './src/lib/centralApi';
-console.log("[Supabase Setup] Initializing server connection.");
-try {
-  getSupabaseServer();
-  console.log("[Supabase Setup] Connection initialized.");
-} catch (e) {
-  console.warn("[Supabase Setup] Notice:", e);
-}
-loadKeysFromFirestore().then(() => console.log("[Supabase Setup] API Keys loaded."));
+// Connect to MongoDB Atlas (server-side, replaces Supabase)
+console.log("[MongoDB Setup] Initializing server connection.");
+loadKeysFromFirestore().then(() => console.log("[MongoDB Setup] API Keys loaded."));
 
 // Enable CORS for webhooks and API clients
 app.use((req, res, next) => {
@@ -399,80 +392,75 @@ app.use((req, res, next) => {
   };
   const purgeAllFirestoreRssArticles = purgeAllCentralRssArticles;
 
-  // Sync user consent decision to Supabase table 'user_consents'
+  // Sync user consent decision to MongoDB collection 'user_consents'
   const syncUserConsentToSupabase = async (consent: any) => {
     try {
       const docId = consent.id || `consent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      const { getSupabaseServer } = await import('./src/lib/centralApi');
-      const client = getSupabaseServer();
-      await client.from('user_consents').upsert({
+      const { saveDocument } = await import('./src/lib/centralApi');
+      await saveDocument('user_consents', docId, {
         id: docId,
-        session_id: consent.sessionId || "",
-        user_email: consent.userEmail || "",
-        essential: true,
+        sessionId: consent.sessionId || "",
+        userEmail: consent.userEmail || "",
         analytics: Boolean(consent.analytics),
         personalization: Boolean(consent.personalization),
         marketing: Boolean(consent.marketing),
-        device_type: consent.deviceType || "",
+        deviceType: consent.deviceType || "",
         locale: consent.locale || "fr-SN",
         country: consent.country || "",
         city: consent.city || "",
-        updated_at: consent.updatedAt || new Date().toISOString()
-      });
-      console.log(`[SUPABASE CONSENT SYNC] Synced consent record "${docId}".`);
+        updatedAt: consent.updatedAt || new Date().toISOString()
+      }, true);
+      console.log(`[MONGODB CONSENT SYNC] Synced consent record "${docId}".`);
     } catch (err) {
-      console.error("[SUPABASE CONSENT SYNC ERROR]", err);
+      console.error("[MONGODB CONSENT SYNC ERROR]", err);
     }
   };
 
-  // Sync visit event to Supabase table 'analytics_events'
+  // Sync visit event to MongoDB collection 'analytics_events'
   const syncEventToSupabase = async (record: any, isConsent: boolean) => {
     try {
-      const { getSupabaseServer } = await import('./src/lib/centralApi');
-      const client = getSupabaseServer();
+      const { saveDocument } = await import('./src/lib/centralApi');
       const docId = record.id || (record.sessionId ? (isConsent ? `consent_${record.sessionId}` : `evt_${record.sessionId}_${Date.now()}`) : `evt_${Date.now()}`);
-      const table = isConsent ? 'user_consents' : 'analytics_events';
-      const payload: any = {
+      const collection = isConsent ? 'user_consents' : 'analytics_events';
+      await saveDocument(collection, docId, {
         id: docId,
-        session_id: record.sessionId || "",
-        event_name: record.eventName || (isConsent ? "consent" : "pageview"),
+        sessionId: record.sessionId || "",
+        eventName: record.eventName || (isConsent ? "consent" : "pageview"),
         path: record.path || "/",
-        article_id: record.articleId || "",
-        article_title: record.articleTitle || "",
+        articleId: record.articleId || "",
+        articleTitle: record.articleTitle || "",
         category: record.category || "General",
-        device_type: record.deviceType || "Desktop",
+        deviceType: record.deviceType || "Desktop",
         country: record.country || "",
         city: record.city || "",
         timestamp: record.timestamp || record.updatedAt || new Date().toISOString(),
-        user_email: record.userEmail || ""
-      };
-      await client.from(table).upsert(payload);
-      console.log(`[SUPABASE ANALYTICS SYNC] Synced ${table} record "${docId}".`);
+        userEmail: record.userEmail || ""
+      }, true);
+      console.log(`[MONGODB ANALYTICS SYNC] Synced ${collection} record "${docId}".`);
     } catch (err) {
-      console.error("[SUPABASE ANALYTICS SYNC ERROR]", err);
+      console.error("[MONGODB ANALYTICS SYNC ERROR]", err);
     }
   };
 
-  // Sync analytics telemetry event to Supabase table 'analytics_events'
+  // Sync analytics telemetry event to MongoDB collection 'analytics_events'
   const syncAnalyticsEventToSupabase = async (event: any) => {
     try {
-      const { getSupabaseServer } = await import('./src/lib/centralApi');
-      const client = getSupabaseServer();
+      const { saveDocument } = await import('./src/lib/centralApi');
       const docId = event.id || `evt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      await client.from('analytics_events').upsert({
+      await saveDocument('analytics_events', docId, {
         id: docId,
-        event_name: event.eventName || "pageview",
-        session_id: event.sessionId || "",
+        eventName: event.eventName || "pageview",
+        sessionId: event.sessionId || "",
         path: event.path || "/",
-        article_id: event.articleId || "",
-        article_title: event.articleTitle || "",
+        articleId: event.articleId || "",
+        articleTitle: event.articleTitle || "",
         category: event.category || "General",
-        device_type: event.deviceType || "Desktop",
+        deviceType: event.deviceType || "Desktop",
         country: event.country || "",
         city: event.city || "",
         timestamp: event.timestamp || new Date().toISOString(),
-        user_email: event.userEmail || ""
-      });
+        userEmail: event.userEmail || ""
+      }, true);
       console.log(`[SUPABASE ANALYTICS SYNC] Synced event "${docId}" to analytics_events.`);
     } catch (err) {
       console.error("[SUPABASE ANALYTICS SYNC ERROR]", err);
