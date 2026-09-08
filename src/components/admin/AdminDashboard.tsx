@@ -147,7 +147,7 @@ export function AdminDashboard() {
       // If clearing articles or all, also purge server RSS drafts
       if (wipeTarget === 'ALL' || wipeTarget === 'articles') {
         setWipeLogs(prev => [...prev, isFr ? 'Vidage du cache serveur RSS (/api/webhooks/make-rss)...' : 'Purging server RSS webhook cache...']);
-        await fetch('/api/webhooks/make-rss', { method: 'DELETE' }).catch(() => {});
+        await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
       }
 
       setWipeLogs(prev => [...prev, isFr ? '✅ Nettoyage terminé avec succès.' : '✅ Wipe operation completed successfully.']);
@@ -619,3 +619,4 @@ export function AdminDashboard() {
     </div>
   );
 }
+

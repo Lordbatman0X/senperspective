@@ -169,7 +169,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
         count: targetRecipients.length,
         method: dispatchMethod,
         status: 'sent'
-      }).catch(() => {});
+      });
 
       // Notify target recipients
       targetRecipients.forEach(sub => {
@@ -421,3 +421,4 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
     </div>
   );
 }
+

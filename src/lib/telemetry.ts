@@ -185,3 +185,4 @@ export function trackPageView(path: string, articleId?: string, articleTitle?: s
 export function trackConversion(type: 'newsletter_subscription' | 'premium_click' | 'ad_click' | 'contact_lead', userEmail?: string, metadata?: Record<string, any>) {
   trackEvent(type, { userEmail, metadata });
 }
+

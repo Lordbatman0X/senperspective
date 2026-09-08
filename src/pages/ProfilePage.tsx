@@ -343,8 +343,8 @@ export function ProfilePage() {
         await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
-        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() }).catch(() => {});
-        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() }).catch(() => {});
+        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() });
+        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() });
         setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -373,7 +373,7 @@ export function ProfilePage() {
         await supabase.from('followers').delete().eq('user_id', myEmail).eq('follower_email', targetEmail);
         setSuccessMsg(language === "fr" ? "Vous ne suivez plus ce membre." : "Unfollowed member.");
       } else {
-        await supabase.from('followers').upsert({ user_id: myEmail, follower_email: targetEmail, followed_at: Date.now() }).catch(() => {});
+        await supabase.from('followers').upsert({ user_id: myEmail, follower_email: targetEmail, followed_at: Date.now() });
         setSuccessMsg(language === "fr" ? "Vous suivez désormais ce membre !" : "Following member!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -402,7 +402,7 @@ export function ProfilePage() {
         await supabase.from('blocks').delete().eq('user_id', myEmail).eq('blocked_email', targetEmail);
         setSuccessMsg(language === "fr" ? "Membre débloqué." : "Unblocked member.");
       } else {
-        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() }).catch(() => {});
+        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() });
         setSuccessMsg(language === "fr" ? "Membre bloqué avec succès." : "Blocked member successfully.");
         
         // Auto-remove friend and follow connections on block
@@ -434,7 +434,7 @@ export function ProfilePage() {
         await supabase.from('blocks').delete().eq('user_id', myEmail).eq('blocked_email', targetEmail);
         setSuccessMsg(language === "fr" ? "Notifications réactivées." : "Unmuted member.");
       } else {
-        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() }).catch(() => {});
+        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() });
         setSuccessMsg(language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications.");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -463,7 +463,7 @@ export function ProfilePage() {
         details: reportDetails,
         date: new Date().toISOString(),
         status: "pending"
-      }).catch(() => {});
+      });
       setShowReportModal(false);
       setReportReason("");
       setReportDetails("");
@@ -485,7 +485,7 @@ export function ProfilePage() {
       const isCover = type === "coverPhotoUrl";
       const compressedDataUrl = await compressImageFile(file, isCover ? 800 : 400, isCover ? 500 : 400, 0.75);
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ [type]: compressedDataUrl }).eq('id', userEmail).catch(() => {});
+      await supabase.from('users').update({ [type]: compressedDataUrl }).eq('id', userEmail);
       
       // Update store immediately if updating self
       if (isSelf) {
@@ -509,7 +509,7 @@ export function ProfilePage() {
     try {
       const newStatus = !targetUser.hidePersonalInfo;
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ hide_personal_info: newStatus }).eq('id', userEmail).catch(() => {});
+      await supabase.from('users').update({ hide_personal_info: newStatus }).eq('id', userEmail);
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hidePersonalInfo: newStatus });
@@ -531,7 +531,7 @@ export function ProfilePage() {
     try {
       const newStatus = !targetUser.hideEmail;
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ hide_email: newStatus }).eq('id', userEmail).catch(() => {});
+      await supabase.from('users').update({ hide_email: newStatus }).eq('id', userEmail);
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hideEmail: newStatus });
@@ -551,7 +551,7 @@ export function ProfilePage() {
   const saveBio = async () => {
     try {
       const userEmail = readerProfile.email.toLowerCase().trim();
-      await supabase.from('users').update({ bio: editedBio }).eq('id', userEmail).catch(() => {});
+      await supabase.from('users').update({ bio: editedBio }).eq('id', userEmail);
       if (isSelf) {
         setReaderProfile({ ...readerProfile, bio: editedBio });
       }
@@ -576,7 +576,7 @@ export function ProfilePage() {
 
     try {
       const userEmail = targetUser.email.toLowerCase().trim();
-      await supabase.from('users').update({ accolades: updatedAccolades }).eq('id', userEmail).catch(() => {});
+      await supabase.from('users').update({ accolades: updatedAccolades }).eq('id', userEmail);
       if (isSelf) {
         setReaderProfile({ ...readerProfile, accolades: updatedAccolades });
       }
@@ -1262,3 +1262,4 @@ export function ProfilePage() {
     </div>
   );
 }
+

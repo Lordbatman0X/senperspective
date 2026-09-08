@@ -774,3 +774,4 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     </motion.div>
   );
 }
+

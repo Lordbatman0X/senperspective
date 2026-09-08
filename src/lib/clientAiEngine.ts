@@ -87,7 +87,7 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 
 // Auto-trigger load on client initialization
 if (typeof window !== 'undefined') {
-  loadClientApiKeysFromFirestore().catch(() => {});
+  loadClientApiKeysFromFirestore();
 }
 
 /**
@@ -1241,3 +1241,4 @@ RÈGLES D'EXPRESSION STRICTES :
     ? "Je suis à votre écoute pour analyser l'actualité ou approfondir un dossier."
     : "I am at your service to analyze ongoing developments or unpack any story.";
 }
+

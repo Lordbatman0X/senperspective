@@ -398,7 +398,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
             title,
             text: caption || title,
             url: fullShareUrl
-          }).catch(() => {});
+          });
         } else {
           handleCopyCitation();
         }
@@ -896,3 +896,4 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     </AnimatePresence>
   );
 };
+

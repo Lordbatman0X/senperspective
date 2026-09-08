@@ -348,27 +348,27 @@ export function AccountDrawer({
 
     try {
       if (isFriend) {
-        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail).catch(() => {});
-        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail).catch(() => {});
+        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail);
+        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
       } else if (hasSentRequest) {
-        await supabase.from('sent_requests').delete().eq('user_id', myEmail).eq('id', targetEmail).catch(() => {});
-        await supabase.from('friend_requests').delete().eq('user_id', targetEmail).eq('id', myEmail).catch(() => {});
+        await supabase.from('sent_requests').delete().eq('user_id', myEmail).eq('id', targetEmail);
+        await supabase.from('friend_requests').delete().eq('user_id', targetEmail).eq('id', myEmail);
         setSettingsSuccessMsg(language === "fr" ? "✓ Demande annulée" : "✓ Request cancelled");
       } else if (hasReceivedRequest) {
-        await supabase.from('friend_requests').delete().eq('user_id', myEmail).eq('id', targetEmail).catch(() => {});
-        await supabase.from('sent_requests').delete().eq('user_id', targetEmail).eq('id', myEmail).catch(() => {});
-        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() }).catch(() => {});
-        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() }).catch(() => {});
+        await supabase.from('friend_requests').delete().eq('user_id', myEmail).eq('id', targetEmail);
+        await supabase.from('sent_requests').delete().eq('user_id', targetEmail).eq('id', myEmail);
+        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() });
+        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() });
         setSettingsSuccessMsg(language === "fr" ? "✓ Demande acceptée !" : "✓ Request accepted!");
       } else {
         if (isPrivate) {
-          await supabase.from('sent_requests').upsert({ id: targetEmail, user_id: myEmail, email: targetEmail, sent_at: Date.now() }).catch(() => {});
-          await supabase.from('friend_requests').upsert({ id: myEmail, user_id: targetEmail, email: myEmail, sent_at: Date.now() }).catch(() => {});
+          await supabase.from('sent_requests').upsert({ id: targetEmail, user_id: myEmail, email: targetEmail, sent_at: Date.now() });
+          await supabase.from('friend_requests').upsert({ id: myEmail, user_id: targetEmail, email: myEmail, sent_at: Date.now() });
           setSettingsSuccessMsg(language === "fr" ? "✓ Demande envoyée" : "✓ Request sent");
         } else {
-          await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() }).catch(() => {});
-          await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() }).catch(() => {});
+          await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() });
+          await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() });
           setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
         }
       }
@@ -382,9 +382,9 @@ export function AccountDrawer({
     if (readerProfile && readerProfile.email) {
       try {
         const safeFields = await sanitizeFirestorePayload(updatedFields);
-        await supabase.from('users').update(safeFields).eq('id', readerProfile.email.toLowerCase().trim()).catch(() => {});
+        await supabase.from('users').update(safeFields).eq('id', readerProfile.email.toLowerCase().trim());
       } catch (err) {
-        console.error("Error syncing profile updates to Firestore:", err);
+        console.error("Error syncing profile updates:", err);
       }
     }
   };
@@ -1332,3 +1332,4 @@ export function AccountDrawer({
     </AnimatePresence>
   );
 }
+

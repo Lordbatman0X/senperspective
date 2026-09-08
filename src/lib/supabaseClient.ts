@@ -1,20 +1,21 @@
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
-import type { Database } from './supabaseDatabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-let cachedClient: SupabaseClient<Database> | null = null;
+let cachedClient: SupabaseClient<any> | null = null;
+let initFailed = false;
 
-export function getSupabaseClient(): SupabaseClient<Database> {
+function getSupabaseClient(): SupabaseClient<any> {
   if (cachedClient) return cachedClient;
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.warn('[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set. Supabase client not initialized.');
-    throw new Error('Supabase not configured: missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY');
+    const msg = '[Supabase] VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY not set. Check your .env file.';
+    console.error(msg);
+    throw new Error(msg);
   }
 
-  cachedClient = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  cachedClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
@@ -26,12 +27,38 @@ export function getSupabaseClient(): SupabaseClient<Database> {
     db: { schema: 'public' }
   });
 
+  console.log('[Supabase] Client initialized.');
   return cachedClient;
 }
 
-export const supabase = /* lazy */ (() => {
-  try { return getSupabaseClient(); } catch { return null as any; }
-})();
+export function getSupabaseClientOrNull(): SupabaseClient<any> | null {
+  if (initFailed) {
+    initFailed = false;
+  }
+  try {
+    return getSupabaseClient();
+  } catch (e) {
+    initFailed = true;
+    console.error('[Supabase] Client initialization failed. Database operations will be skipped.', e);
+    return null;
+  }
+}
+
+// Lazy singleton via Proxy: retries initialization on each access after a failure
+export const supabase: SupabaseClient<any> = new Proxy({} as SupabaseClient<any>, {
+  get(_, prop) {
+    if (initFailed) {
+      initFailed = false;
+    }
+    try {
+      const client = getSupabaseClient();
+      return (client as any)[prop];
+    } catch (e) {
+      console.error(`[Supabase] Cannot access .${String(prop)}: client not initialized.`, e);
+      return undefined;
+    }
+  }
+}) as any;
 
 export async function bootstrapAnonymousAuth(): Promise<User | null> {
   try {
@@ -52,10 +79,11 @@ export async function bootstrapAnonymousAuth(): Promise<User | null> {
   }
 }
 
-export function getCurrentUser(): User | null {
+export async function getCurrentUser(): Promise<User | null> {
   try {
     const client = getSupabaseClient();
-    return client.auth.getSession().then(({ data }) => data.session?.user ?? null) as any;
+    const { data: { session } } = await client.auth.getSession();
+    return session?.user ?? null;
   } catch { return null; }
 }
 

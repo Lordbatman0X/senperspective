@@ -1099,7 +1099,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             }
                             deleteUser(clean);
                             try {
-                              await supabase.from('users').delete().eq('email', clean).catch(() => {});
+                              try { await supabase.from('users').delete().eq('email', clean); } catch {}
                             } catch (e) {
                               console.error(e);
                             }
@@ -1144,3 +1144,4 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
     </>
   );
 };
+

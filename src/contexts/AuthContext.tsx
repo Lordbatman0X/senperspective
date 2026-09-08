@@ -1355,7 +1355,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: cleanActive, isOnline: false, lastActiveAt: new Date().toISOString() })
-        }).catch(() => {});
+        });
       } catch {}
     }
     try {
@@ -1436,3 +1436,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

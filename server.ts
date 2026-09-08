@@ -739,7 +739,7 @@ app.use((req, res, next) => {
         html += new TextDecoder("utf-8").decode(value);
         if (html.includes("</head>") || html.includes("<body")) break;
       }
-      reader.cancel().catch(() => {});
+      reader.cancel();
 
       const ogMatch = html.match(/<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i) ||
                       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["']/i) ||
@@ -3272,3 +3272,4 @@ Do not wrap the response in markdown blocks (like \`\`\`json). Just the raw JSON
   });
 
 export default app;
+
