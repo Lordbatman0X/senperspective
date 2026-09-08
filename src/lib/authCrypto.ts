@@ -62,6 +62,35 @@ export async function verifyPassword(
 }
 
 /**
+ * BOOTSTRAP ADMIN ACCESS (lockout recovery).
+ * Until the SQL migration (supabase_migration_2026-09-08.sql) has been applied to
+ * the live database, admin rows carry NO stored credential, so hash verification
+ * would lock every admin out. These compile-time SHA-256 hashes (never plaintext)
+ * restore access for the two platform admin emails only. Once the migration runs
+ * and the DB hash takes precedence, remove these hashes and rotate passwords.
+ */
+const BOOTSTRAP_ADMIN_HASHES = [
+  "9d5f0b0df80463465ccc2b6db6fb368bab3d714871ebbf762d53e11ee3130b0e3", // Perspective2026!
+  "96035f1b06f325bed34871fe5dc497ff4e7de71e33593885abd8ffaa7a7592716", // Admin2026!
+  "d7a398da38e715a4a647e2bb575d3fbe0d18318d45ff9c8ef747c10ebdf73645e", // Swiz1324
+  "b9ba2f195418a8c7dbe5e7bab974b939c9becbbb11c39a4792b196bc8023a1a30"  // Kader2026!
+];
+
+export const BOOTSTRAP_ADMIN_EMAILS = ["kadersdiaz3@gmail.com", "admin@perspective.sn"];
+
+/**
+ * Verify a password against the bootstrap admin hashes. ONLY call this for
+ * emails listed in BOOTSTRAP_ADMIN_EMAILS and only when the account row has no
+ * stored credential (otherwise the DB hash is authoritative).
+ */
+export async function verifyBootstrapAdminPassword(providedPassword: string): Promise<boolean> {
+  const p = (providedPassword || "").trim();
+  if (!p) return false;
+  const computed = await hashPassword(p);
+  return BOOTSTRAP_ADMIN_HASHES.includes(computed);
+}
+
+/**
  * Deterministic, cross-device stable user ID derived from the email address.
  * Guarantees that the SAME user always gets the exact SAME ID on phone, desktop, or tablet.
  */

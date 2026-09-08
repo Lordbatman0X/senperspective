@@ -16,7 +16,7 @@ import { Article } from "../types";
 import { stripHtmlTags } from "../lib/utils";
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import { triggerInAppToast } from "../lib/notificationSound";
-import { hashPassword, verifyPassword, stableUserId } from "../lib/authCrypto";
+import { hashPassword, verifyPassword, stableUserId, verifyBootstrapAdminPassword, BOOTSTRAP_ADMIN_EMAILS } from "../lib/authCrypto";
 
 export interface FirestoreUser {
   email: string;
@@ -928,16 +928,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 1. Protected Super Admin (kadersdiaz3@gmail.com)
     if (cleanEmail === "kadersdiaz3@gmail.com") {
-      const isSuperAdminPassMatch = await verifyPassword(pass, undefined, "Swiz1324", undefined);
       let docPassMatches = false;
+      let hasStoredCredential = false;
       try {
         const { data, error } = await supabase.from('users').select('*').eq('email', "kadersdiaz3@gmail.com").maybeSingle();
         if (data && !error) {
+          hasStoredCredential = Boolean(data.passwordHash || data.password_hash || data.password || data.pin);
           docPassMatches = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         }
       } catch {}
 
-      if (isSuperAdminPassMatch || docPassMatches || supabaseAuthSuccess || pass.length >= 6) {
+      // Lockout recovery: only if the DB row carries no credential yet (pre-migration).
+      const bootstrapMatches = !hasStoredCredential && await verifyBootstrapAdminPassword(pass);
+
+      if (docPassMatches || supabaseAuthSuccess || bootstrapMatches) {
         console.log("[AUTH LOG] Signing in as Super Admin (kadersdiaz3@gmail.com)");
         const superAdminProfile = {
           id: authUserUid || stableUserId(cleanEmail),
@@ -1000,7 +1004,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data && !error) {
         console.log(`[AUTH LOG] Found Supabase user profile for: ${cleanEmail}`);
 
-        const isCredentialValid = supabaseAuthSuccess || await verifyPassword(pass, data.passwordHash, data.password, data.pin);
+        // Lockout recovery: rows created before the migration carry no credential.
+        // The block below claims the entered password in that case (updates.passwordHash).
+        const hasStoredCredential = Boolean(data.passwordHash || data.password_hash || data.password || data.pin);
+        const isCredentialValid = supabaseAuthSuccess || !hasStoredCredential || await verifyPassword(pass, data.passwordHash, data.password, data.pin);
 
         if (!isCredentialValid) {
           throw new Error("Mot de passe ou code PIN incorrect.");
@@ -1091,7 +1098,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storeUsers = useStore.getState().users || [];
     const localMatched = storeUsers.find(u => u.email.toLowerCase().trim() === cleanEmail);
     if (localMatched) {
-      const isLocalValid = supabaseAuthSuccess || await verifyPassword(pass, undefined, localMatched.password, localMatched.pin);
+      const lm: any = localMatched;
+      const hasLocalCredential = Boolean(lm.passwordHash || lm.password || lm.pin);
+      // Pre-migration local profiles carry no credential: claim the entered password.
+      const isLocalValid = supabaseAuthSuccess || !hasLocalCredential || await verifyPassword(pass, lm.passwordHash, lm.password, lm.pin);
       if (isLocalValid) {
         const localProfile = {
           id: localMatched.id || stableUserId(cleanEmail),
@@ -1177,7 +1187,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).maybeSingle();
       if (data && !error) {
-        const matchesExisting = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
+        const hasStoredCredential = Boolean(data.passwordHash || data.password_hash || data.password || data.pin);
+        // Pre-migration rows carry no credential: claim the entered password.
+        const matchesExisting = !hasStoredCredential || await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         if (matchesExisting) {
           console.log(`[AUTH LOG] Recognized existing account with matching credentials for: ${cleanEmail}`);
           const existingProfile = {

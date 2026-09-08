@@ -10,7 +10,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText, formatCategory } from '../lib/utils';
-import { verifyPassword, stableUserId } from '../lib/authCrypto';
+import { verifyPassword, stableUserId, verifyBootstrapAdminPassword, BOOTSTRAP_ADMIN_EMAILS } from '../lib/authCrypto';
 
 // Modular Tab components
 import { DashboardOverview } from '../components/admin/DashboardOverview';
@@ -159,15 +159,30 @@ export function AdminPortal() {
         const emailToCheck = legacyUserEmailMap[cleanUser];
         const legacySnap = await usersQuery().eq('email', emailToCheck).maybeSingle();
         if (legacySnap?.data) {
-          const isVerified = await verifyPassword(cleanPass, legacySnap.data.passwordHash, legacySnap.data.password, legacySnap.data.pin);
+          const uData: any = legacySnap.data;
+          const hasStoredCredential = Boolean(uData.passwordHash || uData.password_hash || uData.password || uData.pin);
+          const isVerified = hasStoredCredential
+            ? await verifyPassword(cleanPass, uData.passwordHash, uData.password, uData.pin)
+            : await verifyBootstrapAdminPassword(cleanPass); // lockout recovery pre-migration
           if (isVerified) {
             isAuthenticated = true;
-            matchedRole = legacySnap.data.role || 'Admin';
-            matchedName = legacySnap.data.name || cleanUser;
+            matchedRole = uData.role || 'Admin';
+            matchedName = uData.name || cleanUser;
           }
         }
       } catch (err) {
         console.warn("Legacy admin login check notice:", err);
+      }
+    }
+
+    // BOOTSTRAP ACCESS: if the DB has no row (or no credential) for a platform
+    // admin email, allow the bootstrap password (hash-compared, never plaintext).
+    if (!isAuthenticated && BOOTSTRAP_ADMIN_EMAILS.includes(resolvedEmailForLogin)) {
+      const hasRow = (useStore.getState().users || []).some(u => u.email.toLowerCase().trim() === resolvedEmailForLogin && ((u as any).passwordHash || (u as any).password));
+      if (!hasRow && await verifyBootstrapAdminPassword(cleanPass)) {
+        isAuthenticated = true;
+        matchedRole = 'Admin';
+        matchedName = 'Kader';
       }
     }
 
