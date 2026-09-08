@@ -3,7 +3,7 @@ import { useStore, UserAccount, UserInteraction } from '../../store';
 import { useAuth } from '../../contexts/AuthContext';
 import { Users, Trash2, ShieldAlert, Key, UserCheck, Activity, Search, Shield, Eye, EyeOff, AlertTriangle, Award, Lock, Plus, UserPlus } from 'lucide-react';
 import { renderNeutralAvatar } from '../AccountDrawer';
-import { supabase, usersQuery } from '../../lib/supabaseClient';
+import { supabase, usersQuery, saveUserToSupabase } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 
 export function ModerationTab() {
@@ -132,10 +132,10 @@ export function ModerationTab() {
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
       console.error("Error creating user:", err);
-      // Fallback: save directly to Firestore users collection
+      // Fallback: save directly to Supabase users collection & site_settings
       try {
         const cleanEmail = newEmail.toLowerCase().trim();
-        await supabase.from('users').upsert({
+        await saveUserToSupabase({
           email: cleanEmail,
           name: newName,
           role: newRole,
@@ -222,9 +222,11 @@ export function ModerationTab() {
       deleteUser(cleanEmail);
 
       try {
-        await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('email', cleanEmail);
+        await supabase.from('users').delete().eq('email', cleanEmail);
+        const authDocId = 'auth_' + cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
+        await supabase.from('site_settings').delete().eq('id', authDocId);
       } catch (err) {
-        console.error("Error soft-deleting user:", err);
+        console.error("Error deleting user from Supabase:", err);
       }
 
       setConfirmDeleteEmail(null);

@@ -3,8 +3,36 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
+function resolveSupabaseUrl(): string {
+  const viteUrl = process.env.VITE_SUPABASE_URL;
+  if (viteUrl && (viteUrl.startsWith('https://') || viteUrl.startsWith('http://'))) {
+    return viteUrl;
+  }
+  const serverUrl = process.env.SUPABASE_URL;
+  if (serverUrl && (serverUrl.startsWith('https://') || serverUrl.startsWith('http://'))) {
+    return serverUrl;
+  }
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (anonKey && anonKey.includes('.')) {
+    try {
+      const parts = anonKey.split('.');
+      if (parts[1]) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+        if (payload.ref) {
+          return `https://${payload.ref}.supabase.co`;
+        }
+      }
+    } catch {}
+  }
+  return 'https://ymweduynoxuacchspgfj.supabase.co';
+}
+
 export default defineConfig(() => {
+  const resolvedSupabaseUrl = resolveSupabaseUrl();
   return {
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(resolvedSupabaseUrl),
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {

@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { supabase, subscribeToTable } from '../lib/supabaseClient';
+import { supabase, subscribeToTable, formatUserForSupabase } from '../lib/supabaseClient';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,

@@ -5,7 +5,7 @@ import {
   ShieldCheck, Lock, Key, Mail, User, Eye, EyeOff, RefreshCw, CheckCircle2, 
   AlertTriangle, Shield, UserPlus, Edit3, Trash2, ShieldAlert, Check, Sparkles, Sliders
 } from 'lucide-react';
-import { supabase, usersQuery } from '../../lib/supabaseClient';
+import { supabase, usersQuery, saveUserToSupabase, formatUserFromSupabase } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 import { hashPassword, stableUserId } from '../../lib/authCrypto';
 
@@ -188,15 +188,15 @@ export function SecurityTab() {
         localStorage.setItem('perspective_admin_passwords', JSON.stringify(storedPasses));
       } catch (e) {}
 
-      // 2. Update in Firestore users collection with both hash and fallback
-      await supabase.from('users').upsert({
+      // 2. Update in Supabase & site_settings backup
+      await saveUserToSupabase({
         email: targetEmail,
         passwordHash: pHash,
         password: newPasswordValue,
         passwordUpdatedAt: new Date().toISOString()
       });
 
-      // 3. Update via backend Express MongoDB endpoint
+      // 3. Update via backend Express endpoint
       await fetch('/api/mongodb/auth/update-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -251,8 +251,8 @@ export function SecurityTab() {
       // Update in Local Zustand Store
       updateUserPassword(currentAdminEmail, myNewPassword);
 
-      // Update in Firestore
-      await supabase.from('users').upsert({
+      // Update in Supabase & site_settings backup
+      await saveUserToSupabase({
         email: currentAdminEmail.toLowerCase().trim(),
         passwordHash: pHash,
         password: myNewPassword,
@@ -307,8 +307,8 @@ export function SecurityTab() {
       // 1. Register with AuthContext / Firebase
       await registerWithEmail(cleanEmail, addAdminPassword, addAdminName, addAdminRole, 'preset-male', 'password');
 
-      // 2. Save directly in Firestore with passwordHash
-      await supabase.from('users').upsert({
+      // 2. Save directly in Supabase with credentials backup
+      await saveUserToSupabase({
         id: uid,
         email: cleanEmail,
         name: addAdminName,
@@ -340,7 +340,7 @@ export function SecurityTab() {
       console.error("Error creating admin account:", err);
       // Fallback
       const pHash = await hashPassword(addAdminPassword);
-      await supabase.from('users').upsert({
+      await saveUserToSupabase({
         id: stableUserId(cleanEmail),
         email: cleanEmail,
         name: addAdminName,
