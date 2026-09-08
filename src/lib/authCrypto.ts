@@ -90,6 +90,13 @@ export async function verifyBootstrapAdminPassword(providedPassword: string): Pr
   return BOOTSTRAP_ADMIN_HASHES.includes(computed);
 }
 
+// Build marker: lets you verify in DevTools console which build is actually loaded.
+// If you don't see "AUTH-BUILD-2026-09-08-B" in the console, your browser is
+// running a cached bundle — do a hard refresh (Ctrl+Shift+R).
+if (typeof console !== "undefined") {
+  console.log("[AUTH BUILD] 2026-09-08-B — bootstrap admin recovery active");
+}
+
 /**
  * Deterministic, cross-device stable user ID derived from the email address.
  * Guarantees that the SAME user always gets the exact SAME ID on phone, desktop, or tablet.
