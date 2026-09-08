@@ -48,9 +48,16 @@ import {
 export const app = express();
 const PORT = 3000;
 
-// Connect to Firestore (implicitly initialized via firebase-admin)
-console.log("[Firestore Setup] Connection initialized.");
-loadKeysFromFirestore().then(() => console.log("[Firestore Setup] API Keys loaded."));
+// Connect to Supabase (server-side)
+import { getSupabaseServer } from './src/lib/firestoreServer';
+console.log("[Supabase Setup] Initializing server connection.");
+try {
+  getSupabaseServer();
+  console.log("[Supabase Setup] Connection initialized.");
+} catch (e) {
+  console.warn("[Supabase Setup] Notice:", e);
+}
+loadKeysFromFirestore().then(() => console.log("[Supabase Setup] API Keys loaded."));
 
 // Enable CORS for webhooks and API clients
 app.use((req, res, next) => {
@@ -366,162 +373,90 @@ app.use((req, res, next) => {
     return 0;
   };
 
-  // Sync user consent decision to Firestore collection 'user_consents'
-  const syncUserConsentToFirestore = async (consent: any) => {
+  // Sync user consent decision to Supabase table 'user_consents'
+  const syncUserConsentToSupabase = async (consent: any) => {
     try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
       const docId = consent.id || `consent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/user_consents/${docId}?key=${apiKey}`;
-
-      const firestoreBody = {
-        fields: {
-          id: { stringValue: docId },
-          sessionId: { stringValue: consent.sessionId || "" },
-          essential: { booleanValue: true },
-          analytics: { booleanValue: Boolean(consent.analytics) },
-          personalization: { booleanValue: Boolean(consent.personalization) },
-          marketing: { booleanValue: Boolean(consent.marketing) },
-          country: { stringValue: consent.country || "" },
-          city: { stringValue: consent.city || "" },
-          deviceType: { stringValue: consent.deviceType || "" },
-          referrer: { stringValue: consent.referrer || "Direct" },
-          updatedAt: { stringValue: consent.updatedAt || new Date().toISOString() },
-          userEmail: { stringValue: consent.userEmail || "" }
-        }
-      };
-
-      await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(firestoreBody)
+      const { getSupabaseServer } = await import('./src/lib/firestoreServer');
+      const client = getSupabaseServer();
+      await client.from('user_consents').upsert({
+        id: docId,
+        session_id: consent.sessionId || "",
+        user_email: consent.userEmail || "",
+        essential: true,
+        analytics: Boolean(consent.analytics),
+        personalization: Boolean(consent.personalization),
+        marketing: Boolean(consent.marketing),
+        device_type: consent.deviceType || "",
+        locale: consent.locale || "fr-SN",
+        country: consent.country || "",
+        city: consent.city || "",
+        updated_at: consent.updatedAt || new Date().toISOString()
       });
-      console.log(`[FIRESTORE CONSENT SYNC] Synced consent record "${docId}" to Firestore.`);
+      console.log(`[SUPABASE CONSENT SYNC] Synced consent record "${docId}".`);
     } catch (err) {
-      console.error("[FIRESTORE CONSENT SYNC ERROR]", err);
+      console.error("[SUPABASE CONSENT SYNC ERROR]", err);
     }
   };
 
-  // Sync consent or visit record to Firestore collection 'analytics_archive'
-  const syncToAnalyticsArchiveInFirestore = async (record: any, isConsent: boolean) => {
+  // Sync visit event to Supabase table 'analytics_events'
+  const syncEventToSupabase = async (record: any, isConsent: boolean) => {
     try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
-      const docId = record.id || (record.sessionId ? (isConsent ? `consent_${record.sessionId}` : `evt_${record.sessionId}_${Date.now()}`) : `arch_${Date.now()}`);
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/analytics_archive/${docId}?key=${apiKey}`;
-
-      const firestoreBody = {
-        fields: {
-          id: { stringValue: docId },
-          recordType: { stringValue: isConsent ? "consent" : "visit_event" },
-          eventName: { stringValue: record.eventName || (isConsent ? "consent" : "pageview") },
-          sessionId: { stringValue: record.sessionId || "" },
-          path: { stringValue: record.path || "/" },
-          articleId: { stringValue: record.articleId || "" },
-          category: { stringValue: record.category || "Général" },
-          country: { stringValue: record.country || "" },
-          deviceType: { stringValue: record.deviceType || "" },
-          marketing: { booleanValue: Boolean(record.marketing) },
-          analytics: { booleanValue: Boolean(record.analytics !== false) },
-          essential: { booleanValue: true },
-          updatedAt: { stringValue: record.updatedAt || record.timestamp || new Date().toISOString() },
-          timestamp: { stringValue: record.timestamp || record.updatedAt || new Date().toISOString() },
-          archivedAt: { stringValue: new Date().toISOString() },
-          userEmail: { stringValue: record.userEmail || "" }
-        }
+      const { getSupabaseServer } = await import('./src/lib/firestoreServer');
+      const client = getSupabaseServer();
+      const docId = record.id || (record.sessionId ? (isConsent ? `consent_${record.sessionId}` : `evt_${record.sessionId}_${Date.now()}`) : `evt_${Date.now()}`);
+      const table = isConsent ? 'user_consents' : 'analytics_events';
+      const payload: any = {
+        id: docId,
+        session_id: record.sessionId || "",
+        event_name: record.eventName || (isConsent ? "consent" : "pageview"),
+        path: record.path || "/",
+        article_id: record.articleId || "",
+        article_title: record.articleTitle || "",
+        category: record.category || "General",
+        device_type: record.deviceType || "Desktop",
+        country: record.country || "",
+        city: record.city || "",
+        timestamp: record.timestamp || record.updatedAt || new Date().toISOString(),
+        user_email: record.userEmail || ""
       };
-
-      await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(firestoreBody)
-      });
-      console.log(`[FIRESTORE ARCHIVE SYNC] Synced record "${docId}" to Firestore analytics_archive.`);
+      await client.from(table).upsert(payload);
+      console.log(`[SUPABASE ANALYTICS SYNC] Synced ${table} record "${docId}".`);
     } catch (err) {
-      console.error("[FIRESTORE ARCHIVE SYNC ERROR]", err);
+      console.error("[SUPABASE ANALYTICS SYNC ERROR]", err);
     }
   };
 
-  // Sync real analytics telemetry event to Firestore collection 'analytics_events'
-  const syncAnalyticsEventToFirestore = async (event: any) => {
+  // Sync analytics telemetry event to Supabase table 'analytics_events'
+  const syncAnalyticsEventToSupabase = async (event: any) => {
     try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
+      const { getSupabaseServer } = await import('./src/lib/firestoreServer');
+      const client = getSupabaseServer();
       const docId = event.id || `evt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/analytics_events/${docId}?key=${apiKey}`;
-
-      const firestoreBody = {
-        fields: {
-          id: { stringValue: docId },
-          eventName: { stringValue: event.eventName || "pageview" },
-          sessionId: { stringValue: event.sessionId || "" },
-          path: { stringValue: event.path || "/" },
-          articleId: { stringValue: event.articleId || "" },
-          category: { stringValue: event.category || "General" },
-          durationSeconds: { integerValue: Number(event.durationSeconds || 0) },
-          country: { stringValue: event.country || "" },
-          deviceType: { stringValue: event.deviceType || "" },
-          referrer: { stringValue: event.referrer || "Direct" },
-          timestamp: { stringValue: event.timestamp || new Date().toISOString() },
-          userEmail: { stringValue: event.userEmail || "" }
-        }
-      };
-
-      await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(firestoreBody)
+      await client.from('analytics_events').upsert({
+        id: docId,
+        event_name: event.eventName || "pageview",
+        session_id: event.sessionId || "",
+        path: event.path || "/",
+        article_id: event.articleId || "",
+        article_title: event.articleTitle || "",
+        category: event.category || "General",
+        device_type: event.deviceType || "Desktop",
+        country: event.country || "",
+        city: event.city || "",
+        timestamp: event.timestamp || new Date().toISOString(),
+        user_email: event.userEmail || ""
       });
-      console.log(`[FIRESTORE ANALYTICS SYNC] Synced event "${docId}" to Firestore.`);
+      console.log(`[SUPABASE ANALYTICS SYNC] Synced event "${docId}" to analytics_events.`);
     } catch (err) {
-      console.error("[FIRESTORE ANALYTICS SYNC ERROR]", err);
+      console.error("[SUPABASE ANALYTICS SYNC ERROR]", err);
     }
   };
 
-  // Sync aggregated daily analytics snapshot to Firestore collection 'daily_analytics'
-  const syncDailyAnalyticsArchiveToFirestore = async (dateStr: string) => {
-    try {
-      const projectId = "earnest-strand-z71nt";
-      const databaseId = "ai-studio-perspectivegroup-9af7fbb0-c841-48c0-854d-ab5c65f4ba29";
-      const apiKey = "AIzaSyALmx2cnEFumIoBPUj0qQjoO30zFG4pJrg";
-      const docId = dateStr || new Date().toISOString().split('T')[0];
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${databaseId}/documents/daily_analytics/${docId}?key=${apiKey}`;
-
-      const dayEvents = analyticsEventsRepository.filter(e => (e.timestamp || "").startsWith(docId));
-      const dayConsents = userConsentsRepository.filter(c => (c.updatedAt || "").startsWith(docId));
-
-      const pageviews = dayEvents.filter(e => e.eventName === "pageview" || !e.eventName).length;
-      const sessions = new Set([...dayEvents.map(e => e.sessionId), ...dayConsents.map(c => c.sessionId)].filter(Boolean)).size;
-      const consents = dayConsents.length;
-      const analyticsOptIns = dayConsents.filter(c => c.analytics).length;
-      const marketingOptIns = dayConsents.filter(c => c.marketing).length;
-      const conversions = dayEvents.filter(e => ["newsletter_subscription", "conversion_lead", "premium_click", "ad_click", "contact_lead"].includes(e.eventName)).length;
-
-      const firestoreBody = {
-        fields: {
-          date: { stringValue: docId },
-          totalPageviews: { integerValue: pageviews },
-          uniqueSessions: { integerValue: sessions },
-          totalConsents: { integerValue: consents },
-          analyticsOptIns: { integerValue: analyticsOptIns },
-          marketingOptIns: { integerValue: marketingOptIns },
-          leadConversions: { integerValue: conversions },
-          lastUpdated: { stringValue: new Date().toISOString() }
-        }
-      };
-
-      await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(firestoreBody)
-      });
-      console.log(`[FIRESTORE DAILY ARCHIVE SYNC] Synced daily analytics "${docId}" to Firestore.`);
-    } catch (err) {
-      console.error("[FIRESTORE DAILY ARCHIVE SYNC ERROR]", err);
-    }
+  // Daily analytics aggregation is computed client-side and stored in analytics_events
+  const syncDailyAnalyticsArchiveToSupabase = async (_dateStr: string) => {
+    // Daily analytics snapshots are not stored in Supabase (no daily_analytics table).
+    // Analytics are aggregated client-side from analytics_events.
   };
 
   // Helper function to decode XML/HTML entities and clean text
@@ -2558,9 +2493,9 @@ app.use((req, res, next) => {
       } catch (e) {
         console.warn("[Firestore Analytics] saveUserConsent notice:", e);
       }
-      await syncUserConsentToFirestore(consentRecord);
-      await syncToAnalyticsArchiveInFirestore(consentRecord, true);
-      await syncDailyAnalyticsArchiveToFirestore(new Date().toISOString().split('T')[0]);
+      await syncUserConsentToSupabase(consentRecord);
+      await syncEventToSupabase(consentRecord, true);
+      await syncDailyAnalyticsArchiveToSupabase(new Date().toISOString().split('T')[0]);
 
       return res.json({ success: true, message: "Consent recorded & archived in MongoDB & Firestore", consent: consentRecord });
     } catch (err: any) {
@@ -2597,9 +2532,9 @@ app.use((req, res, next) => {
       } catch (e) {
         console.warn("[Firestore Analytics] saveAnalyticsEvent notice:", e);
       }
-      await syncAnalyticsEventToFirestore(eventRecord);
-      await syncToAnalyticsArchiveInFirestore(eventRecord, false);
-      await syncDailyAnalyticsArchiveToFirestore(new Date().toISOString().split('T')[0]);
+      await syncAnalyticsEventToSupabase(eventRecord);
+      await syncEventToSupabase(eventRecord, false);
+      await syncDailyAnalyticsArchiveToSupabase(new Date().toISOString().split('T')[0]);
 
       return res.json({ success: true, message: "Analytics event tracked & archived in MongoDB & Firestore", event: eventRecord });
     } catch (err: any) {

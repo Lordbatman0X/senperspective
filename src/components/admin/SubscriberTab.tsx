@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubscriberItem, useStore } from '../../store';
 import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck } from 'lucide-react';
-import { db, collection, addDoc, getDocs, query, orderBy } from '../../lib/firebase';
+import { supabase } from '../../lib/supabaseClient';
 import { 
   connectGoogleGmail, 
   getCachedGoogleToken, 
@@ -52,17 +52,15 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
   useEffect(() => {
     async function loadDispatches() {
       try {
-        const q = query(collection(db, "dispatches"), orderBy("sentAt", "desc"));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
+        const { data } = await supabase.from('dispatches').select('*').order('sentAt', { ascending: false });
+        if (data) {
           const loaded: { subject: string; date: string; count: number; method?: string }[] = [];
-          snap.forEach(docSnap => {
-            const data = docSnap.data();
+          data.forEach((row: any) => {
             loaded.push({
-              subject: data.subject || 'Newsletter Perspective',
-              date: data.date || (data.sentAt ? data.sentAt.split('T')[0] : '2026-08-08'),
-              count: data.count || (subscribers.length || 1),
-              method: data.method || 'Gmail / Server Relay'
+              subject: row.subject || 'Newsletter Perspective',
+              date: row.date || (row.sentAt ? row.sentAt.split('T')[0] : '2026-08-08'),
+              count: row.count || (subscribers.length || 1),
+              method: row.method || 'Gmail / Server Relay'
             });
           });
           setCampaignLogs(loaded);
@@ -161,9 +159,9 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
       localStorage.setItem('perspective_campaign_dispatches', JSON.stringify(updatedLogs));
     }
 
-    // Save campaign to Firestore database
+    // Save campaign to database
     try {
-      await addDoc(collection(db, "dispatches"), {
+      await supabase.from('dispatches').insert({
         subject: subject.trim(),
         body: body.trim(),
         date: newLog.date,
@@ -171,7 +169,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
         count: targetRecipients.length,
         method: dispatchMethod,
         status: 'sent'
-      });
+      }).catch(() => {});
 
       // Notify target recipients
       targetRecipients.forEach(sub => {

@@ -1,4 +1,4 @@
-import { db, doc, getDoc, setDoc } from './firebase';
+import { supabase } from './supabaseClient';
 
 /**
  * Client-Side AI and RSS Engine
@@ -44,7 +44,7 @@ let hasLoadedFromFirestore = false;
 let loadPromise: Promise<Record<string, string>> | null = null;
 
 /**
- * Loads API keys from Firestore system_config/api_keys into memory and localStorage
+ * Loads API keys from Supabase site_settings into memory and localStorage
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
   if (typeof window === 'undefined') return {};
@@ -52,14 +52,14 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 
   loadPromise = (async () => {
     try {
-      const snap = await getDoc(doc(db, 'system_config', 'api_keys'));
-      if (snap && snap.exists()) {
-        const data = snap.data() || {};
-        cachedFirestoreKeys = { ...data };
+      const { data, error } = await supabase.from('site_settings').select('data').eq('id', 'singleton').single();
+      if (!error && data) {
+        const apiKeys = (data.data as Record<string, string>) || {};
+        cachedFirestoreKeys = { ...apiKeys };
         hasLoadedFromFirestore = true;
         // Sync into localStorage if not already set locally
         if (window.localStorage) {
-          for (const [k, v] of Object.entries(data)) {
+          for (const [k, v] of Object.entries(apiKeys)) {
             if (typeof v === 'string' && v.trim()) {
               const lower = k.toLowerCase();
               const upper = k.toUpperCase();
@@ -75,7 +75,7 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
         return cachedFirestoreKeys;
       }
     } catch (e) {
-      console.warn('[Client AI] Note: Could not fetch keys from Firestore:', e);
+      console.warn('[Client AI] Note: Could not fetch keys from Supabase:', e);
     } finally {
       loadPromise = null;
     }
@@ -151,12 +151,14 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
     delete cachedFirestoreKeys[P];
   }
 
-  // 3. Persist to Firestore system_config/api_keys
+  // 3. Persist to Supabase site_settings
   try {
-    await setDoc(doc(db, 'system_config', 'api_keys'), { [P]: cleanKey }, { merge: true });
-    console.log(`[Client AI] Successfully saved ${P} API key to Firestore database.`);
+    const { data: existing } = await supabase.from('site_settings').select('data').eq('id', 'singleton').single();
+    const existingData = (existing?.data as Record<string, any>) || {};
+    await supabase.from('site_settings').upsert({ id: 'singleton', data: { ...existingData, api_keys: { ...(existingData.api_keys || {}), [P]: cleanKey } } });
+    console.log(`[Client AI] Successfully saved ${P} API key to Supabase database.`);
   } catch (err) {
-    console.warn(`[Client AI] Could not sync ${P} key to Firestore:`, err);
+    console.warn(`[Client AI] Could not sync ${P} key to Supabase:`, err);
   }
 }
 

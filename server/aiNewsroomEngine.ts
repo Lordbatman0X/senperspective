@@ -168,11 +168,14 @@ export let cachedFirestoreKeys: Record<string, string> = {};
 export async function loadKeysFromFirestore() {
   try {
     const doc = await getDocument("system_config", "api_keys");
-    if (doc && doc.data) {
-      cachedFirestoreKeys = doc.data as Record<string, string>;
-      console.log("[Firestore Setup] Loaded API Keys from database:", Object.keys(cachedFirestoreKeys));
+    // getDocument now returns unwrapped data: for site_settings, it returns { id, ...data }
+    // so doc.data contains the full site_settings object with data.api_keys
+    const apiKeys = doc?.data?.api_keys || doc?.data || {};
+    if (apiKeys && Object.keys(apiKeys).length > 0) {
+      cachedFirestoreKeys = apiKeys as Record<string, string>;
+      console.log("[Supabase Setup] Loaded API Keys from database:", Object.keys(cachedFirestoreKeys));
     }
-    // Ensure environment keys are synced to Firestore so direct client/CDN frontends can access them
+    // Ensure environment keys are synced to Supabase so direct client/CDN frontends can access them
     let needsUpdate = false;
     if (process.env.GEMINI_API_KEY && (!cachedFirestoreKeys['GEMINI'] || !cachedFirestoreKeys['gemini'])) {
       cachedFirestoreKeys['GEMINI'] = process.env.GEMINI_API_KEY;
@@ -191,10 +194,10 @@ export async function loadKeysFromFirestore() {
     }
     if (needsUpdate) {
       await saveDocument("system_config", "api_keys", cachedFirestoreKeys, true);
-      console.log("[Firestore Setup] Synced environment API keys to Firestore database.");
+      console.log("[Supabase Setup] Synced environment API keys to database.");
     }
   } catch (err) {
-    console.warn("[Firestore Setup Warning] Could not load API keys from Firestore:", err);
+    console.warn("[Supabase Setup Warning] Could not load API keys from database:", err);
   }
 }
 

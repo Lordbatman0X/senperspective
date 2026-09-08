@@ -6,7 +6,8 @@ import {
 import { useStore } from '../../store';
 import { trackPageView } from '../../lib/telemetry';
 import { safeFetchJson } from '../../lib/apiUtils';
-import { db, safeOnSnapshot, collection, doc, setDoc } from '../../lib/firebase';
+import { supabase } from '../../lib/supabaseClient';
+import { subscribeToTable } from '../../lib/supabaseClient';
 
 export function AudienceAnalyticsTab() {
   const { language, articles, subscribers, friends, interactions, comments, ads } = useStore();
@@ -249,34 +250,40 @@ export function AudienceAnalyticsTab() {
       setLoading(false);
     };
 
-    const unsubArchive = safeOnSnapshot(collection(db, 'analytics_archive'), (snapshot) => {
-      archiveList = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-      processCombinedData();
-    }, (err) => {
-      console.warn('Error fetching analytics_archive from Firestore:', err);
-      processCombinedData();
-    });
+    const loadArchive = async () => {
+      const { data } = await supabase.from('analytics_archive').select('*');
+      if (data) {
+        archiveList = data.map((doc: any) => ({ id: doc.id, ...doc }));
+        processCombinedData();
+      }
+    };
+    loadArchive();
+    const unsubArchive = subscribeToTable('analytics_archive', loadArchive);
 
-    const unsubEvents = safeOnSnapshot(collection(db, 'analytics_events'), (snapshot) => {
-      eventsList = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-      processCombinedData();
-    }, (err) => {
-      console.warn('Error fetching analytics_events from Firestore:', err);
-      processCombinedData();
-    });
+    const loadEvents = async () => {
+      const { data } = await supabase.from('analytics_events').select('*');
+      if (data) {
+        eventsList = data.map((doc: any) => ({ id: doc.id, ...doc }));
+        processCombinedData();
+      }
+    };
+    loadEvents();
+    const unsubEvents = subscribeToTable('analytics_events', loadEvents);
 
-    const unsubConsents = safeOnSnapshot(collection(db, 'user_consents'), (snapshot) => {
-      consentsList = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
-      processCombinedData();
-    }, (err) => {
-      console.warn('Error fetching user_consents from Firestore:', err);
-      processCombinedData();
-    });
+    const loadConsents = async () => {
+      const { data } = await supabase.from('user_consents').select('*');
+      if (data) {
+        consentsList = data.map((doc: any) => ({ id: doc.id, ...doc }));
+        processCombinedData();
+      }
+    };
+    loadConsents();
+    const unsubConsents = subscribeToTable('user_consents', loadConsents);
 
     return () => {
-      unsubArchive();
-      unsubEvents();
-      unsubConsents();
+      void unsubArchive.unsubscribe();
+      void unsubEvents.unsubscribe();
+      void unsubConsents.unsubscribe();
     };
   }, [subscribers, friends, interactions, articles]);
 
@@ -304,7 +311,8 @@ export function AudienceAnalyticsTab() {
     try {
       for (const sub of (subscribers || [])) {
         const subDocId = sub.email.replace(/[^a-zA-Z0-9]/g, '_');
-        await setDoc(doc(db, 'user_consents', subDocId), {
+        await supabase.from('user_consents').upsert({
+          id: subDocId,
           sessionId: `sess_${subDocId}`,
           userEmail: sub.email,
           essential: true,
@@ -314,7 +322,7 @@ export function AudienceAnalyticsTab() {
           deviceType: sub.email.includes('gmail') ? 'Mobile' : 'Desktop',
           country: sub.email.endsWith('.sn') || sub.email.includes('orange.sn') ? 'Sénégal (Dakar, Thiès, Saint-Louis)' : 'Diaspora (France, États-Unis, Canada, Italie)',
           updatedAt: sub.date ? new Date(sub.date).toISOString() : new Date().toISOString()
-        }, { merge: true });
+        });
       }
     } catch (e) {
       console.warn('Error syncing subscribers to Firestore:', e);

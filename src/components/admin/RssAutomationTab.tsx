@@ -16,8 +16,7 @@ import {
   clientFetchRssFeed, 
   loadClientApiKeysFromFirestore 
 } from '../../lib/clientAiEngine';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
-import { db } from '../../lib/realFirebase';
+import { supabase } from '../../lib/supabaseClient';
 
 interface RssAutomationTabProps {
   onEditArticle?: (article: Article) => void;
@@ -218,7 +217,7 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
-  const { articles, setArticles, addArticle, updateArticle, deleteArticle, syncFromMongoDB, language } = useStore();
+  const { articles, setArticles, addArticle, updateArticle, deleteArticle, syncFromSupabase, language } = useStore();
   const isFr = language === 'fr';
 
   // Active Newsroom Tab
@@ -618,7 +617,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   };
 
   useEffect(() => {
-    syncFromMongoDB();
+    syncFromSupabase();
     fetchAiEngineStatus();
     fetchScheduleConfig();
     fetchEditorialGuidelines();
@@ -1060,7 +1059,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       setArticles(articles.filter(a => a.isPublished));
 
       for (const d of draftsToPurge) {
-        deleteDoc(doc(db, "articles", d.id)).catch(() => {});
+        supabase.from('articles').delete().eq('id', d.id).catch(() => {});
       }
 
       safeFetchJson('/api/articles/purge', { method: 'POST' }).catch(() => {});
@@ -1086,7 +1085,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
       // Always persist to localStorage and Firestore
       localStorage.setItem('perspective_rss_schedule_cfg', JSON.stringify(payload));
-      setDoc(doc(db, 'system_config', 'rss_schedule'), payload, { merge: true }).catch(() => {});
+      supabase.from('system_config').upsert({ id: 'rss_schedule', ...payload }).catch(() => {});
       setAutoSchedule((prev: any) => ({ ...prev, ...payload }));
 
       const { ok, data } = await safeFetchJson('/api/rss-automation/config', {

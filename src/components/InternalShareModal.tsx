@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store';
 import { useAuth } from '../contexts/AuthContext';
-import { db, safeOnSnapshot, collection } from '../lib/firebase';
+import { supabase, subscribeToTable } from '../lib/supabaseClient';
 import { SharedAttachment } from './SharedItemCard';
 
 interface InternalShareModalProps {
@@ -97,23 +97,35 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
   useEffect(() => {
     if (!isOpen || !readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const friendsRef = collection(db, "users", myEmail, "friends");
 
-    const unsubscribe = safeOnSnapshot(
-      friendsRef,
-      (snapshot) => {
-        const loadedFriends = snapshot.docs.map((doc: any) => doc.id.toLowerCase().trim());
+    const loadFriends = async () => {
+      const { data } = await supabase
+        .from('users')
+        .select('friend_ids')
+        .eq('email', myEmail)
+        .single();
+      if (data?.friend_ids) {
+        const loadedFriends = data.friend_ids.map((id: string) => id.toLowerCase().trim());
         setFriendsList(loadedFriends);
         if (loadedFriends.length > 0 && selectedRecipientEmail === 'admin@perspective.sn') {
           setSelectedRecipientEmail(loadedFriends[0]);
         }
-      },
-      (error) => {
-        console.warn("Notice loading friends in InternalShareModal:", error);
       }
+    };
+
+    const unsubscribe = subscribeToTable(
+      'users',
+      (payload) => {
+        if (payload.new?.email && payload.new.email.toLowerCase().trim() === myEmail) {
+          loadFriends();
+        }
+      },
+      `email=eq.${myEmail}`
     );
 
-    return () => unsubscribe();
+    loadFriends();
+
+    return () => { unsubscribe.unsubscribe(); };
   }, [isOpen, readerProfile?.email]);
 
   // 2. Compute Active Attachment

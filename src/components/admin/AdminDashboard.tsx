@@ -5,8 +5,8 @@ import {
   Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight, Upload
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { db, collection, getDocs, deleteDoc, doc as mongoDoc } from '../../lib/firebase';
-import { realFirestore, doc as firestoreDoc, setDoc } from '../../lib/realFirebase';
+import { supabase } from '../../lib/supabaseClient';
+import { subscribeToTable } from '../../lib/supabaseClient';
 import { sampleArticles } from '../../data';
 
 interface CollectionStats {
@@ -70,8 +70,8 @@ export function AdminDashboard() {
 
       for (const colName of collectionsToCheck) {
         try {
-          const snap = await getDocs(collection(db, colName));
-          newCounts[colName] = snap.size;
+          const { data } = await supabase.from(colName).select('*');
+          newCounts[colName] = data?.length || 0;
         } catch (err) {
           console.warn(`Failed fetching ${colName} collection:`, err);
           newCounts[colName] = 0;
@@ -100,11 +100,11 @@ export function AdminDashboard() {
     setInspectCollection(colName);
     setInspectLoading(true);
     try {
-      const snap = await getDocs(collection(db, colName));
-      const docsList = snap.docs.slice(0, 15).map(docSnap => ({
-        id: docSnap.id,
-        data: docSnap.data()
-      }));
+      const { data } = await supabase.from(colName).select('*');
+      const docsList = data ? data.slice(0, 15).map((docItem: any) => ({
+        id: docItem.id,
+        data: docItem
+      })) : [];
       setInspectDocs(docsList);
     } catch (err) {
       console.error('Inspection failed:', err);
@@ -128,10 +128,10 @@ export function AdminDashboard() {
 
       for (const colName of targets) {
         setWipeLogs(prev => [...prev, isFr ? `Analyse de la collection "${colName}"...` : `Scanning collection "${colName}"...`]);
-        const snap = await getDocs(collection(db, colName));
-        setWipeLogs(prev => [...prev, isFr ? `Suppression de ${snap.size} document(s) dans "${colName}"...` : `Deleting ${snap.size} document(s) in "${colName}"...`]);
+        const { data } = await supabase.from(colName).select('id');
+        setWipeLogs(prev => [...prev, isFr ? `Suppression de ${data?.length || 0} document(s) dans "${colName}"...` : `Deleting ${data?.length || 0} document(s) in "${colName}"...`]);
         
-        const deletePromises = snap.docs.map(docSnap => deleteDoc(mongoDoc(db, colName, docSnap.id)));
+        const deletePromises = data ? data.map((item: any) => supabase.from(colName).delete().eq('id', item.id)) : [];
         await Promise.all(deletePromises);
 
         // Clear Zustand local memory state corresponding to collection
@@ -166,7 +166,7 @@ export function AdminDashboard() {
     setWipeTarget('articles');
     try {
       for (const article of sampleArticles) {
-        await setDoc(firestoreDoc(realFirestore, "articles", article.id), article, { merge: true });
+        await supabase.from('articles').upsert({ id: article.id, ...article });
         setWipeLogs(prev => [...prev, isFr ? `Synchronisé: ${article.id}` : `Synced: ${article.id}`]);
       }
       setWipeLogs(prev => [...prev, isFr ? '✅ Synchronisation terminée.' : '✅ Sync completed.']);

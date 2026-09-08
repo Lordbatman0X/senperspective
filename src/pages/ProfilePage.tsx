@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { db, safeOnSnapshot, doc, setDoc, collection, deleteDoc, updateDoc } from '../lib/firebase';
+import { supabase, subscribeToTable } from '../lib/supabaseClient';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
@@ -142,83 +142,76 @@ export function ProfilePage() {
   // Real-time following of CURRENT logged-in user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const followingRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "following");
-    const unsubscribe = safeOnSnapshot(followingRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => {
-        list.push(docSnap.id.toLowerCase().trim());
-      });
-      setFollowing(list);
-    }, (err) => {
-      console.warn("Error loading following list:", err);
+    const myEmail = readerProfile.email.toLowerCase().trim();
+    const loadFollowing = async () => {
+      const { data } = await supabase.from('followers').select('follower_email').eq('user_id', myEmail);
+      if (data) setFollowing(data.map(r => r.follower_email.toLowerCase().trim()));
+    };
+    loadFollowing();
+    const unsub = subscribeToTable('followers', (payload) => {
+      if (payload.new?.user_id === myEmail || payload.old?.user_id === myEmail) loadFollowing();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [readerProfile?.email]);
 
   // Real-time followers of TARGET user
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
-    const followersRef = collection(db, "users", dec, "followers");
-    const unsubscribe = safeOnSnapshot(followersRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => {
-        list.push(docSnap.id.toLowerCase().trim());
-      });
-      setFollowers(list);
-    }, (err) => {
-      console.warn("Error loading target followers list:", err);
+    const loadFollowers = async () => {
+      const { data } = await supabase.from('followers').select('follower_email').eq('user_id', dec);
+      if (data) setFollowers(data.map(r => r.follower_email.toLowerCase().trim()));
+    };
+    loadFollowers();
+    const unsub = subscribeToTable('followers', (payload) => {
+      if (payload.new?.user_id === dec) loadFollowers();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [email]);
 
   // Real-time following of TARGET user
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
-    const targetFollowingRef = collection(db, "users", dec, "following");
-    const unsubscribe = safeOnSnapshot(targetFollowingRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => {
-        list.push(docSnap.id.toLowerCase().trim());
-      });
-      setTargetFollowing(list);
-    }, (err) => {
-      console.warn("Error loading target following list:", err);
+    const loadTargetFollowing = async () => {
+      const { data } = await supabase.from('followers').select('follower_email').eq('user_id', dec);
+      if (data) setTargetFollowing(data.map(r => r.follower_email.toLowerCase().trim()));
+    };
+    loadTargetFollowing();
+    const unsub = subscribeToTable('followers', (payload) => {
+      if (payload.new?.user_id === dec) loadTargetFollowing();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [email]);
 
   // Real-time blocks of CURRENT logged-in user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const blocksRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "blocks");
-    const unsubscribe = safeOnSnapshot(blocksRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => {
-        list.push(docSnap.id.toLowerCase().trim());
-      });
-      setBlocks(list);
-    }, (err) => {
-      console.warn("Error loading blocks list:", err);
+    const myEmail = readerProfile.email.toLowerCase().trim();
+    const loadBlocks = async () => {
+      const { data } = await supabase.from('blocks').select('blocked_email').eq('user_id', myEmail);
+      if (data) setBlocks(data.map(r => r.blocked_email.toLowerCase().trim()));
+    };
+    loadBlocks();
+    const unsub = subscribeToTable('blocks', (payload) => {
+      if (payload.new?.user_id === myEmail) loadBlocks();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [readerProfile?.email]);
 
   // Real-time mutes of CURRENT logged-in user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const mutesRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "mutes");
-    const unsubscribe = safeOnSnapshot(mutesRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => {
-        list.push(docSnap.id.toLowerCase().trim());
-      });
-      setMutes(list);
-    }, (err) => {
-      console.warn("Error loading mutes list:", err);
+    const myEmail = readerProfile.email.toLowerCase().trim();
+    const loadMutes = async () => {
+      const { data } = await supabase.from('blocks').select('blocked_email').eq('user_id', myEmail);
+      if (data) setMutes(data.map(r => r.blocked_email.toLowerCase().trim()));
+    };
+    loadMutes();
+    const unsub = subscribeToTable('blocks', (payload) => {
+      if (payload.new?.user_id === myEmail) loadMutes();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [readerProfile?.email]);
 
   // Real-time check if TARGET user has blocked me
@@ -226,54 +219,54 @@ export function ProfilePage() {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec || !readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const targetBlocksRef = collection(db, "users", dec, "blocks");
-    const unsubscribe = safeOnSnapshot(targetBlocksRef, (snapshot) => {
-      let blocked = false;
-      snapshot.forEach((docSnap: any) => {
-        if (docSnap.id.toLowerCase().trim() === myEmail) {
-          blocked = true;
-        }
-      });
-      setHasBlockedMe(blocked);
-    }, (err) => {
-      console.warn("Error loading target blocks list:", err);
+    const checkBlocks = async () => {
+      const { data } = await supabase.from('blocks').select('blocked_email').eq('user_id', dec).eq('blocked_email', myEmail);
+      setHasBlockedMe((data?.length || 0) > 0);
+    };
+    checkBlocks();
+    const unsub = subscribeToTable('blocks', (payload) => {
+      if (payload.new?.user_id === dec) checkBlocks();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [email, readerProfile?.email]);
 
   // Real-time friends of CURRENT logged-in user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
-    const unsubscribe = safeOnSnapshot(friendsRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => {
-        list.push(docSnap.id.toLowerCase().trim());
-      });
-      setFriends(list);
-    }, (err) => {
-      console.warn("Error loading friends list:", err);
+    const myEmail = readerProfile.email.toLowerCase().trim();
+    const loadFriends = async () => {
+      const { data } = await supabase.from('friends').select('friend_email').eq('user_id', myEmail);
+      if (data) setFriends(data.map(r => r.friend_email.toLowerCase().trim()));
+    };
+    loadFriends();
+    const unsub = subscribeToTable('friends', (payload) => {
+      if (payload.new?.user_id === myEmail) loadFriends();
     });
-    return () => unsubscribe();
+    return () => { unsub.unsubscribe?.(); };
   }, [readerProfile?.email]);
 
-  // Handle finding target user with live Firestore listener
+  // Handle finding target user with live Supabase listener
   const decodedEmail = decodeURIComponent(email || "").toLowerCase().trim();
   const [targetUserData, setTargetUserData] = useState<any | null>(null);
 
   useEffect(() => {
     if (!decodedEmail) return;
-    const userDocRef = doc(db, "users", decodedEmail);
-    const unsub = safeOnSnapshot(userDocRef, (snap) => {
-      if (snap.exists()) {
-        setTargetUserData({ id: snap.id, ...snap.data() });
+    const loadUser = async () => {
+      const { data } = await supabase.from('users').select('*').eq('email', decodedEmail).maybeSingle();
+      if (data) {
+        setTargetUserData({ id: data.id, ...data });
       } else {
         setTargetUserData(null);
       }
-    }, (err) => {
-      console.warn("Error loading target user live doc:", err);
+    };
+    loadUser();
+    const unsub = subscribeToTable('users', (payload) => {
+      const row = payload.new || payload.old;
+      if (row && (row.email === decodedEmail || row.id === decodedEmail)) {
+        setTargetUserData({ id: row.id, ...row });
+      }
     });
-    return () => unsub();
+    return () => { unsub.unsubscribe?.(); };
   }, [decodedEmail]);
 
   const fallbackUser = allUsers.find(u => {
@@ -345,16 +338,13 @@ export function ProfilePage() {
     if (myEmail === targetEmail) return;
 
     try {
-      const myFriendDocRef = doc(db, "users", myEmail, "friends", targetEmail);
-      const targetFriendDocRef = doc(db, "users", targetEmail, "friends", myEmail);
-
       if (isFriend) {
-        await deleteDoc(myFriendDocRef);
-        await deleteDoc(targetFriendDocRef);
+        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail);
+        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
-        await setDoc(myFriendDocRef, { email: targetEmail, connectedAt: Date.now() });
-        await setDoc(targetFriendDocRef, { email: myEmail, connectedAt: Date.now() });
+        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() }).catch(() => {});
+        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() }).catch(() => {});
         setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -379,16 +369,11 @@ export function ProfilePage() {
     const isFollowing = following.includes(targetEmail);
 
     try {
-      const myFollowingDocRef = doc(db, "users", myEmail, "following", targetEmail);
-      const targetFollowersDocRef = doc(db, "users", targetEmail, "followers", myEmail);
-
       if (isFollowing) {
-        await deleteDoc(myFollowingDocRef);
-        await deleteDoc(targetFollowersDocRef);
+        await supabase.from('followers').delete().eq('user_id', myEmail).eq('follower_email', targetEmail);
         setSuccessMsg(language === "fr" ? "Vous ne suivez plus ce membre." : "Unfollowed member.");
       } else {
-        await setDoc(myFollowingDocRef, { email: targetEmail, followedAt: Date.now() });
-        await setDoc(targetFollowersDocRef, { email: myEmail, followedAt: Date.now() });
+        await supabase.from('followers').upsert({ user_id: myEmail, follower_email: targetEmail, followed_at: Date.now() }).catch(() => {});
         setSuccessMsg(language === "fr" ? "Vous suivez désormais ce membre !" : "Following member!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -413,19 +398,17 @@ export function ProfilePage() {
     const isCurrentlyBlocked = blocks.includes(targetEmail);
 
     try {
-      const blockDocRef = doc(db, "users", myEmail, "blocks", targetEmail);
       if (isCurrentlyBlocked) {
-        await deleteDoc(blockDocRef);
+        await supabase.from('blocks').delete().eq('user_id', myEmail).eq('blocked_email', targetEmail);
         setSuccessMsg(language === "fr" ? "Membre débloqué." : "Unblocked member.");
       } else {
-        await setDoc(blockDocRef, { email: targetEmail, blockedAt: Date.now() });
+        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() }).catch(() => {});
         setSuccessMsg(language === "fr" ? "Membre bloqué avec succès." : "Blocked member successfully.");
         
         // Auto-remove friend and follow connections on block
-        await deleteDoc(doc(db, "users", myEmail, "friends", targetEmail));
-        await deleteDoc(doc(db, "users", targetEmail, "friends", myEmail));
-        await deleteDoc(doc(db, "users", myEmail, "following", targetEmail));
-        await deleteDoc(doc(db, "users", targetEmail, "followers", myEmail));
+        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail);
+        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
+        await supabase.from('followers').delete().eq('user_id', myEmail).eq('follower_email', targetEmail);
       }
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
@@ -447,12 +430,11 @@ export function ProfilePage() {
     const isCurrentlyMuted = mutes.includes(targetEmail);
 
     try {
-      const muteDocRef = doc(db, "users", myEmail, "mutes", targetEmail);
       if (isCurrentlyMuted) {
-        await deleteDoc(muteDocRef);
+        await supabase.from('blocks').delete().eq('user_id', myEmail).eq('blocked_email', targetEmail);
         setSuccessMsg(language === "fr" ? "Notifications réactivées." : "Unmuted member.");
       } else {
-        await setDoc(muteDocRef, { email: targetEmail, mutedAt: Date.now() });
+        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() }).catch(() => {});
         setSuccessMsg(language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications.");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -473,7 +455,7 @@ export function ProfilePage() {
 
     const reportId = "report-" + Date.now();
     try {
-      await setDoc(doc(db, "reports", reportId), {
+      await supabase.from('reports').insert({
         id: reportId,
         reportedBy: readerProfile.email,
         reportedUser: targetUser.email,
@@ -481,7 +463,7 @@ export function ProfilePage() {
         details: reportDetails,
         date: new Date().toISOString(),
         status: "pending"
-      });
+      }).catch(() => {});
       setShowReportModal(false);
       setReportReason("");
       setReportDetails("");
@@ -502,8 +484,8 @@ export function ProfilePage() {
     try {
       const isCover = type === "coverPhotoUrl";
       const compressedDataUrl = await compressImageFile(file, isCover ? 800 : 400, isCover ? 500 : 400, 0.75);
-      const userDocRef = doc(db, "users", readerProfile.email.toLowerCase().trim());
-      await updateDoc(userDocRef, { [type]: compressedDataUrl });
+      const userEmail = readerProfile.email.toLowerCase().trim();
+      await supabase.from('users').update({ [type]: compressedDataUrl }).eq('id', userEmail).catch(() => {});
       
       // Update store immediately if updating self
       if (isSelf) {
@@ -526,8 +508,8 @@ export function ProfilePage() {
   const togglePrivacy = async () => {
     try {
       const newStatus = !targetUser.hidePersonalInfo;
-      const userDocRef = doc(db, "users", readerProfile.email.toLowerCase().trim());
-      await updateDoc(userDocRef, { hidePersonalInfo: newStatus });
+      const userEmail = readerProfile.email.toLowerCase().trim();
+      await supabase.from('users').update({ hide_personal_info: newStatus }).eq('id', userEmail).catch(() => {});
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hidePersonalInfo: newStatus });
@@ -548,8 +530,8 @@ export function ProfilePage() {
     if (!readerProfile?.email) return;
     try {
       const newStatus = !targetUser.hideEmail;
-      const userDocRef = doc(db, "users", readerProfile.email.toLowerCase().trim());
-      await updateDoc(userDocRef, { hideEmail: newStatus });
+      const userEmail = readerProfile.email.toLowerCase().trim();
+      await supabase.from('users').update({ hide_email: newStatus }).eq('id', userEmail).catch(() => {});
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hideEmail: newStatus });
@@ -568,8 +550,8 @@ export function ProfilePage() {
   // Bio updates
   const saveBio = async () => {
     try {
-      const userDocRef = doc(db, "users", readerProfile.email.toLowerCase().trim());
-      await updateDoc(userDocRef, { bio: editedBio });
+      const userEmail = readerProfile.email.toLowerCase().trim();
+      await supabase.from('users').update({ bio: editedBio }).eq('id', userEmail).catch(() => {});
       if (isSelf) {
         setReaderProfile({ ...readerProfile, bio: editedBio });
       }
@@ -593,8 +575,8 @@ export function ProfilePage() {
     }
 
     try {
-      const userDocRef = doc(db, "users", targetUser.email.toLowerCase().trim());
-      await updateDoc(userDocRef, { accolades: updatedAccolades });
+      const userEmail = targetUser.email.toLowerCase().trim();
+      await supabase.from('users').update({ accolades: updatedAccolades }).eq('id', userEmail).catch(() => {});
       if (isSelf) {
         setReaderProfile({ ...readerProfile, accolades: updatedAccolades });
       }

@@ -5,7 +5,8 @@ import {
   ShieldCheck, Lock, Key, Mail, User, Eye, EyeOff, RefreshCw, CheckCircle2, 
   AlertTriangle, Shield, UserPlus, Edit3, Trash2, ShieldAlert, Check, Sparkles, Sliders
 } from 'lucide-react';
-import { db, safeOnSnapshot, collection, doc, setDoc, deleteDoc } from '../../lib/firebase';
+import { supabase } from '../../lib/supabaseClient';
+import { subscribeToTable } from '../../lib/supabaseClient';
 import { hashPassword, stableUserId } from '../../lib/authCrypto';
 
 export function SecurityTab() {
@@ -53,7 +54,7 @@ export function SecurityTab() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Sync users list from Central Server API and Firestore
+  // Sync users list from Central Server API and Supabase
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -72,31 +73,32 @@ export function SecurityTab() {
     fetchUsers();
     const interval = setInterval(fetchUsers, 4000);
 
-    const usersRef = collection(db, "users");
-    const unsubscribe = safeOnSnapshot(usersRef, (snapshot) => {
-      const list: any[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        list.push({
-          id: docSnap.id,
-          email: data.email || docSnap.id,
-          name: data.name || "Admin",
-          role: data.role || "Admin",
-          authType: data.authType || "password",
-          registeredAt: data.registeredAt || new Date().toISOString(),
-          password: data.password || ''
+    const loadUsers = async () => {
+      const { data } = await supabase.from('users').select('*');
+      if (data) {
+        const list: any[] = [];
+        data.forEach((doc: any) => {
+          list.push({
+            id: doc.id,
+            email: doc.email || doc.id,
+            name: doc.name || "Admin",
+            role: doc.role || "Admin",
+            authType: doc.authType || "password",
+            registeredAt: doc.registeredAt || new Date().toISOString(),
+            password: doc.password || ''
+          });
         });
-      });
-      if (list.length > 0) {
-        setFirestoreUsers(list);
+        if (list.length > 0) {
+          setFirestoreUsers(list);
+        }
       }
-    }, (err) => {
-      console.warn("Firestore users sync notice:", err);
-    });
+    };
+    loadUsers();
+    const unsubscribe = subscribeToTable('users', loadUsers);
 
     return () => {
       clearInterval(interval);
-      unsubscribe();
+      void unsubscribe.unsubscribe();
     };
   }, []);
 
@@ -187,12 +189,12 @@ export function SecurityTab() {
       } catch (e) {}
 
       // 2. Update in Firestore users collection with both hash and fallback
-      await setDoc(doc(db, "users", targetEmail), {
+      await supabase.from('users').upsert({
         email: targetEmail,
         passwordHash: pHash,
         password: newPasswordValue,
         passwordUpdatedAt: new Date().toISOString()
-      }, { merge: true });
+      });
 
       // 3. Update via backend Express MongoDB endpoint
       await fetch('/api/mongodb/auth/update-password', {
@@ -250,12 +252,12 @@ export function SecurityTab() {
       updateUserPassword(currentAdminEmail, myNewPassword);
 
       // Update in Firestore
-      await setDoc(doc(db, "users", currentAdminEmail.toLowerCase().trim()), {
+      await supabase.from('users').upsert({
         email: currentAdminEmail.toLowerCase().trim(),
         passwordHash: pHash,
         password: myNewPassword,
         passwordUpdatedAt: new Date().toISOString()
-      }, { merge: true });
+      });
 
       // Update via Express server
       await fetch('/api/mongodb/auth/update-password', {
@@ -306,7 +308,7 @@ export function SecurityTab() {
       await registerWithEmail(cleanEmail, addAdminPassword, addAdminName, addAdminRole, 'preset-male', 'password');
 
       // 2. Save directly in Firestore with passwordHash
-      await setDoc(doc(db, "users", cleanEmail), {
+      await supabase.from('users').upsert({
         id: uid,
         email: cleanEmail,
         name: addAdminName,
@@ -315,7 +317,7 @@ export function SecurityTab() {
         password: addAdminPassword,
         authType: 'password',
         registeredAt: new Date().toISOString()
-      }, { merge: true });
+      });
 
       // 3. Save via backend Express
       await fetch('/api/mongodb/auth/register', {
@@ -338,7 +340,7 @@ export function SecurityTab() {
       console.error("Error creating admin account:", err);
       // Fallback
       const pHash = await hashPassword(addAdminPassword);
-      await setDoc(doc(db, "users", cleanEmail), {
+      await supabase.from('users').upsert({
         id: stableUserId(cleanEmail),
         email: cleanEmail,
         name: addAdminName,
@@ -347,7 +349,7 @@ export function SecurityTab() {
         password: addAdminPassword,
         authType: 'password',
         registeredAt: new Date().toISOString()
-      }, { merge: true });
+      });
 
       showToast(
         language === 'fr' ? `Compte ${addAdminName} enregistré.` : `Account ${addAdminName} registered.`,

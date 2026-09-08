@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
-import { db, doc, deleteDoc } from '../lib/firebase';
+import { supabase } from '../lib/supabaseClient';
 import { 
   Search, 
   X, 
@@ -1099,7 +1099,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             }
                             deleteUser(clean);
                             try {
-                              await deleteDoc(doc(db, "users", clean));
+                              await supabase.from('users').delete().eq('email', clean).catch(() => {});
                             } catch (e) {
                               console.error(e);
                             }

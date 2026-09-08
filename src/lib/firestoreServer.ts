@@ -1,25 +1,30 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  setLogLevel,
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  deleteDoc, 
-  writeBatch 
-} from 'firebase/firestore';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
-try {
-  setLogLevel('error');
-} catch (e) {
-  // Ignore
+// Server-side Supabase client (uses process.env, not VITE_ vars)
+const SUPABASE_URL = process.env.SUPABASE_URL as string | undefined;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY as string | undefined;
+
+let supabaseServer: SupabaseClient | null = null;
+
+function getSupabaseServer(): SupabaseClient {
+  if (supabaseServer) return supabaseServer;
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn('[Supabase Server] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set. Database operations will use local fallback only.');
+    throw new Error('Supabase server not configured: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  supabaseServer = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false }
+  });
+  return supabaseServer;
 }
 
-// Path to durable centralized file-backed store
+export { getSupabaseServer };
+
+// Path to durable centralized file-backed store (fallback when Supabase is unreachable)
 const DB_FILE_PATH = path.join(process.cwd(), 'server', 'data', 'central_db.json');
 
 interface CentralDB {
@@ -89,9 +94,7 @@ function loadCentralDB(): CentralDB {
     if (fs.existsSync(DB_FILE_PATH)) {
       const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
       inMemoryDB = JSON.parse(raw);
-      // Ensure users exists
       if (!inMemoryDB!.users) inMemoryDB!.users = {};
-      // Ensure super admin always exists
       if (!inMemoryDB!.users["kadersdiaz3@gmail.com"]) {
         inMemoryDB!.users["kadersdiaz3@gmail.com"] = getInitialDB().users["kadersdiaz3@gmail.com"];
       }
@@ -103,7 +106,7 @@ function loadCentralDB(): CentralDB {
 
   inMemoryDB = getInitialDB();
   saveCentralDB();
-  return inMemoryDB;
+  return inMemoryDB!;
 }
 
 function saveCentralDB() {
@@ -119,25 +122,34 @@ function saveCentralDB() {
   }
 }
 
-let cachedFirestore: any = null;
+// Table name mapping (legacy collection names → Supabase table names)
+const TABLE_MAP: Record<string, string> = {
+  'system_config': 'site_settings',
+  'messages': 'messages',
+  'articles': 'articles',
+  'comments': 'comments',
+  'reports': 'reports',
+  'guest_preferences': 'guest_preferences',
+  'analytics_events': 'analytics_events',
+  'user_consents': 'user_consents',
+  'users': 'users',
+  'media': 'media',
+  'ads': 'ads',
+  'matches': 'matches',
+  'subscribers': 'subscribers'
+};
 
-function getFirestoreInstance() {
-  if (cachedFirestore) return cachedFirestore;
-  
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  let config: any = {};
-  try {
-    config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-  } catch (err) {
-    console.warn('[Firestore Server] Could not read firebase-applet-config.json:', err);
-  }
-
-  const app = getApps().length === 0 ? initializeApp(config) : getApp();
-  cachedFirestore = getFirestore(app, config.firestoreDatabaseId);
-  return cachedFirestore;
+function resolveTable(collectionName: string): string {
+  return TABLE_MAP[collectionName] || collectionName;
 }
 
-const db = getFirestoreInstance();
+// Helper to normalize doc data for Supabase (unwrap data field for site_settings)
+function normalizeSupabaseResult(table: string, row: any): any {
+  if (table === 'site_settings' && row.data) {
+    return { id: row.id, ...row.data };
+  }
+  return row;
+}
 
 export async function getCollectionDocs(collectionName: string): Promise<any[]> {
   const central = loadCentralDB();
@@ -145,26 +157,29 @@ export async function getCollectionDocs(collectionName: string): Promise<any[]> 
   const localDocs = Object.entries(localDocsMap).map(([id, data]) => ({ id, ...(data as any) }));
 
   try {
-    // Attempt Firestore fetch
-    const snapshot = await getDocs(collection(db, collectionName));
-    const fsDocs: any[] = [];
-    snapshot.forEach((d) => {
-      const docData = { id: d.id, ...d.data() };
-      fsDocs.push(docData);
-      // Merge into central DB
-      if (!central[collectionName]) central[collectionName] = {};
-      central[collectionName][d.id] = { ...d.data(), id: d.id };
-    });
+    const table = resolveTable(collectionName);
+    const client = getSupabaseServer();
+    const { data: rows, error } = await client.from(table).select('*');
+
+    if (error) throw error;
+
+    const supabaseDocs: any[] = [];
+    if (rows) {
+      for (const row of rows) {
+        const normalized = normalizeSupabaseResult(table, row);
+        supabaseDocs.push(normalized);
+        if (!central[collectionName]) central[collectionName] = {};
+        central[collectionName][row.id] = normalized;
+      }
+    }
 
     saveCentralDB();
-    // Return merged docs, guaranteeing local docs aren't lost
     const mergedMap = new Map<string, any>();
     localDocs.forEach(d => mergedMap.set(d.id, d));
-    fsDocs.forEach(d => mergedMap.set(d.id, d));
+    supabaseDocs.forEach(d => mergedMap.set(d.id, d));
     return Array.from(mergedMap.values());
   } catch (err: any) {
-    console.warn(`[Central DB / Firestore fallback] Fetching collection "${collectionName}" from central store due to Firestore notice:`, err?.message || err);
-    // Return durable local docs
+    console.warn(`[Central DB / Supabase fallback] Fetching collection "${collectionName}" from local store:`, err?.message || err);
     return localDocs;
   }
 }
@@ -174,16 +189,31 @@ export async function getDocument(collectionName: string, docId: string): Promis
   const localData = central[collectionName]?.[docId];
 
   try {
-    const d = await getDoc(doc(db, collectionName, docId));
-    if (d.exists()) {
-      const data = d.data();
-      if (!central[collectionName]) central[collectionName] = {};
-      central[collectionName][docId] = data;
-      saveCentralDB();
-      return { id: d.id, data };
+    const table = resolveTable(collectionName);
+    const client = getSupabaseServer();
+
+    if (table === 'site_settings') {
+      const { data, error } = await client.from('site_settings').select('*').eq('id', docId).single();
+      if (error) throw error;
+      if (data) {
+        const normalized = normalizeSupabaseResult('site_settings', data);
+        if (!central[collectionName]) central[collectionName] = {};
+        central[collectionName][docId] = normalized;
+        saveCentralDB();
+        return { id: data.id, data: normalized };
+      }
+    } else {
+      const { data, error } = await client.from(table).select('*').eq('id', docId).single();
+      if (error) throw error;
+      if (data) {
+        if (!central[collectionName]) central[collectionName] = {};
+        central[collectionName][docId] = data;
+        saveCentralDB();
+        return { id: data.id, data };
+      }
     }
   } catch (err: any) {
-    console.warn(`[Central DB / Firestore fallback] getDocument for ${collectionName}/${docId}:`, err?.message || err);
+    console.warn(`[Central DB / Supabase fallback] getDocument for ${collectionName}/${docId}:`, err?.message || err);
   }
 
   if (localData) {
@@ -201,16 +231,35 @@ export async function saveDocument(collectionName: string, docId: string, data: 
   central[collectionName][docId] = updated;
   saveCentralDB();
 
-  // Background mirror to Firestore (non-blocking)
-  setDoc(doc(db, collectionName, docId), updated, { merge }).catch((err: any) => {
-    console.warn(`[Central DB / Firestore background mirror notice] Could not mirror ${collectionName}/${docId} to Firestore:`, err?.message || err);
-  });
+  // Background mirror to Supabase (non-blocking)
+  try {
+    const table = resolveTable(collectionName);
+    const client = getSupabaseServer();
+
+    if (table === 'site_settings') {
+      const { data: existingRow } = await client.from('site_settings').select('data').eq('id', docId).maybeSingle();
+      const existingData = existingRow?.data || {};
+      const mergedData = merge ? { ...existingData, ...data } : { ...data };
+      try {
+        await client.from('site_settings').upsert({ id: docId, data: mergedData });
+      } catch (mirrorErr: any) {
+        if (mirrorErr?.message) console.warn(`[Supabase mirror notice] ${collectionName}/${docId}:`, mirrorErr.message);
+      }
+    } else {
+      try {
+        await client.from(table).upsert({ id: docId, ...updated });
+      } catch (mirrorErr: any) {
+        if (mirrorErr?.message) console.warn(`[Supabase mirror notice] ${collectionName}/${docId}:`, mirrorErr.message);
+      }
+    }
+  } catch (err: any) {
+    console.warn(`[Supabase mirror notice] Could not mirror ${collectionName}/${docId}:`, err?.message || err);
+  }
 
   return { id: docId, data: updated };
 }
 
 export async function deleteDocument(collectionName: string, docId: string): Promise<boolean> {
-  // Never delete super admin
   if (collectionName === 'users' && docId.toLowerCase().trim() === 'kadersdiaz3@gmail.com') {
     console.warn('[Central DB] Blocked attempt to delete Super Admin kadersdiaz3@gmail.com');
     return false;
@@ -222,10 +271,15 @@ export async function deleteDocument(collectionName: string, docId: string): Pro
     saveCentralDB();
   }
 
-  // Background mirror delete
-  deleteDoc(doc(db, collectionName, docId)).catch((err: any) => {
-    console.warn(`[Central DB] Could not mirror delete ${collectionName}/${docId} to Firestore:`, err?.message || err);
-  });
+  // Background mirror delete to Supabase
+  try {
+    const table = resolveTable(collectionName);
+    const client = getSupabaseServer();
+    const { error } = await client.from(table).delete().eq('id', docId);
+    if (error) console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, error.message);
+  } catch (err: any) {
+    console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, err?.message || err);
+  }
 
   return true;
 }
@@ -235,7 +289,6 @@ export async function wipeCollection(collectionName: string): Promise<number> {
   const existingCount = Object.keys(central[collectionName] || {}).length;
   central[collectionName] = {};
 
-  // Preserve Super Admin in users collection
   if (collectionName === 'users') {
     central.users["kadersdiaz3@gmail.com"] = getInitialDB().users["kadersdiaz3@gmail.com"];
     central.users["admin@perspective.sn"] = getInitialDB().users["admin@perspective.sn"];
@@ -244,15 +297,11 @@ export async function wipeCollection(collectionName: string): Promise<number> {
   saveCentralDB();
 
   try {
-    const snapshot = await getDocs(collection(db, collectionName));
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(d => {
-      if (collectionName === 'users' && d.id.toLowerCase() === 'kadersdiaz3@gmail.com') return;
-      batch.delete(d.ref);
-    });
-    await batch.commit();
+    const table = resolveTable(collectionName);
+    const client = getSupabaseServer();
+    await client.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
   } catch (err: any) {
-    console.warn(`[Central DB] Notice wiping collection in Firestore:`, err?.message || err);
+    console.warn(`[Central DB] Notice wiping collection in Supabase:`, err?.message || err);
   }
 
   return existingCount;
@@ -261,7 +310,7 @@ export async function wipeCollection(collectionName: string): Promise<number> {
 export async function registerUser(email: string, password?: string, name?: string, role: string = 'Abonné', additionalFields: any = {}) {
   const normalizedEmail = String(email).toLowerCase().trim();
   const central = loadCentralDB();
-  
+
   if (central.users[normalizedEmail]) {
     const existing = central.users[normalizedEmail];
     const updated = {
@@ -276,7 +325,7 @@ export async function registerUser(email: string, password?: string, name?: stri
 
   const isSuperAdmin = normalizedEmail === 'kadersdiaz3@gmail.com';
   const userData = {
-    id: `usr_${normalizedEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
+    id: normalizedEmail,
     email: normalizedEmail,
     name: name || normalizedEmail.split('@')[0],
     role: isSuperAdmin ? 'Admin' : role,
@@ -294,10 +343,14 @@ export async function registerUser(email: string, password?: string, name?: stri
   central.users[normalizedEmail] = userData;
   saveCentralDB();
 
-  // Background mirror to Firestore
-  setDoc(doc(db, 'users', normalizedEmail), userData, { merge: true }).catch((err) => {
-    console.warn(`[Central DB] Could not mirror register ${normalizedEmail} to Firestore:`, err?.message || err);
-  });
+  // Background mirror to Supabase (non-blocking)
+  try {
+    const client = getSupabaseServer();
+    const { error } = await client.from('users').upsert({ id: normalizedEmail, ...userData });
+    if (error) console.warn(`[Supabase mirror notice] Could not mirror register ${normalizedEmail}:`, error.message);
+  } catch (err: any) {
+    console.warn(`[Supabase mirror notice] Could not mirror register ${normalizedEmail}:`, err?.message || err);
+  }
 
   return { id: normalizedEmail, ...userData };
 }
@@ -314,6 +367,12 @@ export async function loginUser(email: string, password?: string) {
   }
   return await registerUser(email, password);
 }
+
+// Map legacy collection names to Supabase tables for analytics/consents
+const SUPABASE_TABLE_MAP: Record<string, string> = {
+  'analytics_events': 'analytics_events',
+  'user_consents': 'user_consents'
+};
 
 export async function saveAnalyticsEvent(eventRecord: any) {
   const id = eventRecord.id || `evt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -347,6 +406,15 @@ export async function updateUserPasswordServer(email: string, newPassword: strin
     central.users[normalizedEmail].passwordUpdatedAt = new Date().toISOString();
     saveCentralDB();
   }
-  setDoc(doc(db, 'users', normalizedEmail), { password: newPassword, passwordUpdatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+
+  // Background mirror to Supabase
+  try {
+    const client = getSupabaseServer();
+    const { error } = await client.from('users').update({ password: newPassword, passwordUpdatedAt: new Date().toISOString() }).eq('id', normalizedEmail);
+    if (error) console.warn(`[Supabase mirror notice] Could not update password for ${normalizedEmail}:`, error.message);
+  } catch (err: any) {
+    console.warn(`[Supabase mirror notice] Could not update password for ${normalizedEmail}:`, err?.message || err);
+  }
+
   return { success: true, email: normalizedEmail };
 }

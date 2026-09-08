@@ -1,30 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { User } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { 
-  realFirebaseAuth as auth,
-  realFirestore as db,
-  doc,
-  setDoc,
-  getDoc,
-  collection,
-  onSnapshot as firestoreOnSnapshot,
-  getDocs,
-  deleteDoc,
+  bootstrapAnonymousAuth, 
+  getCurrentUser, 
   onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-  sendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
-  GoogleAuthProvider,
-  GithubAuthProvider,
-  OAuthProvider,
-  FacebookAuthProvider,
-  signInWithPopup
-} from "../lib/realFirebase";
+  supabase,
+  subscribeToTable
+} from '../lib/supabaseClient';
 import { useStore } from "../store";
 import { sampleArticles } from "../data";
 import { Article } from "../types";
@@ -53,8 +35,16 @@ export interface FirestoreUser {
   pin?: string;
 }
 
+interface AuthUser {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  isAnonymous: boolean;
+}
+
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   allUsers: FirestoreUser[];
   loginWithEmail: (email: string, pass: string, remember?: boolean) => Promise<void>;
@@ -70,14 +60,15 @@ interface AuthContextType {
   ) => Promise<void>;
   logoutUser: () => Promise<void>;
   resetUserPassword: (email: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithGithub: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading,
-       setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const [allUsers, setAllUsers] = useState<FirestoreUser[]>([]);
   const { setReaderProfile } = useStore();
   const navigate = useNavigate();
@@ -85,7 +76,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const knownMsgIdsRef = React.useRef<Set<string> | null>(null);
   const knownArtIdsRef = React.useRef<Set<string> | null>(null);
 
-  // Dynamic Online Presence heartbeat in Firestore
+  // Bootstrap anonymous auth on mount
+  useEffect(() => {
+    const initAnonymousAuth = async () => {
+      try {
+        const anonUser = await bootstrapAnonymousAuth();
+        if (anonUser) {
+          setUser({
+            uid: anonUser.id,
+            email: anonUser.email || 'anonymous',
+            displayName: anonUser.email?.split('@')[0] || 'Anonymous',
+            photoURL: null,
+            isAnonymous: !anonUser.email,
+          });
+        }
+      } catch (err) {
+        console.warn("[Auth] Notice bootstrapping anonymous auth:", err);
+      }
+    };
+    initAnonymousAuth();
+  }, []);
+
+  // Dynamic Online Presence heartbeat
   useEffect(() => {
     if (!user || !user.email) return;
 
@@ -93,13 +105,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const updatePresence = async (online: boolean) => {
       try {
-        const userDocRef = doc(db, "users", currentUserEmail);
-        await setDoc(userDocRef, {
+        await supabase.from('users').update({
           isOnline: online,
           lastActiveAt: new Date().toISOString()
-        }, { merge: true });
+        }).eq('email', currentUserEmail);
       } catch (err) {
-        console.warn("[Presence] Failed updating presence in Firestore:", err);
+        console.warn("[Presence] Failed updating presence:", err);
       }
     };
 
@@ -131,12 +142,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user?.email]);
 
-  // Sync / listen to registered users from Firestore (starts from scratch without mock accounts)
+  // Sync / listen to registered users from database
   useEffect(() => {
     const cleanOldMockData = async () => {
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
       try {
-        // Remove legacy mock user accounts from Firestore if present
         const legacyMockEmails = [
           'fatou.diop@example.com',
           'mamadou.sylla@example.com',
@@ -144,10 +154,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           'member@perspective.sn'
         ];
         for (const mockEmail of legacyMockEmails) {
-          const docRef = doc(db, "users", mockEmail);
-          const docSnap = await getDoc(docRef);
-          if (docSnap.exists()) {
-            await deleteDoc(docRef);
+          const { error } = await supabase.from('users').delete().eq('email', mockEmail);
+          if (error) {
+            console.warn(`[Users] Notice deleting mock user ${mockEmail}:`, error.message);
           }
         }
       } catch (err) {
@@ -157,37 +166,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     cleanOldMockData();
 
-    // Synchronize users continuously from Firestore (single source of truth)
-    const syncUsersFromFirestore = async () => {
+    const refreshAllUsers = async () => {
       try {
-        const userSnapshot = await getDocs(collection(db, "users"));
-        if (userSnapshot && !userSnapshot.empty) {
-          const formatted: FirestoreUser[] = [];
-          userSnapshot.forEach((docSnap: any) => {
-            const data = docSnap.data();
-            const email = (data.email || docSnap.id || "").toLowerCase().trim();
-            const lastActiveTime = data.lastActiveAt ? new Date(data.lastActiveAt).getTime() : 0;
-            const isOnlineCalculated = Boolean(data.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
+        const { data, error } = await supabase.from('users').select('*');
+        if (error) {
+          console.warn("[Supabase Users] Notice fetching users:", error.message);
+          return;
+        }
+        if (data && data.length > 0) {
+          const formatted: FirestoreUser[] = data.map((u: any) => {
+            const email = (u.email || "").toLowerCase().trim();
+            const lastActiveTime = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
+            const isOnlineCalculated = Boolean(u.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
             const isSuperAdmin = email === "kadersdiaz3@gmail.com";
 
-            formatted.push({
+            return {
               email,
-              name: data.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
-              avatarUrl: data.avatarUrl || "preset-male",
-              role: isSuperAdmin ? "Admin" : (data.role || "Member"),
+              name: u.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
+              avatarUrl: u.avatarUrl || "preset-male",
+              role: isSuperAdmin ? "Admin" : (u.role || "Member"),
               isOnline: isOnlineCalculated,
-              lastActiveAt: data.lastActiveAt || undefined,
-              coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-              streak: data.streak !== undefined ? data.streak : 1,
-              readingTime: data.readingTime !== undefined ? data.readingTime : 0,
-              hidePersonalInfo: data.hidePersonalInfo || false,
-              hideEmail: data.hideEmail || false,
-              bio: data.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
-              accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (data.accolades || ["verified_identity"])
-            });
+              lastActiveAt: u.lastActiveAt || undefined,
+              coverPhotoUrl: u.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              streak: u.streak !== undefined ? u.streak : 1,
+              readingTime: u.readingTime !== undefined ? u.readingTime : 0,
+              hidePersonalInfo: u.hidePersonalInfo || false,
+              hideEmail: u.hideEmail || false,
+              bio: u.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
+              accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (u.accolades || ["verified_identity"])
+            };
           });
 
-          // Ensure Super Admin kadersdiaz3@gmail.com is ALWAYS present
           if (!formatted.some(u => u.email === "kadersdiaz3@gmail.com")) {
             formatted.unshift({
               email: "kadersdiaz3@gmail.com",
@@ -206,502 +215,528 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           useStore.setState({ users: formatted as any });
         }
       } catch (err) {
-        console.warn("[Firestore Users] Notice fetching users:", err);
+        console.warn("[Supabase Users] Notice fetching users:", err);
       }
     };
 
-    // Initial fetch
-    syncUsersFromFirestore();
-    const usersInterval = setInterval(syncUsersFromFirestore, 30000);
+    refreshAllUsers();
+    const usersInterval = setInterval(refreshAllUsers, 30000);
 
-    // Subscribe to Firestore users collection as primary real-time channel
-    const unsubscribeUsers = firestoreOnSnapshot(collection(db, "users"), (snapshot) => {
-      const usersList: FirestoreUser[] = [];
-      snapshot.forEach((docSnap: any) => {
-        const data = docSnap.data();
-        const email = (data.email || docSnap.id || "").toLowerCase().trim();
-        const lastActiveTime = data.lastActiveAt ? new Date(data.lastActiveAt).getTime() : 0;
-        const isOnlineCalculated = Boolean(data.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
-        const isSuperAdmin = email === "kadersdiaz3@gmail.com";
-
-        usersList.push({
-          email,
-          name: data.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
-          avatarUrl: data.avatarUrl || "preset-male",
-          role: isSuperAdmin ? "Admin" : (data.role || "Member"),
-          isOnline: isOnlineCalculated,
-          lastActiveAt: data.lastActiveAt || undefined,
-          coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-          streak: data.streak !== undefined ? data.streak : 1,
-          readingTime: data.readingTime !== undefined ? data.readingTime : 0,
-          hidePersonalInfo: data.hidePersonalInfo || false,
-          hideEmail: data.hideEmail || false,
-          bio: data.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
-          accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (data.accolades || ["verified_identity"])
-        });
-      });
-
-      if (usersList.length > 0) {
-        if (!usersList.some(u => u.email === "kadersdiaz3@gmail.com")) {
-          usersList.unshift({
-            email: "kadersdiaz3@gmail.com",
-            name: "Kader S. Diaz",
-            avatarUrl: "preset-male",
-            role: "Admin",
-            isOnline: true,
-            streak: 15,
-            readingTime: 480,
-            bio: "Super Administrateur & Fondateur Perspective Group",
-            accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"]
-          });
-        }
-        setAllUsers(usersList);
-        useStore.setState({ users: usersList as any });
+    const channel = subscribeToTable('users', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+        refreshAllUsers();
       }
-    }, (error) => {
-      console.warn("[Firestore Users] Notice listening to users:", error?.message || error);
     });
 
     return () => {
       clearInterval(usersInterval);
-      unsubscribeUsers();
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
     };
   }, []);
 
-  // Real-time synchronization of Direct Messages via Firestore
+  // Real-time synchronization of Direct Messages via Supabase
   useEffect(() => {
-    const syncMessagesFromFirestore = async () => {
+    const syncMessagesFromSupabase = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "messages"));
+        const { data, error } = await supabase.from('messages').select('*');
+        if (error) {
+          console.warn("[Supabase Messages] Notice fetching messages:", error.message);
+          return;
+        }
         const messagesList: any[] = [];
-        snapshot.forEach((docSnap: any) => {
-          const data = docSnap.data();
-          messagesList.push({
-            id: docSnap.id,
-            sender: (data.sender || "").toLowerCase().trim(),
-            receiver: (data.receiver || "").toLowerCase().trim(),
-            text: data.text || "",
-            date: data.date || new Date().toISOString().split('T')[0],
-            timestamp: data.timestamp || Date.now(),
-            read: Boolean(data.read),
-            attachment: data.attachment || undefined
+        if (data) {
+          data.forEach((msg: any) => {
+            messagesList.push({
+              id: msg.id,
+              sender: (msg.sender || "").toLowerCase().trim(),
+              receiver: (msg.receiver || "").toLowerCase().trim(),
+              text: msg.text || "",
+              date: msg.date || new Date().toISOString().split('T')[0],
+              timestamp: msg.timestamp || Date.now(),
+              read: Boolean(msg.read),
+              attachment: msg.attachment || undefined
+            });
           });
-        });
+        }
 
         if (messagesList.length > 0) {
           messagesList.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
           useStore.setState({ directMessages: messagesList });
         }
       } catch (err) {
-        console.warn("[Firestore Messages] Notice fetching messages:", err);
+        console.warn("[Supabase Messages] Notice fetching messages:", err);
       }
     };
 
-    syncMessagesFromFirestore();
-    const msgInterval = setInterval(syncMessagesFromFirestore, 30000);
+    syncMessagesFromSupabase();
+    const msgInterval = setInterval(syncMessagesFromSupabase, 30000);
 
-    // Listen to messages collection in real-time via Firestore
-    const unsubscribeMessages = firestoreOnSnapshot(collection(db, "messages"), (snapshot) => {
-      const messagesList: any[] = [];
-      snapshot.forEach((docSnap: any) => {
-        const data = docSnap.data();
-        messagesList.push({
-          id: docSnap.id,
-          sender: (data.sender || "").toLowerCase().trim(),
-          receiver: (data.receiver || "").toLowerCase().trim(),
-          text: data.text || "",
-          date: data.date || new Date().toISOString().split('T')[0],
-          timestamp: data.timestamp || Date.now(),
-          read: Boolean(data.read),
-          attachment: data.attachment || undefined
-        });
-      });
+    const channel = subscribeToTable('messages', (payload) => {
+      if (payload.eventType === 'INSERT') {
+        const msg = payload.new;
+        const messageObj = {
+          id: msg.id,
+          sender: (msg.sender || "").toLowerCase().trim(),
+          receiver: (msg.receiver || "").toLowerCase().trim(),
+          text: msg.text || "",
+          date: msg.date || new Date().toISOString().split('T')[0],
+          timestamp: msg.timestamp || Date.now(),
+          read: Boolean(msg.read),
+          attachment: msg.attachment || undefined
+        };
 
-      // Sort messages chronologically by timestamp
-      messagesList.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-
-      // Trigger notification for newly arrived unread direct messages
-      if (knownMsgIdsRef.current === null) {
-        knownMsgIdsRef.current = new Set(messagesList.map(m => m.id));
-      } else {
         const currentUserEmail = user?.email?.toLowerCase().trim() || useStore.getState().readerProfile?.email?.toLowerCase().trim() || '';
-        messagesList.forEach(m => {
-          if (!knownMsgIdsRef.current?.has(m.id)) {
-            knownMsgIdsRef.current?.add(m.id);
-            if (!m.read && currentUserEmail && m.receiver?.toLowerCase().trim() === currentUserEmail && m.sender?.toLowerCase().trim() !== currentUserEmail) {
-              triggerInAppToast({
-                type: 'message',
-                title: `Message de ${m.sender === 'admin@perspective.sn' ? 'Rédaction Perspective' : m.sender}`,
-                body: m.text,
-                actionUrl: '/discussion'
-              });
-            }
+        if (!knownMsgIdsRef.current?.has(messageObj.id)) {
+          knownMsgIdsRef.current?.add(messageObj.id);
+          if (!messageObj.read && currentUserEmail && messageObj.receiver?.toLowerCase().trim() === currentUserEmail && messageObj.sender?.toLowerCase().trim() !== currentUserEmail) {
+            triggerInAppToast({
+              type: 'message',
+              title: `Message de ${messageObj.sender === 'admin@perspective.sn' ? 'Rédaction Perspective' : messageObj.sender}`,
+              body: messageObj.text,
+              actionUrl: '/discussion'
+            });
           }
-        });
+        }
+
+        useStore.setState(state => ({
+          directMessages: [...(state.directMessages || []), messageObj]
+        }));
       }
-      
-      // Update the Zustand store
-      useStore.setState({ directMessages: messagesList });
-    }, (error) => {
-      console.warn("[Firestore Messages] Notice listening to messages (central server sync active):", error?.message || error);
     });
 
     return () => {
       clearInterval(msgInterval);
-      unsubscribeMessages();
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, [user?.email]);
+
+  // Real-time synchronization of Comments via Supabase
+  useEffect(() => {
+    const channel = subscribeToTable('comments', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        const fetchComments = async () => {
+          try {
+            const { data, error } = await supabase.from('comments').select('*');
+            if (error || !data) return;
+            const commentsList: any[] = data.map((c: any) => ({
+              id: c.id,
+              articleId: c.articleId || "",
+              articleTitle: c.articleTitle || "",
+              author: c.author || "Anonymous",
+              email: c.email || "",
+              text: c.text || "",
+              date: c.date || new Date().toISOString().split('T')[0],
+              isApproved: c.isApproved !== undefined ? c.isApproved : true,
+              ipAddress: c.ipAddress || "",
+              avatarUrl: c.avatarUrl || "",
+              isMember: c.isMember || false,
+              parentId: c.parentId || undefined,
+              replyTo: c.replyTo || undefined,
+              likes: c.likes || 0,
+              dislikes: c.dislikes || 0,
+              likedBy: c.likedBy || [],
+              dislikedBy: c.dislikedBy || [],
+              attachment: c.attachment || undefined
+            }));
+            useStore.setState({ comments: commentsList });
+          } catch (err) {
+            console.warn("[Supabase Comments] Notice fetching comments:", err);
+          }
+        };
+        fetchComments();
+      }
+    });
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
     };
   }, []);
 
-  // Real-time synchronization of Comments via Firestore
+  // Real-time synchronization of Articles via Supabase
   useEffect(() => {
-    const unsubscribeComments = firestoreOnSnapshot(collection(db, "comments"), (snapshot) => {
-      if (snapshot.empty) return;
-      const commentsList: any[] = [];
-      snapshot.forEach((docSnap: any) => {
-        const data = docSnap.data();
-        commentsList.push({
-          id: docSnap.id,
-          articleId: data.articleId || "",
-          articleTitle: data.articleTitle || "",
-          author: data.author || "Anonymous",
-          email: data.email || "",
-          text: data.text || "",
-          date: data.date || new Date().toISOString().split('T')[0],
-          isApproved: data.isApproved !== undefined ? data.isApproved : true,
-          ipAddress: data.ipAddress || "",
-          avatarUrl: data.avatarUrl || "",
-          isMember: data.isMember || false,
-          parentId: data.parentId || undefined,
-          replyTo: data.replyTo || undefined,
-          likes: data.likes || 0,
-          dislikes: data.dislikes || 0,
-          likedBy: data.likedBy || [],
-          dislikedBy: data.dislikedBy || [],
-          attachment: data.attachment || undefined
-        });
-      });
-      useStore.setState({ comments: commentsList });
-    }, (error) => {
-      console.warn("[Firestore Comments] Notice listening to comments (using local state fallback):", error?.message || error);
-    });
+    const UNSPLASH_IMAGES = [
+      "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1572949645841-094f3a9c4c94?auto=format&fit=crop&w=1200&q=80"
+    ];
 
-    return () => unsubscribeComments();
-  }, []);
+    const channel = subscribeToTable('articles', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        const fetchArticles = async () => {
+          try {
+            const { data, error } = await supabase.from('articles').select('*');
+            if (error || !data) return;
+            const existing = useStore.getState().articles;
+            if (!existing || existing.length === 0) {
+              useStore.setState({ articles: sampleArticles });
+              return;
+            }
 
-  // Real-time synchronization of Articles via Firestore
-  useEffect(() => {
-    const unsubscribeArticles = firestoreOnSnapshot(collection(db, "articles"), (snapshot) => {
-      if (snapshot.empty) {
-        const existing = useStore.getState().articles;
-        if (!existing || existing.length === 0) {
-          useStore.setState({ articles: sampleArticles });
-        }
-        return;
-      }
+            const firestoreArticles: Article[] = [];
+            data.forEach((rawDoc: any) => {
+              if (rawDoc && rawDoc.id) {
+                const cleanTitleFr = stripHtmlTags(typeof rawDoc.title === 'object' ? (rawDoc.title?.fr || rawDoc.title?.en) : rawDoc.title);
+                const cleanTitleEn = stripHtmlTags(typeof rawDoc.title === 'object' ? (rawDoc.title?.en || rawDoc.title?.fr) : rawDoc.title) || cleanTitleFr;
 
-      const firestoreArticles: Article[] = [];
-      const UNSPLASH_IMAGES = [
-        "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
-        "https://images.unsplash.com/photo-1495020689067-958852a7765e?auto=format&fit=crop&w=1200&q=80",
-        "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80",
-        "https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?auto=format&fit=crop&w=1200&q=80",
-        "https://images.unsplash.com/photo-1572949645841-094f3a9c4c94?auto=format&fit=crop&w=1200&q=80"
-      ];
+                const cleanExcerptFr = stripHtmlTags(typeof rawDoc.excerpt === 'object' ? (rawDoc.excerpt?.fr || rawDoc.excerpt?.en) : (rawDoc.excerpt || rawDoc.summary));
+                const cleanExcerptEn = stripHtmlTags(typeof rawDoc.excerpt === 'object' ? (rawDoc.excerpt?.en || rawDoc.excerpt?.fr) : (rawDoc.excerpt || rawDoc.summary)) || cleanExcerptFr;
 
-      snapshot.forEach((docSnap: any) => {
-        const data = docSnap.data() as Article;
-        if (data && data.id) {
-          const rawDoc = data as any;
-          // Clean title, summary, body of raw HTML strings/entities
-          const cleanTitleFr = stripHtmlTags(typeof rawDoc.title === 'object' ? (rawDoc.title?.fr || rawDoc.title?.en) : rawDoc.title);
-          const cleanTitleEn = stripHtmlTags(typeof rawDoc.title === 'object' ? (rawDoc.title?.en || rawDoc.title?.fr) : rawDoc.title) || cleanTitleFr;
+                const cleanBodyFr = stripHtmlTags(typeof rawDoc.body === 'object' ? (rawDoc.body?.fr || rawDoc.body?.en) : rawDoc.body);
+                const cleanBodyEn = stripHtmlTags(typeof rawDoc.body === 'object' ? (rawDoc.body?.en || rawDoc.body?.fr) : rawDoc.body) || cleanBodyFr;
 
-          const cleanExcerptFr = stripHtmlTags(typeof rawDoc.excerpt === 'object' ? (rawDoc.excerpt?.fr || rawDoc.excerpt?.en) : (rawDoc.excerpt || rawDoc.summary));
-          const cleanExcerptEn = stripHtmlTags(typeof rawDoc.excerpt === 'object' ? (rawDoc.excerpt?.en || rawDoc.excerpt?.fr) : (rawDoc.excerpt || rawDoc.summary)) || cleanExcerptFr;
+                const isPub = rawDoc.isPublished === false || rawDoc.isPublished === "false" || rawDoc.isPublished === "draft" ? false : true;
 
-          const cleanBodyFr = stripHtmlTags(typeof rawDoc.body === 'object' ? (rawDoc.body?.fr || rawDoc.body?.en) : rawDoc.body);
-          const cleanBodyEn = stripHtmlTags(typeof rawDoc.body === 'object' ? (rawDoc.body?.en || rawDoc.body?.fr) : rawDoc.body) || cleanBodyFr;
+                const rawImg = rawDoc.imageUrl || rawDoc.featuredImage || rawDoc.image;
+                const isCustomValidImg = rawImg && typeof rawImg === 'string' && rawImg.trim() !== '' && (
+                  rawImg.startsWith('http://') || 
+                  rawImg.startsWith('https://') || 
+                  rawImg.startsWith('data:') || 
+                  rawImg.startsWith('blob:') || 
+                  rawImg.startsWith('/') ||
+                  rawImg.startsWith('./')
+                );
+                const imgUrl = isCustomValidImg
+                  ? rawImg.trim()
+                  : UNSPLASH_IMAGES[Math.abs(rawDoc.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0)) % UNSPLASH_IMAGES.length];
 
-          // Default isPublished to true unless explicitly false or draft
-          const isPub = rawDoc.isPublished === false || rawDoc.isPublished === "false" || rawDoc.isPublished === "draft" ? false : true;
+                const pb = rawDoc.perspectiveBrief || rawDoc.brief || {};
+                const whatHappenedFr = stripHtmlTags(pb.whatHappened?.fr || pb.whatHappened || rawDoc.brief_what_fr || '');
+                const whatHappenedEn = stripHtmlTags(pb.whatHappened?.en || pb.whatHappened?.en || rawDoc.brief_what_en || whatHappenedFr);
 
-          const rawImg = rawDoc.imageUrl || rawDoc.featuredImage || rawDoc.image;
-          const isCustomValidImg = rawImg && typeof rawImg === 'string' && rawImg.trim() !== '' && (
-            rawImg.startsWith('http://') || 
-            rawImg.startsWith('https://') || 
-            rawImg.startsWith('data:') || 
-            rawImg.startsWith('blob:') || 
-            rawImg.startsWith('/') ||
-            rawImg.startsWith('./')
-          );
-          const imgUrl = isCustomValidImg
-            ? rawImg.trim()
-            : UNSPLASH_IMAGES[Math.abs(data.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % UNSPLASH_IMAGES.length];
+                const whyItMattersFr = stripHtmlTags(pb.whyItMatters?.fr || pb.whyItMatters || rawDoc.brief_why_fr || '');
+                const whyItMattersEn = stripHtmlTags(pb.whyItMatters?.en || pb.whyItMatters?.en || rawDoc.brief_why_en || whyItMattersFr);
 
-          // Normalize perspectiveBrief from any variant (brief, perspectiveBrief, flat strings)
-          const pb = rawDoc.perspectiveBrief || rawDoc.brief || {};
-          const whatHappenedFr = stripHtmlTags(pb.whatHappened?.fr || pb.whatHappened || rawDoc.brief_what_fr || '');
-          const whatHappenedEn = stripHtmlTags(pb.whatHappened?.en || rawDoc.brief_what_en || whatHappenedFr);
+                const whatToWatchNextFr = stripHtmlTags(pb.whatToWatchNext?.fr || pb.perspectives?.fr || pb.perspectives || rawDoc.brief_perspectives_fr || '');
+                const whatToWatchNextEn = stripHtmlTags(pb.whatToWatchNext?.en || pb.perspectives?.en || pb.perspectives?.en || rawDoc.brief_perspectives_en || whatToWatchNextFr);
 
-          const whyItMattersFr = stripHtmlTags(pb.whyItMatters?.fr || pb.whyItMatters || rawDoc.brief_why_fr || '');
-          const whyItMattersEn = stripHtmlTags(pb.whyItMatters?.en || rawDoc.brief_why_en || whyItMattersFr);
+                const perspectiveBriefObj = (whatHappenedFr || whyItMattersFr || whatToWatchNextFr) ? {
+                  whatHappened: { fr: whatHappenedFr, en: whatHappenedEn },
+                  whyItMatters: { fr: whyItMattersFr, en: whyItMattersEn },
+                  whatToWatchNext: { fr: whatToWatchNextFr, en: whatToWatchNextEn }
+                } : rawDoc.perspectiveBrief;
 
-          const whatToWatchNextFr = stripHtmlTags(pb.whatToWatchNext?.fr || pb.perspectives?.fr || pb.perspectives || rawDoc.brief_perspectives_fr || '');
-          const whatToWatchNextEn = stripHtmlTags(pb.whatToWatchNext?.en || pb.perspectives?.en || rawDoc.brief_perspectives_en || whatToWatchNextFr);
+                const sf = rawDoc.structuralForces || rawDoc.structural_forces || {};
+                const polFr = stripHtmlTags(sf.political?.fr || rawDoc.structural_forces_fr || sf.political || '');
+                const polEn = stripHtmlTags(sf.political?.en || rawDoc.structural_forces_en || polFr);
 
-          const perspectiveBriefObj = (whatHappenedFr || whyItMattersFr || whatToWatchNextFr) ? {
-            whatHappened: { fr: whatHappenedFr, en: whatHappenedEn },
-            whyItMatters: { fr: whyItMattersFr, en: whyItMattersEn },
-            whatToWatchNext: { fr: whatToWatchNextFr, en: whatToWatchNextEn }
-          } : data.perspectiveBrief;
+                const ecoFr = stripHtmlTags(sf.economic?.fr || sf.economic || '');
+                const ecoEn = stripHtmlTags(sf.economic?.en || ecoFr);
 
-          // Normalize structuralForces from any variant (structuralForces, structural_forces, flat strings)
-          const sf = rawDoc.structuralForces || rawDoc.structural_forces || {};
-          const polFr = stripHtmlTags(sf.political?.fr || rawDoc.structural_forces_fr || sf.political || '');
-          const polEn = stripHtmlTags(sf.political?.en || rawDoc.structural_forces_en || polFr);
+                const socFr = stripHtmlTags(sf.social?.fr || sf.social || '');
+                const socEn = stripHtmlTags(sf.social?.en || socFr);
 
-          const ecoFr = stripHtmlTags(sf.economic?.fr || sf.economic || '');
-          const ecoEn = stripHtmlTags(sf.economic?.en || ecoFr);
+                const intFr = stripHtmlTags(sf.international?.fr || sf.international || '');
+                const intEn = stripHtmlTags(sf.international?.en || intFr);
 
-          const socFr = stripHtmlTags(sf.social?.fr || sf.social || '');
-          const socEn = stripHtmlTags(sf.social?.en || socFr);
+                const structuralForcesObj = (polFr || ecoFr || socFr || intFr) ? {
+                  political: { fr: polFr, en: polEn },
+                  economic: { fr: ecoFr, en: ecoEn },
+                  social: { fr: socFr, en: socEn },
+                  international: { fr: intFr, en: intEn }
+                } : rawDoc.structuralForces;
 
-          const intFr = stripHtmlTags(sf.international?.fr || sf.international || '');
-          const intEn = stripHtmlTags(sf.international?.en || intFr);
-
-          const structuralForcesObj = (polFr || ecoFr || socFr || intFr) ? {
-            political: { fr: polFr, en: polEn },
-            economic: { fr: ecoFr, en: ecoEn },
-            social: { fr: socFr, en: socEn },
-            international: { fr: intFr, en: intEn }
-          } : data.structuralForces;
-
-          firestoreArticles.push({
-            ...data,
-            slug: data.slug || data.id,
-            type: data.type || 'Analysis',
-            readingTime: data.readingTime || rawDoc.readTimeMinutes || 4,
-            title: { fr: cleanTitleFr, en: cleanTitleEn },
-            excerpt: { fr: cleanExcerptFr, en: cleanExcerptEn },
-            body: { fr: cleanBodyFr, en: cleanBodyEn },
-            imageUrl: imgUrl,
-            featuredImage: imgUrl,
-            perspectiveBrief: perspectiveBriefObj,
-            structuralForces: structuralForcesObj,
-            isPublished: isPub
-          });
-        }
-      });
-
-      // Deduplicate articles by unique ID (preserving first occurrence)
-      const uniqueArticlesMap = new Map<string, Article>();
-      firestoreArticles.forEach((art) => {
-        if (art.id && !uniqueArticlesMap.has(art.id)) {
-          uniqueArticlesMap.set(art.id, art);
-        }
-      });
-      const deduplicatedArticles = Array.from(uniqueArticlesMap.values());
-
-      if (deduplicatedArticles.length === 0) {
-        const existing = useStore.getState().articles;
-        if (!existing || existing.length === 0) {
-          useStore.setState({ articles: sampleArticles });
-        }
-      } else {
-        // Sort by date newest first
-        deduplicatedArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-
-        // Check for new published articles
-        if (knownArtIdsRef.current === null) {
-          knownArtIdsRef.current = new Set(deduplicatedArticles.map(a => a.id));
-        } else {
-          deduplicatedArticles.forEach(a => {
-            if (!knownArtIdsRef.current?.has(a.id)) {
-              knownArtIdsRef.current?.add(a.id);
-              if (a.isPublished !== false) {
-                const titleText = typeof a.title === 'string' ? a.title : (a.title?.fr || a.title?.en || 'Nouvelle publication');
-                triggerInAppToast({
-                  type: 'publication',
-                  title: 'Flash Info — Nouvelle Publication',
-                  body: titleText,
-                  actionUrl: `/article/${a.slug}`
+                firestoreArticles.push({
+                  ...rawDoc,
+                  slug: rawDoc.slug || rawDoc.id,
+                  type: rawDoc.type || 'Analysis',
+                  readingTime: rawDoc.readingTime || rawDoc.readTimeMinutes || 4,
+                  title: { fr: cleanTitleFr, en: cleanTitleEn },
+                  excerpt: { fr: cleanExcerptFr, en: cleanExcerptEn },
+                  body: { fr: cleanBodyFr, en: cleanBodyEn },
+                  imageUrl: imgUrl,
+                  featuredImage: imgUrl,
+                  perspectiveBrief: perspectiveBriefObj,
+                  structuralForces: structuralForcesObj,
+                  isPublished: isPub
                 });
               }
+            });
+
+            const uniqueArticlesMap = new Map<string, Article>();
+            firestoreArticles.forEach((art: Article) => {
+              if (art.id && !uniqueArticlesMap.has(art.id)) {
+                uniqueArticlesMap.set(art.id, art);
+              }
+            });
+            const deduplicatedArticles = Array.from(uniqueArticlesMap.values());
+
+            if (deduplicatedArticles.length === 0) {
+              const existing = useStore.getState().articles;
+              if (!existing || existing.length === 0) {
+                useStore.setState({ articles: sampleArticles });
+              }
+            } else {
+              deduplicatedArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+              if (knownArtIdsRef.current === null) {
+                knownArtIdsRef.current = new Set(deduplicatedArticles.map(a => a.id));
+              } else {
+                deduplicatedArticles.forEach((a: Article) => {
+                  if (!knownArtIdsRef.current?.has(a.id)) {
+                    knownArtIdsRef.current?.add(a.id);
+                    if (a.isPublished !== false) {
+                      const titleText = typeof a.title === 'string' ? a.title : (a.title?.fr || a.title?.en || 'Nouvelle publication');
+                      triggerInAppToast({
+                        type: 'publication',
+                        title: 'Flash Info — Nouvelle Publication',
+                        body: titleText,
+                        actionUrl: `/article/${a.slug}`
+                      });
+                    }
+                  }
+                });
+              }
+
+              useStore.setState({ articles: deduplicatedArticles });
             }
-          });
+          } catch (err) {
+            console.warn("[Supabase Articles] Notice fetching articles:", err);
+          }
+        };
+        fetchArticles();
+      }
+    });
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, []);
+
+  // Real-time synchronization of Media via Supabase
+  useEffect(() => {
+    const channel = subscribeToTable('media', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        const fetchMedia = async () => {
+          try {
+            const { data, error } = await supabase.from('media').select('*');
+            if (error || !data) return;
+            const mediaList: any[] = data.map((m: any) => m.data || m);
+            useStore.setState({ media: mediaList });
+          } catch (err) {
+            console.warn("[Supabase Media] Notice fetching media:", err);
+          }
+        };
+        fetchMedia();
+      }
+    });
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, []);
+
+  // Real-time synchronization of Ads via Supabase
+  useEffect(() => {
+    const channel = subscribeToTable('ads', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        const fetchAds = async () => {
+          try {
+            const { data, error } = await supabase.from('ads').select('*');
+            if (error || !data) return;
+            const adsList: any[] = data.filter((a: any) => a.data || a);
+            if (adsList.length > 0) {
+              useStore.setState({ ads: adsList });
+            }
+          } catch (err) {
+            console.warn("[Supabase Ads] Notice fetching ads:", err);
+          }
+        };
+        fetchAds();
+      }
+    });
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, []);
+
+  // Real-time synchronization of Site Settings via Supabase
+  useEffect(() => {
+    const channel = subscribeToTable('siteSettings', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+        const data = payload.new;
+        if (data.id === 'config') {
+          useStore.setState((state) => ({
+            siteSettings: { ...state.siteSettings, ...data }
+          }));
         }
-
-        useStore.setState({ articles: deduplicatedArticles });
       }
-    }, (error) => {
-      console.warn("[Firestore Articles] Notice listening to articles (using local state fallback):", error?.message || error);
     });
 
-    return () => unsubscribeArticles();
-  }, []);
-
-  // Real-time synchronization of Media via Firestore
-  useEffect(() => {
-    const unsubscribeMedia = firestoreOnSnapshot(collection(db, "media"), (snapshot) => {
-      if (snapshot.empty) return;
-      const mediaList: any[] = [];
-      snapshot.forEach((docSnap: any) => {
-        mediaList.push(docSnap.data());
-      });
-      useStore.setState({ media: mediaList });
-    }, (error) => {
-      console.warn("[Firestore Media] Notice listening to media (using local state fallback):", error?.message || error);
-    });
-
-    return () => unsubscribeMedia();
-  }, []);
-
-  // Real-time synchronization of Ads via Firestore
-  useEffect(() => {
-    const unsubscribeAds = firestoreOnSnapshot(collection(db, "ads"), (snapshot) => {
-      if (snapshot.empty) return;
-      const adsList: any[] = [];
-      snapshot.forEach((docSnap: any) => {
-        if (docSnap.data()) adsList.push(docSnap.data());
-      });
-      if (adsList.length > 0) {
-        useStore.setState({ ads: adsList });
-      }
-    }, (error) => {
-      console.warn("[Firestore Ads] Notice listening to ads (using local state fallback):", error?.message || error);
-    });
-
-    return () => unsubscribeAds();
-  }, []);
-
-  // Real-time synchronization of Site Settings via Firestore
-  useEffect(() => {
-    const unsubscribeSettings = firestoreOnSnapshot(doc(db, "siteSettings", "config"), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        useStore.setState((state) => ({
-          siteSettings: { ...state.siteSettings, ...data }
-        }));
-      } else {
-        // Bootstrap initial settings document in Firestore with maintenance mode disabled (site live)
-        const current = useStore.getState().siteSettings;
-        setDoc(doc(db, "siteSettings", "config"), { ...current, isMaintenanceMode: false }, { merge: true }).catch(() => {});
-      }
-    }, (error) => {
-      console.warn("[Firestore Settings] Notice listening to siteSettings (using local state fallback):", error?.message || error);
-    });
-
-    return () => unsubscribeSettings();
-  }, []);
-
-  // Real-time synchronization of Matches via Firestore
-  useEffect(() => {
-    const unsubscribeMatches = firestoreOnSnapshot(collection(db, "matches"), (snapshot) => {
-      if (snapshot.empty) return;
-      const matchesList: any[] = [];
-      snapshot.forEach((docSnap: any) => {
-        matchesList.push(docSnap.data());
-      });
-      useStore.setState({ matches: matchesList });
-    }, (error) => {
-      console.warn("[Firestore Matches] Notice listening to matches (using local state fallback):", error?.message || error);
-    });
-
-    return () => unsubscribeMatches();
-  }, []);
-
-  // Real-time synchronization of Subscribers via Firestore
-  useEffect(() => {
-    const unsubscribeSubscribers = firestoreOnSnapshot(collection(db, "subscribers"), (snapshot) => {
-      if (snapshot.empty) return;
-      const subList: any[] = [];
-      snapshot.forEach((docSnap: any) => {
-        const data = docSnap.data();
-        if (data && data.email) {
-          subList.push({ email: data.email, date: data.date || new Date().toISOString().split('T')[0] });
+    // Bootstrap initial settings if missing
+    const bootstrapSettings = async () => {
+      try {
+        const { data, error } = await supabase.from('siteSettings').select('*').eq('id', 'config').single();
+        if (error || !data) {
+          const current = useStore.getState().siteSettings;
+          await supabase.from('siteSettings').upsert({ ...current, id: 'config', isMaintenanceMode: false });
         }
-      });
-      if (subList.length > 0) {
-        useStore.setState({ subscribers: subList });
+      } catch (err) {
+        console.warn("[Supabase Settings] Notice bootstrapping settings:", err);
       }
-    }, (error) => {
-      console.warn("[Firestore Subscribers] Notice listening to subscribers (using local state fallback):", error?.message || error);
+    };
+    bootstrapSettings();
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, []);
+
+  // Real-time synchronization of Matches via Supabase
+  useEffect(() => {
+    const channel = subscribeToTable('matches', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        const fetchMatches = async () => {
+          try {
+            const { data, error } = await supabase.from('matches').select('*');
+            if (error || !data) return;
+            const matchesList: any[] = data.map((m: any) => m.data || m);
+            if (matchesList.length > 0) {
+              useStore.setState({ matches: matchesList });
+            }
+          } catch (err) {
+            console.warn("[Supabase Matches] Notice fetching matches:", err);
+          }
+        };
+        fetchMatches();
+      }
     });
 
-    return () => unsubscribeSubscribers();
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
+  }, []);
+
+  // Real-time synchronization of Subscribers via Supabase
+  useEffect(() => {
+    const channel = subscribeToTable('subscribers', (payload) => {
+      if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
+        const fetchSubscribers = async () => {
+          try {
+            const { data, error } = await supabase.from('subscribers').select('*');
+            if (error || !data) return;
+            const subList: any[] = data
+              .filter((s: any) => s && s.email)
+              .map((s: any) => ({
+                email: s.email,
+                date: s.date || new Date().toISOString().split('T')[0]
+              }));
+            if (subList.length > 0) {
+              useStore.setState({ subscribers: subList });
+            }
+          } catch (err) {
+            console.warn("[Supabase Subscribers] Notice fetching subscribers:", err);
+          }
+        };
+        fetchSubscribers();
+      }
+    });
+
+    return () => {
+      if (channel && typeof channel.unsubscribe === 'function') {
+        channel.unsubscribe();
+      }
+    };
   }, []);
 
   // Listen to Auth State
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (mongoUser) => {
-      setUser(mongoUser);
-      if (mongoUser && mongoUser.email) {
-        try {
-          const userDocRef = doc(db, "users", mongoUser.email.toLowerCase().trim());
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            const isAdminUser = mongoUser.email === "kadersdiaz3@gmail.com" || mongoUser.email === "admin@perspective.sn" || data.role === "Admin" || mongoUser.email.includes("admin");
-            const updatedProfile = {
-              id: mongoUser.uid,
-              name: data.name || mongoUser.displayName || "Anonymous",
-              email: mongoUser.email,
-              avatarUrl: data.avatarUrl || mongoUser.photoURL || "preset-male",
-              role: isAdminUser ? "Admin" : (data.role || "Member"),
-              emailVerified: mongoUser.emailVerified,
-              mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
-              isMongoDB: true,
-              isFirebaseAuthSession: true,
-              coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-              streak: data.streak !== undefined ? data.streak : 5,
-              readingTime: data.readingTime !== undefined ? data.readingTime : 120,
-              hidePersonalInfo: data.hidePersonalInfo || false,
-              hideEmail: data.hideEmail || false,
-              bio: data.bio || "",
-              accolades: data.accolades || ["verified_identity"]
-            };
-            setReaderProfile(updatedProfile);
-            try {
-              localStorage.setItem('perspective_auth_session', JSON.stringify(updatedProfile));
-            } catch {}
-          } else {
-            // Profile does not exist in Firestore yet, create default
-            const isAdminUser = mongoUser.email === "kadersdiaz3@gmail.com" || mongoUser.email === "admin@perspective.sn" || mongoUser.email.includes("admin");
-            const fallbackProfile = {
-              id: mongoUser.uid,
-              email: mongoUser.email,
-              name: mongoUser.displayName || mongoUser.email.split("@")[0],
-              avatarUrl: mongoUser.photoURL || "preset-male",
-              role: isAdminUser ? "Admin" : "Member",
-              coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-              streak: 5,
-              readingTime: 120,
-              hidePersonalInfo: false,
-              bio: "Nouveau lecteur.",
-              accolades: ["verified_identity"],
-              registeredAt: new Date().toISOString(),
-              lastLoginAt: new Date().toISOString()
-            };
-            await setDoc(userDocRef, fallbackProfile).catch(() => {});
-            setReaderProfile({
-              ...fallbackProfile,
-              emailVerified: mongoUser.emailVerified,
-              mfaEnabled: false,
-              isMongoDB: true,
-              isFirebaseAuthSession: true
-            });
-            try {
-              localStorage.setItem('perspective_auth_session', JSON.stringify(fallbackProfile));
-            } catch {}
+    const { data: { subscription } } = onAuthStateChanged(async (authUser: any) => {
+      if (authUser) {
+        const authUserObj: AuthUser = {
+          uid: authUser.id,
+          email: authUser.email || '',
+          displayName: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || '',
+          photoURL: authUser.user_metadata?.avatar_url || '',
+          isAnonymous: !authUser.email,
+        };
+        setUser(authUserObj);
+
+        if (authUser.email) {
+          try {
+            const { data, error } = await supabase.from('users').select('*').eq('email', authUser.email.toLowerCase().trim()).single();
+            if (data && !error) {
+              const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || data.role === "Admin" || authUser.email.includes("admin");
+              const updatedProfile = {
+                id: authUser.id,
+                name: data.name || authUser.user_metadata?.full_name || "Anonymous",
+                email: authUser.email,
+                avatarUrl: data.avatarUrl || authUser.user_metadata?.avatar_url || "preset-male",
+                role: isAdminUser ? "Admin" : (data.role || "Member"),
+                emailVerified: authUser.email_confirmed_at ? true : false,
+                mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
+                isMongoDB: true,
+                isSupabaseAuthSession: true,
+                coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+                streak: data.streak !== undefined ? data.streak : 5,
+                readingTime: data.readingTime !== undefined ? data.readingTime : 120,
+                hidePersonalInfo: data.hidePersonalInfo || false,
+                hideEmail: data.hideEmail || false,
+                bio: data.bio || "",
+                accolades: data.accolades || ["verified_identity"]
+              };
+              setReaderProfile(updatedProfile);
+              try {
+                localStorage.setItem('perspective_auth_session', JSON.stringify(updatedProfile));
+              } catch {}
+            } else {
+              const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || authUser.email.includes("admin");
+              const fallbackProfile = {
+                id: authUser.id,
+                email: authUser.email,
+                name: authUser.user_metadata?.full_name || authUser.email.split("@")[0],
+                avatarUrl: authUser.user_metadata?.avatar_url || "preset-male",
+                role: isAdminUser ? "Admin" : "Member",
+                coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+                streak: 5,
+                readingTime: 120,
+                hidePersonalInfo: false,
+                bio: "Nouveau lecteur.",
+                accolades: ["verified_identity"],
+                registeredAt: new Date().toISOString(),
+                lastLoginAt: new Date().toISOString()
+              };
+              await supabase.from('users').upsert({ ...fallbackProfile, email: authUser.email.toLowerCase().trim() }).eq('email', authUser.email.toLowerCase().trim());
+              setReaderProfile({
+                ...fallbackProfile,
+                emailVerified: authUser.email_confirmed_at ? true : false,
+                mfaEnabled: false,
+                isMongoDB: true,
+                isSupabaseAuthSession: true
+              });
+              try {
+                localStorage.setItem('perspective_auth_session', JSON.stringify(fallbackProfile));
+              } catch {}
+            }
+          } catch (err) {
+            console.warn("[Supabase Profile] Notice syncing reader profile:", err);
           }
-        } catch (err) {
-          console.warn("[Firestore Profile] Notice syncing reader profile:", err);
         }
+      } else {
+        setUser(null);
       }
       setLoading(false);
     });
 
-    return () => unsubscribeAuth();
+    return () => subscription.unsubscribe();
   }, [setReaderProfile]);
 
   // Cross-device resilient session restoration from persistent storage
@@ -714,9 +749,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (targetEmail) {
           const cleanEmail = targetEmail.toLowerCase().trim();
-          const userDoc = await getDoc(doc(db, "users", cleanEmail));
-          if (userDoc.exists()) {
-            const data = userDoc.data();
+          const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+          if (data && !error) {
             const isAdminUser = cleanEmail === "kadersdiaz3@gmail.com" || cleanEmail === "admin@perspective.sn" || data.role === "Admin" || cleanEmail.includes("admin");
             const refreshedProfile = {
               id: data.id || stableUserId(cleanEmail),
@@ -737,7 +771,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setReaderProfile(refreshedProfile);
             localStorage.setItem('perspective_auth_session', JSON.stringify(refreshedProfile));
           } else if (cleanEmail === "kadersdiaz3@gmail.com") {
-            // Guarantee Super Admin presence in Firestore if missing
             const superAdminProfile = {
               id: stableUserId("kadersdiaz3@gmail.com"),
               name: "Kader Diaz (Super Admin)",
@@ -754,7 +787,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               bio: "Super Administrateur & Fondateur Perspective Group",
               accolades: ["verified_identity", "editorial_board"]
             };
-            await setDoc(doc(db, "users", "kadersdiaz3@gmail.com"), superAdminProfile, { merge: true }).catch(() => {});
+            await supabase.from('users').upsert({ ...superAdminProfile, email: cleanEmail }).eq('email', cleanEmail);
             setReaderProfile(superAdminProfile);
             localStorage.setItem('perspective_auth_session', JSON.stringify(superAdminProfile));
           }
@@ -767,6 +800,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     restoreSession();
   }, [setReaderProfile]);
 
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) {
+      console.warn("[Auth] Google sign-in error:", error.message);
+    }
+  };
+
+  const signInWithGithub = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) {
+      console.warn("[Auth] GitHub sign-in error:", error.message);
+    }
+  };
+
   const loginWithEmail = async (email: string, pass: string, remember: boolean = true) => {
     let cleanEmail = email.toLowerCase().trim();
     if (cleanEmail === "admin") cleanEmail = "admin@perspective.sn";
@@ -775,13 +828,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     console.log(`[AUTH LOG] Attempting loginWithEmail for user: "${cleanEmail}"`);
 
-    try {
-      await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
-    } catch (err) {
-      console.warn("[AUTH LOG] Failed to set auth persistence:", err);
-    }
-
-    // 1. Preset account lookup for immediate guaranteed access
     const presetAccounts: Record<string, any> = {
       "kadersdiaz3@gmail.com": {
         name: "Kader Diaz (Super Admin)",
@@ -810,35 +856,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     };
 
-    let firebaseAuthSuccess = false;
+    let supabaseAuthSuccess = false;
     let authUserUid = "";
 
-    // Try Firebase Auth
+    // Try Supabase Auth
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, pass);
-      firebaseAuthSuccess = true;
-      authUserUid = userCredential.user.uid;
-      console.log(`[AUTH LOG] Firebase Auth sign-in successful for: ${userCredential.user.email}`);
-      const userDocRef = doc(db, "users", cleanEmail);
-      await setDoc(userDocRef, { lastLoginAt: new Date().toISOString(), isOnline: true }, { merge: true }).catch(() => {});
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: pass,
+      });
+      if (data && !error) {
+        supabaseAuthSuccess = true;
+        authUserUid = data.user.id;
+        console.log(`[AUTH LOG] Supabase Auth sign-in successful for: ${data.user.email}`);
+        await supabase.from('users').update({ lastLoginAt: new Date().toISOString(), isOnline: true }).eq('email', cleanEmail);
+      } else {
+        console.warn(`[AUTH LOG] Supabase Auth sign-in notice (${error?.message || 'unknown'}): ${error?.message || ''}. Continuing with database verification...`);
+      }
     } catch (err: any) {
-      console.warn(`[AUTH LOG] Firebase Auth sign-in notice (${err?.code || 'unknown'}): ${err?.message}. Continuing with database verification...`);
+      console.warn(`[AUTH LOG] Supabase Auth sign-in notice: ${err?.message || err}. Continuing with database verification...`);
     }
 
-    // 2. Protected Super Admin (kadersdiaz3@gmail.com)
+    // 1. Protected Super Admin (kadersdiaz3@gmail.com)
     if (cleanEmail === "kadersdiaz3@gmail.com") {
       const isSuperAdminPassMatch = await verifyPassword(pass, undefined, "Swiz1324", undefined);
-      // Also check Firestore user doc
       let docPassMatches = false;
       try {
-        const userDoc = await getDoc(doc(db, "users", "kadersdiaz3@gmail.com"));
-        if (userDoc.exists()) {
-          const d = userDoc.data();
-          docPassMatches = await verifyPassword(pass, d.passwordHash, d.password, d.pin);
+        const { data, error } = await supabase.from('users').select('*').eq('email', "kadersdiaz3@gmail.com").single();
+        if (data && !error) {
+          docPassMatches = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         }
       } catch {}
 
-      if (isSuperAdminPassMatch || docPassMatches || firebaseAuthSuccess || pass.length >= 6) {
+      if (isSuperAdminPassMatch || docPassMatches || supabaseAuthSuccess || pass.length >= 6) {
         console.log("[AUTH LOG] Signing in as Super Admin (kadersdiaz3@gmail.com)");
         const superAdminProfile = {
           id: authUserUid || stableUserId(cleanEmail),
@@ -849,7 +899,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           emailVerified: true,
           mfaEnabled: false,
           isMongoDB: true,
-          isFirebaseAuthSession: firebaseAuthSuccess,
+          isSupabaseAuthSession: supabaseAuthSuccess,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 10,
           readingTime: 300,
@@ -858,11 +908,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           accolades: ["verified_identity", "editorial_board"]
         };
 
-        await setDoc(doc(db, "users", "kadersdiaz3@gmail.com"), {
-          ...superAdminProfile,
-          lastLoginAt: new Date().toISOString(),
-          isOnline: true
-        }, { merge: true }).catch(() => {});
+        await supabase.from('users').upsert({ 
+          ...superAdminProfile, 
+          email: "kadersdiaz3@gmail.com",
+          lastLoginAt: new Date().toISOString(), 
+          isOnline: true 
+        }).eq('email', "kadersdiaz3@gmail.com");
 
         localStorage.setItem('perspective_auth_session', JSON.stringify(superAdminProfile));
         setReaderProfile(superAdminProfile);
@@ -870,7 +921,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    // 3. Other Preset accounts
+    // 2. Other Preset accounts
     if (presetAccounts[cleanEmail]) {
       const preset = presetAccounts[cleanEmail];
       console.log(`[AUTH LOG] Signing in via preset platform account: ${cleanEmail}`);
@@ -883,7 +934,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         emailVerified: true,
         mfaEnabled: false,
         isMongoDB: true,
-        isFirebaseAuthSession: firebaseAuthSuccess,
+        isSupabaseAuthSession: supabaseAuthSuccess,
         coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
         streak: 10,
         readingTime: 300,
@@ -892,23 +943,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         accolades: ["verified_identity", "editorial_board"]
       };
 
-      const userDocRef = doc(db, "users", cleanEmail);
-      await setDoc(userDocRef, { ...presetProfile, lastLoginAt: new Date().toISOString(), isOnline: true }, { merge: true }).catch(() => {});
+      await supabase.from('users').upsert({ 
+        ...presetProfile, 
+        email: cleanEmail,
+        lastLoginAt: new Date().toISOString(), 
+        isOnline: true 
+      }).eq('email', cleanEmail);
+
       localStorage.setItem('perspective_auth_session', JSON.stringify(presetProfile));
       setReaderProfile(presetProfile);
       return;
     }
 
-    // 4. Check against Firestore user document
+    // 3. Check against Supabase users table
     try {
-      const userDocRef = doc(db, "users", cleanEmail);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        console.log(`[AUTH LOG] Found Firestore user profile for: ${cleanEmail}`);
+      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+      if (data && !error) {
+        console.log(`[AUTH LOG] Found Supabase user profile for: ${cleanEmail}`);
 
-        // Verify password using secure hash, plain password, or PIN
-        const isCredentialValid = firebaseAuthSuccess || await verifyPassword(pass, data.passwordHash, data.password, data.pin);
+        const isCredentialValid = supabaseAuthSuccess || await verifyPassword(pass, data.passwordHash, data.password, data.pin);
 
         if (!isCredentialValid) {
           throw new Error("Mot de passe ou code PIN incorrect.");
@@ -926,7 +979,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           emailVerified: true,
           mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
           isMongoDB: true,
-          isFirebaseAuthSession: firebaseAuthSuccess,
+          isSupabaseAuthSession: supabaseAuthSuccess,
           coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: data.streak || 1,
           readingTime: data.readingTime || 0,
@@ -935,7 +988,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           accolades: data.accolades || ["verified_identity"]
         };
 
-        // Upgrade record with secure passwordHash if missing
         const updates: any = {
           ...profileObj,
           lastLoginAt: new Date().toISOString(),
@@ -945,7 +997,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           updates.passwordHash = await hashPassword(pass);
         }
 
-        await setDoc(userDocRef, updates, { merge: true }).catch(() => {});
+        await supabase.from('users').upsert(updates).eq('email', cleanEmail);
         localStorage.setItem('perspective_auth_session', JSON.stringify(profileObj));
         setReaderProfile(profileObj);
         console.log(`[AUTH LOG] Database sign-in completed successfully for: ${cleanEmail}`);
@@ -955,17 +1007,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fsErr.message === "Mot de passe ou code PIN incorrect.") {
         throw fsErr;
       }
-      console.warn("[AUTH LOG] Notice querying Firestore user record:", fsErr);
+      console.warn("[AUTH LOG] Notice querying Supabase user record:", fsErr);
     }
 
-    // 4b. Check Central Server Database API for cross-device accounts
+    // 4. Check Central Server Database API for cross-device accounts
     try {
       const srvRes = await fetch(`/api/mongodb/doc/users/${encodeURIComponent(cleanEmail)}`);
       if (srvRes.ok) {
         const srvData = await srvRes.json();
         if (srvData && srvData.data) {
           const u = srvData.data;
-          const isPassValid = firebaseAuthSuccess || await verifyPassword(pass, u.passwordHash, u.password, u.pin);
+          const isPassValid = supabaseAuthSuccess || await verifyPassword(pass, u.passwordHash, u.password, u.pin);
           if (isPassValid) {
             const isSuperAdmin = cleanEmail === "kadersdiaz3@gmail.com";
             const profileObj = {
@@ -977,7 +1029,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               emailVerified: true,
               mfaEnabled: u.twoFactorEnabled || false,
               isMongoDB: true,
-              isFirebaseAuthSession: firebaseAuthSuccess,
+              isSupabaseAuthSession: supabaseAuthSuccess,
               coverPhotoUrl: u.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
               streak: u.streak || 1,
               readingTime: u.readingTime || 0,
@@ -1000,7 +1052,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storeUsers = useStore.getState().users || [];
     const localMatched = storeUsers.find(u => u.email.toLowerCase().trim() === cleanEmail);
     if (localMatched) {
-      const isLocalValid = firebaseAuthSuccess || await verifyPassword(pass, undefined, localMatched.password, localMatched.pin);
+      const isLocalValid = supabaseAuthSuccess || await verifyPassword(pass, undefined, localMatched.password, localMatched.pin);
       if (isLocalValid) {
         const localProfile = {
           id: localMatched.id || stableUserId(cleanEmail),
@@ -1011,7 +1063,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           emailVerified: true,
           mfaEnabled: false,
           isMongoDB: true,
-          isFirebaseAuthSession: firebaseAuthSuccess,
+          isSupabaseAuthSession: supabaseAuthSuccess,
           coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
           streak: 1,
           readingTime: 0,
@@ -1020,14 +1072,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           accolades: ["verified_identity"]
         };
 
-        // Save to Firestore so it syncs across all other devices
-        await setDoc(doc(db, "users", cleanEmail), {
-          ...localProfile,
+        await supabase.from('users').upsert({ 
+          ...localProfile, 
+          email: cleanEmail,
           passwordHash: await hashPassword(pass),
           password: pass,
-          lastLoginAt: new Date().toISOString(),
-          isOnline: true
-        }, { merge: true }).catch(() => {});
+          lastLoginAt: new Date().toISOString(), 
+          isOnline: true 
+        }).eq('email', cleanEmail);
 
         localStorage.setItem('perspective_auth_session', JSON.stringify(localProfile));
         setReaderProfile(localProfile);
@@ -1037,8 +1089,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
 
-    // 6. If Firebase Auth succeeded but Firestore was missing, create profile now
-    if (firebaseAuthSuccess) {
+    // 6. If Supabase Auth succeeded but users table was missing, create profile now
+    if (supabaseAuthSuccess) {
       const fallbackProfile = {
         id: authUserUid || stableUserId(cleanEmail),
         name: cleanEmail.split("@")[0].replace(/[._-]/g, ' '),
@@ -1048,7 +1100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         emailVerified: true,
         mfaEnabled: false,
         isMongoDB: true,
-        isFirebaseAuthSession: true,
+        isSupabaseAuthSession: true,
         coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
         streak: 1,
         readingTime: 0,
@@ -1057,8 +1109,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         accolades: ["verified_identity"]
       };
 
-      const userDocRef = doc(db, "users", cleanEmail);
-      await setDoc(userDocRef, fallbackProfile, { merge: true }).catch(() => {});
+      await supabase.from('users').upsert({ 
+        ...fallbackProfile, 
+        email: cleanEmail 
+      }).eq('email', cleanEmail);
+
       localStorage.setItem('perspective_auth_session', JSON.stringify(fallbackProfile));
       setReaderProfile(fallbackProfile);
       return;
@@ -1082,29 +1137,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const cleanEmail = email.toLowerCase().trim();
     const cleanName = name.trim() || cleanEmail.split("@")[0];
 
-    // Check if account already exists in Firestore
+    // Check if account already exists in Supabase
     try {
-      const existingDoc = await getDoc(doc(db, "users", cleanEmail));
-      if (existingDoc.exists()) {
-        const d = existingDoc.data();
-        const matchesExisting = await verifyPassword(pass, d.passwordHash, d.password, d.pin);
+      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+      if (data && !error) {
+        const matchesExisting = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         if (matchesExisting) {
           console.log(`[AUTH LOG] Recognized existing account with matching credentials for: ${cleanEmail}`);
           const existingProfile = {
-            id: d.id || stableUserId(cleanEmail),
-            name: d.name || cleanName,
+            id: data.id || stableUserId(cleanEmail),
+            name: data.name || cleanName,
             email: cleanEmail,
-            avatarUrl: d.avatarUrl || avatarUrl || "preset-male",
-            role: cleanEmail === "kadersdiaz3@gmail.com" ? "Admin" : (d.role || role || "Member"),
+            avatarUrl: data.avatarUrl || avatarUrl || "preset-male",
+            role: cleanEmail === "kadersdiaz3@gmail.com" ? "Admin" : (data.role || role || "Member"),
             emailVerified: true,
-            mfaEnabled: d.twoFactorEnabled || d.mfaEnabled || false,
+            mfaEnabled: data.twoFactorEnabled || data.mfaEnabled || false,
             isMongoDB: true,
-            coverPhotoUrl: d.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-            streak: d.streak || 1,
-            readingTime: d.readingTime || 0,
-            hidePersonalInfo: d.hidePersonalInfo || false,
-            bio: d.bio || "Membre actif Perspective",
-            accolades: d.accolades || ["verified_identity"]
+            coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+            streak: data.streak || 1,
+            readingTime: data.readingTime || 0,
+            hidePersonalInfo: data.hidePersonalInfo || false,
+            bio: data.bio || "Membre actif Perspective",
+            accolades: data.accolades || ["verified_identity"]
           };
           localStorage.setItem('perspective_auth_session', JSON.stringify(existingProfile));
           setReaderProfile(existingProfile);
@@ -1120,29 +1174,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     let authUid = stableUserId(cleanEmail);
-    let firebaseAuthSuccess = false;
+    let supabaseAuthSuccess = false;
 
-    // Try Firebase Auth
+    // Try Supabase Auth
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
-      authUid = userCredential.user.uid;
-      firebaseAuthSuccess = true;
-    } catch (err: any) {
-      if (err?.code === "auth/email-already-in-use") {
-        try {
-          const loginCredential = await signInWithEmailAndPassword(auth, cleanEmail, pass);
-          authUid = loginCredential.user.uid;
-          firebaseAuthSuccess = true;
-        } catch (loginErr) {
-          console.error("[Auth] Existing account sign-in failed during registration:", loginErr);
+      const { data, error } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: pass,
+        options: { data: { name: cleanName } }
+      });
+      if (data && !error && data.user) {
+        authUid = data.user.id;
+        supabaseAuthSuccess = true;
+      } else if (error?.message?.includes('already registered')) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: pass,
+        });
+        if (signInData && !signInError && signInData.user) {
+          authUid = signInData.user.id;
+          supabaseAuthSuccess = true;
+        } else {
           throw new Error("Cet e-mail est déjà utilisé. Veuillez vous connecter à votre compte.");
         }
       } else {
-        // Notice: In custom domains (senperspective.com) or Brave Shields, Firebase Auth may throw
-        // auth/unauthorized-domain, auth/operation-not-allowed, network-request-failed, etc.
-        // We seamlessly continue to create the database account with cryptographic hashing.
-        console.warn("[Auth] Firebase Auth client notice (proceeding with durable database account):", err?.code || err?.message);
+        console.warn("[Auth] Supabase Auth client notice (proceeding with durable database account):", error?.message || error);
       }
+    } catch (err: any) {
+      console.warn("[Auth] Supabase Auth client notice (proceeding with durable database account):", err?.message || err);
     }
 
     // Deterministic, durable User ID derived from email
@@ -1156,7 +1215,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const isAdminUser = isSuperAdmin || cleanEmail === "admin@perspective.sn" || cleanEmail.includes("admin");
     const assignedRole = isSuperAdmin ? "Admin" : (isAdminUser ? "Admin" : (role || "Member"));
 
-    // Save complete user account profile in Firestore users collection
     const profileData: any = {
       id: finalUid,
       email: cleanEmail,
@@ -1165,7 +1223,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       role: assignedRole,
       authType: authType || 'password',
       passwordHash: passwordHash,
-      password: pass, // Preserved for backwards compatibility with AdminPortal and SecurityTab credential checks
+      password: pass,
       pin: pin || "",
       twoFactorEnabled: !!twoFactorEnabled,
       mfaEnabled: !!twoFactorEnabled,
@@ -1179,23 +1237,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       registeredAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
       isOnline: true,
-      isFirebaseAuthSession: firebaseAuthSuccess
+      isSupabaseAuthSession: supabaseAuthSuccess
     };
 
-    // Track whether we actually persisted the account durably.
-    let firestoreDurable = false;
-    let firestoreErrMsg = "";
+    let supabaseDurable = false;
+    let supabaseErrMsg = "";
     try {
       const safeProfile = await sanitizeFirestorePayload(profileData);
-      await setDoc(doc(db, "users", cleanEmail), safeProfile, { merge: true });
-      firestoreDurable = true;
-      console.log(`[AUTH LOG] User profile successfully committed to Firestore: ${cleanEmail}`);
+      await supabase.from('users').upsert({ ...safeProfile, email: cleanEmail }).eq('email', cleanEmail);
+      supabaseDurable = true;
+      console.log(`[AUTH LOG] User profile successfully committed to Supabase: ${cleanEmail}`);
     } catch (fsErr: any) {
-      firestoreErrMsg = fsErr?.message || String(fsErr);
-      console.warn("[AUTH LOG] Firestore setDoc notice for user registration:", fsErr?.message || fsErr);
+      supabaseErrMsg = fsErr?.message || String(fsErr);
+      console.warn("[AUTH LOG] Supabase upsert notice for user registration:", fsErr?.message || fsErr);
     }
 
-    // Persist to Central Server Database API (guarantees cross-device network visibility)
     let serverDurable = false;
     try {
       const safeProfile = await sanitizeFirestorePayload(profileData);
@@ -1212,12 +1268,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.warn("[AUTH LOG] Central server user persistence notice:", sErr);
     }
 
-    if ((!firebaseAuthSuccess && !firestoreDurable && !serverDurable) && cleanEmail !== "kadersdiaz3@gmail.com") {
-      // No durable record exists anywhere -> the account would be lost.
+    if ((!supabaseAuthSuccess && !supabaseDurable && !serverDurable) && cleanEmail !== "kadersdiaz3@gmail.com") {
       const appLang = useStore.getState().language || 'fr';
       console.error(
-        `[AUTH LOG] ACCOUNT CREATION ERROR for ${cleanEmail}: firebaseAuthSuccess=${firebaseAuthSuccess}, firestoreDurable=${firestoreDurable}, serverDurable=${serverDurable}. ` +
-        `Firestore error: ${firestoreErrMsg}`
+        `[AUTH LOG] ACCOUNT CREATION ERROR for ${cleanEmail}: supabaseAuthSuccess=${supabaseAuthSuccess}, supabaseDurable=${supabaseDurable}, serverDurable=${serverDurable}. ` +
+        `Supabase error: ${supabaseErrMsg}`
       );
       throw new Error(
         appLang === 'fr'
@@ -1226,7 +1281,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       );
     }
 
-    // Immediately update allUsers in state so other components reflect the new member
     setAllUsers(prev => {
       const withoutSelf = prev.filter(u => u.email.toLowerCase().trim() !== cleanEmail);
       return [...withoutSelf, {
@@ -1242,7 +1296,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }];
     });
 
-    // Save in local Zustand store users list
     const currentUsers = useStore.getState().users || [];
     if (!currentUsers.some(u => u.email.toLowerCase().trim() === cleanEmail)) {
       useStore.setState({
@@ -1262,12 +1315,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
     }
 
-    // Persist session locally
     try {
       localStorage.setItem('perspective_auth_session', JSON.stringify(profileData));
     } catch {}
 
-    // Immediately set active readerProfile in global state
     setReaderProfile({
       id: finalUid,
       name: profileData.name,
@@ -1277,7 +1328,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       emailVerified: true,
       mfaEnabled: !!twoFactorEnabled,
       isMongoDB: true,
-      isFirebaseAuthSession: firebaseAuthSuccess,
+      isSupabaseAuthSession: supabaseAuthSuccess,
       coverPhotoUrl: profileData.coverPhotoUrl,
       streak: profileData.streak,
       readingTime: profileData.readingTime,
@@ -1292,14 +1343,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (activeEmail) {
       const cleanActive = activeEmail.toLowerCase().trim();
       try {
-        await setDoc(doc(db, "users", cleanActive), {
+        await supabase.from('users').update({
           isOnline: false,
           lastActiveAt: new Date().toISOString()
-        }, { merge: true });
+        }).eq('email', cleanActive);
       } catch (err) {
-        console.warn("Failed updating logout status in Firestore:", err);
+        console.warn("Failed updating logout status:", err);
       }
-      // Update central server database
       try {
         fetch("/api/users", {
           method: "POST",
@@ -1314,7 +1364,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       sessionStorage.removeItem("perspective-temp-admin-session");
     } catch {}
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch {}
     setUser(null);
     setReaderProfile(null);
@@ -1331,28 +1381,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let authError: string | null = null;
     
     try {
-      await sendPasswordResetEmail(auth, cleanEmail);
-      emailSent = true;
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: window.location.origin
+      });
+      emailSent = !error;
+      if (error) {
+        authError = error.message;
+      }
     } catch (err: any) {
-      console.warn("MongoDB Auth password reset notice:", err?.code || err?.message);
-      authError = err?.code || err?.message;
+      console.warn("Supabase Auth password reset notice:", err?.message || err);
+      authError = err?.message || String(err);
     }
 
-    // Always log the password reset request to Firestore so admin or user system tracks it
     try {
       const resetId = cleanEmail.replace(/[^a-zA-Z0-9]/g, '_');
-      await setDoc(doc(db, "password_resets", resetId), {
+      await supabase.from('password_resets').upsert({
+        id: resetId,
         email: cleanEmail,
         requestedAt: new Date().toISOString(),
         emailSent,
         authError: authError || null,
         status: emailSent ? 'sent' : 'logged'
-      }, { merge: true });
+      });
     } catch (dbErr) {
-      console.warn("Firestore password_resets write notice:", dbErr);
+      console.warn("Supabase password_resets write notice:", dbErr);
     }
 
-    // If MongoDB Auth threw invalid email or quota error, surface it
     if (authError && authError.includes('invalid-email')) {
       throw new Error("L'adresse e-mail saisie est invalide.");
     }
@@ -1366,7 +1420,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       loginWithEmail,
       registerWithEmail,
       logoutUser,
-      resetUserPassword
+      resetUserPassword,
+      signInWithGoogle,
+      signInWithGithub
     }}>
       {children}
     </AuthContext.Provider>

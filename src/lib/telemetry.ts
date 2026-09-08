@@ -3,7 +3,7 @@
  * Sends consented reader metrics, pageviews, and commercial conversion events to server & Firestore
  */
 
-import { db, collection, addDoc, setDoc, doc, getDoc } from './firebase';
+import { supabase } from './supabaseClient';
 
 const STORAGE_SESSION_KEY = 'perspective_analytics_session_id';
 const STORAGE_CONSENT_KEY = 'perspective_cookie_consent';
@@ -37,35 +37,7 @@ export function getUserConsent(): { essential: boolean; analytics: boolean; pers
   }
 }
 
-// Update daily analytics aggregate directly in Firestore
-async function updateDailyAnalyticsSnapshot(dateStr: string, isPageview: boolean, isSession: boolean, isConsent: boolean, isMarketing: boolean, isAnalyticsOptIn: boolean, isConversion: boolean) {
-  try {
-    const dailyDocRef = doc(db, 'daily_analytics', dateStr);
-    const snap = await getDoc(dailyDocRef);
-    const existing = snap.exists() ? snap.data() : {
-      date: dateStr,
-      totalPageviews: 0,
-      uniqueSessions: 0,
-      totalConsents: 0,
-      analyticsOptIns: 0,
-      marketingOptIns: 0,
-      leadConversions: 0
-    };
-
-    await setDoc(dailyDocRef, {
-      date: dateStr,
-      totalPageviews: (existing.totalPageviews || 0) + (isPageview ? 1 : 0),
-      uniqueSessions: (existing.uniqueSessions || 0) + (isSession ? 1 : 0),
-      totalConsents: (existing.totalConsents || 0) + (isConsent ? 1 : 0),
-      analyticsOptIns: (existing.analyticsOptIns || 0) + (isAnalyticsOptIn ? 1 : 0),
-      marketingOptIns: (existing.marketingOptIns || 0) + (isMarketing ? 1 : 0),
-      leadConversions: (existing.leadConversions || 0) + (isConversion ? 1 : 0),
-      lastUpdated: new Date().toISOString()
-    }, { merge: true });
-  } catch (err) {
-    console.warn('[FIRESTORE DAILY SNAPSHOT ERROR]', err);
-  }
-}
+// Daily analytics aggregate removed — no daily_analytics table in Supabase schema
 
 export function detectRealLocation(): { country: string; city: string; region: string } {
   if (typeof window === 'undefined') {
@@ -125,20 +97,12 @@ export async function sendConsentTelemetry(preferences: { essential: boolean; an
     userEmail: userEmail || ''
   };
 
-  // 1. Write directly to Firestore using Firebase Web SDK (works on senperspective.com & everywhere)
+  // 1. Write directly to Supabase
   try {
-    await setDoc(doc(db, 'user_consents', consentDocId), payload, { merge: true });
-    await setDoc(doc(db, 'analytics_archive', consentDocId), {
-      id: consentDocId,
-      sessionId,
-      ...payload,
-      recordType: 'consent',
-      archivedAt: new Date().toISOString()
-    }, { merge: true });
-    await updateDailyAnalyticsSnapshot(todayStr, false, false, true, Boolean(preferences.marketing), Boolean(preferences.analytics), false);
-    console.log('[TELEMETRY] Cookie consent stored directly in Firestore analytics_archive:', consentDocId);
-  } catch (firestoreErr) {
-    console.warn('[TELEMETRY FIRESTORE CONSENT ERROR]', firestoreErr);
+    await supabase.from('user_consents').upsert({ ...payload, id: consentDocId });
+    console.log('[TELEMETRY] Cookie consent stored in Supabase:', consentDocId);
+  } catch (supabaseErr) {
+    console.warn('[TELEMETRY SUPABASE CONSENT ERROR]', supabaseErr);
   }
 
   // 2. Secondary fetch attempt to API route if backend server exists
@@ -193,22 +157,13 @@ export async function trackEvent(
     metadata: details.metadata || {}
   };
 
-  // 1. Write directly to Firestore using Firebase Web SDK
+  // 1. Write directly to Supabase
   try {
     const eventDocId = `evt_${sessionId}_${Date.now()}`;
-    await addDoc(collection(db, 'analytics_events'), payload);
-    await setDoc(doc(db, 'analytics_archive', eventDocId), {
-      id: eventDocId,
-      sessionId,
-      ...payload,
-      recordType: 'visit_event',
-      archivedAt: new Date().toISOString()
-    }, { merge: true });
-    const isConversion = ['newsletter_subscription', 'conversion_lead', 'premium_click', 'ad_click', 'contact_lead'].includes(eventName);
-    await updateDailyAnalyticsSnapshot(todayStr, eventName === 'pageview', false, false, false, false, isConversion);
-    console.log('[TELEMETRY] Event tracked directly in Firestore analytics_archive:', eventName);
-  } catch (firestoreErr) {
-    console.warn('[TELEMETRY FIRESTORE EVENT ERROR]', firestoreErr);
+    await supabase.from('analytics_events').insert({ ...payload, id: eventDocId });
+    console.log('[TELEMETRY] Event tracked in Supabase:', eventName);
+  } catch (supabaseErr) {
+    console.warn('[TELEMETRY SUPABASE EVENT ERROR]', supabaseErr);
   }
 
   // 2. Secondary fetch attempt to API route if backend server exists

@@ -17,11 +17,11 @@ import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 
 function App() {
-  const syncFromMongoDB = useStore(state => state.syncFromMongoDB);
+  const syncFromSupabase = useStore(state => state.syncFromSupabase);
 
   useEffect(() => {
-    syncFromMongoDB();
-  }, [syncFromMongoDB]);
+    syncFromSupabase();
+  }, [syncFromSupabase]);
 
   return (
     <Router>

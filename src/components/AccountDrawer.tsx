@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { db, safeOnSnapshot, doc, updateDoc, collection, setDoc, deleteDoc } from '../lib/firebase';
+import { supabase, subscribeToTable } from '../lib/supabaseClient';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -259,41 +259,78 @@ export function AccountDrawer({
 
   useEffect(() => {
     if (!readerProfile?.email) return;
-    
-    const reqRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friend_requests");
-    const unsubReq = safeOnSnapshot(reqRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => list.push(docSnap.id.toLowerCase().trim()));
-      setFriendRequests(list);
-    }, (err) => console.warn(err));
+    const email = readerProfile.email.toLowerCase().trim();
 
-    const sentRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "sent_requests");
-    const unsubSent = safeOnSnapshot(sentRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => list.push(docSnap.id.toLowerCase().trim()));
-      setSentRequests(list);
-    }, (err) => console.warn(err));
+    const loadFriendRequests = async () => {
+      const { data } = await supabase.from('friend_requests').select('*').eq('user_id', email);
+      if (data) {
+        const list: string[] = data.map((row: any) => (row.id || '').toLowerCase().trim()).filter(Boolean);
+        setFriendRequests(list);
+      }
+    };
+    loadFriendRequests();
 
-    return () => { unsubReq(); unsubSent(); };
+    const unsubReq = subscribeToTable('friend_requests', (payload) => {
+      if (payload.new && (payload.new as any).user_id === email) {
+        setFriendRequests(prev => [...prev, (payload.new as any).id.toLowerCase().trim()]);
+      } else if (payload.old && (payload.old as any).user_id === email) {
+        setFriendRequests(prev => prev.filter(id => id !== (payload.old as any).id.toLowerCase().trim()));
+      }
+    }, `user_id=eq.${email}`);
+
+    const loadSentRequests = async () => {
+      const { data } = await supabase.from('sent_requests').select('*').eq('user_id', email);
+      if (data) {
+        const list: string[] = data.map((row: any) => (row.id || '').toLowerCase().trim()).filter(Boolean);
+        setSentRequests(list);
+      }
+    };
+    loadSentRequests();
+
+    const unsubSent = subscribeToTable('sent_requests', (payload) => {
+      if (payload.new && (payload.new as any).user_id === email) {
+        setSentRequests(prev => [...prev, (payload.new as any).id.toLowerCase().trim()]);
+      } else if (payload.old && (payload.old as any).user_id === email) {
+        setSentRequests(prev => prev.filter(id => id !== (payload.old as any).id.toLowerCase().trim()));
+      }
+    }, `user_id=eq.${email}`);
+
+    return () => {
+      if (unsubReq && typeof (unsubReq as any).unsubscribe === 'function') {
+        (unsubReq as any).unsubscribe();
+      }
+      if (unsubSent && typeof (unsubSent as any).unsubscribe === 'function') {
+        (unsubSent as any).unsubscribe();
+      }
+    };
   }, [readerProfile?.email]);
 
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
-    const unsubscribe = safeOnSnapshot(
-      friendsRef,
-      (snapshot) => {
-        const list: string[] = [];
-        snapshot.forEach((docSnap: any) => {
-          list.push(docSnap.id.toLowerCase().trim());
-        });
+    const email = readerProfile.email.toLowerCase().trim();
+
+    const loadFriends = async () => {
+      const { data } = await supabase.from('friends').select('*').eq('user_id', email);
+      if (data) {
+        const list: string[] = data.map((row: any) => (row.friend_email || '').toLowerCase().trim()).filter(Boolean);
         setFriendsList(list);
-      },
-      (error) => {
-        console.warn("Notice fetching friends:", error);
       }
-    );
-    return () => unsubscribe();
+    };
+    loadFriends().catch((err) => console.warn("Notice fetching friends:", err));
+
+    const unsubscribe = subscribeToTable('friends', (payload) => {
+      if (payload.new && (payload.new as any).user_id === email) {
+        setFriendsList(prev => [...prev, (payload.new as any).friend_email.toLowerCase().trim()]);
+      } else if (payload.old && (payload.old as any).user_id === email) {
+        setFriendsList(prev => prev.filter(id => id !== (payload.old as any).friend_email.toLowerCase().trim()));
+      }
+    }, `user_id=eq.${email}`);
+
+    return () => {
+      if (unsubscribe && typeof (unsubscribe as any).unsubscribe === 'function') {
+        (unsubscribe as any).unsubscribe();
+      }
+    };
   }, [readerProfile?.email]);
 
   const toggleFriend = async (friendEmail: string) => {
@@ -310,37 +347,28 @@ export function AccountDrawer({
     const isPrivate = targetUser?.hidePersonalInfo;
 
     try {
-      const myFriendDocRef = doc(db, "users", myEmail, "friends", targetEmail);
-      const targetFriendDocRef = doc(db, "users", targetEmail, "friends", myEmail);
-      
-      const sentReqRef = doc(db, "users", myEmail, "sent_requests", targetEmail);
-      const targetReqRef = doc(db, "users", targetEmail, "friend_requests", myEmail);
-
-      const receivedReqRef = doc(db, "users", myEmail, "friend_requests", targetEmail);
-      const targetSentReqRef = doc(db, "users", targetEmail, "sent_requests", myEmail);
-
       if (isFriend) {
-        await deleteDoc(myFriendDocRef);
-        await deleteDoc(targetFriendDocRef);
+        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail).catch(() => {});
+        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail).catch(() => {});
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
       } else if (hasSentRequest) {
-        await deleteDoc(sentReqRef);
-        await deleteDoc(targetReqRef);
+        await supabase.from('sent_requests').delete().eq('user_id', myEmail).eq('id', targetEmail).catch(() => {});
+        await supabase.from('friend_requests').delete().eq('user_id', targetEmail).eq('id', myEmail).catch(() => {});
         setSettingsSuccessMsg(language === "fr" ? "✓ Demande annulée" : "✓ Request cancelled");
       } else if (hasReceivedRequest) {
-        await deleteDoc(receivedReqRef);
-        await deleteDoc(targetSentReqRef);
-        await setDoc(myFriendDocRef, { email: targetEmail, connectedAt: Date.now() });
-        await setDoc(targetFriendDocRef, { email: myEmail, connectedAt: Date.now() });
+        await supabase.from('friend_requests').delete().eq('user_id', myEmail).eq('id', targetEmail).catch(() => {});
+        await supabase.from('sent_requests').delete().eq('user_id', targetEmail).eq('id', myEmail).catch(() => {});
+        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() }).catch(() => {});
+        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() }).catch(() => {});
         setSettingsSuccessMsg(language === "fr" ? "✓ Demande acceptée !" : "✓ Request accepted!");
       } else {
         if (isPrivate) {
-          await setDoc(sentReqRef, { email: targetEmail, sentAt: Date.now() });
-          await setDoc(targetReqRef, { email: myEmail, sentAt: Date.now() });
+          await supabase.from('sent_requests').upsert({ id: targetEmail, user_id: myEmail, email: targetEmail, sent_at: Date.now() }).catch(() => {});
+          await supabase.from('friend_requests').upsert({ id: myEmail, user_id: targetEmail, email: myEmail, sent_at: Date.now() }).catch(() => {});
           setSettingsSuccessMsg(language === "fr" ? "✓ Demande envoyée" : "✓ Request sent");
         } else {
-          await setDoc(myFriendDocRef, { email: targetEmail, connectedAt: Date.now() });
-          await setDoc(targetFriendDocRef, { email: myEmail, connectedAt: Date.now() });
+          await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() }).catch(() => {});
+          await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() }).catch(() => {});
           setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
         }
       }
@@ -353,9 +381,8 @@ export function AccountDrawer({
   const syncProfileToFirestore = async (updatedFields: Record<string, any>) => {
     if (readerProfile && readerProfile.email) {
       try {
-        const userRef = doc(db, "users", readerProfile.email.toLowerCase().trim());
         const safeFields = await sanitizeFirestorePayload(updatedFields);
-        await updateDoc(userRef, safeFields);
+        await supabase.from('users').update(safeFields).eq('id', readerProfile.email.toLowerCase().trim()).catch(() => {});
       } catch (err) {
         console.error("Error syncing profile updates to Firestore:", err);
       }

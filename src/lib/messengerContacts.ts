@@ -45,7 +45,7 @@ export function getMessengerContacts(
     });
   }
 
-  // 3. Registered Users from Firestore
+  // 3. Registered Users from Supabase
   (allUsers || []).forEach(u => {
     const emailLow = (u.email || '').toLowerCase().trim();
     if (emailLow && emailLow !== myEmailLower && !map.has(emailLow)) {

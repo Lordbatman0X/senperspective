@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
-import { db, collection, safeOnSnapshot } from '../lib/firebase';
+import { supabase, subscribeToTable } from '../lib/supabaseClient';
 import { useAuth } from "../contexts/AuthContext";
 import { Bot, MessageSquare, X, Send, Trash2, Paperclip, Check, ChevronDown, Sparkles, RefreshCw, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -46,13 +46,30 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const [realFriendsList, setRealFriendsList] = useState<string[]>([]);
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const friendsRef = collection(db, "users", readerProfile.email.toLowerCase().trim(), "friends");
-    const unsubscribe = safeOnSnapshot(friendsRef, (snapshot) => {
-      const list: string[] = [];
-      snapshot.forEach((docSnap: any) => list.push(docSnap.id.toLowerCase().trim()));
-      setRealFriendsList(list);
-    }, (err) => console.warn(err));
-    return () => unsubscribe();
+    const email = readerProfile.email.toLowerCase().trim();
+
+    const loadRealFriends = async () => {
+      const { data } = await supabase.from('friends').select('*').eq('user_id', email);
+      if (data) {
+        const list: string[] = data.map((row: any) => (row.friend_email || '').toLowerCase().trim()).filter(Boolean);
+        setRealFriendsList(list);
+      }
+    };
+    loadRealFriends().catch((err) => console.warn(err));
+
+    const unsubscribe = subscribeToTable('friends', (payload) => {
+      if (payload.new && (payload.new as any).user_id === email) {
+        setRealFriendsList(prev => [...prev, (payload.new as any).friend_email.toLowerCase().trim()]);
+      } else if (payload.old && (payload.old as any).user_id === email) {
+        setRealFriendsList(prev => prev.filter(id => id !== (payload.old as any).friend_email.toLowerCase().trim()));
+      }
+    }, `user_id=eq.${email}`);
+
+    return () => {
+      if (unsubscribe && typeof (unsubscribe as any).unsubscribe === 'function') {
+        (unsubscribe as any).unsubscribe();
+      }
+    };
   }, [readerProfile?.email]);
 
   // Compute location-aware Abdel prompts dynamically

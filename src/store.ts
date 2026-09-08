@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { realFirestore as db, collection, doc, setDoc, deleteDoc, getDocs } from './lib/realFirebase';
+import { supabase } from './lib/supabaseClient';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
@@ -62,7 +62,7 @@ export interface ReaderProfile {
   emailVerified?: boolean;
   mfaEnabled?: boolean;
   isMongoDB?: boolean;
-  isFirebaseAuthSession?: boolean;
+  isSupabaseAuthSession?: boolean;
   coverPhotoUrl?: string;
   streak?: number;
   readingTime?: number;
@@ -172,7 +172,7 @@ interface AppState {
   toggleSavedArticle: (id: string) => void;
   articles: Article[];
   setArticles: (articles: Article[]) => void;
-  syncFromMongoDB: () => Promise<void>;
+  syncFromSupabase: () => Promise<void>;
   addArticle: (article: Article) => void;
   updateArticle: (article: Article) => void;
   deleteArticle: (id: string) => void;
@@ -376,8 +376,11 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
 
     if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
       const cleanEmail = email.toLowerCase().trim();
-      const userRef = doc(db, "users", cleanEmail);
-      await setDoc(userRef, { preferences: currentPrefs }, { merge: true });
+      if (supabase) {
+        await supabase.from('users').upsert({ id: cleanEmail, preferences: currentPrefs }).then(({ error }) => {
+          if (error) console.warn("[Supabase notice] Error syncing preferences:", error);
+        }).catch(() => {});
+      }
     } else {
       let deviceId = '';
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -387,10 +390,6 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
           localStorage.setItem('perspective_device_id', deviceId);
         }
         localStorage.setItem('perspective_preferences', JSON.stringify(currentPrefs));
-      }
-      if (deviceId) {
-        const guestRef = doc(db, "guest_preferences", deviceId);
-        await setDoc(guestRef, { ...currentPrefs, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
       }
     }
   } catch (err) {
@@ -439,7 +438,9 @@ export const useStore = create<AppState>()(
           return dm;
         });
         set({ directMessages: updatedDms });
-        setDoc(doc(db, "messages", messageId), { reactions: updatedReactions }, { merge: true }).catch(() => {});
+        if (supabase) {
+          supabase.from('messages').update({ reactions: updatedReactions as any }).eq('id', messageId).catch(() => {});
+        }
       },
       syncPreferencesToFirebase: async (customPrefs?: any) => {
         await syncPreferencesToFirestore(customPrefs);
@@ -478,73 +479,45 @@ export const useStore = create<AppState>()(
       },
       articles: sampleArticles,
       setArticles: (articles) => set({ articles }),
-      syncFromMongoDB: async () => {
+      syncFromSupabase: async () => {
         try {
-          const [snapshot, adsSnapshot, userSnapshot] = await Promise.all([
-            getDocs(collection(db, "articles")),
-            getDocs(collection(db, "ads")),
-            getDocs(collection(db, "users"))
+          const [articlesRes, adsRes, usersRes] = await Promise.all([
+            supabase.from('articles').select('*'),
+            supabase.from('ads').select('*'),
+            supabase.from('users').select('*')
           ]);
 
-          if (snapshot && !snapshot.empty) {
-            const fetchedArticles: Article[] = [];
-            snapshot.forEach((docSnap) => {
-              const data = docSnap.data();
-              if (data && data.id) {
-                fetchedArticles.push(data as Article);
-              }
-            });
-            if (fetchedArticles.length > 0) {
-              // Centralize: use all fetched articles sorted by date descending
-              const combined = [...fetchedArticles].sort(
-                (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-              );
-              set({ articles: combined });
-            }
+          if (articlesRes.data && articlesRes.data.length > 0) {
+            const fetchedArticles: Article[] = articlesRes.data as Article[];
+            const combined = [...fetchedArticles].sort(
+              (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+            );
+            set({ articles: combined });
           } else {
-            // Firestore is currently empty - don't seed, just set empty
             set({ articles: [] });
           }
 
-          // Sync Ads
-          if (adsSnapshot && !adsSnapshot.empty) {
-            const fetchedAds: any[] = [];
-            adsSnapshot.forEach((docSnap) => {
-              const data = docSnap.data();
-              if (data) fetchedAds.push(data);
-            });
-            if (fetchedAds.length > 0) {
-              set({ ads: fetchedAds });
-            }
+          if (adsRes.data && adsRes.data.length > 0) {
+            set({ ads: adsRes.data as any });
           }
 
-          // Sync Users - Fuse accounts with same email
-          if (userSnapshot && !userSnapshot.empty) {
-            const fetchedUsers: any[] = [];
-            userSnapshot.forEach((docSnap) => {
-              const data = docSnap.data();
-              if (data) fetchedUsers.push(data);
+          if (usersRes.data && usersRes.data.length > 0) {
+            const fetchedUsers: any[] = usersRes.data;
+            const emailMap = new Map<string, any>();
+            fetchedUsers.forEach(user => {
+              const email = (user.email || '').toLowerCase().trim();
+              if (!email) return;
+              if (emailMap.has(email)) {
+                const existing = emailMap.get(email);
+                emailMap.set(email, { ...existing, ...user, email });
+              } else {
+                emailMap.set(email, user);
+              }
             });
-            if (fetchedUsers.length > 0) {
-              // Fuse accounts with same email into one
-              const emailMap = new Map<string, any>();
-              fetchedUsers.forEach(user => {
-                const email = (user.email || '').toLowerCase().trim();
-                if (!email) return;
-                if (emailMap.has(email)) {
-                  // Merge data into existing account
-                  const existing = emailMap.get(email);
-                  emailMap.set(email, { ...existing, ...user, email });
-                } else {
-                  emailMap.set(email, user);
-                }
-              });
-              const fusedUsers = Array.from(emailMap.values());
-              set({ users: fusedUsers });
-            }
+            set({ users: Array.from(emailMap.values()) });
           }
         } catch (err) {
-                    console.warn("[Offline/Local-only mode] Firestore is unreachable or unauthorized — articles/ads are loaded from local seed data and persisted to THIS browser only. Accounts and content will NOT be shared across devices until the Firestore backend is reachable. Underlying error:", err);
+          console.warn("[Offline/Local-only mode] Supabase is unreachable — articles/ads are loaded from local seed data and persisted to THIS browser only. Underlying error:", err);
           const current = get().articles;
           if (!current || current.length === 0) {
             set({ articles: seedArticles });
@@ -555,9 +528,9 @@ export const useStore = create<AppState>()(
         set({ articles: [article, ...get().articles] });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          await setDoc(doc(db, "articles", article.id), clean, { merge: true });
+          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
         } catch (err) {
-          console.error("Error writing article to MongoDB:", err);
+          console.error("[Supabase notice] Error writing article:", err);
         }
 
         if (article.isPublished) {
@@ -582,38 +555,23 @@ export const useStore = create<AppState>()(
         set({ articles: get().articles.map(a => a.id === article.id ? article : a) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          await setDoc(doc(db, "articles", article.id), clean, { merge: true });
+          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
         } catch (err) {
-          console.error("Error updating article in MongoDB:", err);
+          console.error("[Supabase notice] Error updating article:", err);
         }
       },
       deleteArticle: (id) => {
         set({ articles: get().articles.filter(a => a.id !== id) });
-        deleteDoc(doc(db, "articles", id)).catch(() => {});
+        if (supabase) { supabase.from('articles').delete().eq('id', id).catch(() => {}); }
       },
       purgeAllArticles: async () => {
-        // Capture current articles BEFORE resetting store state
         const currentArticles = [...(get().articles || [])];
         set({ articles: [] });
 
-        // Delete all captured articles from MongoDB
-        const deletePromises = currentArticles.map(a => 
-          deleteDoc(doc(db, "articles", a.id)).catch(err => console.error(`Failed deleting ${a.id}:`, err))
-        );
-        await Promise.all(deletePromises);
-
-        // Query MongoDB collection directly to delete any remaining draft or live articles
-        try {
-          const snapshot = await getDocs(collection(db, "articles"));
-          const mongodbDeletes = snapshot.docs.map(docSnap => 
-            deleteDoc(doc(db, "articles", docSnap.id)).catch(err => console.error(`Failed deleting doc ${docSnap.id}:`, err))
-          );
-          await Promise.all(mongodbDeletes);
-        } catch (e) {
-          console.error("Error purging MongoDB articles collection:", e);
+        if (supabase) {
+          await supabase.from('articles').delete().neq('id', '00000000-0000-0000-0000-000000000000').catch(() => {});
         }
 
-        // Purge server-side RSS drafts and cache
         try {
           await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
         } catch (e) {
@@ -625,18 +583,18 @@ export const useStore = create<AppState>()(
         set({ media: [m, ...(get().media || [])] });
         try {
           const clean = await sanitizeFirestorePayload(m as any);
-          await setDoc(doc(db, "media", m.id), clean, { merge: true });
+          if (supabase) { await supabase.from('media').upsert({ id: m.id, ...clean }).catch(() => {}); }
         } catch (err) {
-          console.error("Error adding media to MongoDB:", err);
+          console.error("[Supabase notice] Error adding media:", err);
         }
       },
       deleteMedia: (id) => {
         set({ media: (get().media || []).filter(m => m.id !== id) });
-        deleteDoc(doc(db, "media", id)).catch(() => {});
+        if (supabase) { supabase.from('media').delete().eq('id', id).catch(() => {}); }
       },
       updateMediaName: (id, name) => {
         set({ media: (get().media || []).map(m => m.id === id ? { ...m, name } : m) });
-        setDoc(doc(db, "media", id), { name }, { merge: true }).catch(() => {});
+        if (supabase) { supabase.from('media').update({ name }).eq('id', id).catch(() => {}); }
       },
       ads: [
         {
@@ -743,14 +701,14 @@ export const useStore = create<AppState>()(
         set({ ads: updatedAds });
         try {
           const clean = await sanitizeFirestorePayload(ad as any);
-          await setDoc(doc(db, "ads", ad.id), clean, { merge: true });
+          if (supabase) { await supabase.from('ads').upsert({ id: ad.id, ...clean }).catch(() => {}); }
         } catch (err) {
-          console.error("Error saving ad to MongoDB:", err);
+          console.error("[Supabase notice] Error saving ad:", err);
         }
       },
       deleteAd: (id) => {
         set({ ads: (get().ads || []).filter(a => a.id !== id) });
-        deleteDoc(doc(db, "ads", id)).catch(err => console.error("Error deleting ad from MongoDB:", err));
+        if (supabase) { supabase.from('ads').delete().eq('id', id).catch(() => {}); }
       },
       comments: seedComments && seedComments.length > 0 ? (seedComments as CommentItem[]) : [],
       directMessages: seedMessages && seedMessages.length > 0 ? (seedMessages as DirectMessage[]) : [],
@@ -769,12 +727,12 @@ export const useStore = create<AppState>()(
         };
         set({ directMessages: [...dms, newMsg] });
 
-        // Save to Firestore
         try {
-          const cleanMsg = JSON.parse(JSON.stringify(newMsg));
-          setDoc(doc(db, "messages", msgId), cleanMsg).catch(err => {
-            console.warn("Firestore message notice:", err?.message || err);
-          });
+          if (supabase) {
+            supabase.from('messages').insert({ id: msgId, ...newMsg }).then(({ error }) => {
+              if (error) console.warn('[Supabase notice]', error?.message || error);
+            }).catch(() => {});
+          }
         } catch (err) {
           console.warn("Message sync notice:", err);
         }
@@ -836,7 +794,9 @@ export const useStore = create<AppState>()(
               };
 
               set(state => ({ directMessages: [...(state.directMessages || []), abdelMsg] }));
-              await setDoc(doc(db, "messages", abdelMsgId), abdelMsg);
+              if (supabase) {
+                await supabase.from('messages').insert({ id: abdelMsgId, ...abdelMsg }).catch(() => {});
+              }
             } catch (err) {
               console.warn("[Abdel Messenger] Direct AI response notice:", err);
             }
@@ -846,9 +806,7 @@ export const useStore = create<AppState>()(
       deleteDirectMessage: (id) => {
         const dms = get().directMessages || [];
         set({ directMessages: dms.filter(dm => dm.id !== id) });
-        try {
-          deleteDoc(doc(db, "messages", id)).catch(() => {});
-        } catch (err) {}
+        if (supabase) { supabase.from('messages').delete().eq('id', id).catch(() => {}); }
       },
       markDirectMessagesAsRead: (contactEmail, userEmail) => {
         const dms = get().directMessages || [];
@@ -859,9 +817,7 @@ export const useStore = create<AppState>()(
         const newDms = dms.map(dm => {
           if (!dm.read && dm.receiver?.toLowerCase() === receiverClean && (!senderClean || dm.sender?.toLowerCase() === senderClean)) {
             updated = true;
-            try {
-              setDoc(doc(db, "messages", dm.id), { read: true }, { merge: true }).catch(() => {});
-            } catch (err) {}
+            if (supabase) { supabase.from('messages').update({ read: true }).eq('id', dm.id).catch(() => {}); }
             return { ...dm, read: true };
           }
           return dm;
@@ -923,16 +879,15 @@ export const useStore = create<AppState>()(
         const fusedUsers = Array.from(emailMap.values());
         if (duplicates.length > 0) {
           set({ users: fusedUsers });
-          // Sync to Firestore - delete duplicates, update originals
           for (const dup of duplicates) {
             try {
-              await deleteDoc(doc(db, "users", dup.id)).catch(() => {});
+              if (supabase) { await supabase.from('users').delete().eq('id', dup.id).catch(() => {}); }
             } catch (_) {}
           }
           for (const user of fusedUsers) {
             try {
               const clean = await sanitizeFirestorePayload(user);
-              await setDoc(doc(db, "users", user.id), clean, { merge: true }).catch(() => {});
+              if (supabase) { await supabase.from('users').upsert({ id: user.id, ...clean }).catch(() => {}); }
             } catch (_) {}
           }
           console.log(`Fused ${duplicates.length} duplicate accounts. Total users: ${fusedUsers.length}`);
@@ -960,10 +915,9 @@ export const useStore = create<AppState>()(
         
         if (removedUsers.length > 0) {
           set({ users: realUsers });
-          // Delete fake accounts from Firestore
           for (const user of removedUsers) {
             try {
-              await deleteDoc(doc(db, "users", user.id)).catch(() => {});
+              if (supabase) { await supabase.from('users').delete().eq('id', user.id).catch(() => {}); }
             } catch (_) {}
           }
           console.log(`Removed ${removedUsers.length} fake accounts. Total users: ${realUsers.length}`);
@@ -1012,14 +966,14 @@ export const useStore = create<AppState>()(
         const filtered = comments.filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
         
-        // Write to MongoDB comments collection
         try {
-          const cleanComment = JSON.parse(JSON.stringify(comment));
-          setDoc(doc(db, "comments", comment.id), cleanComment).catch(err => {
-            console.error("Failed to write comment to MongoDB:", err);
-          });
+          if (supabase) {
+            supabase.from('comments').insert({ id: comment.id, ...comment } as any).then(({ error }) => {
+              if (error) console.error("[Supabase notice] Failed to write comment:", error);
+            }).catch(() => {});
+          }
         } catch (err) {
-          console.warn("MongoDB comment write error:", err);
+          console.warn("[Supabase notice] Comment write error:", err);
         }
 
         // Log interaction if author email exists
@@ -1074,9 +1028,7 @@ export const useStore = create<AppState>()(
       },
       approveComment: (id) => {
         set({ comments: (get().comments || []).map(c => c.id === id ? { ...c, isApproved: true } : c) });
-        try {
-          setDoc(doc(db, "comments", id), { isApproved: true }, { merge: true });
-        } catch (e) { console.error(e); }
+        if (supabase) { supabase.from('comments').update({ isApproved: true } as any).eq('id', id).catch(() => {}); }
       },
       deleteComment: (id, requesterEmail) => {
         const comments = get().comments || [];
@@ -1092,9 +1044,7 @@ export const useStore = create<AppState>()(
         }
 
         set({ comments: comments.filter(c => c.id !== id) });
-        try {
-          deleteDoc(doc(db, "comments", id)).catch(err => console.error("MongoDB comment deletion error:", err));
-        } catch (err) { console.error(err); }
+        if (supabase) { supabase.from('comments').delete().eq('id', id).catch(() => {}); }
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1123,9 +1073,7 @@ export const useStore = create<AppState>()(
         set({
           comments: comments.map(c => c.id === id ? { ...c, text, isApproved: true } : c)
         });
-        try {
-          setDoc(doc(db, "comments", id), { text, isApproved: true }, { merge: true });
-        } catch (err) { console.error(err); }
+        if (supabase) { supabase.from('comments').update({ text, isApproved: true } as any).eq('id', id).catch(() => {}); }
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1182,9 +1130,9 @@ export const useStore = create<AppState>()(
           comments: comments.map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
 
-        try {
-          setDoc(doc(db, "comments", id), { likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy }, { merge: true });
-        } catch (err) { console.error(err); }
+        if (supabase) {
+          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id).catch(() => {});
+        }
 
         get().addInteraction(
           userEmail,
@@ -1284,8 +1232,8 @@ export const useStore = create<AppState>()(
           const updatedProfile = { ...currentProfile, notificationPreferences: updated };
           set({ notificationPreferences: updated, readerProfile: updatedProfile });
           const userKey = (currentProfile.email || currentProfile.id || '').toLowerCase().trim();
-          if (userKey) {
-            setDoc(doc(db, "users", userKey), updatedProfile, { merge: true }).catch(() => {});
+          if (userKey && supabase) {
+            supabase.from('users').update({ notification_preferences: updated } as any).eq('id', userKey).catch(() => {});
           }
         } else {
           set({ notificationPreferences: updated });
@@ -1365,14 +1313,11 @@ export const useStore = create<AppState>()(
           trackConversion('newsletter_subscription', clean, { source: 'subscription_form' });
           try {
             const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
-            await setDoc(doc(db, "subscribers", subDocId), {
-              email: clean,
-              date: newSub.date,
-              createdAt: new Date().toISOString(),
-              active: true
-            }, { merge: true });
+            if (supabase) {
+              await supabase.from('subscribers').upsert({ id: subDocId, email: clean, date: newSub.date, active: true }).catch(() => {});
+            }
           } catch (err) {
-            console.error("Error saving subscriber to MongoDB:", err);
+            console.error("[Supabase notice] Error saving subscriber:", err);
           }
         }
       },
@@ -1381,9 +1326,11 @@ export const useStore = create<AppState>()(
         set({ subscribers: (get().subscribers || []).filter(s => s.email.toLowerCase() !== clean) });
         try {
           const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
-          await deleteDoc(doc(db, "subscribers", subDocId));
+          if (supabase) {
+            await supabase.from('subscribers').delete().eq('id', subDocId).catch(() => {});
+          }
         } catch (err) {
-          console.error("Error deleting subscriber from MongoDB:", err);
+          console.error("[Supabase notice] Error deleting subscriber:", err);
         }
       },
       readerProfile: null,
@@ -1596,7 +1543,7 @@ export const useStore = create<AppState>()(
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
         seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
-        databaseProvider: 'firestore',
+        databaseProvider: 'supabase',
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
@@ -1708,26 +1655,24 @@ export const useStore = create<AppState>()(
         set({ siteSettings: newSettings });
         try {
           const clean = await sanitizeFirestorePayload(newSettings as any);
-          await setDoc(doc(db, "siteSettings", "config"), clean, { merge: true });
+          if (supabase) {
+            await supabase.from('site_settings').upsert({ id: 'singleton', data: clean }).catch(() => {});
+          }
         } catch (err) {
-          console.error("Error updating siteSettings in MongoDB:", err);
+          console.error("[Supabase notice] Error updating siteSettings:", err);
         }
       },
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
         set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
-        try {
-          deleteDoc(doc(db, "users", normalized)).catch(err => console.error("Error deleting user from MongoDB:", err));
-        } catch (e) { console.error(e); }
+        if (supabase) { supabase.from('users').delete().eq('id', normalized).catch(() => {}); }
       },
       updateUserRole: (email, role) => {
         const normalized = email.toLowerCase().trim();
         set({
           users: (get().users || []).map(u => u.email.toLowerCase() === normalized ? { ...u, role } : u)
         });
-        try {
-          setDoc(doc(db, "users", normalized), { role }, { merge: true }).catch(err => console.error("Error updating user role in MongoDB:", err));
-        } catch (e) { console.error(e); }
+        if (supabase) { supabase.from('users').update({ role }).eq('id', normalized).catch(() => {}); }
       },
       updateUserSecurity: (email, emailVerified, mfaEnabled) => {
         const normalized = email.toLowerCase().trim();
@@ -1741,9 +1686,7 @@ export const useStore = create<AppState>()(
           users: updatedUsers,
           readerProfile: updatedProfile
         });
-        try {
-          setDoc(doc(db, "users", normalized), { emailVerified, mfaEnabled, twoFactorEnabled: mfaEnabled }, { merge: true }).catch(err => console.error("Error updating user security in MongoDB:", err));
-        } catch (e) { console.error(e); }
+        if (supabase) { supabase.from('users').update({ emailVerified, mfaEnabled }).eq('id', normalized).catch(() => {}); }
       },
       updateUserPassword: (email, password) => {
         const normalized = email.toLowerCase().trim();
@@ -1762,9 +1705,7 @@ export const useStore = create<AppState>()(
           });
         }
         set({ users: updatedUsers });
-        try {
-          setDoc(doc(db, "users", normalized), { password, email: normalized, role: 'Admin' }, { merge: true }).catch(err => console.error("Error updating user password in MongoDB:", err));
-        } catch (e) { console.error(e); }
+        if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }).catch(() => {}); }
       },
       updateUserPin: (email, pin) => {
         const normalized = email.toLowerCase().trim();
@@ -1778,9 +1719,7 @@ export const useStore = create<AppState>()(
           users: updatedUsers,
           readerProfile: updatedProfile
         });
-        try {
-          setDoc(doc(db, "users", normalized), { pin, authType: 'pin', mfaEnabled: true, twoFactorEnabled: true }, { merge: true }).catch(err => console.error("Error updating user PIN in MongoDB:", err));
-        } catch (e) { console.error(e); }
+        if (supabase) { supabase.from('users').update({ pin, authType: 'pin', mfaEnabled: true }).eq('id', normalized).catch(() => {}); }
       },
       purgeDatabaseAndArticles: async () => {
         const articlesToDelete = get().articles || [];
@@ -1808,30 +1747,33 @@ export const useStore = create<AppState>()(
           console.error("Error clearing local storage:", e);
         }
 
-        // 3. Delete documents from Firestore collections
-        try {
-          // Delete all articles (including drafts)
-          const artSnapshot = await getDocs(collection(db, "articles"));
-          for (const docSnap of artSnapshot.docs) {
-            await deleteDoc(doc(db, "articles", docSnap.id)).catch(() => {});
-          }
-          
-          // Delete users
-          const userSnapshot = await getDocs(collection(db, "users"));
-          for (const docSnap of userSnapshot.docs) {
-            await deleteDoc(doc(db, "users", docSnap.id)).catch(() => {});
-          }
+        // 3. Delete documents from Supabase tables
+        if (supabase) {
+          const [articlesRes, usersRes] = await Promise.all([
+            supabase.from('articles').select('id'),
+            supabase.from('users').select('id')
+          ]);
 
-          // Delete other data
-          const colNames = ["comments", "messages", "notifications", "interactions", "subscribers", "media", "ads", "matches"];
-          for (const colName of colNames) {
-            const snap = await getDocs(collection(db, colName));
-            for (const docSnap of snap.docs) {
-                await deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+          if (articlesRes.data) {
+            for (const row of articlesRes.data) {
+              await supabase.from('articles').delete().eq('id', row.id).catch(() => {});
             }
           }
-        } catch (e) {
-          console.error("Error purging Firestore docs:", e);
+          if (usersRes.data) {
+            for (const row of usersRes.data) {
+              await supabase.from('users').delete().eq('id', row.id).catch(() => {});
+            }
+          }
+
+          const colNames = ["comments", "messages", "subscribers", "media", "ads", "matches"];
+          for (const colName of colNames) {
+            const snap = await supabase.from(colName).select('id');
+            if (snap.data) {
+              for (const row of snap.data) {
+                await supabase.from(colName).delete().eq('id', row.id).catch(() => {});
+              }
+            }
+          }
         }
       },
       seedSampleArticles: () => {
@@ -2064,9 +2006,9 @@ export const useStore = create<AppState>()(
         if (target) {
           try {
             const clean = await sanitizeFirestorePayload(target as any);
-            await setDoc(doc(db, "matches", matchId), clean, { merge: true });
+            if (supabase) { await supabase.from('matches').upsert({ id: matchId, ...clean }).catch(() => {}); }
           } catch (e) {
-            console.error("Error updating match in MongoDB:", e);
+            console.error("[Supabase notice] Error updating match:", e);
           }
         }
       },
@@ -2074,14 +2016,14 @@ export const useStore = create<AppState>()(
         set({ matches: [...(get().matches || []), match] });
         try {
           const clean = await sanitizeFirestorePayload(match as any);
-          await setDoc(doc(db, "matches", match.id), clean, { merge: true });
+          if (supabase) { await supabase.from('matches').upsert({ id: match.id, ...clean }).catch(() => {}); }
         } catch (e) {
-          console.error("Error adding match to MongoDB:", e);
+          console.error("[Supabase notice] Error adding match:", e);
         }
       },
       deleteMatch: (matchId) => {
         set({ matches: (get().matches || []).filter(m => m.id !== matchId) });
-        deleteDoc(doc(db, "matches", matchId)).catch(() => {});
+        if (supabase) { supabase.from('matches').delete().eq('id', matchId).catch(() => {}); }
       }
     }),
     {
@@ -2098,10 +2040,10 @@ export const useStore = create<AppState>()(
         readerProfile: state.readerProfile
       }),
       onRehydrateStorage: () => (state) => {
-        // Note: Shared content is centralized in Firestore and NOT persisted locally.
-        // `syncFromMongoDB()` (run in App.tsx) loads the authoritative Firestore data.
+        // Note: Shared content is centralized in Supabase and NOT persisted locally.
+        // `syncFromSupabase()` (run in App.tsx) loads the authoritative data from Supabase.
         // We only seed a minimal offline placeholder so the shell doesn't flash empty
-        // while the Firestore sync resolves — it is overwritten by the Firestore truth.
+        // while the Supabase sync resolves — it is overwritten by the Supabase truth.
         if (state) {
           if (!state.articles || state.articles.length === 0) {
             state.articles = seedArticles;
@@ -2111,3 +2053,5 @@ export const useStore = create<AppState>()(
     }
   )
 );
+
+

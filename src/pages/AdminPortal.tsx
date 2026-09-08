@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Article } from '../types';
-import { db, doc, getDoc } from '../lib/firebase';
+import { supabase } from '../lib/supabaseClient';
 import { 
   LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
@@ -138,10 +138,9 @@ export function AdminPortal() {
           checkKeys.push(`${cleanUser}@perspective.sn`);
         }
         for (const docKey of checkKeys) {
-          const userDocRef = doc(db, "users", docKey);
-          const userSnap = await getDoc(userDocRef);
-          if (userSnap.exists()) {
-            const uData = userSnap.data();
+          const userSnap = await supabase.from('users').select('*').eq('id', docKey).single();
+          if (userSnap.data) {
+            const uData = userSnap.data;
             const uRole = uData.role || 'Admin';
             const isMaster = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324";
             const isVerified = await verifyPassword(cleanPass, uData.passwordHash, uData.password, uData.pin);
