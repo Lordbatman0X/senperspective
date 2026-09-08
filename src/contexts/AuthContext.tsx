@@ -5,7 +5,8 @@ import {
   getCurrentUser, 
   onAuthStateChanged,
   supabase,
-  subscribeToTable
+  subscribeToTable,
+  usersQuery
 } from '../lib/supabaseClient';
 import { useStore } from "../store";
 import { sampleArticles } from "../data";
@@ -154,9 +155,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           'member@perspective.sn'
         ];
         for (const mockEmail of legacyMockEmails) {
-          const { error } = await supabase.from('users').delete().eq('email', mockEmail);
+          const { error } = await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('email', mockEmail);
           if (error) {
-            console.warn(`[Users] Notice deleting mock user ${mockEmail}:`, error.message);
+            console.warn(`[Users] Notice soft-deleting mock user ${mockEmail}:`, error.message);
           }
         }
       } catch (err) {
@@ -168,7 +169,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const refreshAllUsers = async () => {
       try {
-        const { data, error } = await supabase.from('users').select('*');
+        const { data, error } = await usersQuery();
         if (error) {
           console.warn("[Supabase Users] Notice fetching users:", error.message);
           return;
@@ -672,7 +673,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (authUser.email) {
           try {
-            const { data, error } = await supabase.from('users').select('*').eq('email', authUser.email.toLowerCase().trim()).single();
+            const { data, error } = await usersQuery().eq('email', authUser.email.toLowerCase().trim()).single();
             if (data && !error) {
               const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || data.role === "Admin" || authUser.email.includes("admin");
               const updatedProfile = {
@@ -749,7 +750,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (targetEmail) {
           const cleanEmail = targetEmail.toLowerCase().trim();
-          const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+          const { data, error } = await usersQuery().eq('email', cleanEmail).single();
           if (data && !error) {
             const isAdminUser = cleanEmail === "kadersdiaz3@gmail.com" || cleanEmail === "admin@perspective.sn" || data.role === "Admin" || cleanEmail.includes("admin");
             const refreshedProfile = {
@@ -882,7 +883,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const isSuperAdminPassMatch = await verifyPassword(pass, undefined, "Swiz1324", undefined);
       let docPassMatches = false;
       try {
-        const { data, error } = await supabase.from('users').select('*').eq('email', "kadersdiaz3@gmail.com").single();
+        const { data, error } = await usersQuery().eq('email', "kadersdiaz3@gmail.com").single();
         if (data && !error) {
           docPassMatches = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         }
@@ -957,7 +958,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 3. Check against Supabase users table
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+      const { data, error } = await usersQuery().eq('email', cleanEmail).single();
       if (data && !error) {
         console.log(`[AUTH LOG] Found Supabase user profile for: ${cleanEmail}`);
 
@@ -1139,7 +1140,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Check if account already exists in Supabase
     try {
-      const { data, error } = await supabase.from('users').select('*').eq('email', cleanEmail).single();
+      const { data, error } = await usersQuery().eq('email', cleanEmail).single();
       if (data && !error) {
         const matchesExisting = await verifyPassword(pass, data.passwordHash, data.password, data.pin);
         if (matchesExisting) {

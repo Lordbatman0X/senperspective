@@ -1097,12 +1097,12 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             } catch (e) {
                               console.error(e);
                             }
-                            deleteUser(clean);
-                            try {
-                              try { await supabase.from('users').delete().eq('email', clean); } catch {}
-                            } catch (e) {
-                              console.error(e);
-                            }
+                             deleteUser(clean);
+                             try {
+                               try { await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('email', clean); } catch {}
+                             } catch (e) {
+                               console.error(e);
+                             }
                             setReaderProfile({
                               name: "Visiteur",
                               email: "",

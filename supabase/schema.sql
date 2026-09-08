@@ -20,11 +20,13 @@ create table if not exists public.users (
   cover_photo_url text,
   registered_at text not null default '',
   last_active_at text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  deleted_at timestamptz
 );
 
 -- Index on users.email (used everywhere)
 create index if not exists idx_users_email on public.users (email);
+create index if not exists idx_users_deleted_at on public.users (deleted_at);
 
 -- FRIENDS junction table (replaces Firestore subcollection users/{email}/friends/{friend})
 create table if not exists public.friends (
@@ -227,10 +229,14 @@ alter table public.analytics_events enable row level security;
 alter table public.user_consents enable row level security;
 alter table public.matches enable row level security;
 
--- USERS: public read, auth write
+-- USERS: public read, auth write, HARD DELETE BLOCKED
 create policy "Public read users" on public.users for select using (true);
 create policy "Anyone can upsert users" on public.users for insert with check (true);
 create policy "Anyone can update users" on public.users for update using (true);
+-- BLOCK hard delete: any DELETE that does not set deleted_at is rejected
+create policy "Block hard delete users" on public.users for delete using (false);
+-- Allow soft-delete via UPDATE setting deleted_at
+create policy "Allow soft delete users" on public.users for update using (true);
 
 -- FRIENDS: users can read their own, write their own
 create policy "Users read own friends" on public.friends for select using (true);

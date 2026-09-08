@@ -5,7 +5,7 @@ import {
   ShieldCheck, Lock, Key, Mail, User, Eye, EyeOff, RefreshCw, CheckCircle2, 
   AlertTriangle, Shield, UserPlus, Edit3, Trash2, ShieldAlert, Check, Sparkles, Sliders
 } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, usersQuery } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 import { hashPassword, stableUserId } from '../../lib/authCrypto';
 
@@ -74,7 +74,7 @@ export function SecurityTab() {
     const interval = setInterval(fetchUsers, 4000);
 
     const loadUsers = async () => {
-      const { data } = await supabase.from('users').select('*');
+      const { data } = await usersQuery();
       if (data) {
         const list: any[] = [];
         data.forEach((doc: any) => {

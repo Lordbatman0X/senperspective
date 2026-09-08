@@ -3,7 +3,7 @@ import { useStore, UserAccount, UserInteraction } from '../../store';
 import { useAuth } from '../../contexts/AuthContext';
 import { Users, Trash2, ShieldAlert, Key, UserCheck, Activity, Search, Shield, Eye, EyeOff, AlertTriangle, Award, Lock, Plus, UserPlus } from 'lucide-react';
 import { renderNeutralAvatar } from '../AccountDrawer';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, usersQuery } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 
 export function ModerationTab() {
@@ -32,7 +32,7 @@ export function ModerationTab() {
   // Real-time synchronization with Supabase users collection
   useEffect(() => {
     const loadUsers = async () => {
-      const { data } = await supabase.from('users').select('*');
+      const { data } = await usersQuery();
       if (data) {
         const list: any[] = [];
         data.forEach((doc: any) => {
@@ -222,9 +222,9 @@ export function ModerationTab() {
       deleteUser(cleanEmail);
 
       try {
-        await supabase.from('users').delete().eq('email', cleanEmail);
+        await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('email', cleanEmail);
       } catch (err) {
-        console.error("Error deleting user from Firestore:", err);
+        console.error("Error soft-deleting user:", err);
       }
 
       setConfirmDeleteEmail(null);

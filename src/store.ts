@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { supabase } from './lib/supabaseClient';
+import { supabase, usersQuery } from './lib/supabaseClient';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
@@ -484,7 +484,7 @@ export const useStore = create<AppState>()(
           const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
             supabase.from('articles').select('*'),
             supabase.from('ads').select('*'),
-            supabase.from('users').select('*'),
+            usersQuery(),
             supabase.from('comments').select('*')
           ]);
 
@@ -886,7 +886,7 @@ export const useStore = create<AppState>()(
           set({ users: fusedUsers });
           for (const dup of duplicates) {
             try {
-              if (supabase) { await supabase.from('users').delete().eq('id', dup.id); }
+              if (supabase) { await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', dup.id); }
             } catch (_) {}
           }
           for (const user of fusedUsers) {
@@ -922,7 +922,7 @@ export const useStore = create<AppState>()(
           set({ users: realUsers });
           for (const user of removedUsers) {
             try {
-              if (supabase) { await supabase.from('users').delete().eq('id', user.id); }
+              if (supabase) { await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', user.id); }
             } catch (_) {}
           }
           console.log(`Removed ${removedUsers.length} fake accounts. Total users: ${realUsers.length}`);
@@ -1730,7 +1730,7 @@ export const useStore = create<AppState>()(
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
         set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
-        if (supabase) { supabase.from('users').delete().eq('id', normalized); }
+        if (supabase) { supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', normalized); }
       },
       updateUserRole: (email, role) => {
         const normalized = email.toLowerCase().trim();
@@ -1826,7 +1826,7 @@ export const useStore = create<AppState>()(
           }
           if (usersRes.data) {
             for (const row of usersRes.data) {
-              await supabase.from('users').delete().eq('id', row.id);
+              await supabase.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', row.id);
             }
           }
 

@@ -274,7 +274,7 @@ app.use((req, res, next) => {
         return res.status(403).json({ success: false, error: "Le Super Administrateur ne peut pas être supprimé." });
       }
       await deleteDocument("users", email);
-      return res.json({ success: true, message: `Utilisateur ${email} supprimé.` });
+      return res.json({ success: true, message: `Utilisateur ${email} marqué comme supprimé.` });
     } catch (err: any) {
       console.error("[DELETE /api/users ERROR]", err);
       return res.status(500).json({ success: false, error: err?.message || "Erreur suppression" });

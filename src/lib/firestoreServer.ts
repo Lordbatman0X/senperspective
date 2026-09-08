@@ -267,16 +267,25 @@ export async function deleteDocument(collectionName: string, docId: string): Pro
 
   const central = loadCentralDB();
   if (central[collectionName]?.[docId]) {
-    delete central[collectionName][docId];
+    if (collectionName === 'users') {
+      central[collectionName][docId].deleted_at = new Date().toISOString();
+    } else {
+      delete central[collectionName][docId];
+    }
     saveCentralDB();
   }
 
-  // Background mirror delete to Supabase
+  // Background mirror to Supabase (soft-delete for users, hard delete for others)
   try {
     const table = resolveTable(collectionName);
     const client = getSupabaseServer();
-    const { error } = await client.from(table).delete().eq('id', docId);
-    if (error) console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, error.message);
+    if (table === 'users') {
+      const { error } = await client.from('users').update({ deleted_at: new Date().toISOString() }).eq('id', docId);
+      if (error) console.warn(`[Supabase mirror notice] Could not soft-delete ${collectionName}/${docId}:`, error.message);
+    } else {
+      const { error } = await client.from(table).delete().eq('id', docId);
+      if (error) console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, error.message);
+    }
   } catch (err: any) {
     console.warn(`[Supabase mirror notice] Could not mirror delete ${collectionName}/${docId}:`, err?.message || err);
   }

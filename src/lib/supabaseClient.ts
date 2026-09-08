@@ -118,3 +118,9 @@ export function subscribeToTable(
     return { unsubscribe() {} };
   }
 }
+
+// Always filter out soft-deleted users from reads
+export function usersQuery() {
+  const client = getSupabaseClient();
+  return client.from('users').select('*').is('deleted_at', null);
+}

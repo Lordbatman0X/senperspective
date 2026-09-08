@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { supabase, subscribeToTable } from '../lib/supabaseClient';
+import { supabase, subscribeToTable, usersQuery } from '../lib/supabaseClient';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
@@ -252,7 +252,7 @@ export function ProfilePage() {
   useEffect(() => {
     if (!decodedEmail) return;
     const loadUser = async () => {
-      const { data } = await supabase.from('users').select('*').eq('email', decodedEmail).maybeSingle();
+      const { data } = await usersQuery().eq('email', decodedEmail).maybeSingle();
       if (data) {
         setTargetUserData({ id: data.id, ...data });
       } else {

@@ -5,7 +5,7 @@ import {
   Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight, Upload
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { supabase } from '../../lib/supabaseClient';
+import { supabase, usersQuery } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 import { sampleArticles } from '../../data';
 
