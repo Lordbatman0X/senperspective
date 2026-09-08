@@ -32,9 +32,9 @@ function getSupabaseClient(): SupabaseClient<any> {
 }
 
 export function getSupabaseClientOrNull(): SupabaseClient<any> | null {
-  if (initFailed) {
-    initFailed = false;
-  }
+  // AUDIT fix: do NOT reset `initFailed` on access — a failed init must stay failed
+  // until the environment is actually fixed, otherwise every property access
+  // retried a full createClient() and spammed console errors.
   try {
     return getSupabaseClient();
   } catch (e) {
@@ -83,9 +83,8 @@ const safeFallbackClient: any = {
 // Lazy singleton via Proxy: retries initialization on each access after a failure
 export const supabase: any = new Proxy({} as any, {
   get(_, prop) {
-    if (initFailed) {
-      initFailed = false;
-    }
+    // AUDIT fix: no `initFailed` reset here either; the safeFallbackClient below
+    // absorbs all calls when the client is unconfigured, so no TypeError occurs.
     try {
       const client = getSupabaseClient();
       return (client as any)[prop];
@@ -141,7 +140,7 @@ export function subscribeToTable(
   try {
     const client = getSupabaseClient();
     const channel = client
-      .channel(`realtime:${table}`)
+      .channel(`realtime:public:${table}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table, filter: filter || undefined },

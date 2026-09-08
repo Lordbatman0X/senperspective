@@ -360,7 +360,7 @@ CREATE POLICY "User consents policy" ON public.user_consents FOR ALL USING (true
 -- SEED FOUNDER / SUPER ADMIN (Kader S. Diaz)
 -- -----------------------------------------------------------------------------
 INSERT INTO public.users (
-  id, email, name, avatar_url, role, auth_type, password, streak, reading_time, is_online, bio, accolades
+  id, email, name, avatar_url, role, auth_type, password_hash, streak, reading_time, is_online, bio, accolades
 ) VALUES (
   'kadersdiaz3-admin-founder',
   'kadersdiaz3@gmail.com',
@@ -368,7 +368,9 @@ INSERT INTO public.users (
   'preset-male',
   'Admin',
   'password',
-  'Perspective2026!',
+  -- SECURITY (audit fix): SHA-256("Perspective2026!" + "_perspective_auth_v2_2026_salt")
+  -- Matches hashPassword() in src/lib/authCrypto.ts. No plaintext password is seeded.
+  '9d5f0b0df80463465ccc2b6db6fb368bab3d714871ebbf762d53e11ee3130b0e3',
   25,
   820,
   true,
@@ -378,3 +380,76 @@ INSERT INTO public.users (
   role = 'Admin',
   name = 'Kader S. Diaz',
   accolades = '["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"]'::jsonb;
+
+-- ------------------------------------------------------------------------------
+-- 11. MISSING TABLES (audit fix): password_resets, dispatches, daily_analytics
+-- These were referenced by the application but absent from the schema.
+-- ------------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.password_resets (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  token TEXT,
+  code TEXT,
+  expires_at TIMESTAMPTZ,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.password_resets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Password resets policy" ON public.password_resets;
+CREATE POLICY "Password resets policy" ON public.password_resets FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.dispatches (
+  id TEXT PRIMARY KEY,
+  subject TEXT DEFAULT '',
+  body TEXT DEFAULT '',
+  audience TEXT DEFAULT 'all',
+  recipient_count INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'sent',
+  sent_by TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.dispatches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Dispatches policy" ON public.dispatches;
+CREATE POLICY "Dispatches policy" ON public.dispatches FOR ALL USING (true) WITH CHECK (true);
+
+CREATE TABLE IF NOT EXISTS public.daily_analytics (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL,
+  visits INTEGER DEFAULT 0,
+  unique_visitors INTEGER DEFAULT 0,
+  article_views INTEGER DEFAULT 0,
+  avg_duration_seconds INTEGER DEFAULT 0,
+  data JSONB DEFAULT '{}'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_analytics_date ON public.daily_analytics(date);
+ALTER TABLE public.daily_analytics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Daily analytics policy" ON public.daily_analytics;
+CREATE POLICY "Daily analytics policy" ON public.daily_analytics FOR ALL USING (true) WITH CHECK (true);
+
+-- ------------------------------------------------------------------------------
+-- 12. REALTIME PUBLICATION (audit fix): all tables registered for realtime
+-- ------------------------------------------------------------------------------
+
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'users', 'friends', 'followers', 'blocks', 'friend_requests', 'messages',
+    'articles', 'comments', 'analytics_events', 'subscribers', 'media', 'ads',
+    'site_settings', 'user_consents', 'matches', 'guest_preferences', 'reports',
+    'password_resets', 'dispatches', 'daily_analytics'
+  ]
+  LOOP
+    BEGIN
+      EXECUTE format('ALTER PUBLICATION supabase_realtime ADD TABLE public.%I', t);
+    EXCEPTION WHEN duplicate_object THEN
+      NULL; -- already in the publication
+    END;
+  END LOOP;
+END $$;

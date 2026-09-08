@@ -1,6 +1,15 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
+
+// SECURITY (audit fix): passwords are hashed server-side with the same SHA-256
+// scheme used by the client (authCrypto.ts) instead of being stored in plaintext.
+const AUTH_SALT = '_perspective_auth_v2_2026_salt';
+export function hashPasswordServer(password?: string): string {
+  if (!password) return '';
+  return createHash('sha256').update(String(password) + AUTH_SALT).digest('hex');
+}
 
 // Server-side Supabase client (uses process.env, not VITE_ vars)
 const SUPABASE_URL = process.env.SUPABASE_URL as string | undefined;
@@ -329,7 +338,7 @@ export async function registerUser(email: string, password?: string, name?: stri
     email: normalizedEmail,
     name: name || normalizedEmail.split('@')[0],
     role: isSuperAdmin ? 'Admin' : role,
-    password: password || 'default_pass',
+    passwordHash: hashPasswordServer(password || additionalFields.password),
     avatarUrl: additionalFields.avatarUrl || 'preset-male',
     registeredAt: new Date().toISOString(),
     lastActiveAt: new Date().toISOString(),
@@ -396,7 +405,7 @@ export async function updateUserPasswordServer(email: string, newPassword: strin
   const normalizedEmail = String(email).toLowerCase().trim();
   const central = loadCentralDB();
   if (central.users[normalizedEmail]) {
-    central.users[normalizedEmail].password = newPassword;
+    central.users[normalizedEmail].passwordHash = hashPasswordServer(newPassword);
     central.users[normalizedEmail].passwordUpdatedAt = new Date().toISOString();
     saveCentralDB();
   }
@@ -404,7 +413,7 @@ export async function updateUserPasswordServer(email: string, newPassword: strin
   // Background mirror to Supabase
   try {
     const client = getSupabaseServer();
-    const { error } = await client.from('users').update({ password: newPassword, passwordUpdatedAt: new Date().toISOString() }).eq('email', normalizedEmail);
+    const { error } = await client.from('users').update({ passwordHash: hashPasswordServer(newPassword), passwordUpdatedAt: new Date().toISOString() }).eq('email', normalizedEmail);
     if (error) console.warn(`[Supabase mirror notice] Could not update password for ${normalizedEmail}:`, error.message);
   } catch (err: any) {
     console.warn(`[Supabase mirror notice] Could not update password for ${normalizedEmail}:`, err?.message || err);

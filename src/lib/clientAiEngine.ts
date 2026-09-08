@@ -52,9 +52,11 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 
   loadPromise = (async () => {
     try {
-      const { data, error } = await supabase.from('site_settings').select('data').eq('id', 'singleton').single();
+      // AUDIT fix: read the same row the server writes ('api_keys'), not 'singleton'
+      const { data, error } = await supabase.from('site_settings').select('data').eq('id', 'api_keys').single();
       if (!error && data) {
-        const apiKeys = (data.data as Record<string, string>) || {};
+        const wrapped = (data.data as Record<string, any>) || {};
+        const apiKeys = (wrapped.api_keys || wrapped) as Record<string, string>;
         cachedFirestoreKeys = { ...apiKeys };
         hasLoadedFromFirestore = true;
         // Sync into localStorage if not already set locally
@@ -151,11 +153,11 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
     delete cachedFirestoreKeys[P];
   }
 
-  // 3. Persist to Supabase site_settings
+  // 3. Persist to Supabase site_settings (row 'api_keys' — matches server-side writer)
   try {
-    const { data: existing } = await supabase.from('site_settings').select('data').eq('id', 'singleton').single();
-    const existingData = (existing?.data as Record<string, any>) || {};
-    await supabase.from('site_settings').upsert({ id: 'singleton', data: { ...existingData, api_keys: { ...(existingData.api_keys || {}), [P]: cleanKey } } });
+    const { data: existing } = await supabase.from('site_settings').select('data').eq('id', 'api_keys').single();
+    const existingData = ((existing?.data as Record<string, any>)?.api_keys ? existing.data : { api_keys: (existing?.data as Record<string, any>) || {} }) as Record<string, any>;
+    await supabase.from('site_settings').upsert({ id: 'api_keys', data: { ...existingData, api_keys: { ...(existingData.api_keys || {}), [P]: cleanKey } } });
     console.log(`[Client AI] Successfully saved ${P} API key to Supabase database.`);
   } catch (err) {
     console.warn(`[Client AI] Could not sync ${P} key to Supabase:`, err);

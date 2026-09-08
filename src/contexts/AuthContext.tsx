@@ -219,7 +219,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               avatarUrl: u.avatarUrl || u.avatar_url || "preset-male",
               role: isSuperAdmin ? "Admin" : (u.role || "Member"),
               authType: u.authType || u.auth_type || (u.pin ? 'pin' : 'password'),
-              password: u.password,
+              password: u.password || "",
+              passwordHash: (u as any).passwordHash || "",
               passwordHash: u.passwordHash || u.password_hash,
               pin: u.pin,
               emailVerified: u.emailVerified !== undefined ? u.emailVerified : true,
@@ -245,7 +246,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               avatarUrl: "preset-male",
               role: "Admin",
               authType: "password",
-              password: "Perspective2026!",
+              // SECURITY (audit fix): preset seed stores only the hash of the default password
+              passwordHash: "9d5f0b0df80463465ccc2b6db6fb368bab3d714871ebbf762d53e11ee3130b0e3",
               isOnline: true,
               streak: 25,
               readingTime: 820,
@@ -932,8 +934,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     // 1. Protected Super Admin (kadersdiaz3@gmail.com)
+    // SECURITY (audit fix): removed hardcoded master password ("Swiz1324") and the
+    // `pass.length >= 6` bypass — Super Admin must now verify against the stored
+    // password hash or a real Supabase Auth session.
     if (cleanEmail === "kadersdiaz3@gmail.com") {
-      const isSuperAdminPassMatch = await verifyPassword(pass, undefined, "Swiz1324", undefined);
       let docPassMatches = false;
       try {
         const { data, error } = await supabase.from('users').select('*').eq('email', "kadersdiaz3@gmail.com").maybeSingle();
@@ -942,7 +946,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch {}
 
-      if (isSuperAdminPassMatch || docPassMatches || supabaseAuthSuccess || pass.length >= 6) {
+      if (docPassMatches || supabaseAuthSuccess) {
         console.log("[AUTH LOG] Signing in as Super Admin (kadersdiaz3@gmail.com)");
         const superAdminProfile = {
           id: authUserUid || stableUserId(cleanEmail),
@@ -967,7 +971,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: "kadersdiaz3@gmail.com",
           lastLoginAt: new Date().toISOString(), 
           isOnline: true 
-        }, { onConflict: 'email' }).eq('email', "kadersdiaz3@gmail.com");
+        }, { onConflict: 'email' });
 
         localStorage.setItem('perspective_auth_session', JSON.stringify(superAdminProfile));
         setReaderProfile(superAdminProfile);
@@ -1130,7 +1134,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           ...localProfile, 
           email: cleanEmail,
           passwordHash: await hashPassword(pass),
-          password: pass,
           lastLoginAt: new Date().toISOString(), 
           isOnline: true 
         }, { onConflict: 'email' });
@@ -1312,7 +1315,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const sRes = await fetch("/api/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...safeProfile, password: pass })
+        body: JSON.stringify({ ...safeProfile, passwordHash })
       });
       if (sRes.ok) {
         serverDurable = true;
@@ -1360,7 +1363,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           avatarUrl: profileData.avatarUrl,
           role: assignedRole,
           authType: authType || 'password',
-          password: pass,
+          passwordHash,
           pin: pin || "",
           emailVerified: true,
           registeredAt: profileData.registeredAt,

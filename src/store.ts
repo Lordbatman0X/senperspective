@@ -4,6 +4,7 @@ import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import { supabase } from './lib/supabaseClient';
+import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
@@ -1888,28 +1889,30 @@ export const useStore = create<AppState>()(
           body: JSON.stringify({ email: normalized, emailVerified, mfaEnabled })
         }).catch(() => {});
       },
-      updateUserPassword: (email, password) => {
+      updateUserPassword: async (email, password) => {
         const normalized = email.toLowerCase().trim();
+        // SECURITY (audit fix): store only the hash — never the plaintext password.
+        const passwordHash = await hashPassword(password);
         const users = get().users || [];
         const exists = users.some(u => u.email.toLowerCase() === normalized);
-        let updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, password } : u);
+        let updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, passwordHash } : u);
         if (!exists) {
           updatedUsers.push({
             id: 'admin-' + Date.now(),
             email: normalized,
             name: normalized.split('@')[0],
             role: 'Admin',
-            password: password,
+            passwordHash,
             authType: 'password',
             registeredAt: new Date().toISOString()
           });
         }
         set({ users: updatedUsers });
-        if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
+        if (supabase) { supabase.from('users').upsert({ id: normalized, passwordHash, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
         fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalized, password, role: 'Admin' })
+          body: JSON.stringify({ email: normalized, passwordHash, role: 'Admin' })
         }).catch(() => {});
         fetch('/api/mongodb/auth/update-password', {
           method: 'POST',

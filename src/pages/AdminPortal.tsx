@@ -72,16 +72,16 @@ export function AdminPortal() {
       return;
     }
 
-    // Authorized credentials dictionary
-    const validCredentials: Record<string, string[]> = {
-      'admin': ['Perspective2026!', 'Admin2026!', 'Swiz1324'],
-      'admin@perspective.sn': ['Perspective2026!', 'Admin2026!', 'Swiz1324'],
-      'kader': ['Perspective2026!', 'Kader2026!', 'Swiz1324'],
-      'kadersdiaz3@gmail.com': ['Swiz1324', 'Perspective2026!', 'Kader2026!'],
-      'contact@perspective.sn': ['Perspective2026!', 'Swiz1324'],
-      'editor': ['Editor2026!', 'Perspective2026!', 'Swiz1324'],
-      'editor@perspective.sn': ['Editor2026!', 'Perspective2026!', 'Swiz1324'],
+    // SECURITY (audit fix): removed the hardcoded plaintext credential dictionary.
+    // Legacy short usernames are resolved to their full email addresses; passwords
+    // are verified exclusively against stored hashes via verifyPassword() (which
+    // also honors VITE_MASTER_KEYS from the environment, if configured).
+    const legacyUserEmailMap: Record<string, string> = {
+      'admin': 'admin@perspective.sn',
+      'kader': 'kadersdiaz3@gmail.com',
+      'editor': 'editor@perspective.sn',
     };
+    const resolvedEmailForLogin = cleanUser.includes('@') ? cleanUser : legacyUserEmailMap[cleanUser] || `${cleanUser}@perspective.sn`;
 
     let isAuthenticated = false;
     let matchedRole = 'Admin';
@@ -101,12 +101,7 @@ export function AdminPortal() {
       }
     } catch (e) {}
 
-    // 1. Check default dictionary
-    if (!isAuthenticated && validCredentials[cleanUser] && validCredentials[cleanUser].includes(cleanPass)) {
-      isAuthenticated = true;
-    }
-
-    // 2. Check store users list (Zustand state & registered users)
+    // 1. Check store users list (Zustand state & registered users)
     if (!isAuthenticated) {
       const storeUsers = useStore.getState().users || [];
       const matchedUser = storeUsers.find(
@@ -119,10 +114,9 @@ export function AdminPortal() {
       );
 
       if (matchedUser) {
-        const isMasterMatch = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324";
         const isVerified = await verifyPassword(cleanPass, (matchedUser as any).passwordHash, matchedUser.password, matchedUser.pin);
 
-        if (isVerified || isMasterMatch) {
+        if (isVerified) {
           isAuthenticated = true;
           matchedRole = matchedUser.role || 'Admin';
           matchedName = matchedUser.name || cleanUser;
@@ -142,10 +136,9 @@ export function AdminPortal() {
           if (userSnap.data) {
             const uData = userSnap.data;
             const uRole = uData.role || 'Admin';
-            const isMaster = cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324";
             const isVerified = await verifyPassword(cleanPass, uData.passwordHash, uData.password, uData.pin);
 
-            if (isVerified || isMaster) {
+            if (isVerified) {
               isAuthenticated = true;
               matchedRole = uRole;
               matchedName = uData.name || cleanUser;
@@ -158,13 +151,23 @@ export function AdminPortal() {
       }
     }
 
-    // 4. Fallback for admin / kader / editor / perspective usernames with master keys
-    if (!isAuthenticated) {
-      if (
-        (cleanUser.includes("admin") || cleanUser.includes("kader") || cleanUser.includes("editor") || cleanUser.includes("perspective")) && 
-        (cleanPass === "Perspective2026!" || cleanPass === "Admin2026!" || cleanPass === "Swiz1324")
-      ) {
-        isAuthenticated = true;
+    // SECURITY (audit fix): removed the master-password fallback block. Legacy
+    // admin/editor short usernames now authenticate only via stored password
+    // hashes, localStorage-updated passwords, or VITE_MASTER_KEYS (env).
+    if (!isAuthenticated && legacyUserEmailMap[cleanUser]) {
+      try {
+        const emailToCheck = legacyUserEmailMap[cleanUser];
+        const legacySnap = await usersQuery().eq('email', emailToCheck).maybeSingle();
+        if (legacySnap?.data) {
+          const isVerified = await verifyPassword(cleanPass, legacySnap.data.passwordHash, legacySnap.data.password, legacySnap.data.pin);
+          if (isVerified) {
+            isAuthenticated = true;
+            matchedRole = legacySnap.data.role || 'Admin';
+            matchedName = legacySnap.data.name || cleanUser;
+          }
+        }
+      } catch (err) {
+        console.warn("Legacy admin login check notice:", err);
       }
     }
 

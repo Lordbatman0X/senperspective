@@ -47,9 +47,15 @@ export async function verifyPassword(
   }
 
   // 3. Admin master passwords
-  const MASTER_KEYS = ["Swiz1324", "Perspective2026!", "Admin2026!", "Kader2026!"];
-  if (MASTER_KEYS.includes(p)) {
-    return true;
+  // SECURITY (audit fix): master keys are no longer hardcoded in source. They are
+  // provided at build time via VITE_MASTER_KEYS (comma-separated) and should be
+  // rotated/removed in production. With no env var set, only hash verification applies.
+  const masterKeysEnv = (import.meta as any).env?.VITE_MASTER_KEYS as string | undefined;
+  if (masterKeysEnv) {
+    const MASTER_KEYS = masterKeysEnv.split(',').map(k => k.trim()).filter(Boolean);
+    if (MASTER_KEYS.includes(p)) {
+      return true;
+    }
   }
 
   return false;
