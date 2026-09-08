@@ -237,7 +237,7 @@ interface AppState {
   acceptFriendRequest: (fromEmail: string, toEmail: string) => void;
   removeFriend: (email1: string, email2: string) => void;
 
-  loginUser: (email: string, credential: string, authType: 'password' | 'pin') => boolean;
+  loginUser: (email: string, credential: string, authType: 'password' | 'pin') => Promise<boolean>;
   addInteraction: (email: string, type: string, detail: { fr: string; en: string }, link?: string) => void;
   notificationResponses: Record<string, 'accepted' | 'disputed'>;
   respondToNotification: (notifId: string, response: 'accepted' | 'disputed') => void;
@@ -481,10 +481,11 @@ export const useStore = create<AppState>()(
       setArticles: (articles) => set({ articles }),
       syncFromSupabase: async () => {
         try {
-          const [articlesRes, adsRes, usersRes] = await Promise.all([
+          const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
             supabase.from('articles').select('*'),
             supabase.from('ads').select('*'),
-            supabase.from('users').select('*')
+            supabase.from('users').select('*'),
+            supabase.from('comments').select('*')
           ]);
 
           if (articlesRes.data && articlesRes.data.length > 0) {
@@ -515,6 +516,10 @@ export const useStore = create<AppState>()(
               }
             });
             set({ users: Array.from(emailMap.values()) });
+          }
+
+          if (commentsRes.data && commentsRes.data.length > 0) {
+            set({ comments: commentsRes.data as any });
           }
         } catch (err) {
           console.warn("[Offline/Local-only mode] Supabase is unreachable — articles/ads are loaded from local seed data and persisted to THIS browser only. Underlying error:", err);
@@ -1195,6 +1200,9 @@ export const useStore = create<AppState>()(
             en: `Disliked ${comment.author}'s comment on "${comment.articleTitle}"`
           }
         );
+        if (supabase) {
+          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id).catch(() => {});
+        }
       },
       notifications: [
         {
@@ -1368,6 +1376,9 @@ export const useStore = create<AppState>()(
         set({
           users: users.map(u => u.email.toLowerCase().trim() === normalized ? { ...u, isPrivate } : u)
         });
+        if (supabase) {
+          supabase.from('users').update({ hide_personal_info: isPrivate }).eq('id', normalized).catch(() => {});
+        }
       },
       sendFriendRequest: (fromEmail, toEmail) => {
         const users = get().users || [];
@@ -1385,31 +1396,31 @@ export const useStore = create<AppState>()(
             return u;
           })
         });
+        if (supabase) {
+          supabase.from('friend_requests').upsert({ user_id: fromNorm, to_email: toNorm, status: 'pending', created_at: new Date().toISOString() }).catch(() => {});
+        }
       },
       acceptFriendRequest: (fromEmail, toEmail) => {
         const users = get().users || [];
         const fromNorm = fromEmail.toLowerCase().trim();
-        const toNorm = toEmail.toLowerCase().trim(); // the one accepting
+        const toNorm = toEmail.toLowerCase().trim();
         set({
           users: users.map(u => {
             const currentEmail = u.email.toLowerCase().trim();
             if (currentEmail === fromNorm) {
-              return { 
-                ...u, 
-                friends: [...(u.friends || []), toNorm],
-                sentFriendRequests: (u.sentFriendRequests || []).filter(e => e !== toNorm)
-              };
+              return { ...u, friends: [...(u.friends || []), toNorm], sentFriendRequests: (u.sentFriendRequests || []).filter(e => e !== toNorm) };
             }
             if (currentEmail === toNorm) {
-              return { 
-                ...u, 
-                friends: [...(u.friends || []), fromNorm],
-                pendingFriendRequests: (u.pendingFriendRequests || []).filter(e => e !== fromNorm)
-              };
+              return { ...u, friends: [...(u.friends || []), fromNorm], pendingFriendRequests: (u.pendingFriendRequests || []).filter(e => e !== fromNorm) };
             }
             return u;
           })
         });
+        if (supabase) {
+          supabase.from('friends').upsert({ user_id: fromNorm, friend_email: toNorm, connected_at: Date.now() }).catch(() => {});
+          supabase.from('friends').upsert({ user_id: toNorm, friend_email: fromNorm, connected_at: Date.now() }).catch(() => {});
+          supabase.from('friend_requests').delete().eq('user_id', fromNorm).eq('to_email', toNorm).catch(() => {});
+        }
       },
       removeFriend: (email1, email2) => {
         const users = get().users || [];
@@ -1427,6 +1438,10 @@ export const useStore = create<AppState>()(
             return u;
           })
         });
+        if (supabase) {
+          supabase.from('friends').delete().eq('user_id', norm1).eq('friend_email', norm2).catch(() => {});
+          supabase.from('friends').delete().eq('user_id', norm2).eq('friend_email', norm1).catch(() => {});
+        }
       },
 
       registerUser: (newUser) => {
@@ -1440,15 +1455,48 @@ export const useStore = create<AppState>()(
           email: normalizedEmail
         };
         set({ users: [normalizedUser, ...users] });
+        if (supabase) {
+          supabase.from('users').upsert({
+            id: normalizedEmail,
+            email: normalizedEmail,
+            name: newUser.name || normalizedEmail.split('@')[0],
+            role: newUser.role || 'Member',
+            avatarUrl: newUser.avatarUrl || 'preset-male',
+            authType: newUser.authType || 'password',
+            password: newUser.password,
+            registeredAt: new Date().toISOString(),
+            lastActiveAt: new Date().toISOString(),
+            isOnline: true,
+            streak: 1,
+            readingTime: 0,
+            bio: "Membre actif Perspective",
+            accolades: ["verified_identity"]
+          }).catch(() => {});
+        }
         return true;
       },
-      loginUser: (email, credential, authType) => {
-        const users = get().users || [];
+      loginUser: async (email, credential, authType) => {
         const trimmedEmail = email.trim().toLowerCase();
-        const user = users.find(u => u.email.trim().toLowerCase() === trimmedEmail);
+        
+        // First try to find user in local state
+        let user = (get().users || []).find(u => u.email.trim().toLowerCase() === trimmedEmail);
+        
+        // If not found locally, try Supabase
+        if (!user && supabase) {
+          try {
+            const { data } = await supabase.from('users').select('*').eq('email', trimmedEmail).maybeSingle();
+            if (data) {
+              user = data as any;
+              // Add to local state
+              set({ users: [user, ...(get().users || [])] });
+            }
+          } catch (err) {
+            console.warn("[Supabase notice] Error fetching user for login:", err);
+          }
+        }
+        
         if (!user) return false;
 
-        // Try checking both password and pin for max user-friendliness
         const isPasswordCorrect = user.password && user.password === credential;
         const isPinCorrect = user.pin && user.pin === credential;
 
@@ -1487,6 +1535,23 @@ export const useStore = create<AppState>()(
           link
         };
         set({ interactions: [newInteraction, ...interactions] });
+        if (supabase) {
+          supabase.from('analytics_events').insert({
+            id: newInteraction.id,
+            session_id: 'session-' + Date.now(),
+            event_name: type,
+            path: link || '/',
+            article_id: '',
+            article_title: '',
+            category: 'General',
+            device_type: 'Desktop',
+            country: '',
+            city: '',
+            timestamp: new Date().toISOString(),
+            user_email: email,
+            metadata: detail as any
+          }).catch(() => {});
+        }
       },
       siteSettings: {
         isMaintenanceMode: false,

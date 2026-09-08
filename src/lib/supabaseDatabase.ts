@@ -116,6 +116,26 @@ export interface Database {
           created_at?: string;
         };
       };
+      friend_requests: {
+        Row: {
+          user_id: string;
+          to_email: string;
+          status: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          to_email: string;
+          status?: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          to_email?: string;
+          status?: string;
+          created_at?: string;
+        };
+      };
       articles: {
         Row: {
           id: string;

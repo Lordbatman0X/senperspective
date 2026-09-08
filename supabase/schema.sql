@@ -5,7 +5,7 @@
 
 -- USERS TABLE
 create table if not exists public.users (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   email text unique not null,
   name text not null default '',
   avatar_url text,
@@ -55,6 +55,17 @@ create table if not exists public.blocks (
   created_at timestamptz not null default now(),
   primary key (user_id, blocked_email)
 );
+
+-- FRIEND REQUESTS table
+create table if not exists public.friend_requests (
+  user_id text not null references public.users(id) on delete cascade,
+  to_email text not null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  primary key (user_id, to_email)
+);
+create index if not exists idx_friend_requests_user on public.friend_requests (user_id);
+create index if not exists idx_friend_requests_to on public.friend_requests (to_email);
 
 -- ARTICLES
 create table if not exists public.articles (
@@ -236,6 +247,12 @@ create policy "Public read blocks" on public.blocks for select using (true);
 create policy "Anyone insert blocks" on public.blocks for insert with check (true);
 create policy "Anyone delete blocks" on public.blocks for delete using (true);
 
+-- FRIEND REQUESTS: read/write open for now
+create policy "Public read friend_requests" on public.friend_requests for select using (true);
+create policy "Anyone insert friend_requests" on public.friend_requests for insert with check (true);
+create policy "Anyone update friend_requests" on public.friend_requests for update using (true);
+create policy "Anyone delete friend_requests" on public.friend_requests for delete using (true);
+
 -- ARTICLES: public read, authenticated write
 create policy "Public read articles" on public.articles for select using (true);
 create policy "Authenticated insert articles" on public.articles for insert with check (auth.role() = 'authenticated');
@@ -298,6 +315,8 @@ create policy "Authenticated delete matches" on public.matches for delete using 
 alter publication supabase_realtime add table public.users;
 alter publication supabase_realtime add table public.friends;
 alter publication supabase_realtime add table public.followers;
+alter publication supabase_realtime add table public.blocks;
+alter publication supabase_realtime add table public.friend_requests;
 alter publication supabase_realtime add table public.messages;
 alter publication supabase_realtime add table public.articles;
 alter publication supabase_realtime add table public.comments;
