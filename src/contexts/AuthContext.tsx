@@ -808,7 +808,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               isMongoDB: true,
               isSupabaseAuthSession: true
             };
-            setReaderProfile(refreshedProfile);
+            setReaderProfile(refreshedProfile as any);
             localStorage.setItem('perspective_auth_session', JSON.stringify(refreshedProfile));
           } else if (cleanEmail === "kadersdiaz3@gmail.com") {
             const superAdminProfile = {
