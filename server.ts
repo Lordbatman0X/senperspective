@@ -42,7 +42,9 @@ import {
   saveUserConsent,
   getAnalyticsEvents,
   getUserConsents,
-  wipeAnalytics
+  wipeAnalytics,
+  getUnifiedSyncState,
+  mergeUnifiedSyncState
 } from "./src/lib/firestoreServer";
 
 export const app = express();
@@ -186,6 +188,30 @@ app.use((req, res, next) => {
     } catch (err: any) {
       console.error("[Firestore WIPE COLLECTION ERROR]", err);
       return res.status(500).json({ success: false, error: err?.message || "Erreur Firestore" });
+    }
+  });
+
+  // ==========================================
+  // UNIFIED CROSS-DEVICE SYNC STATE
+  // ==========================================
+  app.get("/api/sync/state", async (req, res) => {
+    try {
+      const state = await getUnifiedSyncState();
+      return res.json({ success: true, ...state });
+    } catch (err: any) {
+      console.error("[Sync GET State ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur Sync" });
+    }
+  });
+
+  app.post("/api/sync/state", async (req, res) => {
+    try {
+      const { articles, ads, siteSettings, users, media } = req.body || {};
+      const updated = await mergeUnifiedSyncState({ articles, ads, siteSettings, users, media });
+      return res.json({ success: true, ...updated });
+    } catch (err: any) {
+      console.error("[Sync POST State ERROR]", err);
+      return res.status(500).json({ success: false, error: err?.message || "Erreur Sync" });
     }
   });
 
