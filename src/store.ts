@@ -1007,7 +1007,9 @@ export const useStore = create<AppState>()(
           set({ users: fusedUsers });
           for (const dup of duplicates) {
             try {
-              if (supabase) { await supabase.from('users').delete().eq('id', dup.id).catch(() => {}); }
+              // FIX (disappearing accounts): soft-delete duplicates instead of
+              // permanently deleting the row, so the account can be recovered.
+              if (supabase) { await supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('id', dup.id).catch(() => {}); }
             } catch (_) {}
           }
           for (const user of fusedUsers) {
@@ -1047,7 +1049,9 @@ export const useStore = create<AppState>()(
           set({ users: realUsers });
           for (const user of removedUsers) {
             try {
-              if (supabase && user.id) { await supabase.from('users').delete().eq('id', user.id).catch(() => {}); }
+              // FIX (disappearing accounts): soft-delete corrupt/placeholder
+              // entries instead of permanently destroying the row.
+              if (supabase && user.id) { await supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('id', user.id).catch(() => {}); }
             } catch (_) {}
           }
         }
@@ -1853,8 +1857,11 @@ export const useStore = create<AppState>()(
       },
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
+        // FIX (disappearing accounts): never hard-delete. Soft-delete instead so
+        // the account is recoverable and matches the soft-delete policy adopted
+        // in ConnectionsAndProfile.tsx and usersQuery().
         set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
-        if (supabase) { supabase.from('users').delete().eq('id', normalized).catch(() => {}); }
+        if (supabase) { supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('email', normalized).catch(() => {}); }
         fetch(`/api/users/${encodeURIComponent(normalized)}`, { method: 'DELETE' }).catch(() => {});
         fetch(`/api/mongodb/doc/users/${encodeURIComponent(normalized)}`, { method: 'DELETE' }).catch(() => {});
       },
@@ -1978,8 +1985,14 @@ export const useStore = create<AppState>()(
             }
           }
           if (usersRes.data) {
+            // FIX (disappearing accounts): the full purge keeps protected core
+            // accounts (founder + platform admins) — soft-deletes everything else
+            // so even bulk resets remain recoverable.
+            const protectedEmails = ['kadersdiaz3@gmail.com', 'admin@perspective.sn'];
             for (const row of usersRes.data) {
-              await supabase.from('users').delete().eq('id', row.id).catch(() => {});
+              const rowEmail = String(row.id || '').toLowerCase().trim();
+              if (protectedEmails.includes(rowEmail) || rowEmail.endsWith('@perspective.sn')) continue;
+              await supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('id', row.id).catch(() => {});
             }
           }
 

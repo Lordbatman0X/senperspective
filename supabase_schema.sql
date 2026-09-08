@@ -47,8 +47,18 @@ CREATE TABLE IF NOT EXISTS public.users (
   lastActiveAt TIMESTAMPTZ,
   registered_at TIMESTAMPTZ DEFAULT NOW(),
   registeredAt TIMESTAMPTZ,
+  -- FIX (disappearing accounts): soft-delete columns — code (usersQuery,
+  -- ConnectionsAndProfile, store.deleteUser) sets deleted_at instead of deleting.
+  deleted_at TIMESTAMPTZ,
+  deletedAt TIMESTAMPTZ,
+  password_updated_at TIMESTAMPTZ,
+  passwordUpdatedAt TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ,
+  lastLoginAt TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON public.users(deleted_at);
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);

@@ -1099,7 +1099,8 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             }
                              deleteUser(clean);
                              try {
-                               try { await supabase.from('users').delete().eq('email', clean); } catch {}
+                               // FIX (disappearing accounts): soft-delete instead of hard DELETE.
+                               try { await supabase.from('users').update({ deleted_at: new Date().toISOString(), is_online: false }).eq('email', clean); } catch {}
                              } catch (e) {
                                console.error(e);
                              }

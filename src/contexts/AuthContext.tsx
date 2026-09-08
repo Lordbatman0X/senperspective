@@ -222,8 +222,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               avatarUrl: u.avatarUrl || u.avatar_url || "preset-male",
               role: isSuperAdmin ? "Admin" : (u.role || "Member"),
               authType: u.authType || u.auth_type || (u.pin ? 'pin' : 'password'),
-              password: u.password,
-              passwordHash: u.passwordHash || u.password_hash,
+              password: u.password || "",
+              passwordHash: u.passwordHash || u.password_hash || "",
               pin: u.pin,
               emailVerified: u.emailVerified !== undefined ? u.emailVerified : true,
               mfaEnabled: Boolean(u.mfaEnabled || u.twoFactorEnabled),
@@ -1345,6 +1345,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           role: assignedRole,
           authType: authType || 'password',
           password: pass,
+          // `passwordHash` is the durable credential (plaintext stays local-only;
+          // formatUserForSupabase never sends it to Supabase).
+          ...({ passwordHash } as any),
           pin: pin || "",
           emailVerified: true,
           registeredAt: profileData.registeredAt,

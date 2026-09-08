@@ -230,10 +230,12 @@ export function formatUserFromSupabase(row: any): Record<string, any> {
   };
 }
 
-// Always query the live Supabase users table safely
+// Always query the live Supabase users table safely.
+// FIX (disappearing accounts): exclude soft-deleted rows so deleteUser() can
+// remain non-destructive and soft-deleted accounts never ghost the UI.
 export function usersQuery() {
   const client = getSupabaseClient();
-  return client.from('users').select('*');
+  return client.from('users').select('*').is('deleted_at', null);
 }
 
 // High-level safe upsert to both Supabase public.users and Central Server Database

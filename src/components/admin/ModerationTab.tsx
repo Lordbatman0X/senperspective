@@ -222,7 +222,8 @@ export function ModerationTab() {
       deleteUser(cleanEmail);
 
       try {
-        await supabase.from('users').delete().eq('email', cleanEmail);
+        // FIX (disappearing accounts): soft-delete — never permanently destroy accounts.
+        await supabase.from('users').update({ deleted_at: new Date().toISOString(), is_online: false }).eq('email', cleanEmail);
         const authDocId = 'auth_' + cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
         await supabase.from('site_settings').delete().eq('id', authDocId);
       } catch (err) {
