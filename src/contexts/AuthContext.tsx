@@ -714,7 +714,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 registeredAt: new Date().toISOString(),
                 lastLoginAt: new Date().toISOString()
               };
-              await supabase.from('users').upsert({ ...fallbackProfile, email: authUser.email.toLowerCase().trim() }).eq('email', authUser.email.toLowerCase().trim());
+              await supabase.from('users').upsert({ ...fallbackProfile, email: authUser.email.toLowerCase().trim() }, { onConflict: 'email' }).eq('email', authUser.email.toLowerCase().trim());
               setReaderProfile({
                 ...fallbackProfile,
                 emailVerified: authUser.email_confirmed_at ? true : false,
@@ -787,7 +787,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               bio: "Super Administrateur & Fondateur Perspective Group",
               accolades: ["verified_identity", "editorial_board"]
             };
-            await supabase.from('users').upsert({ ...superAdminProfile, email: cleanEmail }).eq('email', cleanEmail);
+            await supabase.from('users').upsert({ ...superAdminProfile, email: cleanEmail }, { onConflict: 'email' }).eq('email', cleanEmail);
             setReaderProfile(superAdminProfile);
             localStorage.setItem('perspective_auth_session', JSON.stringify(superAdminProfile));
           }
@@ -913,7 +913,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           email: "kadersdiaz3@gmail.com",
           lastLoginAt: new Date().toISOString(), 
           isOnline: true 
-        }).eq('email', "kadersdiaz3@gmail.com");
+        }, { onConflict: 'email' }).eq('email', "kadersdiaz3@gmail.com");
 
         localStorage.setItem('perspective_auth_session', JSON.stringify(superAdminProfile));
         setReaderProfile(superAdminProfile);
@@ -948,7 +948,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         email: cleanEmail,
         lastLoginAt: new Date().toISOString(), 
         isOnline: true 
-      }).eq('email', cleanEmail);
+      }, { onConflict: 'email' }).eq('email', cleanEmail);
 
       localStorage.setItem('perspective_auth_session', JSON.stringify(presetProfile));
       setReaderProfile(presetProfile);
@@ -997,7 +997,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           updates.passwordHash = await hashPassword(pass);
         }
 
-        await supabase.from('users').upsert(updates).eq('email', cleanEmail);
+        await supabase.from('users').upsert(updates, { onConflict: 'email' }).eq('email', cleanEmail);
         localStorage.setItem('perspective_auth_session', JSON.stringify(profileObj));
         setReaderProfile(profileObj);
         console.log(`[AUTH LOG] Database sign-in completed successfully for: ${cleanEmail}`);
@@ -1079,7 +1079,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           password: pass,
           lastLoginAt: new Date().toISOString(), 
           isOnline: true 
-        }).eq('email', cleanEmail);
+        }, { onConflict: 'email' }).eq('email', cleanEmail);
 
         localStorage.setItem('perspective_auth_session', JSON.stringify(localProfile));
         setReaderProfile(localProfile);
@@ -1112,7 +1112,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await supabase.from('users').upsert({ 
         ...fallbackProfile, 
         email: cleanEmail 
-      }).eq('email', cleanEmail);
+      }, { onConflict: 'email' }).eq('email', cleanEmail);
 
       localStorage.setItem('perspective_auth_session', JSON.stringify(fallbackProfile));
       setReaderProfile(fallbackProfile);
@@ -1244,7 +1244,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let supabaseErrMsg = "";
     try {
       const safeProfile = await sanitizeFirestorePayload(profileData);
-      await supabase.from('users').upsert({ ...safeProfile, email: cleanEmail }).eq('email', cleanEmail);
+      await supabase.from('users').upsert({ ...safeProfile, email: cleanEmail }, { onConflict: 'email' }).eq('email', cleanEmail);
       supabaseDurable = true;
       console.log(`[AUTH LOG] User profile successfully committed to Supabase: ${cleanEmail}`);
     } catch (fsErr: any) {

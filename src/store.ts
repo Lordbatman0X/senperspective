@@ -374,13 +374,13 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
       ...customPrefs
     };
 
-    if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
-      const cleanEmail = email.toLowerCase().trim();
-      if (supabase) {
-        await supabase.from('users').upsert({ id: cleanEmail, preferences: currentPrefs }).then(({ error }) => {
-          if (error) console.warn("[Supabase notice] Error syncing preferences:", error);
-        }).catch(() => {});
-      }
+        if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
+          const cleanEmail = email.toLowerCase().trim();
+          if (supabase) {
+            await supabase.from('users').upsert({ id: cleanEmail, preferences: currentPrefs }, { onConflict: 'email' }).then(({ error }) => {
+              if (error) console.warn("[Supabase notice] Error syncing preferences:", error);
+            }).catch(() => {});
+          }
     } else {
       let deviceId = '';
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -892,7 +892,7 @@ export const useStore = create<AppState>()(
           for (const user of fusedUsers) {
             try {
               const clean = await sanitizeFirestorePayload(user);
-              if (supabase) { await supabase.from('users').upsert({ id: user.id, ...clean }).catch(() => {}); }
+              if (supabase) { await supabase.from('users').upsert({ id: user.id, ...clean }, { onConflict: 'email' }).catch(() => {}); }
             } catch (_) {}
           }
           console.log(`Fused ${duplicates.length} duplicate accounts. Total users: ${fusedUsers.length}`);
@@ -1471,7 +1471,7 @@ export const useStore = create<AppState>()(
             readingTime: 0,
             bio: "Membre actif Perspective",
             accolades: ["verified_identity"]
-          }).catch(() => {});
+          }, { onConflict: 'email' }).catch(() => {});
         }
         return true;
       },
@@ -1770,7 +1770,7 @@ export const useStore = create<AppState>()(
           });
         }
         set({ users: updatedUsers });
-        if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }).catch(() => {}); }
+        if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
       },
       updateUserPin: (email, pin) => {
         const normalized = email.toLowerCase().trim();
