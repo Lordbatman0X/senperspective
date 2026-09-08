@@ -379,7 +379,7 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
           if (supabase) {
             await supabase.from('users').upsert({ id: cleanEmail, preferences: currentPrefs }, { onConflict: 'email' }).then(({ error }) => {
               if (error) console.warn("[Supabase notice] Error syncing preferences:", error);
-            });
+            }).catch(() => {});
           }
     } else {
       let deviceId = '';
@@ -439,7 +439,7 @@ export const useStore = create<AppState>()(
         });
         set({ directMessages: updatedDms });
         if (supabase) {
-          supabase.from('messages').update({ reactions: updatedReactions as any }).eq('id', messageId);
+          supabase.from('messages').update({ reactions: updatedReactions as any }).eq('id', messageId).catch(() => {});
         }
       },
       syncPreferencesToFirebase: async (customPrefs?: any) => {
@@ -533,7 +533,7 @@ export const useStore = create<AppState>()(
         set({ articles: [article, ...get().articles] });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }); }
+          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
         } catch (err) {
           console.error("[Supabase notice] Error writing article:", err);
         }
@@ -560,21 +560,21 @@ export const useStore = create<AppState>()(
         set({ articles: get().articles.map(a => a.id === article.id ? article : a) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }); }
+          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
         } catch (err) {
           console.error("[Supabase notice] Error updating article:", err);
         }
       },
       deleteArticle: (id) => {
         set({ articles: get().articles.filter(a => a.id !== id) });
-        if (supabase) { supabase.from('articles').delete().eq('id', id); }
+        if (supabase) { supabase.from('articles').delete().eq('id', id).catch(() => {}); }
       },
       purgeAllArticles: async () => {
         const currentArticles = [...(get().articles || [])];
         set({ articles: [] });
 
         if (supabase) {
-          await supabase.from('articles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          await supabase.from('articles').delete().neq('id', '00000000-0000-0000-0000-000000000000').catch(() => {});
         }
 
         try {
@@ -588,18 +588,18 @@ export const useStore = create<AppState>()(
         set({ media: [m, ...(get().media || [])] });
         try {
           const clean = await sanitizeFirestorePayload(m as any);
-          if (supabase) { await supabase.from('media').upsert({ id: m.id, ...clean }); }
+          if (supabase) { await supabase.from('media').upsert({ id: m.id, ...clean }).catch(() => {}); }
         } catch (err) {
           console.error("[Supabase notice] Error adding media:", err);
         }
       },
       deleteMedia: (id) => {
         set({ media: (get().media || []).filter(m => m.id !== id) });
-        if (supabase) { supabase.from('media').delete().eq('id', id); }
+        if (supabase) { supabase.from('media').delete().eq('id', id).catch(() => {}); }
       },
       updateMediaName: (id, name) => {
         set({ media: (get().media || []).map(m => m.id === id ? { ...m, name } : m) });
-        if (supabase) { supabase.from('media').update({ name }).eq('id', id); }
+        if (supabase) { supabase.from('media').update({ name }).eq('id', id).catch(() => {}); }
       },
       ads: [
         {
@@ -706,14 +706,14 @@ export const useStore = create<AppState>()(
         set({ ads: updatedAds });
         try {
           const clean = await sanitizeFirestorePayload(ad as any);
-          if (supabase) { await supabase.from('ads').upsert({ id: ad.id, ...clean }); }
+          if (supabase) { await supabase.from('ads').upsert({ id: ad.id, ...clean }).catch(() => {}); }
         } catch (err) {
           console.error("[Supabase notice] Error saving ad:", err);
         }
       },
       deleteAd: (id) => {
         set({ ads: (get().ads || []).filter(a => a.id !== id) });
-        if (supabase) { supabase.from('ads').delete().eq('id', id); }
+        if (supabase) { supabase.from('ads').delete().eq('id', id).catch(() => {}); }
       },
       comments: seedComments && seedComments.length > 0 ? (seedComments as CommentItem[]) : [],
       directMessages: seedMessages && seedMessages.length > 0 ? (seedMessages as DirectMessage[]) : [],
@@ -736,7 +736,7 @@ export const useStore = create<AppState>()(
           if (supabase) {
             supabase.from('messages').insert({ id: msgId, ...newMsg }).then(({ error }) => {
               if (error) console.warn('[Supabase notice]', error?.message || error);
-            });
+            }).catch(() => {});
           }
         } catch (err) {
           console.warn("Message sync notice:", err);
@@ -800,7 +800,7 @@ export const useStore = create<AppState>()(
 
               set(state => ({ directMessages: [...(state.directMessages || []), abdelMsg] }));
               if (supabase) {
-                await supabase.from('messages').insert({ id: abdelMsgId, ...abdelMsg });
+                await supabase.from('messages').insert({ id: abdelMsgId, ...abdelMsg }).catch(() => {});
               }
             } catch (err) {
               console.warn("[Abdel Messenger] Direct AI response notice:", err);
@@ -811,7 +811,7 @@ export const useStore = create<AppState>()(
       deleteDirectMessage: (id) => {
         const dms = get().directMessages || [];
         set({ directMessages: dms.filter(dm => dm.id !== id) });
-        if (supabase) { supabase.from('messages').delete().eq('id', id); }
+        if (supabase) { supabase.from('messages').delete().eq('id', id).catch(() => {}); }
       },
       markDirectMessagesAsRead: (contactEmail, userEmail) => {
         const dms = get().directMessages || [];
@@ -822,7 +822,7 @@ export const useStore = create<AppState>()(
         const newDms = dms.map(dm => {
           if (!dm.read && dm.receiver?.toLowerCase() === receiverClean && (!senderClean || dm.sender?.toLowerCase() === senderClean)) {
             updated = true;
-            if (supabase) { supabase.from('messages').update({ read: true }).eq('id', dm.id); }
+            if (supabase) { supabase.from('messages').update({ read: true }).eq('id', dm.id).catch(() => {}); }
             return { ...dm, read: true };
           }
           return dm;
@@ -892,7 +892,7 @@ export const useStore = create<AppState>()(
           for (const user of fusedUsers) {
             try {
               const clean = await sanitizeFirestorePayload(user);
-              if (supabase) { await supabase.from('users').upsert({ id: user.id, ...clean }, { onConflict: 'email' }); }
+              if (supabase) { await supabase.from('users').upsert({ id: user.id, ...clean }, { onConflict: 'email' }).catch(() => {}); }
             } catch (_) {}
           }
           console.log(`Fused ${duplicates.length} duplicate accounts. Total users: ${fusedUsers.length}`);
@@ -975,7 +975,7 @@ export const useStore = create<AppState>()(
           if (supabase) {
             supabase.from('comments').insert({ id: comment.id, ...comment } as any).then(({ error }) => {
               if (error) console.error("[Supabase notice] Failed to write comment:", error);
-            });
+            }).catch(() => {});
           }
         } catch (err) {
           console.warn("[Supabase notice] Comment write error:", err);
@@ -1033,7 +1033,7 @@ export const useStore = create<AppState>()(
       },
       approveComment: (id) => {
         set({ comments: (get().comments || []).map(c => c.id === id ? { ...c, isApproved: true } : c) });
-        if (supabase) { supabase.from('comments').update({ isApproved: true } as any).eq('id', id); }
+        if (supabase) { supabase.from('comments').update({ isApproved: true } as any).eq('id', id).catch(() => {}); }
       },
       deleteComment: (id, requesterEmail) => {
         const comments = get().comments || [];
@@ -1049,7 +1049,7 @@ export const useStore = create<AppState>()(
         }
 
         set({ comments: comments.filter(c => c.id !== id) });
-        if (supabase) { supabase.from('comments').delete().eq('id', id); }
+        if (supabase) { supabase.from('comments').delete().eq('id', id).catch(() => {}); }
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1078,7 +1078,7 @@ export const useStore = create<AppState>()(
         set({
           comments: comments.map(c => c.id === id ? { ...c, text, isApproved: true } : c)
         });
-        if (supabase) { supabase.from('comments').update({ text, isApproved: true } as any).eq('id', id); }
+        if (supabase) { supabase.from('comments').update({ text, isApproved: true } as any).eq('id', id).catch(() => {}); }
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1136,7 +1136,7 @@ export const useStore = create<AppState>()(
         });
 
         if (supabase) {
-          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id);
+          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id).catch(() => {});
         }
 
         get().addInteraction(
@@ -1201,7 +1201,7 @@ export const useStore = create<AppState>()(
           }
         );
         if (supabase) {
-          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id);
+          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id).catch(() => {});
         }
       },
       notifications: [
@@ -1241,7 +1241,7 @@ export const useStore = create<AppState>()(
           set({ notificationPreferences: updated, readerProfile: updatedProfile });
           const userKey = (currentProfile.email || currentProfile.id || '').toLowerCase().trim();
           if (userKey && supabase) {
-            supabase.from('users').update({ notification_preferences: updated } as any).eq('id', userKey);
+            supabase.from('users').update({ notification_preferences: updated } as any).eq('id', userKey).catch(() => {});
           }
         } else {
           set({ notificationPreferences: updated });
@@ -1282,7 +1282,7 @@ export const useStore = create<AppState>()(
                   });
                 } catch (e) {}
               }
-            });
+            }).catch(() => {});
           }
         }
       },
@@ -1322,7 +1322,7 @@ export const useStore = create<AppState>()(
           try {
             const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
             if (supabase) {
-              await supabase.from('subscribers').upsert({ id: subDocId, email: clean, date: newSub.date, active: true });
+              await supabase.from('subscribers').upsert({ id: subDocId, email: clean, date: newSub.date, active: true }).catch(() => {});
             }
           } catch (err) {
             console.error("[Supabase notice] Error saving subscriber:", err);
@@ -1335,7 +1335,7 @@ export const useStore = create<AppState>()(
         try {
           const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
           if (supabase) {
-            await supabase.from('subscribers').delete().eq('id', subDocId);
+            await supabase.from('subscribers').delete().eq('id', subDocId).catch(() => {});
           }
         } catch (err) {
           console.error("[Supabase notice] Error deleting subscriber:", err);
@@ -1377,7 +1377,7 @@ export const useStore = create<AppState>()(
           users: users.map(u => u.email.toLowerCase().trim() === normalized ? { ...u, isPrivate } : u)
         });
         if (supabase) {
-          supabase.from('users').update({ hide_personal_info: isPrivate }).eq('id', normalized);
+          supabase.from('users').update({ hide_personal_info: isPrivate }).eq('id', normalized).catch(() => {});
         }
       },
       sendFriendRequest: (fromEmail, toEmail) => {
@@ -1397,7 +1397,7 @@ export const useStore = create<AppState>()(
           })
         });
         if (supabase) {
-          supabase.from('friend_requests').upsert({ user_id: fromNorm, to_email: toNorm, status: 'pending', created_at: new Date().toISOString() });
+          supabase.from('friend_requests').upsert({ user_id: fromNorm, to_email: toNorm, status: 'pending', created_at: new Date().toISOString() }).catch(() => {});
         }
       },
       acceptFriendRequest: (fromEmail, toEmail) => {
@@ -1417,9 +1417,9 @@ export const useStore = create<AppState>()(
           })
         });
         if (supabase) {
-          supabase.from('friends').upsert({ user_id: fromNorm, friend_email: toNorm, connected_at: Date.now() });
-          supabase.from('friends').upsert({ user_id: toNorm, friend_email: fromNorm, connected_at: Date.now() });
-          supabase.from('friend_requests').delete().eq('user_id', fromNorm).eq('to_email', toNorm);
+          supabase.from('friends').upsert({ user_id: fromNorm, friend_email: toNorm, connected_at: Date.now() }).catch(() => {});
+          supabase.from('friends').upsert({ user_id: toNorm, friend_email: fromNorm, connected_at: Date.now() }).catch(() => {});
+          supabase.from('friend_requests').delete().eq('user_id', fromNorm).eq('to_email', toNorm).catch(() => {});
         }
       },
       removeFriend: (email1, email2) => {
@@ -1439,8 +1439,8 @@ export const useStore = create<AppState>()(
           })
         });
         if (supabase) {
-          supabase.from('friends').delete().eq('user_id', norm1).eq('friend_email', norm2);
-          supabase.from('friends').delete().eq('user_id', norm2).eq('friend_email', norm1);
+          supabase.from('friends').delete().eq('user_id', norm1).eq('friend_email', norm2).catch(() => {});
+          supabase.from('friends').delete().eq('user_id', norm2).eq('friend_email', norm1).catch(() => {});
         }
       },
 
@@ -1471,7 +1471,7 @@ export const useStore = create<AppState>()(
             readingTime: 0,
             bio: "Membre actif Perspective",
             accolades: ["verified_identity"]
-          }, { onConflict: 'email' });
+          }, { onConflict: 'email' }).catch(() => {});
         }
         return true;
       },
@@ -1550,7 +1550,7 @@ export const useStore = create<AppState>()(
             timestamp: new Date().toISOString(),
             user_email: email,
             metadata: detail as any
-          });
+          }).catch(() => {});
         }
       },
       siteSettings: {
@@ -1721,7 +1721,7 @@ export const useStore = create<AppState>()(
         try {
           const clean = await sanitizeFirestorePayload(newSettings as any);
           if (supabase) {
-            await supabase.from('site_settings').upsert({ id: 'singleton', data: clean });
+            await supabase.from('site_settings').upsert({ id: 'singleton', data: clean }).catch(() => {});
           }
         } catch (err) {
           console.error("[Supabase notice] Error updating siteSettings:", err);
@@ -1737,7 +1737,7 @@ export const useStore = create<AppState>()(
         set({
           users: (get().users || []).map(u => u.email.toLowerCase() === normalized ? { ...u, role } : u)
         });
-        if (supabase) { supabase.from('users').update({ role }).eq('id', normalized); }
+        if (supabase) { supabase.from('users').update({ role }).eq('id', normalized).catch(() => {}); }
       },
       updateUserSecurity: (email, emailVerified, mfaEnabled) => {
         const normalized = email.toLowerCase().trim();
@@ -1751,7 +1751,7 @@ export const useStore = create<AppState>()(
           users: updatedUsers,
           readerProfile: updatedProfile
         });
-        if (supabase) { supabase.from('users').update({ emailVerified, mfaEnabled }).eq('id', normalized); }
+        if (supabase) { supabase.from('users').update({ emailVerified, mfaEnabled }).eq('id', normalized).catch(() => {}); }
       },
       updateUserPassword: (email, password) => {
         const normalized = email.toLowerCase().trim();
@@ -1770,7 +1770,7 @@ export const useStore = create<AppState>()(
           });
         }
         set({ users: updatedUsers });
-        if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }, { onConflict: 'email' }); }
+        if (supabase) { supabase.from('users').upsert({ id: normalized, password, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
       },
       updateUserPin: (email, pin) => {
         const normalized = email.toLowerCase().trim();
@@ -1784,7 +1784,7 @@ export const useStore = create<AppState>()(
           users: updatedUsers,
           readerProfile: updatedProfile
         });
-        if (supabase) { supabase.from('users').update({ pin, authType: 'pin', mfaEnabled: true }).eq('id', normalized); }
+        if (supabase) { supabase.from('users').update({ pin, authType: 'pin', mfaEnabled: true }).eq('id', normalized).catch(() => {}); }
       },
       purgeDatabaseAndArticles: async () => {
         const articlesToDelete = get().articles || [];
@@ -1821,7 +1821,7 @@ export const useStore = create<AppState>()(
 
           if (articlesRes.data) {
             for (const row of articlesRes.data) {
-              await supabase.from('articles').delete().eq('id', row.id);
+              await supabase.from('articles').delete().eq('id', row.id).catch(() => {});
             }
           }
           if (usersRes.data) {
@@ -1835,7 +1835,7 @@ export const useStore = create<AppState>()(
             const snap = await supabase.from(colName).select('id');
             if (snap.data) {
               for (const row of snap.data) {
-                await supabase.from(colName).delete().eq('id', row.id);
+                await supabase.from(colName).delete().eq('id', row.id).catch(() => {});
               }
             }
           }
@@ -2071,7 +2071,7 @@ export const useStore = create<AppState>()(
         if (target) {
           try {
             const clean = await sanitizeFirestorePayload(target as any);
-            if (supabase) { await supabase.from('matches').upsert({ id: matchId, ...clean }); }
+            if (supabase) { await supabase.from('matches').upsert({ id: matchId, ...clean }).catch(() => {}); }
           } catch (e) {
             console.error("[Supabase notice] Error updating match:", e);
           }
@@ -2081,14 +2081,14 @@ export const useStore = create<AppState>()(
         set({ matches: [...(get().matches || []), match] });
         try {
           const clean = await sanitizeFirestorePayload(match as any);
-          if (supabase) { await supabase.from('matches').upsert({ id: match.id, ...clean }); }
+          if (supabase) { await supabase.from('matches').upsert({ id: match.id, ...clean }).catch(() => {}); }
         } catch (e) {
           console.error("[Supabase notice] Error adding match:", e);
         }
       },
       deleteMatch: (matchId) => {
         set({ matches: (get().matches || []).filter(m => m.id !== matchId) });
-        if (supabase) { supabase.from('matches').delete().eq('id', matchId); }
+        if (supabase) { supabase.from('matches').delete().eq('id', matchId).catch(() => {}); }
       }
     }),
     {
@@ -2118,6 +2118,5 @@ export const useStore = create<AppState>()(
     }
   )
 );
-
 
 
