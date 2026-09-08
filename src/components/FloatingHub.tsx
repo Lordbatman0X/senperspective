@@ -96,7 +96,8 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
   const contactMap = new Map<string, { name: string; email: string; avatar?: string; role?: string; isOnline?: boolean }>();
 
-  // Only add friends to the FloatingHub chat contact list
+  // Add friends to the FloatingHub chat contact list.
+  // First pass: use allUsers data for friends that are in the registered users list.
   allUsers.forEach(u => {
     const emailLow = u.email.toLowerCase().trim();
     if (emailLow && emailLow !== myEmailLower && realFriendsList.includes(emailLow)) {
@@ -110,6 +111,21 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     }
   });
 
+  // Second pass: add any friends that are NOT in allUsers (e.g. Firestore users
+  // collection is empty or unreachable). This prevents the contact list from
+  // disappearing entirely when the central database is offline.
+  realFriendsList.forEach((friendEmail: string) => {
+    const emailLow = friendEmail.toLowerCase().trim();
+    if (emailLow && emailLow !== myEmailLower && !contactMap.has(emailLow)) {
+      contactMap.set(emailLow, {
+        name: emailLow.split("@")[0],
+        email: friendEmail,
+        avatar: emailLow.charAt(0).toUpperCase(),
+        role: "Member",
+        isOnline: false
+      });
+    }
+  });
 
   const contactsList = Array.from(contactMap.values());
   const [userSearchQuery, setUserSearchQuery] = useState("");

@@ -1,47 +1,11 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
-import { get, set as idbSet, del } from 'idb-keyval';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import { realFirestore as db, collection, doc, setDoc, deleteDoc, getDocs } from './lib/realFirebase';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
-
-const idbStorage: StateStorage = {
-  getItem: async (name: string): Promise<string | null> => {
-    try {
-      return (await get(name)) || null;
-    } catch (err) {
-      console.warn("IndexedDB getItem fallback notice:", err);
-      try {
-        return localStorage.getItem(name);
-      } catch (_) {
-        return null;
-      }
-    }
-  },
-  setItem: async (name: string, value: string): Promise<void> => {
-    try {
-      await idbSet(name, value);
-    } catch (err) {
-      console.warn("IndexedDB setItem fallback notice:", err);
-      try {
-        localStorage.setItem(name, value);
-      } catch (_) {}
-    }
-  },
-  removeItem: async (name: string): Promise<void> => {
-    try {
-      await del(name);
-    } catch (err) {
-      console.warn("IndexedDB removeItem fallback notice:", err);
-      try {
-        localStorage.removeItem(name);
-      } catch (_) {}
-    }
-  },
-};
 
 export interface FriendContact {
   email: string;
@@ -531,20 +495,8 @@ export const useStore = create<AppState>()(
               }
             });
             if (fetchedArticles.length > 0) {
-              // Centralize: only keep articles published between yesterday and today
-              const now = new Date();
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const yesterday = new Date(today);
-              yesterday.setDate(yesterday.getDate() - 1);
-              
-              const filteredArticles = fetchedArticles.filter(a => {
-                if (!a.date) return false;
-                const articleDate = new Date(a.date);
-                return articleDate >= yesterday && articleDate <= now;
-              });
-              
-              // Only use filtered articles - don't add seeds back
-              const combined = [...filteredArticles].sort(
+              // Centralize: use all fetched articles sorted by date descending
+              const combined = [...fetchedArticles].sort(
                 (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
               );
               set({ articles: combined });
@@ -817,19 +769,11 @@ export const useStore = create<AppState>()(
         };
         set({ directMessages: [...dms, newMsg] });
 
-        // Save to Firestore and Central Server Backend
+        // Save to Firestore
         try {
           const cleanMsg = JSON.parse(JSON.stringify(newMsg));
           setDoc(doc(db, "messages", msgId), cleanMsg).catch(err => {
             console.warn("Firestore message notice:", err?.message || err);
-          });
-          // Dual persistence: central server database for uninterrupted cross-device sync
-          fetch(`/api/mongodb/doc/messages/${msgId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: cleanMsg, merge: true })
-          }).catch(err => {
-            console.warn("Central DB message notice:", err);
           });
         } catch (err) {
           console.warn("Message sync notice:", err);
@@ -1857,8 +1801,8 @@ export const useStore = create<AppState>()(
 
         // 2. Clear client-side storage caches
         try {
-          await del('perspective-group-storage');
-          await del('perspective-storage-v1');
+          localStorage.removeItem('perspective-group-storage');
+          localStorage.removeItem('perspective-storage-v1');
           localStorage.clear();
         } catch (e) {
           console.error("Error clearing local storage:", e);
@@ -2142,12 +2086,8 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'perspective-group-storage',
-      storage: createJSONStorage(() => idbStorage),
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({ 
-        // Centralized data store: only persist USER-SPECIFIC preferences locally.
-        // Shared content (articles, ads, comments, messages, subscribers, matches,
-        // siteSettings, media, users, interactions) lives ONLY in Firestore so every
-        // device/browser sees the SAME database — no more separate/localized copies.
         theme: state.theme,
         language: state.language, 
         savedArticles: state.savedArticles,

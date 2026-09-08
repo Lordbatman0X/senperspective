@@ -157,34 +157,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     cleanOldMockData();
 
-    // 1. Synchronize users continuously from Central Server API and Firestore
-    const syncUsersFromCentralAPI = async () => {
+    // Synchronize users continuously from Firestore (single source of truth)
+    const syncUsersFromFirestore = async () => {
       try {
-        const res = await fetch("/api/users");
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.success && Array.isArray(data.users)) {
-          const formatted: FirestoreUser[] = data.users.map((u: any) => {
-            const email = (u.email || u.id || "").toLowerCase().trim();
-            const lastActiveTime = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
-            const isOnlineCalculated = Boolean(u.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
+        const userSnapshot = await getDocs(collection(db, "users"));
+        if (userSnapshot && !userSnapshot.empty) {
+          const formatted: FirestoreUser[] = [];
+          userSnapshot.forEach((docSnap: any) => {
+            const data = docSnap.data();
+            const email = (data.email || docSnap.id || "").toLowerCase().trim();
+            const lastActiveTime = data.lastActiveAt ? new Date(data.lastActiveAt).getTime() : 0;
+            const isOnlineCalculated = Boolean(data.isOnline) || (lastActiveTime > 0 && (Date.now() - lastActiveTime < 5 * 60 * 1000));
             const isSuperAdmin = email === "kadersdiaz3@gmail.com";
 
-            return {
-              email: email,
-              name: u.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
-              avatarUrl: u.avatarUrl || "preset-male",
-              role: isSuperAdmin ? "Admin" : (u.role || "Member"),
+            formatted.push({
+              email,
+              name: data.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
+              avatarUrl: data.avatarUrl || "preset-male",
+              role: isSuperAdmin ? "Admin" : (data.role || "Member"),
               isOnline: isOnlineCalculated,
-              lastActiveAt: u.lastActiveAt || undefined,
-              coverPhotoUrl: u.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
-              streak: u.streak !== undefined ? u.streak : 1,
-              readingTime: u.readingTime !== undefined ? u.readingTime : 0,
-              hidePersonalInfo: u.hidePersonalInfo || false,
-              hideEmail: u.hideEmail || false,
-              bio: u.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
-              accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (u.accolades || ["verified_identity"])
-            };
+              lastActiveAt: data.lastActiveAt || undefined,
+              coverPhotoUrl: data.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+              streak: data.streak !== undefined ? data.streak : 1,
+              readingTime: data.readingTime !== undefined ? data.readingTime : 0,
+              hidePersonalInfo: data.hidePersonalInfo || false,
+              hideEmail: data.hideEmail || false,
+              bio: data.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : "Membre actif Perspective"),
+              accolades: isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : (data.accolades || ["verified_identity"])
+            });
           });
 
           // Ensure Super Admin kadersdiaz3@gmail.com is ALWAYS present
@@ -206,15 +206,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           useStore.setState({ users: formatted as any });
         }
       } catch (err) {
-        console.warn("[Central Users Sync notice]", err);
+        console.warn("[Firestore Users] Notice fetching users:", err);
       }
     };
 
-    // Initial fetch and periodic polling
-    syncUsersFromCentralAPI();
-    const usersInterval = setInterval(syncUsersFromCentralAPI, 4000);
+    // Initial fetch
+    syncUsersFromFirestore();
+    const usersInterval = setInterval(syncUsersFromFirestore, 30000);
 
-    // Subscribe to Firestore users collection as auxiliary real-time channel
+    // Subscribe to Firestore users collection as primary real-time channel
     const unsubscribeUsers = firestoreOnSnapshot(collection(db, "users"), (snapshot) => {
       const usersList: FirestoreUser[] = [];
       snapshot.forEach((docSnap: any) => {
@@ -225,7 +225,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const isSuperAdmin = email === "kadersdiaz3@gmail.com";
 
         usersList.push({
-          email: email,
+          email,
           name: data.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
           avatarUrl: data.avatarUrl || "preset-male",
           role: isSuperAdmin ? "Admin" : (data.role || "Member"),
@@ -259,7 +259,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         useStore.setState({ users: usersList as any });
       }
     }, (error) => {
-      console.warn("[Firestore Users] Notice listening to users (central server sync is active):", error?.message || error);
+      console.warn("[Firestore Users] Notice listening to users:", error?.message || error);
     });
 
     return () => {
@@ -268,40 +268,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Direct Messages via Central Server API + Firestore
+  // Real-time synchronization of Direct Messages via Firestore
   useEffect(() => {
-    const syncMessagesFromCentralAPI = async () => {
+    const syncMessagesFromFirestore = async () => {
       try {
-        const res = await fetch("/api/mongodb/collection/messages");
-        if (!res.ok) return;
-        const data = await res.json();
-        const rawList = data.documents || [];
-        if (Array.isArray(rawList) && rawList.length > 0) {
-          const messagesList = rawList.map((d: any) => {
-            const item = d.data || d;
-            return {
-              id: d.id || item.id,
-              sender: (item.sender || "").toLowerCase().trim(),
-              receiver: (item.receiver || "").toLowerCase().trim(),
-              text: item.text || "",
-              date: item.date || new Date().toISOString().split('T')[0],
-              timestamp: item.timestamp || Date.now(),
-              read: Boolean(item.read),
-              attachment: item.attachment || undefined
-            };
+        const snapshot = await getDocs(collection(db, "messages"));
+        const messagesList: any[] = [];
+        snapshot.forEach((docSnap: any) => {
+          const data = docSnap.data();
+          messagesList.push({
+            id: docSnap.id,
+            sender: (data.sender || "").toLowerCase().trim(),
+            receiver: (data.receiver || "").toLowerCase().trim(),
+            text: data.text || "",
+            date: data.date || new Date().toISOString().split('T')[0],
+            timestamp: data.timestamp || Date.now(),
+            read: Boolean(data.read),
+            attachment: data.attachment || undefined
           });
-          messagesList.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+        });
+
+        if (messagesList.length > 0) {
+          messagesList.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
           useStore.setState({ directMessages: messagesList });
         }
       } catch (err) {
-        // Silent catch for message polling
+        console.warn("[Firestore Messages] Notice fetching messages:", err);
       }
     };
 
-    syncMessagesFromCentralAPI();
-    const msgInterval = setInterval(syncMessagesFromCentralAPI, 4000);
+    syncMessagesFromFirestore();
+    const msgInterval = setInterval(syncMessagesFromFirestore, 30000);
 
-    // Listen to messages collection in real-time via Firestore when available
+    // Listen to messages collection in real-time via Firestore
     const unsubscribeMessages = firestoreOnSnapshot(collection(db, "messages"), (snapshot) => {
       const messagesList: any[] = [];
       snapshot.forEach((docSnap: any) => {

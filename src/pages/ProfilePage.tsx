@@ -329,8 +329,9 @@ export function ProfilePage() {
                   userEmailLow === "admin@perspective.sn" || 
                   userEmailLow.includes("admin");
 
-  // Privacy gate rule (Always show public badges/bio, hide personal email if requested)
-  const canViewDetails = true;
+  // Privacy gate rule: show public info always; hide detailed stats/accolades/badges
+  // when target user has set their profile to private, unless viewer is the owner or admin.
+  const canViewDetails = isSelf || isAdmin || !targetUser.hidePersonalInfo;
 
   // Toggle friendship action
   const handleFriendship = async () => {

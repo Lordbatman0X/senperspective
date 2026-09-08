@@ -61,21 +61,36 @@ export function getMessengerContacts(
     }
   });
 
-  // 4. Friends List
-  (friends || []).forEach(f => {
-    const emailLow = (f.email || '').toLowerCase().trim();
-    if (emailLow && emailLow !== myEmailLower && !map.has(emailLow)) {
-      map.set(emailLow, {
-        email: f.email,
-        name: f.name || emailLow.split('@')[0],
-        role: f.role || 'Member',
-        avatar: (f.name || 'U').charAt(0).toUpperCase(),
-        avatarUrl: f.avatarUrl || f.avatar,
-        isOnline: Boolean((f as any).isOnline),
-        isAi: false
-      });
-    }
-  });
+  // 4. Friends List — friends may be string emails or FriendContact objects
+   const normalizedFriends: MessengerContact[] = (friends || []).map(f => {
+     if (typeof f === 'string') {
+       const emailLow = f.toLowerCase().trim();
+       return {
+         email: emailLow,
+         name: emailLow.split('@')[0],
+         role: 'Member',
+         avatar: emailLow.charAt(0).toUpperCase(),
+         isOnline: false,
+         isAi: false
+       };
+     }
+     const emailLow = (f.email || '').toLowerCase().trim();
+     return {
+       email: emailLow,
+       name: f.name || emailLow.split('@')[0],
+       role: f.role || 'Member',
+       avatar: (f.name || 'U').charAt(0).toUpperCase(),
+       avatarUrl: f.avatarUrl || f.avatar,
+       isOnline: Boolean(f.isOnline),
+       isAi: false
+     };
+   });
+
+   normalizedFriends.forEach(f => {
+     if (f.email && f.email !== myEmailLower && !map.has(f.email)) {
+       map.set(f.email, f);
+     }
+   });
 
   return Array.from(map.values());
 }
