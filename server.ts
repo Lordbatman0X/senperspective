@@ -112,24 +112,11 @@ app.use((req, res, next) => {
     const { name } = req.params;
     try {
       const formatted = await getCollectionDocs(name);
-      if (name === "articles" && (!formatted || formatted.length === 0)) {
-        const fallback = rssDraftsRepository.length > 0 ? rssDraftsRepository : [];
-        return res.json({ 
-          success: true, 
-          count: fallback.length, 
-          documents: fallback.map(d => ({ id: d.id, data: d })) 
-        });
-      }
+      // FIX: Do NOT fallback to RSS drafts - they are test/seed data
+      // Return empty array if no articles found, so client can show proper state
       return res.json({ success: true, count: formatted.length, documents: formatted });
     } catch (err: any) {
       console.warn("[MongoDB GET COLLECTION NOTICE]", err?.message || err);
-      if (name === "articles" && rssDraftsRepository.length > 0) {
-        return res.json({
-          success: true,
-          count: rssDraftsRepository.length,
-          documents: rssDraftsRepository.map(d => ({ id: d.id, data: d }))
-        });
-      }
       return res.status(500).json({ success: false, error: err?.message || "Erreur MongoDB" });
     }
   });

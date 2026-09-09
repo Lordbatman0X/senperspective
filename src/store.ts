@@ -177,6 +177,7 @@ interface AppState {
   toggleSavedArticle: (id: string) => void;
   articles: Article[];
   setArticles: (articles: Article[]) => void;
+  loadArticles: () => Promise<Article[]>;
   syncFromSupabase: () => Promise<void>;
   addArticle: (article: Article) => void;
   updateArticle: (article: Article) => void;
@@ -497,6 +498,52 @@ export const useStore = create<AppState>()(
       articles: [], // Start empty - will be populated by loadArticles() on app init
       isLoadingArticles: true, // Track loading state for proper UX
       setArticles: (articles) => set({ articles }),
+      loadArticles: async () => {
+        // Set loading state
+        set({ isLoadingArticles: true });
+        
+        try {
+          // Fetch articles from MongoDB API
+          const res = await fetch('/api/mongodb/collection/articles');
+          const data = await res.json();
+          
+          if (data?.success && Array.isArray(data.documents)) {
+            const remoteArticles = data.documents;
+            const combined = [...remoteArticles].sort(
+              (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+            );
+            set({ articles: combined, isLoadingArticles: false });
+            return combined;
+          } else {
+            // API returned no articles - check for local fallback
+            console.warn("[LoadArticles] No articles from API, checking local fallback");
+            const persisted = localStorage.getItem('perspective-store');
+            const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
+            if (!hasPersistedData) {
+              // First ever visit with no data - use seed articles
+              set({ articles: seedArticles, isLoadingArticles: false });
+              return seedArticles;
+            }
+            // Has persisted data - keep it
+            set({ isLoadingArticles: false });
+            return get().articles;
+          }
+        } catch (err) {
+          console.warn("[LoadArticles] Error fetching articles:", err);
+          // On error, keep persisted articles or use seed
+          const current = get().articles;
+          if (!current || current.length === 0) {
+            const persisted = localStorage.getItem('perspective-store');
+            const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
+            if (!hasPersistedData) {
+              set({ articles: seedArticles, isLoadingArticles: false });
+              return seedArticles;
+            }
+          }
+          set({ isLoadingArticles: false });
+          return get().articles;
+        }
+      },
       syncFromSupabase: async () => {
         set({ isSyncing: true });
         try {
@@ -689,12 +736,25 @@ export const useStore = create<AppState>()(
         set({ articles: [article, ...get().articles] });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
-          fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: clean, merge: true })
-          }).catch(() => {});
+          // Save to Supabase (shim routes to MongoDB API)
+          if (supabase) { 
+            await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(err => {
+              console.warn("[Supabase save notice]:", err?.message || err);
+            }); 
+          }
+          // Save directly to MongoDB API with await to ensure it completes
+          try {
+            const res = await fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: clean, merge: true })
+            });
+            if (!res.ok) {
+              console.warn("[MongoDB save notice]: Server returned", res.status);
+            }
+          } catch (fetchErr) {
+            console.warn("[MongoDB save notice]:", fetchErr);
+          }
         } catch (err) {
           console.error("[Persistence notice] Error writing article:", err);
         }
@@ -721,12 +781,25 @@ export const useStore = create<AppState>()(
         set({ articles: get().articles.map(a => a.id === article.id ? article : a) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          if (supabase) { await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(() => {}); }
-          fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: clean, merge: true })
-          }).catch(() => {});
+          // Save to Supabase (shim routes to MongoDB API)
+          if (supabase) { 
+            await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(err => {
+              console.warn("[Supabase update notice]:", err?.message || err);
+            }); 
+          }
+          // Save directly to MongoDB API with await to ensure it completes
+          try {
+            const res = await fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ data: clean, merge: true })
+            });
+            if (!res.ok) {
+              console.warn("[MongoDB update notice]: Server returned", res.status);
+            }
+          } catch (fetchErr) {
+            console.warn("[MongoDB update notice]:", fetchErr);
+          }
         } catch (err) {
           console.error("[Persistence notice] Error updating article:", err);
         }
