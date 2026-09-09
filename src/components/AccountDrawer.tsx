@@ -6,6 +6,7 @@ import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
 import { supabase, subscribeToTable, formatUserForSupabase } from '../lib/supabaseClient';
+import { cloudLoadCollection } from '../lib/cloudStore';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -310,13 +311,28 @@ export function AccountDrawer({
     const email = readerProfile.email.toLowerCase().trim();
 
     const loadFriends = async () => {
-      const { data } = await supabase.from('friends').select('*').eq('user_id', email);
-      if (data) {
-        const list: string[] = data.map((row: any) => (row.friend_email || '').toLowerCase().trim()).filter(Boolean);
+      try {
+        // Load friends from MongoDB via cloudStore
+        const rows = await cloudLoadCollection('friends');
+        console.log('[AccountDrawer] All friends from MongoDB:', rows);
+        console.log('[AccountDrawer] Current user email:', email);
+
+        const userFriends = rows.filter((row: any) => {
+          const userId = String(row?.user_id || '').toLowerCase().trim();
+          return userId === email;
+        });
+
+        const list: string[] = userFriends
+          .map((row: any) => (row.friend_email || row.email || '').toLowerCase().trim())
+          .filter(Boolean);
+
+        console.log('[AccountDrawer] Friends list:', list);
         setFriendsList(list);
+      } catch (err) {
+        console.warn("[AccountDrawer] Error fetching friends:", err);
       }
     };
-    loadFriends().catch((err) => console.warn("Notice fetching friends:", err));
+    loadFriends();
 
     const unsubscribe = subscribeToTable('friends', (payload) => {
       if (payload.new && (payload.new as any).user_id === email) {
@@ -926,7 +942,10 @@ export function AccountDrawer({
                             return (
                               <div className="py-2 px-2 flex flex-col items-center justify-center text-center w-full gap-1">
                                 <p className="text-xs text-zinc-500 italic">
-                                  {language === "fr" ? "Aucun contact trouvé" : "No contacts found"}
+                                  {chatSearchTerm 
+                                    ? (language === "fr" ? "Aucun contact trouvé" : "No contacts found")
+                                    : (language === "fr" ? "Chargement des contacts..." : "Loading contacts...")
+                                  }
                                 </p>
                               </div>
                             );

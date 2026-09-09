@@ -36,6 +36,17 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"abdel" | "chat">("abdel");
   const [selectedAbdelAi, setSelectedAbdelAi] = useState(siteSettings?.abdelAiProvider || 'auto');
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size for responsive layout
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     if (siteSettings?.abdelAiProvider) {
@@ -49,15 +60,52 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     const email = readerProfile.email.toLowerCase().trim();
 
     const loadRealFriends = async () => {
-      const rows: any[] = await cloudLoadCollection('friends');
-      const list: string[] = rows
-        .filter((row: any) => String(row?.user_id || '').toLowerCase().trim() === email)
-        .map((row: any) => String(row?.friend_email || '').toLowerCase().trim())
-        .filter(Boolean);
-      setRealFriendsList(list);
+      try {
+        const rows: any[] = await cloudLoadCollection('friends');
+        console.log('[FloatingHub] All friends from MongoDB:', rows);
+        console.log('[FloatingHub] Current user email:', email);
+
+        // Load friends from cloud - filter by user_id matching current user
+        const cloudFriends = rows
+          .filter((row: any) => {
+            const userId = String(row?.user_id || '').toLowerCase().trim();
+            const match = userId === email;
+            if (match) console.log('[FloatingHub] Matching friend row:', row);
+            return match;
+          })
+          .map((row: any) => String(row?.friend_email || row?.email || '').toLowerCase().trim())
+          .filter(Boolean);
+
+        console.log('[FloatingHub] Cloud friends after filter:', cloudFriends);
+
+        // Also include friends from the store (local state)
+        const storeFriends = (friends || [])
+          .map((f: any) => {
+            if (typeof f === 'string') return f.toLowerCase().trim();
+            return (f?.email || '').toLowerCase().trim();
+          })
+          .filter(Boolean);
+
+        console.log('[FloatingHub] Store friends:', storeFriends);
+
+        // Combine and deduplicate
+        const combinedFriends = [...new Set([...cloudFriends, ...storeFriends])];
+        console.log('[FloatingHub] Combined friends:', combinedFriends);
+        setRealFriendsList(combinedFriends);
+      } catch (err) {
+        console.warn('[FloatingHub] Error loading friends:', err);
+        // Fallback to store friends on error
+        const storeFriends = (friends || [])
+          .map((f: any) => {
+            if (typeof f === 'string') return f.toLowerCase().trim();
+            return (f?.email || '').toLowerCase().trim();
+          })
+          .filter(Boolean);
+        setRealFriendsList(storeFriends);
+      }
     };
-    loadRealFriends().catch((err) => console.warn(err));
-  }, [readerProfile?.email]);
+    loadRealFriends();
+  }, [readerProfile?.email, friends]);
 
 
   // Compute location-aware Abdel prompts dynamically
@@ -101,6 +149,31 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
   const contactMap = new Map<string, { name: string; email: string; avatar?: string; role?: string; isOnline?: boolean }>();
 
+  // Always add default contacts first (Abdel AI and Editorial Admin)
+  // This ensures users always have someone to message even with no friends
+  const abdelEmail = 'abdel@perspective.sn';
+  const editorialEmail = 'contact@perspective.sn';
+  
+  if (myEmailLower !== abdelEmail) {
+    contactMap.set(abdelEmail, {
+      name: language === 'fr' ? 'Abdel (IA Rédactionnelle)' : 'Abdel (Editorial AI)',
+      email: abdelEmail,
+      avatar: 'A',
+      role: language === 'fr' ? 'Intelligence Éditoriale' : 'Editorial Intelligence',
+      isOnline: true
+    });
+  }
+  
+  if (myEmailLower !== editorialEmail) {
+    contactMap.set(editorialEmail, {
+      name: language === 'fr' ? 'Admin Rédaction' : 'Editorial Admin',
+      email: editorialEmail,
+      avatar: 'P',
+      role: 'Perspective Group',
+      isOnline: true
+    });
+  }
+
   // Add friends to the FloatingHub chat contact list.
   // First pass: use allUsers data for friends that are in the registered users list.
   allUsers.forEach(u => {
@@ -128,6 +201,21 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
         avatar: emailLow.charAt(0).toUpperCase(),
         role: "Member",
         isOnline: false
+      });
+    }
+  });
+
+  // Third pass: add all registered users (not just friends) so users can discover
+  // and message other community members
+  allUsers.forEach(u => {
+    const emailLow = u.email.toLowerCase().trim();
+    if (emailLow && emailLow !== myEmailLower && !contactMap.has(emailLow)) {
+      contactMap.set(emailLow, {
+        name: u.name || emailLow.split("@")[0],
+        email: u.email,
+        avatar: (u.name || "U").charAt(0).toUpperCase(),
+        role: u.role || "Member",
+        isOnline: Boolean(u.isOnline)
       });
     }
   });
@@ -371,17 +459,17 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   };
 
   return (
-    <motion.div 
+    <motion.div
       ref={containerRef}
-      drag={true}
+      drag={!isMobile}
       dragConstraints={{ left: -1000, right: 50, top: -800, bottom: 50 }}
       dragElastic={0.08}
       dragMomentum={false}
-      className="fixed bottom-4 right-6 sm:right-10 z-[120] flex flex-col items-end font-sans touch-none select-none cursor-grab active:cursor-grabbing"
+      className={`fixed z-[120] flex flex-col items-end font-sans touch-none select-none ${isMobile ? 'bottom-0 right-0' : 'bottom-4 right-6 sm:right-10 cursor-grab active:cursor-grabbing'}`}
     >
       {/* Floating Trigger Bubbles - Abdel AI & Reader Messenger */}
       {!isOpen && (
-        <div className="flex items-center gap-2 p-1.5 bg-black/70 backdrop-blur-xl border border-white/20 rounded-full shadow-2xl transition-all">
+        <div className={`${isMobile ? 'mb-4 mr-4' : ''} flex items-center gap-2 p-1.5 bg-black/70 backdrop-blur-xl border border-white/20 rounded-full shadow-2xl transition-all`}>
           <button
             type="button"
             onClick={() => {
@@ -424,10 +512,10 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
             transition={{ duration: 0.2 }}
-            className="w-[380px] sm:w-[420px] h-[560px] bg-black/65 backdrop-blur-2xl border border-white/20 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-zinc-100"
+            className={`${isMobile ? 'fixed inset-0 w-full h-full rounded-none' : 'w-[380px] sm:w-[420px] h-[560px] rounded-2xl'} bg-black/65 backdrop-blur-2xl border border-white/20 shadow-2xl flex flex-col overflow-hidden text-zinc-100`}
           >
             {/* Header with Tabs */}
-            <div className="bg-zinc-900/95 dark:bg-zinc-900/95 px-4 py-3 flex items-center justify-between border-b border-zinc-800/80">
+            <div className={`bg-zinc-900/95 dark:bg-zinc-900/95 ${isMobile ? 'px-2 pt-8 pb-3' : 'px-4 py-3'} flex items-center justify-between border-b border-zinc-800/80 shrink-0`}>
               <div className="flex items-center gap-2">
                 <div className="flex bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
                   <button
@@ -594,7 +682,10 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
                   {filteredContacts.length === 0 ? (
                     <p className="text-[11px] text-zinc-500 text-center py-1">
-                      {language === "fr" ? "Aucun contact trouvé" : "No contacts found"}
+                      {userSearchQuery
+                        ? (language === "fr" ? "Aucun contact trouvé" : "No contacts found")
+                        : (language === "fr" ? "Chargement des contacts..." : "Loading contacts...")
+                      }
                     </p>
                   ) : (
                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
@@ -607,7 +698,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                           <button
                             key={c.email}
                             onClick={() => setSelectedContact(c.email)}
-                            className={`shrink-0 w-36 flex items-center gap-2 p-2 rounded-xl text-left border transition-all cursor-pointer ${
+                            className={`shrink-0 ${isMobile ? 'w-28' : 'w-36'} flex items-center gap-2 p-2 rounded-xl text-left border transition-all cursor-pointer ${
                               selectedContact === c.email
                                 ? "bg-zinc-800/90 border-[#E85D42] text-white shadow-sm"
                                 : "bg-zinc-950/60 border-zinc-800/60 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"

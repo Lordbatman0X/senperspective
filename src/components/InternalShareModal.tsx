@@ -542,7 +542,10 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
               <div className="p-1">
                 {filteredContacts.length === 0 ? (
                   <div className="p-6 text-center text-xs text-zinc-400 font-mono">
-                    {language === 'fr' ? 'Aucun contact trouvé' : 'No contacts found'}
+                    {searchQuery 
+                      ? (language === 'fr' ? 'Aucun contact trouvé' : 'No contacts found')
+                      : (language === 'fr' ? 'Chargement des contacts...' : 'Loading contacts...')
+                    }
                   </div>
                 ) : (
                   filteredContacts.map(contact => {
