@@ -5,7 +5,7 @@ import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import { supabase } from './lib/supabaseClient';
 import { cloudSave, cloudDelete, cloudLoadCollection, cloudSaveUserProfile } from './lib/cloudStore';
-import { resolveApiUrl } from './lib/apiUtils';
+import { resolveApiUrl, safeFetchJson } from './lib/apiUtils';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
@@ -498,21 +498,24 @@ export const useStore = create<AppState>()(
       syncFromSupabase: async () => {
         set({ isSyncing: true });
         try {
+          // Use direct backend API calls instead of Supabase shim to ensure
+          // all browsers hit the same authoritative MongoDB endpoint
           const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
-            supabase.from('articles').select('*'),
-            supabase.from('ads').select('*'),
+            safeFetchJson(resolveApiUrl('/api/mongodb/collection/articles')),
+            safeFetchJson(resolveApiUrl('/api/mongodb/collection/ads')),
             usersQuery(),
-            supabase.from('comments').select('*')
+            safeFetchJson(resolveApiUrl('/api/mongodb/collection/comments'))
           ]);
 
           let remoteArticles: Article[] = [];
-          if (articlesRes && articlesRes.data && Array.isArray(articlesRes.data) && articlesRes.data.length > 0) {
-            remoteArticles = articlesRes.data as Article[];
+          if (articlesRes.ok && articlesRes.data && Array.isArray((articlesRes.data as any).documents) && (articlesRes.data as any).documents.length > 0) {
+            // Extract articles from { id, data } wrapper
+            remoteArticles = (articlesRes.data as any).documents.map((d: any) => d.data);
           }
 
           let remoteAds: any[] = [];
-          if (adsRes && adsRes.data && Array.isArray(adsRes.data) && adsRes.data.length > 0) {
-            remoteAds = adsRes.data as any;
+          if (adsRes.ok && adsRes.data && Array.isArray((adsRes.data as any).documents) && (adsRes.data as any).documents.length > 0) {
+            remoteAds = (adsRes.data as any).documents.map((d: any) => d.data);
           }
 
           let remoteUsers: any[] = [];
@@ -521,65 +524,14 @@ export const useStore = create<AppState>()(
           }
 
           let remoteComments: any[] = [];
-          if (commentsRes && commentsRes.data && Array.isArray(commentsRes.data) && commentsRes.data.length > 0) {
-            remoteComments = commentsRes.data as any;
+          if (commentsRes.ok && commentsRes.data && Array.isArray((commentsRes.data as any).documents) && (commentsRes.data as any).documents.length > 0) {
+            remoteComments = (commentsRes.data as any).documents.map((d: any) => d.data);
           }
 
-          // Fallback / merge with Central Server unified sync state
-          try {
-            const sRes = await fetch(resolveApiUrl('/api/sync/state'));
-            if (sRes.ok) {
-              const sData = await sRes.json();
-              if (sData.success) {
-                if (remoteArticles.length === 0 && Array.isArray(sData.articles) && sData.articles.length > 0) {
-                  remoteArticles = sData.articles;
-                }
-                if (remoteAds.length === 0 && Array.isArray(sData.ads) && sData.ads.length > 0) {
-                  remoteAds = sData.ads;
-                }
-                if (Array.isArray(sData.users) && sData.users.length > 0) {
-                  const uMap = new Map<string, any>();
-                  remoteUsers.forEach(u => {
-                    const em = (u.email || u.id || '').toLowerCase().trim();
-                    if (em) uMap.set(em, u);
-                  });
-                  sData.users.forEach((u: any) => {
-                    const em = (u.email || u.id || '').toLowerCase().trim();
-                    if (em && !uMap.has(em)) {
-                      uMap.set(em, u);
-                    }
-                  });
-                  remoteUsers = Array.from(uMap.values());
-                }
-              }
-            }
-          } catch (srvErr) {
-            console.warn('[Sync] Central server state fetch notice:', srvErr);
-          }
-
-          // Central Users API fallback
-          try {
-            const uRes = await fetch(resolveApiUrl('/api/users'));
-            if (uRes.ok) {
-              const uData = await uRes.json();
-              if (uData.success && Array.isArray(uData.users) && uData.users.length > 0) {
-                const uMap = new Map<string, any>();
-                remoteUsers.forEach(u => {
-                  const em = (u.email || u.id || '').toLowerCase().trim();
-                  if (em) uMap.set(em, u);
-                });
-                uData.users.forEach((u: any) => {
-                  const em = (u.email || u.id || '').toLowerCase().trim();
-                  if (em && !uMap.has(em)) {
-                    uMap.set(em, u);
-                  }
-                });
-                remoteUsers = Array.from(uMap.values());
-              }
-            }
-          } catch (uErr) {
-            console.warn('[Sync] Central users endpoint notice:', uErr);
-          }
+          // REMOVED: Fragile fallback chain to /api/sync/state and /api/users
+          // All data must come from authoritative MongoDB endpoints above.
+          // If MongoDB is unavailable, we keep locally persisted data (below)
+          // instead of silently accepting different fallback data per browser.
 
           if (remoteArticles.length > 0) {
             const combined = [...remoteArticles].sort(
@@ -587,6 +539,8 @@ export const useStore = create<AppState>()(
             );
             set({ articles: combined });
           } else {
+            // Keep locally persisted articles — do NOT overwrite with seed data
+            // if the backend is temporarily unreachable.
             const current = get().articles;
             if (!current || current.length === 0) {
               set({ articles: seedArticles });
