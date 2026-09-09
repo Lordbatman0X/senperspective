@@ -169,6 +169,7 @@ export interface SubscriberItem {
 interface AppState {
   theme: 'light' | 'dark';
   isSyncing: boolean;
+  isLoadingArticles: boolean;
   toggleTheme: () => void;
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -493,7 +494,8 @@ export const useStore = create<AppState>()(
           );
         }
       },
-      articles: sampleArticles,
+      articles: [], // Start empty - will be populated by loadArticles() on app init
+      isLoadingArticles: true, // Track loading state for proper UX
       setArticles: (articles) => set({ articles }),
       syncFromSupabase: async () => {
         set({ isSyncing: true });
@@ -537,13 +539,24 @@ export const useStore = create<AppState>()(
             const combined = [...remoteArticles].sort(
               (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
             );
-            set({ articles: combined });
+            set({ articles: combined, isLoadingArticles: false });
           } else {
             // Keep locally persisted articles — do NOT overwrite with seed data
             // if the backend is temporarily unreachable.
             const current = get().articles;
             if (!current || current.length === 0) {
-              set({ articles: seedArticles });
+              // Only use seed articles on FIRST EVER visit (no persisted data)
+              // This ensures published articles are never overwritten by seed data
+              const persisted = localStorage.getItem('perspective-store');
+              const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
+              if (!hasPersistedData) {
+                set({ articles: seedArticles, isLoadingArticles: false });
+              } else {
+                // Has persisted data but API returned empty - keep persisted data
+                set({ isLoadingArticles: false });
+              }
+            } else {
+              set({ isLoadingArticles: false });
             }
           }
 
@@ -631,7 +644,16 @@ export const useStore = create<AppState>()(
             if (cloudFriends.length > 0) {
               const local = get().friends || [];
               const emailSet = new Set(local.map(f => (f.email || '').toLowerCase().trim()));
-              const merged = [...local, ...cloudFriends.filter(f => {
+              // Normalize cloud friends data - map friend_email to email if needed
+              const normalizedCloudFriends = cloudFriends.map((f: any) => ({
+                ...f,
+                email: f.email || f.friend_email || '',
+                name: f.name || (f.friend_email ? f.friend_email.split('@')[0] : 'Friend'),
+                role: f.role || 'Member',
+                avatar: f.avatar || (f.name ? f.name.charAt(0).toUpperCase() : 'F'),
+                status: f.status || 'connected'
+              }));
+              const merged = [...local, ...normalizedCloudFriends.filter(f => {
                 const em = (f.email || '').toLowerCase().trim();
                 return em && !emailSet.has(em);
               })];
@@ -651,8 +673,14 @@ export const useStore = create<AppState>()(
           console.warn("[Sync Notice] Remote sync note:", err);
           const current = get().articles;
           if (!current || current.length === 0) {
-            set({ articles: seedArticles });
+            // Only use seed articles on FIRST EVER visit (no persisted data)
+            const persisted = localStorage.getItem('perspective-store');
+            const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
+            if (!hasPersistedData) {
+              set({ articles: seedArticles });
+            }
           }
+          set({ isLoadingArticles: false });
         } finally {
           set({ isSyncing: false });
         }

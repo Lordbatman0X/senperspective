@@ -423,11 +423,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           try {
             const { data, error } = await supabase.from('articles').select('*');
             if (error || !data) return;
-            const existing = useStore.getState().articles;
-            if (!existing || existing.length === 0) {
-              useStore.setState({ articles: sampleArticles });
-              return;
-            }
+            // Don't reset to sampleArticles - keep current articles if they exist
+            // This prevents published articles from being overwritten by seed data
 
             const firestoreArticles: Article[] = [];
             data.forEach((rawDoc: any) => {
@@ -518,10 +515,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const deduplicatedArticles = Array.from(uniqueArticlesMap.values());
 
             if (deduplicatedArticles.length === 0) {
-              const existing = useStore.getState().articles;
-              if (!existing || existing.length === 0) {
-                useStore.setState({ articles: sampleArticles });
-              }
+              // Don't reset to sampleArticles - keep current articles
+              // This prevents published articles from being overwritten by seed data
+              console.log('[Auth] No articles from Supabase, keeping current articles');
             } else {
               deduplicatedArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
