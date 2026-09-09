@@ -3,7 +3,7 @@
  * Sends consented reader metrics, pageviews, and commercial conversion events to server & Firestore
  */
 
-import { supabase } from './supabaseClient';
+import { resolveApiUrl } from './apiUtils';
 
 const STORAGE_SESSION_KEY = 'perspective_analytics_session_id';
 const STORAGE_CONSENT_KEY = 'perspective_cookie_consent';
@@ -97,17 +97,21 @@ export async function sendConsentTelemetry(preferences: { essential: boolean; an
     userEmail: userEmail || ''
   };
 
-  // 1. Write directly to Supabase
+  // 1. Write directly to backend API
   try {
-    await supabase.from('user_consents').upsert({ ...payload, id: consentDocId });
-    console.log('[TELEMETRY] Cookie consent stored in Supabase:', consentDocId);
+    await fetch(resolveApiUrl('/api/analytics/consent'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, preferences, ...payload })
+    });
+    console.log('[TELEMETRY] Cookie consent stored in backend:', consentDocId);
   } catch (supabaseErr) {
-    console.warn('[TELEMETRY SUPABASE CONSENT ERROR]', supabaseErr);
+    console.warn('[TELEMETRY BACKEND CONSENT ERROR]', supabaseErr);
   }
 
-  // 2. Secondary fetch attempt to API route if backend server exists
+  // 2. Secondary raw fetch attempt to API route if backend server exists
   try {
-    await fetch('/api/analytics/consent', {
+    await fetch(resolveApiUrl('/api/analytics/consent'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId, preferences, ...payload })
@@ -157,18 +161,22 @@ export async function trackEvent(
     metadata: details.metadata || {}
   };
 
-  // 1. Write directly to Supabase
+  // 1. Write directly to backend API
   try {
     const eventDocId = `evt_${sessionId}_${Date.now()}`;
-    await supabase.from('analytics_events').insert({ ...payload, id: eventDocId });
-    console.log('[TELEMETRY] Event tracked in Supabase:', eventName);
+    await fetch(resolveApiUrl('/api/analytics/event'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, id: eventDocId })
+    });
+    console.log('[TELEMETRY] Event tracked in backend:', eventName);
   } catch (supabaseErr) {
-    console.warn('[TELEMETRY SUPABASE EVENT ERROR]', supabaseErr);
+    console.warn('[TELEMETRY BACKEND EVENT ERROR]', supabaseErr);
   }
 
   // 2. Secondary fetch attempt to API route if backend server exists
   try {
-    await fetch('/api/analytics/event', {
+    await fetch(resolveApiUrl('/api/analytics/event'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

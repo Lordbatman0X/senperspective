@@ -1,8 +1,7 @@
-import { supabase } from './supabaseClient';
+import { resolveApiUrl } from './apiUtils';
 
 type User = any;
 
-// In-memory & persistent access token cache
 let cachedAccessToken: string | null = typeof window !== 'undefined' ? localStorage.getItem('pg_google_access_token') : null;
 let cachedUser: User | null = null;
 let cachedUserEmail: string | null = typeof window !== 'undefined' ? localStorage.getItem('pg_google_user_email') : null;
@@ -16,66 +15,39 @@ const WORKSPACE_SCOPES = [
 
 /**
  * Sign in with Google to grant Google Workspace (Gmail + Sheets) permissions.
- * Uses Google Identity Services or Supabase OAuth.
+ * Uses Google Identity Services (GIS) — Supabase OAuth fallback removed (audit).
  */
 export async function connectGoogleGmail(): Promise<{ user: User; accessToken: string }> {
-  // If Google Identity Services is present on window
   const g = typeof window !== 'undefined' ? (window as any).google?.accounts?.oauth2 : null;
-  if (g) {
-    return new Promise((resolve, reject) => {
-      try {
-        const client = g.initTokenClient({
-          client_id: (window as any).__GOOGLE_CLIENT_ID__ || '',
-          scope: WORKSPACE_SCOPES.join(' '),
-          callback: (tokenResponse: any) => {
-            if (tokenResponse.error) {
-              reject(tokenResponse);
-              return;
-            }
-            cachedAccessToken = tokenResponse.access_token;
-            cachedUser = { email: cachedUserEmail || 'connected-user@google.com' };
-            cachedUserEmail = cachedUser.email;
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('pg_google_access_token', tokenResponse.access_token);
-              localStorage.setItem('pg_google_user_email', cachedUserEmail || '');
-            }
-            resolve({ user: cachedUser, accessToken: tokenResponse.access_token });
+  if (!g) {
+    return Promise.reject(new Error('Google Identity Services not loaded'));
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const client = g.initTokenClient({
+        client_id: (window as any).__GOOGLE_CLIENT_ID__ || '',
+        scope: WORKSPACE_SCOPES.join(' '),
+        callback: (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            reject(tokenResponse);
+            return;
           }
-        });
-        client.requestAccessToken({ prompt: 'select_account' });
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-
-  // Supabase OAuth fallback
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        scopes: WORKSPACE_SCOPES.join(' '),
-        queryParams: { prompt: 'select_account', access_type: 'offline' }
-      }
-    });
-    if (error) throw error;
-
-    const sessionRes = await supabase.auth.getSession();
-    const token = sessionRes.data?.session?.provider_token || sessionRes.data?.session?.access_token || 'mock_token';
-    cachedAccessToken = token;
-    cachedUser = sessionRes.data?.session?.user || { email: 'connected-user@google.com' };
-    cachedUserEmail = cachedUser?.email || 'connected-user@google.com';
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('pg_google_access_token', token);
-      localStorage.setItem('pg_google_user_email', cachedUserEmail || '');
+          cachedAccessToken = tokenResponse.access_token;
+          cachedUser = { email: cachedUserEmail || 'connected-user@google.com' };
+          cachedUserEmail = cachedUser.email;
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('pg_google_access_token', tokenResponse.access_token);
+            localStorage.setItem('pg_google_user_email', cachedUserEmail || '');
+          }
+          resolve({ user: cachedUser, accessToken: tokenResponse.access_token });
+        }
+      });
+      client.requestAccessToken({ prompt: 'select_account' });
+    } catch (err) {
+      reject(err);
     }
-
-    return { user: cachedUser, accessToken: token };
-  } catch (error: any) {
-    console.error('Google Workspace OAuth notice:', error);
-    throw error;
-  }
+  });
 }
 
 /**
@@ -179,7 +151,7 @@ export async function appendSubscriberToGoogleSheet({
 
   // Fallback to server proxy route `/api/sheets/append`
   try {
-    const res = await fetch('/api/sheets/append', {
+    const res = await fetch(resolveApiUrl('/api/sheets/append'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -247,7 +219,7 @@ export async function sendEmailViaGmailApi({
 
   // Server proxy route fallback
   try {
-    const res = await fetch('/api/gmail/send', {
+    const res = await fetch(resolveApiUrl('/api/gmail/send'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -277,7 +249,7 @@ export async function sendEmailViaGmailApi({
 export async function sendGoogleChatMessage(webhookUrl: string, text: string): Promise<boolean> {
   // Try server proxy first to avoid CORS issues
   try {
-    const res = await fetch('/api/google-chat/send', {
+    const res = await fetch(resolveApiUrl('/api/google-chat/send'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhookUrl, text })

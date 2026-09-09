@@ -3,13 +3,23 @@
 // central server API (/api/mongodb/*), which persists to MongoDB Atlas.
 // Replaces the retired browser-side Supabase client for messages,
 // notifications, friends, interactions and profile updates.
+//
+// IMPORTANT (audit fix): every request is resolved through resolveApiUrl()
+// so it honors the configured backend base (Admin → API, VITE_BACKEND_URL,
+// or the static-host fallback). A raw relative fetch would hit the static
+// Firebase host instead of the Express API and silently return index.html.
 // =============================================================================
 import { sanitizeFirestorePayload } from './imageUtils';
+import { resolveApiUrl } from './apiUtils';
+
+function cloudFetch(path: string, options?: RequestInit): Promise<Response> {
+  return fetch(resolveApiUrl(path), options);
+}
 
 export async function cloudSave(collection: string, id: string, data: any): Promise<void> {
   try {
     const clean = await sanitizeFirestorePayload(data);
-    await fetch(`/api/mongodb/doc/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+    await cloudFetch(`/api/mongodb/doc/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: clean, merge: true })
@@ -21,7 +31,7 @@ export async function cloudSave(collection: string, id: string, data: any): Prom
 
 export async function cloudDelete(collection: string, id: string): Promise<void> {
   try {
-    await fetch(`/api/mongodb/doc/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
+    await cloudFetch(`/api/mongodb/doc/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`, {
       method: 'DELETE'
     });
   } catch (err) {
@@ -32,8 +42,10 @@ export async function cloudDelete(collection: string, id: string): Promise<void>
 // Returns an array of document payloads (each containing at least an `id`)
 export async function cloudLoadCollection(collection: string): Promise<any[]> {
   try {
-    const res = await fetch(`/api/mongodb/collection/${encodeURIComponent(collection)}`);
+    const res = await cloudFetch(`/api/mongodb/collection/${encodeURIComponent(collection)}`);
     if (!res.ok) return [];
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('text/html')) return []; // static-hosting fallback page, not the API
     const json = await res.json();
     if (!json?.success || !Array.isArray(json.documents)) return [];
     // Server returns flattened docs: { id, ...fields }
@@ -50,7 +62,7 @@ export async function cloudSaveUserProfile(email: string, fields: Record<string,
   if (!cleanEmail) return;
   try {
     const clean = await sanitizeFirestorePayload(fields);
-    await fetch('/api/users', {
+    await cloudFetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...clean, email: cleanEmail, id: cleanEmail })

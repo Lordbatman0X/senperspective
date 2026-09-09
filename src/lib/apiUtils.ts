@@ -4,6 +4,23 @@
 const BACKEND_URL_STORAGE_KEY = 'perspective_backend_api_url';
 
 /**
+ * Default Express API base used when the app is served from a STATIC host
+ * (Firebase Hosting / Vercel / Netlify) where a relative `/api` call would
+ * hit the static site instead of the backend. This makes the deployed static
+ * site reach the real API out of the box. Overridable per-user in Admin → API,
+ * or globally at build time via VITE_BACKEND_URL.
+ */
+export const DEFAULT_STATIC_BACKEND = 'https://senperspective-api.onrender.com';
+
+function isStaticHost(): boolean {
+  if (typeof window === 'undefined' || !window.location) return false;
+  const host = window.location.hostname || '';
+  // Render/Express serve the site AND the API from the same origin → relative works.
+  // Firebase Vercel Netlify static hosts have no backend → we must point elsewhere.
+  return /\.(web\.app|firebaseapp|vercel\.app|netlify\.app|pages\.dev)$/i.test(host) || host === 'localhost' || host === '127.0.0.1';
+}
+
+/**
  * Returns the configured Backend API base URL, if any.
  * Allows custom domains (like senperspective.com on Firebase/Vercel) to point
  * to a dedicated Express backend (e.g. Railway, Render, Cloud Run).
@@ -17,6 +34,11 @@ export function getApiBaseUrl(): string {
   const envUrl = (import.meta as any).env?.VITE_BACKEND_URL;
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, '');
+  }
+  // Static-hosting fallback so the deployed Firebase site reaches the API.
+  if (isStaticHost()) {
+    const fallback = (DEFAULT_STATIC_BACKEND || '').trim().replace(/\/+$/, '');
+    if (fallback) return fallback;
   }
   return '';
 }

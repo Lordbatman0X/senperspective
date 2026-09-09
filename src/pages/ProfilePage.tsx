@@ -6,6 +6,7 @@ import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import { supabase, subscribeToTable, usersQuery } from '../lib/supabaseClient';
 import { cloudSave, cloudDelete, cloudLoadCollection } from '../lib/cloudStore';
+import { resolveApiUrl } from '../lib/apiUtils';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
@@ -206,7 +207,7 @@ export function ProfilePage() {
   useEffect(() => {
     if (!readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const load = async () => setFriends(await loadRelations('friends', 'user_id', myEmail, 'friend_email'));
+    const load = async () => setFriends(await loadRelations('friends', 'user_id', myEmail, 'email'));
     load();
   }, [readerProfile?.email]);
 
@@ -307,12 +308,17 @@ export function ProfilePage() {
         await cloudDelete('friends', `${a}:${b}`);
         await cloudDelete('friends', `${b}:${a}`);
         setFriends(friends.filter(f => f !== b));
+        useStore().deleteFriend(b);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
         const ts = Date.now();
-        await cloudSave('friends', `${a}:${b}`, { id: `${a}:${b}`, user_id: a, friend_email: b, connected_at: ts, type: 'friend' });
-        await cloudSave('friends', `${b}:${a}`, { id: `${b}:${a}`, user_id: b, friend_email: a, connected_at: ts, type: 'friend' });
+        const contact = { id: b, email: b, name: targetUser.name || b.split('@')[0], role: targetUser.role || 'Member', avatarUrl: targetUser.avatarUrl || '', status: 'friend' };
+        // Unified friend record (keyed per direction). The bubble/drawer read `.email`,
+        // the profile reads `.user_id` → `.email`. Persisted to MongoDB Atlas via cloudStore.
+        await cloudSave('friends', `${a}:${b}`, { id: `${a}:${b}`, user_id: a, friend_email: b, email: b, name: contact.name, role: contact.role, avatarUrl: contact.avatarUrl, connected_at: ts, type: 'friend' });
+        await cloudSave('friends', `${b}:${a}`, { id: `${b}:${a}`, user_id: b, friend_email: a, email: a, name: readerProfile?.name || a.split('@')[0], role: readerProfile?.role || 'Member', avatarUrl: readerProfile?.avatarUrl || '', connected_at: ts, type: 'friend' });
         setFriends([...new Set([...friends, b])]);
+        useStore().addFriend(contact);
         setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -452,9 +458,8 @@ export function ProfilePage() {
   const persistUserUpdate = async (userEmail: string, payload: Record<string, any>) => {
     const cleanEmail = userEmail.toLowerCase().trim();
     try {
-      // /api/users merges profile fields into the MongoDB users collection
       const clean = await sanitizeFirestorePayload(payload);
-      await fetch('/api/users', {
+      await fetch(resolveApiUrl('/api/users'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...clean, email: cleanEmail, id: cleanEmail })

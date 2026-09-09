@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient';
+import { resolveApiUrl, safeFetchJson } from './apiUtils';
 
 /**
  * Client-Side AI and RSS Engine
@@ -52,10 +52,10 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 
   loadPromise = (async () => {
     try {
-      // AUDIT fix: read the same row the server writes ('api_keys'), not 'singleton'
-      const { data, error } = await supabase.from('site_settings').select('data').eq('id', 'api_keys').single();
-      if (!error && data) {
-        const wrapped = (data.data as Record<string, any>) || {};
+       // AUDIT fix: read API keys from the central backend via Express API
+      const res = await safeFetchJson(resolveApiUrl('/api/mongodb/doc/site_settings/api_keys'));
+      if (res.ok && res.data) {
+        const wrapped = (res.data.data as Record<string, any>) || res.data;
         const apiKeys = (wrapped.api_keys || wrapped) as Record<string, string>;
         cachedFirestoreKeys = { ...apiKeys };
         hasLoadedFromFirestore = true;
@@ -77,7 +77,7 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
         return cachedFirestoreKeys;
       }
     } catch (e) {
-      console.warn('[Client AI] Note: Could not fetch keys from Supabase:', e);
+      console.warn('[Client AI] Note: Could not fetch keys from backend:', e);
     } finally {
       loadPromise = null;
     }
@@ -153,14 +153,21 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
     delete cachedFirestoreKeys[P];
   }
 
-  // 3. Persist to Supabase site_settings (row 'api_keys' — matches server-side writer)
+  // 3. Persist to backend site_settings (row 'api_keys')
   try {
-    const { data: existing } = await supabase.from('site_settings').select('data').eq('id', 'api_keys').single();
-    const existingData = ((existing?.data as Record<string, any>)?.api_keys ? existing.data : { api_keys: (existing?.data as Record<string, any>) || {} }) as Record<string, any>;
-    await supabase.from('site_settings').upsert({ id: 'api_keys', data: { ...existingData, api_keys: { ...(existingData.api_keys || {}), [P]: cleanKey } } });
-    console.log(`[Client AI] Successfully saved ${P} API key to Supabase database.`);
+    const existingRes = await safeFetchJson(resolveApiUrl('/api/mongodb/doc/site_settings/api_keys'));
+    let existingData: Record<string, any> = {};
+    if (existingRes.ok && existingRes.data) {
+      existingData = ((existingRes.data.data as Record<string, any>)?.api_keys ? existingRes.data.data : { api_keys: (existingRes.data.data as Record<string, any>) || {} }) as Record<string, any>;
+    }
+    await fetch(resolveApiUrl('/api/mongodb/doc/site_settings/api_keys'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { ...existingData, api_keys: { ...(existingData.api_keys || {}), [P]: cleanKey } }, merge: true })
+    });
+    console.log(`[Client AI] Successfully saved ${P} API key to backend database.`);
   } catch (err) {
-    console.warn(`[Client AI] Could not sync ${P} key to Supabase:`, err);
+    console.warn(`[Client AI] Could not sync ${P} key to backend:`, err);
   }
 }
 

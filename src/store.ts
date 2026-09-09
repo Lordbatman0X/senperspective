@@ -5,6 +5,7 @@ import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import { supabase } from './lib/supabaseClient';
 import { cloudSave, cloudDelete, cloudLoadCollection, cloudSaveUserProfile } from './lib/cloudStore';
+import { resolveApiUrl } from './lib/apiUtils';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
@@ -500,7 +501,7 @@ export const useStore = create<AppState>()(
           const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
             supabase.from('articles').select('*'),
             supabase.from('ads').select('*'),
-            supabase.from('users').select('*'),
+            usersQuery(),
             supabase.from('comments').select('*')
           ]);
 
@@ -526,7 +527,7 @@ export const useStore = create<AppState>()(
 
           // Fallback / merge with Central Server unified sync state
           try {
-            const sRes = await fetch('/api/sync/state');
+            const sRes = await fetch(resolveApiUrl('/api/sync/state'));
             if (sRes.ok) {
               const sData = await sRes.json();
               if (sData.success) {
@@ -558,7 +559,7 @@ export const useStore = create<AppState>()(
 
           // Central Users API fallback
           try {
-            const uRes = await fetch('/api/users');
+            const uRes = await fetch(resolveApiUrl('/api/users'));
             if (uRes.ok) {
               const uData = await uRes.json();
               if (uData.success && Array.isArray(uData.users) && uData.users.length > 0) {
@@ -762,7 +763,7 @@ export const useStore = create<AppState>()(
         }
 
         try {
-          await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
+          await fetch(resolveApiUrl('/api/webhooks/make-rss'), { method: 'DELETE' });
         } catch (e) {
           console.error("Error calling DELETE /api/webhooks/make-rss:", e);
         }
@@ -940,7 +941,7 @@ export const useStore = create<AppState>()(
           setTimeout(async () => {
             try {
               let replyText = "";
-              const response = await fetch('/api/chat', {
+              const response = await fetch(resolveApiUrl('/api/chat'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1808,7 +1809,7 @@ export const useStore = create<AppState>()(
         seoTitleSuffix: '| Perspective Group Dakar',
         seoCanonicalBase: 'https://perspective.sn',
         seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
-        databaseProvider: 'supabase',
+        databaseProvider: 'mongodb',
         editorialPhone: '+221 33 824 55 55',
         supportEmail: 'contact@perspective.sn',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
@@ -1943,7 +1944,7 @@ export const useStore = create<AppState>()(
           users: (get().users || []).map(u => u.email.toLowerCase() === normalized ? { ...u, role } : u)
         });
         if (supabase) { supabase.from('users').update({ role }).eq('id', normalized).catch(() => {}); }
-        fetch('/api/users', {
+        fetch(resolveApiUrl('/api/users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: normalized, role })
@@ -1962,7 +1963,7 @@ export const useStore = create<AppState>()(
           readerProfile: updatedProfile
         });
         if (supabase) { supabase.from('users').update({ emailVerified, mfaEnabled }).eq('id', normalized).catch(() => {}); }
-        fetch('/api/users', {
+        fetch(resolveApiUrl('/api/users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: normalized, emailVerified, mfaEnabled })
@@ -1988,12 +1989,12 @@ export const useStore = create<AppState>()(
         }
         set({ users: updatedUsers });
         if (supabase) { supabase.from('users').upsert({ id: normalized, passwordHash, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
-        fetch('/api/users', {
+        fetch(resolveApiUrl('/api/users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: normalized, passwordHash, role: 'Admin' })
         }).catch(() => {});
-        fetch('/api/mongodb/auth/update-password', {
+        fetch(resolveApiUrl('/api/mongodb/auth/update-password'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: normalized, password })
@@ -2012,7 +2013,7 @@ export const useStore = create<AppState>()(
           readerProfile: updatedProfile
         });
         if (supabase) { supabase.from('users').update({ pin, authType: 'pin', mfaEnabled: true }).eq('id', normalized).catch(() => {}); }
-        fetch('/api/users', {
+        fetch(resolveApiUrl('/api/users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: normalized, pin, authType: 'pin', mfaEnabled: true })

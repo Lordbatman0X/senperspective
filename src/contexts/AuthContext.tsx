@@ -17,6 +17,7 @@ import { stripHtmlTags } from "../lib/utils";
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import { triggerInAppToast } from "../lib/notificationSound";
 import { hashPassword, verifyPassword, stableUserId, verifyBootstrapAdminPassword, BOOTSTRAP_ADMIN_EMAILS } from "../lib/authCrypto";
+import { resolveApiUrl } from "../lib/apiUtils";
 
 export interface FirestoreUser {
   email: string;
@@ -167,7 +168,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // 2. Fetch from Central Server API
         try {
-          const sRes = await fetch('/api/users');
+          const sRes = await fetch(resolveApiUrl('/api/users'));
           if (sRes.ok) {
             const sData = await sRes.json();
             if (sData.success && Array.isArray(sData.users)) {
@@ -929,7 +930,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // 0. SERVER-AUTHORITATIVE LOGIN (MongoDB Atlas — single source of truth).
     // Passwords are verified server-side; the client never inspects credentials.
     try {
-      const sRes = await fetch('/api/mongodb/auth/login', {
+      const sRes = await fetch(resolveApiUrl('/api/mongodb/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password: pass })
@@ -1449,7 +1450,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.warn("Failed updating logout status:", err);
       }
       try {
-        fetch("/api/users", {
+        fetch(resolveApiUrl("/api/users"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: cleanActive, isOnline: false, lastActiveAt: new Date().toISOString() })
