@@ -8,6 +8,22 @@ export function HeaderTopBar() {
   const { language, setLanguage, theme, toggleTheme } = useStore();
   const location = useLocation();
   const [currentTime, setCurrentTime] = useState(new Date());
+  // One-time mode tutorial for first-time visitors (glassy bubble on the toggle)
+  const [showModeTuto, setShowModeTuto] = useState(() => {
+    try { return !localStorage.getItem('perspective_mode_tuto_v1'); } catch { return false; }
+  });
+
+  const dismissModeTuto = () => {
+    setShowModeTuto(false);
+    try { localStorage.setItem('perspective_mode_tuto_v1', '1'); } catch {}
+  };
+
+  // Auto-dismiss the tutorial after 9 seconds if the user doesn't interact
+  useEffect(() => {
+    if (!showModeTuto) return;
+    const t = setTimeout(dismissModeTuto, 9000);
+    return () => clearTimeout(t);
+  }, [showModeTuto]);
 
   // Dynamic user location & weather state
   const [locationInfo, setLocationInfo] = useState<{
@@ -278,13 +294,32 @@ export function HeaderTopBar() {
         </div>
 
         <div className="flex items-center gap-1.5 md:gap-3 shrink-0 ml-auto">
-          <button
-            onClick={toggleTheme}
-            className="p-1 rounded-none hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
-            title="Toggle Theme"
-          >
-            {theme === "dark" ? <Sun size={11} /> : <Moon size={11} />}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => { toggleTheme(); dismissModeTuto(); }}
+              className="p-1 rounded-none hover:bg-white/10 transition-colors text-gray-300 hover:text-white"
+              title="Toggle Theme"
+            >
+              {theme === "dark" ? <Sun size={11} /> : <Moon size={11} />}
+            </button>
+            {showModeTuto && (
+              <div
+                onClick={dismissModeTuto}
+                className="absolute right-0 top-full mt-2 z-50 w-44 p-2.5 rounded-md cursor-pointer
+                  bg-white/10 dark:bg-white/10 backdrop-blur-md border border-white/20 shadow-xl
+                  text-[9px] leading-relaxed text-white animate-[fadein_.4s_ease-out]"
+              >
+                <span className="absolute -top-1 right-2 w-2 h-2 rotate-45 bg-white/10 border-l border-t border-white/20" />
+                <span className="font-black uppercase tracking-wider text-[#E85D42] block mb-0.5">
+                  {language === "fr" ? "Astuce" : "Tip"}
+                </span>
+                {language === "fr"
+                  ? "Basculez entre mode sombre et clair ici — votre préférence est mémorisée sur tous vos appareils."
+                  : "Switch between dark & light mode here — your preference is remembered across all your devices."}
+                <style>{`@keyframes fadein { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+              </div>
+            )}
+          </div>
           <div className="flex bg-black/40 p-0.5 rounded-none shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)] border border-zinc-700">
             <button
               onClick={() => setLanguage("fr")}

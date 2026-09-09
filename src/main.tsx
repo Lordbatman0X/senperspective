@@ -27,6 +27,16 @@ if (API_BASE) {
   };
   globalThis.fetch = routedFetch;
   console.info(`[API] Remote backend active: ${API_BASE}`);
+
+  // Keep-alive: free-tier hosts (Render) spin the API down after ~15 min idle,
+  // which caused 30-60s delays on login/first load. Ping health every 9 min
+  // while the tab is open so the backend stays warm.
+  const KEEPALIVE_MS = 9 * 60 * 1000;
+  const pingHealth = () => {
+    originalFetch(`${API_BASE}/api/health`).catch(() => {});
+  };
+  pingHealth();
+  setInterval(pingHealth, KEEPALIVE_MS);
 }
 
 createRoot(document.getElementById('root')!).render(

@@ -167,6 +167,7 @@ export interface SubscriberItem {
 
 interface AppState {
   theme: 'light' | 'dark';
+  isSyncing: boolean;
   toggleTheme: () => void;
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -399,7 +400,8 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
-      theme: 'light',
+      theme: 'dark',
+      isSyncing: false,
       toggleTheme: () => {
         const next = get().theme === 'light' ? 'dark' : 'light';
         set({ theme: next });
@@ -478,6 +480,7 @@ export const useStore = create<AppState>()(
       articles: sampleArticles,
       setArticles: (articles) => set({ articles }),
       syncFromSupabase: async () => {
+        set({ isSyncing: true });
         try {
           const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
             supabase.from('articles').select('*'),
@@ -680,6 +683,8 @@ export const useStore = create<AppState>()(
           if (!current || current.length === 0) {
             set({ articles: seedArticles });
           }
+        } finally {
+          set({ isSyncing: false });
         }
       },
       addArticle: async (article) => {
@@ -2322,6 +2327,9 @@ export const useStore = create<AppState>()(
         notificationResponses: state.notificationResponses,
         readerProfile: state.readerProfile,
         users: state.users,
+        // Cache the last-synced content so returning devices instantly show
+        // fresh articles instead of stale seed placeholders during cold starts
+        articles: state.articles,
         directMessages: state.directMessages,
         notifications: state.notifications,
         friends: state.friends,
