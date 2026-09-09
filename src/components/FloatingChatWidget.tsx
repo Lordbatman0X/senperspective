@@ -37,7 +37,16 @@ export const FloatingChatWidget: React.FC = () => {
   } = useStore();
 
   const auth = useAuth();
-  const allUsers = auth?.allUsers || [];
+  // Merge auth-context users (live fetch, includes online status) with store users
+  // (persisted across browsers/devices so contacts always appear even before the
+  // auth context finishes loading).
+  const authUsers = auth?.allUsers || [];
+  const storeUsers = useStore(s => s.users) || [];
+  const authUserEmails = new Set(authUsers.map(u => (u.email || '').toLowerCase().trim()));
+  const allUsers = [
+    ...storeUsers.filter(u => !authUserEmails.has((u.email || '').toLowerCase().trim())),
+    ...authUsers
+  ];
 
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);

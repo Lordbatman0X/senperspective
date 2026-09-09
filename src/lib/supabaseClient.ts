@@ -147,9 +147,7 @@ function createQueryBuilder(table: string): any {
 
     // thenable — so `await qb` and `Promise.all([qb, ...])` work
     then(onResolve: any, onReject?: any) {
-      executeQuery(qb)
-        .then(onResolve, onReject)
-        .catch(onReject || (() => {}));
+      return executeQuery(qb).then(onResolve, onReject);
     },
 
     async single() {
