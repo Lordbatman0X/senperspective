@@ -55,30 +55,56 @@ async function seedCoreAccounts() {
   if (seeded || !mongoDb) return;
   try {
     const users = mongoDb.collection('users');
-    await users.updateOne({ _id: 'kadersdiaz3@gmail.com' as any }, {
-      $setOnInsert: {
-        id: 'kadersdiaz3@gmail.com', email: 'kadersdiaz3@gmail.com',
-        name: 'Kader S. Diaz', avatarUrl: 'preset-male', role: 'Admin',
-        authType: 'password', passwordHash: hashPasswordServer('Perspective2026!'),
-        isOnline: false, streak: 25, readingTime: 820,
-        bio: 'Fondateur & Directeur de Publication â€” Perspective Group SÃ©nÃ©gal',
-        accolades: ['verified_identity', 'editorial_board', 'elite_clearance', 'sahel_insider'],
-        emailVerified: true, registeredAt: '2026-01-01T00:00:00.000Z',
-        lastActiveAt: new Date().toISOString(), deletedAt: null
+    // DISAPPEARING-ACCOUNTS FIX: protected identities are always enforced on
+    // connect/restart — name, role, bio, accolades and verified flag can never be
+    // wiped. deletedAt is cleared so the super admin can never become invisible.
+    // A custom-uploaded avatar is preserved; default is only applied when missing.
+    const accounts = [
+      {
+        email: 'kadersdiaz3@gmail.com',
+        password: 'Perspective2026!',
+        avatar: 'preset-male',
+        identity: {
+          id: 'kadersdiaz3@gmail.com', email: 'kadersdiaz3@gmail.com',
+          name: 'Kader S. Diaz', role: 'Admin', authType: 'password',
+          isOnline: false, streak: 25, readingTime: 820,
+          bio: 'Fondateur & Directeur de Publication — Perspective Group Sénégal',
+          accolades: ['verified_identity', 'editorial_board', 'elite_clearance', 'sahel_insider'],
+          emailVerified: true, registeredAt: '2026-01-01T00:00:00.000Z',
+          lastActiveAt: new Date().toISOString(), deletedAt: null
+        }
+      },
+      {
+        email: 'admin@perspective.sn',
+        password: 'Admin2026!',
+        avatar: 'preset-male',
+        identity: {
+          id: 'admin@perspective.sn', email: 'admin@perspective.sn',
+          name: 'Perspective Admin', role: 'Admin', authType: 'password',
+          isOnline: false, streak: 10, readingTime: 320,
+          bio: 'Administrateur Système & Supervision Rédactionnelle',
+          accolades: ['verified_identity', 'elite_clearance'],
+          emailVerified: true, registeredAt: '2026-01-01T00:00:00.000Z',
+          lastActiveAt: new Date().toISOString(), deletedAt: null
+        }
       }
-    }, { upsert: true });
-    await users.updateOne({ _id: 'admin@perspective.sn' as any }, {
-      $setOnInsert: {
-        id: 'admin@perspective.sn', email: 'admin@perspective.sn',
-        name: 'Perspective Admin', avatarUrl: 'preset-male', role: 'Admin',
-        authType: 'password', passwordHash: hashPasswordServer('Admin2026!'),
-        isOnline: false, streak: 10, readingTime: 320,
-        bio: 'Administrateur SystÃ¨me & Supervision RÃ©dactionnelle',
-        accolades: ['verified_identity', 'elite_clearance'],
-        emailVerified: true, registeredAt: '2026-01-01T00:00:00.000Z',
-        lastActiveAt: new Date().toISOString(), deletedAt: null
+    ];
+    for (const acct of accounts) {
+      const current = await users.findOne({ _id: acct.email } as any);
+      const identity: any = { ...acct.identity };
+      if (current?.avatarUrl && String(current.avatarUrl).trim() !== '') {
+        delete identity.avatarUrl; // keep the admin's custom photo
+      } else if (!acct.email.includes('@perspective.sn')) {
+        identity.avatarUrl = acct.avatar;
       }
-    }, { upsert: true });
+      const setOnInsert: any = { ...acct.identity, avatarUrl: acct.avatar, passwordHash: hashPasswordServer(acct.password) };
+      await users.updateOne(
+        { _id: acct.email } as any,
+        { $set: { ...identity, deletedAt: null, isOnline: Boolean(current?.isOnline) }, $setOnInsert: setOnInsert },
+        { upsert: true }
+      );
+    }
+
     seeded = true;
     console.log('[MongoDB] Core accounts seeded (kadersdiaz3@gmail.com, admin@perspective.sn).');
   } catch (err: any) {

@@ -268,6 +268,21 @@ interface AppState {
     ga4MeasurementId?: string;
     databaseProvider?: string;
     homeSections?: string[];
+    writingIdentity?: {
+      writerNameFr?: string;
+      writerNameEn?: string;
+      publicationNameFr?: string;
+      publicationNameEn?: string;
+      bylineTemplateFr?: string;
+      bylineTemplateEn?: string;
+      voiceToneFr?: string;
+      voiceToneEn?: string;
+      editorialStanceFr?: string;
+      editorialStanceEn?: string;
+      creditLineFr?: string;
+      creditLineEn?: string;
+    };
+    globalWritingPrompt?: string;
     headerNavItems?: { id: string; labelFr: string; labelEn: string; url: string; enabled: boolean; isExternal?: boolean; }[];
     showHeaderTopBar?: boolean;
     showHeaderTicker?: boolean;

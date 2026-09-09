@@ -1,0 +1,29 @@
+name: Keep-Alive (Render)
+
+on:
+  schedule:
+    # Run every 10 minutes to keep the free-tier Render API warm
+    # (Render free instances sleep after ~15 min of inactivity).
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API health endpoint
+        shell: bash
+        run: |
+          URL="${{ secrets.RENDER_API_URL }}"
+          if [ -z "$URL" ] || [ "$URL" = "" ]; then
+            URL="${{ vars.RENDER_API_URL }}"
+          fi
+          if [ -z "$URL" ] || [ "$URL" = "" ]; then
+            echo "::warning::RENDER_API_URL is not configured. " \
+              "Set a repository secret named RENDER_API_URL to the Render API base URL " \
+              "(e.g. https://your-api.onrender.com) to keep the backend warm."
+            echo "No-op ping completed."
+            exit 0
+          fi
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 40 "$URL/api/health" || echo "000")
+          echo "Pinged $URL/api/health -> HTTP $code"

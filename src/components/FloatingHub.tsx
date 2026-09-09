@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
-import { supabase, subscribeToTable } from '../lib/supabaseClient';
+import { cloudLoadCollection } from '../lib/cloudStore';
 import { useAuth } from "../contexts/AuthContext";
 import { Bot, MessageSquare, X, Send, Trash2, Paperclip, Check, ChevronDown, Sparkles, RefreshCw, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -49,28 +49,16 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     const email = readerProfile.email.toLowerCase().trim();
 
     const loadRealFriends = async () => {
-      const { data } = await supabase.from('friends').select('*').eq('user_id', email);
-      if (data) {
-        const list: string[] = data.map((row: any) => (row.friend_email || '').toLowerCase().trim()).filter(Boolean);
-        setRealFriendsList(list);
-      }
+      const rows: any[] = await cloudLoadCollection('friends');
+      const list: string[] = rows
+        .filter((row: any) => String(row?.user_id || '').toLowerCase().trim() === email)
+        .map((row: any) => String(row?.friend_email || '').toLowerCase().trim())
+        .filter(Boolean);
+      setRealFriendsList(list);
     };
     loadRealFriends().catch((err) => console.warn(err));
-
-    const unsubscribe = subscribeToTable('friends', (payload) => {
-      if (payload.new && (payload.new as any).user_id === email) {
-        setRealFriendsList(prev => [...prev, (payload.new as any).friend_email.toLowerCase().trim()]);
-      } else if (payload.old && (payload.old as any).user_id === email) {
-        setRealFriendsList(prev => prev.filter(id => id !== (payload.old as any).friend_email.toLowerCase().trim()));
-      }
-    }, `user_id=eq.${email}`);
-
-    return () => {
-      if (unsubscribe && typeof (unsubscribe as any).unsubscribe === 'function') {
-        (unsubscribe as any).unsubscribe();
-      }
-    };
   }, [readerProfile?.email]);
+
 
   // Compute location-aware Abdel prompts dynamically
   const contextualData = getAbdelContextualPrompts(

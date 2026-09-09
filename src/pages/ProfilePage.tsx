@@ -5,6 +5,7 @@ import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import { supabase, subscribeToTable, usersQuery } from '../lib/supabaseClient';
+import { cloudSave, cloudDelete, cloudLoadCollection } from '../lib/cloudStore';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
@@ -139,110 +140,74 @@ export function ProfilePage() {
   const currentSettings = siteSettings || { accentColor: "#E85D42" };
   const accentColor = currentSettings.accentColor;
 
-  // Real-time following of CURRENT logged-in user
+  // Relationship state — loaded from MongoDB Atlas via cloudStore (Supabase retired)
+  const loadRelations = async (collection: string, byField: string, key: string, valueField: string, type?: string): Promise<string[]> => {
+    const rows: any[] = await cloudLoadCollection(collection);
+    const k = key.toLowerCase().trim();
+    return rows
+      .filter((r: any) => String(r?.[byField] || "").toLowerCase().trim() === k && (!type || String(r?.type || "").toLowerCase() === type))
+      .map((r: any) => String(r?.[valueField] || "").toLowerCase().trim())
+      .filter(Boolean);
+  };
+
+  // Following of CURRENT user (accounts they follow)
   useEffect(() => {
     if (!readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const loadFollowing = async () => {
-      const { data } = await supabase.from('followers').select('follower_email').eq('user_id', myEmail);
-      if (data) setFollowing(data.map(r => r.follower_email.toLowerCase().trim()));
-    };
-    loadFollowing();
-    const unsub = subscribeToTable('followers', (payload) => {
-      if (payload.new?.user_id === myEmail || payload.old?.user_id === myEmail) loadFollowing();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    const load = async () => setFollowing(await loadRelations('followers', 'user_id', myEmail, 'follower_email'));
+    load();
   }, [readerProfile?.email]);
 
-  // Real-time followers of TARGET user
+  // Followers of TARGET user
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
-    const loadFollowers = async () => {
-      const { data } = await supabase.from('followers').select('follower_email').eq('user_id', dec);
-      if (data) setFollowers(data.map(r => r.follower_email.toLowerCase().trim()));
-    };
-    loadFollowers();
-    const unsub = subscribeToTable('followers', (payload) => {
-      if (payload.new?.user_id === dec) loadFollowers();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    const load = async () => setFollowers(await loadRelations('followers', 'user_id', dec, 'follower_email'));
+    load();
   }, [email]);
 
-  // Real-time following of TARGET user
+  // Following of TARGET user
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
-    const loadTargetFollowing = async () => {
-      const { data } = await supabase.from('followers').select('follower_email').eq('user_id', dec);
-      if (data) setTargetFollowing(data.map(r => r.follower_email.toLowerCase().trim()));
-    };
-    loadTargetFollowing();
-    const unsub = subscribeToTable('followers', (payload) => {
-      if (payload.new?.user_id === dec) loadTargetFollowing();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    const load = async () => setTargetFollowing(await loadRelations('followers', 'user_id', dec, 'follower_email'));
+    load();
   }, [email]);
 
-  // Real-time blocks of CURRENT logged-in user
+  // Blocks of CURRENT user
   useEffect(() => {
     if (!readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const loadBlocks = async () => {
-      const { data } = await supabase.from('blocks').select('blocked_email').eq('user_id', myEmail);
-      if (data) setBlocks(data.map(r => r.blocked_email.toLowerCase().trim()));
-    };
-    loadBlocks();
-    const unsub = subscribeToTable('blocks', (payload) => {
-      if (payload.new?.user_id === myEmail) loadBlocks();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    const load = async () => setBlocks(await loadRelations('blocks', 'user_id', myEmail, 'blocked_email', 'block'));
+    load();
   }, [readerProfile?.email]);
 
-  // Real-time mutes of CURRENT logged-in user
+  // Mutes of CURRENT user
   useEffect(() => {
     if (!readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const loadMutes = async () => {
-      const { data } = await supabase.from('blocks').select('blocked_email').eq('user_id', myEmail);
-      if (data) setMutes(data.map(r => r.blocked_email.toLowerCase().trim()));
-    };
-    loadMutes();
-    const unsub = subscribeToTable('blocks', (payload) => {
-      if (payload.new?.user_id === myEmail) loadMutes();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    const load = async () => setMutes(await loadRelations('blocks', 'user_id', myEmail, 'blocked_email', 'mute'));
+    load();
   }, [readerProfile?.email]);
 
-  // Real-time check if TARGET user has blocked me
+  // Check if TARGET user has blocked CURRENT user
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec || !readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const checkBlocks = async () => {
-      const { data } = await supabase.from('blocks').select('blocked_email').eq('user_id', dec).eq('blocked_email', myEmail);
-      setHasBlockedMe((data?.length || 0) > 0);
+    const check = async () => {
+      const rows: any[] = await cloudLoadCollection('blocks');
+      setHasBlockedMe(rows.some(r => String(r?.user_id || "").toLowerCase().trim() === dec && String(r?.blocked_email || "").toLowerCase().trim() === myEmail && String(r?.type || "block").toLowerCase() === 'block'));
     };
-    checkBlocks();
-    const unsub = subscribeToTable('blocks', (payload) => {
-      if (payload.new?.user_id === dec) checkBlocks();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    check();
   }, [email, readerProfile?.email]);
 
-  // Real-time friends of CURRENT logged-in user
+  // Friends of CURRENT user
   useEffect(() => {
     if (!readerProfile?.email) return;
     const myEmail = readerProfile.email.toLowerCase().trim();
-    const loadFriends = async () => {
-      const { data } = await supabase.from('friends').select('friend_email').eq('user_id', myEmail);
-      if (data) setFriends(data.map(r => r.friend_email.toLowerCase().trim()));
-    };
-    loadFriends();
-    const unsub = subscribeToTable('friends', (payload) => {
-      if (payload.new?.user_id === myEmail) loadFriends();
-    });
-    return () => { unsub.unsubscribe?.(); };
+    const load = async () => setFriends(await loadRelations('friends', 'user_id', myEmail, 'friend_email'));
+    load();
   }, [readerProfile?.email]);
 
   // Handle finding target user with live Supabase listener
@@ -336,15 +301,18 @@ export function ProfilePage() {
     const myEmail = readerProfile.email.toLowerCase().trim();
     const targetEmail = targetUser.email.toLowerCase().trim();
     if (myEmail === targetEmail) return;
-
+    const a = myEmail, b = targetEmail;
     try {
       if (isFriend) {
-        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail);
-        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
+        await cloudDelete('friends', `${a}:${b}`);
+        await cloudDelete('friends', `${b}:${a}`);
+        setFriends(friends.filter(f => f !== b));
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
-        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() });
-        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() });
+        const ts = Date.now();
+        await cloudSave('friends', `${a}:${b}`, { id: `${a}:${b}`, user_id: a, friend_email: b, connected_at: ts, type: 'friend' });
+        await cloudSave('friends', `${b}:${a}`, { id: `${b}:${a}`, user_id: b, friend_email: a, connected_at: ts, type: 'friend' });
+        setFriends([...new Set([...friends, b])]);
         setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -367,13 +335,14 @@ export function ProfilePage() {
     if (myEmail === targetEmail) return;
 
     const isFollowing = following.includes(targetEmail);
-
     try {
       if (isFollowing) {
-        await supabase.from('followers').delete().eq('user_id', myEmail).eq('follower_email', targetEmail);
+        await cloudDelete('followers', `${myEmail}:${targetEmail}`);
+        setFollowing(following.filter(f => f !== targetEmail));
         setSuccessMsg(language === "fr" ? "Vous ne suivez plus ce membre." : "Unfollowed member.");
       } else {
-        await supabase.from('followers').upsert({ user_id: myEmail, follower_email: targetEmail, followed_at: Date.now() });
+        await cloudSave('followers', `${myEmail}:${targetEmail}`, { id: `${myEmail}:${targetEmail}`, user_id: myEmail, follower_email: targetEmail, followed_at: Date.now(), type: 'follow' });
+        setFollowing([...new Set([...following, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Vous suivez désormais ce membre !" : "Following member!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -396,19 +365,21 @@ export function ProfilePage() {
     if (myEmail === targetEmail) return;
 
     const isCurrentlyBlocked = blocks.includes(targetEmail);
-
     try {
       if (isCurrentlyBlocked) {
-        await supabase.from('blocks').delete().eq('user_id', myEmail).eq('blocked_email', targetEmail);
+        await cloudDelete('blocks', `${myEmail}:${targetEmail}`);
+        setBlocks(blocks.filter(x => x !== targetEmail));
         setSuccessMsg(language === "fr" ? "Membre débloqué." : "Unblocked member.");
       } else {
-        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() });
+        await cloudSave('blocks', `${myEmail}:${targetEmail}`, { id: `${myEmail}:${targetEmail}`, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'block' });
+        setBlocks([...new Set([...blocks, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Membre bloqué avec succès." : "Blocked member successfully.");
-        
         // Auto-remove friend and follow connections on block
-        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail);
-        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
-        await supabase.from('followers').delete().eq('user_id', myEmail).eq('follower_email', targetEmail);
+        await cloudDelete('friends', `${myEmail}:${targetEmail}`);
+        await cloudDelete('friends', `${targetEmail}:${myEmail}`);
+        await cloudDelete('followers', `${myEmail}:${targetEmail}`);
+        setFriends(friends.filter(f => f !== targetEmail));
+        setFollowing(following.filter(f => f !== targetEmail));
       }
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
@@ -428,13 +399,14 @@ export function ProfilePage() {
     if (myEmail === targetEmail) return;
 
     const isCurrentlyMuted = mutes.includes(targetEmail);
-
     try {
       if (isCurrentlyMuted) {
-        await supabase.from('blocks').delete().eq('user_id', myEmail).eq('blocked_email', targetEmail);
+        await cloudDelete('blocks', `${myEmail}:${targetEmail}`);
+        setMutes(mutes.filter(x => x !== targetEmail));
         setSuccessMsg(language === "fr" ? "Notifications réactivées." : "Unmuted member.");
       } else {
-        await supabase.from('blocks').upsert({ user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString() });
+        await cloudSave('blocks', `${myEmail}:${targetEmail}`, { id: `${myEmail}:${targetEmail}`, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'mute' });
+        setMutes([...new Set([...mutes, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications.");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -455,7 +427,7 @@ export function ProfilePage() {
 
     const reportId = "report-" + Date.now();
     try {
-      await supabase.from('reports').insert({
+      await cloudSave('reports', reportId, {
         id: reportId,
         reportedBy: readerProfile.email,
         reportedUser: targetUser.email,
@@ -476,16 +448,9 @@ export function ProfilePage() {
     }
   };
 
-  // Helper to durably save user fields to Supabase and Central Database
+  // Helper to durably save user fields to Central Database (MongoDB)
   const persistUserUpdate = async (userEmail: string, payload: Record<string, any>) => {
     const cleanEmail = userEmail.toLowerCase().trim();
-    try {
-      if (supabase) {
-        await supabase.from('users').update(payload).or(`email.eq.${cleanEmail},id.eq.${cleanEmail}`);
-      }
-    } catch (err) {
-      console.warn("[Profile update notice - Supabase]:", err);
-    }
     try {
       // /api/users merges profile fields into the MongoDB users collection
       const clean = await sanitizeFirestorePayload(payload);
