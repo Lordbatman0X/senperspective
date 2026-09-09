@@ -22,7 +22,8 @@ import {
   resetAllProviderRateLimits,
   resetSingleProviderRateLimit,
   testProviderPing,
-  loadKeysFromFirestore
+  loadKeysFromFirestore,
+  buildSeoMeta
 } from "./server/aiNewsroomEngine";
 import { 
   generateArticleImageWithAI, 
@@ -1368,6 +1369,14 @@ app.use((req, res, next) => {
       date: new Date().toISOString().split("T")[0],
       readingTime: parseInt(bodyData.readingTime || bodyData.readTime || "5", 10) || 5,
       tags: Array.isArray(bodyData.tags) ? bodyData.tags : ["Automation", "RSS", "Perspective"],
+      ...buildSeoMeta({
+        title: { fr: titleFr, en: titleEn },
+        excerpt: { fr: excerptFr, en: excerptEn },
+        tags: Array.isArray(bodyData.tags) ? bodyData.tags : ["Automation", "RSS", "Perspective"],
+        category: bodyData.category || "Politique",
+        slug: bodyData.slug || "",
+        featuredImage: selectedImg
+      }),
       isPublished: isPublished,
       isFeatured: isFeatured,
       isTrending: isTrending,
@@ -1478,6 +1487,14 @@ app.use((req, res, next) => {
       isBreaking: false,
       readTime: `${enriched.readingTime || 4} min`,
       tags: enriched.tags || ["RSS", "Sénégal", "Perspective"],
+      ...buildSeoMeta({
+        title: enriched.title,
+        excerpt: enriched.excerpt,
+        tags: enriched.tags || ["RSS", "Sénégal", "Perspective"],
+        category: feedCategory || enriched.category || "Économie",
+        slug: enriched.slug,
+        featuredImage: draftImage
+      }),
       status: "Draft",
       perspectiveBrief: enriched.perspectiveBrief || null,
       timeline: enriched.timeline || [],

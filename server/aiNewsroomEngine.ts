@@ -1488,9 +1488,30 @@ export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallback
     };
   }
 
-  const readingTime = typeof rawJson.readingTime === "number" && rawJson.readingTime > 0 
-    ? rawJson.readingTime 
+  const readingTime = typeof rawJson.readingTime === "number" && rawJson.readingTime > 0
+    ? rawJson.readingTime
     : (articleType === "News" ? 3 : 6);
+
+  const generatedTags = Array.isArray(rawJson.tags) && rawJson.tags.length > 0 ? rawJson.tags : ["Sénégal", "Actualité", "Perspective"];
+
+  const resolvedFeaturedImage = (() => {
+      const rawOrigImg = typeof sourceItem === "object" && sourceItem ? (sourceItem.imageUrl || sourceItem.featuredImage || sourceItem.image || sourceItem.enclosure?.url || sourceItem.thumbnail) : "";
+      const origRssImg = typeof rawOrigImg === "string" && rawOrigImg.startsWith("http") ? rawOrigImg.trim() : "";
+      let resolved = (rawJson.featuredImage || rawJson.imageUrl || "").trim();
+      if (origRssImg && (!resolved || resolved.includes("photo-1504711434969-e33886168f5c"))) {
+        return origRssImg;
+      }
+      return resolved || origRssImg || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80";
+  })();
+
+  const seoMeta = buildSeoMeta({
+    title: { fr: titleFr, en: titleEn },
+    excerpt: { fr: excerptFr, en: excerptEn },
+    tags: generatedTags,
+    category: rawJson.category || fallbackCategory || "Économie",
+    slug,
+    featuredImage: resolvedFeaturedImage
+  });
 
   return {
     title: { fr: titleFr, en: titleEn },
@@ -1502,25 +1523,10 @@ export function sanitizeAndEnrichArticle(rawJson: any, sourceItem: any, fallback
     author: rawJson.author || "Rédaction Perspective",
     date: new Date().toISOString(),
     readingTime,
-    tags: Array.isArray(rawJson.tags) && rawJson.tags.length > 0 ? rawJson.tags : ["Sénégal", "Actualité", "Perspective"],
-    featuredImage: (() => {
-      const rawOrigImg = typeof sourceItem === "object" && sourceItem ? (sourceItem.imageUrl || sourceItem.featuredImage || sourceItem.image || sourceItem.enclosure?.url || sourceItem.thumbnail) : "";
-      const origRssImg = typeof rawOrigImg === "string" && rawOrigImg.startsWith("http") ? rawOrigImg.trim() : "";
-      let resolved = (rawJson.featuredImage || rawJson.imageUrl || "").trim();
-      if (origRssImg && (!resolved || resolved.includes("photo-1504711434969-e33886168f5c"))) {
-        return origRssImg;
-      }
-      return resolved || origRssImg || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80";
-    })(),
-    imageUrl: (() => {
-      const rawOrigImg = typeof sourceItem === "object" && sourceItem ? (sourceItem.imageUrl || sourceItem.featuredImage || sourceItem.image || sourceItem.enclosure?.url || sourceItem.thumbnail) : "";
-      const origRssImg = typeof rawOrigImg === "string" && rawOrigImg.startsWith("http") ? rawOrigImg.trim() : "";
-      let resolved = (rawJson.imageUrl || rawJson.featuredImage || "").trim();
-      if (origRssImg && (!resolved || resolved.includes("photo-1504711434969-e33886168f5c"))) {
-        return origRssImg;
-      }
-      return resolved || origRssImg || "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80";
-    })(),
+    tags: generatedTags,
+    featuredImage: resolvedFeaturedImage,
+    imageUrl: resolvedFeaturedImage,
+    ...seoMeta,
     perspectiveBrief,
     timeline,
     keyActors,
@@ -1817,5 +1823,58 @@ Please craft the complete bilingual storytelling article in strict JSON matching
     engineUsed,
     failoverTriggered,
     failoverReason: failoverTriggered ? failoverReason : undefined
+  };
+}
+
+/**
+ * Builds SEO metadata for an AI-generated article. Applied to every AI writing
+ * path so drafts land in the editor with the SEO section already filled.
+ */
+export function buildSeoMeta(a: {
+  title?: { fr?: string; en?: string };
+  excerpt?: { fr?: string; en?: string };
+  tags?: string[];
+  category?: string;
+  slug?: string;
+  featuredImage?: string;
+  imageUrl?: string;
+}): {
+  seoMetaTitle: string;
+  seoMetaDescription: string;
+  seoKeywords: string;
+  seoOgImage: string;
+  seoCanonicalUrl: string;
+} {
+  const stripHtml = (s: string) => s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+
+  const rawTitle = stripHtml(a.title?.fr || a.title?.en || "");
+  const rawDesc = stripHtml(a.excerpt?.fr || a.excerpt?.en || "");
+
+  // Google truncates titles ~60 chars and descriptions ~155 chars
+  const seoMetaTitle = (rawTitle.length > 60 ? rawTitle.slice(0, 57).trim() + "..." : rawTitle) || "Perspective Group";
+
+  const seoMetaDescription = rawDesc
+    ? (rawDesc.length > 155 ? rawDesc.slice(0, 152).trim() + "..." : rawDesc)
+    : (rawTitle ? `Décryptage Perspective : ${rawTitle.slice(0, 120)}` : "");
+
+  const kwSet = new Set<string>();
+  (Array.isArray(a.tags) ? a.tags : []).forEach(t => { const k = String(t).trim(); if (k) kwSet.add(k.toLowerCase()); });
+  if (a.category) kwSet.add(String(a.category).toLowerCase());
+  kwSet.add("sénégal");
+  kwSet.add("actualité");
+  rawTitle.toLowerCase().split(/[^a-zà-ÿ0-9]+/).forEach(w => {
+    if (w.length > 4 && !["dans", "pour", "avec", "entre", "après", "selon", "cette", "être", "faire", "avant", "leurs", "aussi", "comme", "encore", "ainsi"].includes(w)) kwSet.add(w);
+  });
+  const seoKeywords = Array.from(kwSet).slice(0, 10).join(", ");
+
+  const canonicalBase = (process.env.SEO_CANONICAL_BASE || "https://perspective.sn").replace(/\/+$/, "");
+  const seoCanonicalUrl = a.slug ? `${canonicalBase}/article/${a.slug}` : "";
+
+  return {
+    seoMetaTitle,
+    seoMetaDescription,
+    seoKeywords,
+    seoOgImage: a.featuredImage || a.imageUrl || "",
+    seoCanonicalUrl
   };
 }
