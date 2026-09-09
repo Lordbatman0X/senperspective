@@ -390,10 +390,11 @@ export function AccountDrawer({
         console.error("Error syncing profile updates to Supabase:", err);
       }
       try {
-        await fetch('/api/central/doc', {
+        // /api/users merges profile fields into the MongoDB users collection
+        await fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ collection: 'users', id: cleanEmail, data: updatedFields, merge: true })
+          body: JSON.stringify({ ...updatedFields, email: cleanEmail, id: cleanEmail })
         });
       } catch (err) {
         console.error("Error syncing profile updates to Central DB:", err);

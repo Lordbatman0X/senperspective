@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
-import { compressImageFile } from "../lib/imageUtils";
+import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import { supabase, subscribeToTable, usersQuery } from '../lib/supabaseClient';
 import { 
@@ -487,10 +487,12 @@ export function ProfilePage() {
       console.warn("[Profile update notice - Supabase]:", err);
     }
     try {
-      await fetch('/api/central/doc', {
+      // /api/users merges profile fields into the MongoDB users collection
+      const clean = await sanitizeFirestorePayload(payload);
+      await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ collection: 'users', id: cleanEmail, data: payload, merge: true })
+        body: JSON.stringify({ ...clean, email: cleanEmail, id: cleanEmail })
       });
     } catch (err) {
       console.warn("[Profile update notice - Central]:", err);

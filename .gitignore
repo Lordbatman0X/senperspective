@@ -15,3 +15,8 @@ server/data/central_db.json
 .firebase/
 dist/
 node_modules/
+
+analytics-events.json
+user-consents.json
+build_out.txt
+tsc_out.txt

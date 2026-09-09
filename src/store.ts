@@ -4,6 +4,7 @@ import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import { supabase } from './lib/supabaseClient';
+import { cloudSave, cloudDelete, cloudLoadCollection, cloudSaveUserProfile } from './lib/cloudStore';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
@@ -377,11 +378,8 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
 
         if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
           const cleanEmail = email.toLowerCase().trim();
-          if (supabase) {
-            await supabase.from('users').upsert({ email: cleanEmail, id: cleanEmail, preferences: currentPrefs }, { onConflict: 'email' }).then(({ error }) => {
-              if (error) console.warn("[Supabase notice] Error syncing preferences:", error);
-            }).catch(() => {});
-          }
+          // Persist preferences in the user's profile document (MongoDB Atlas via /api/users)
+          await cloudSaveUserProfile(cleanEmail, { preferences: currentPrefs });
         } else {
       let deviceId = '';
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -439,9 +437,8 @@ export const useStore = create<AppState>()(
           return dm;
         });
         set({ directMessages: updatedDms });
-        if (supabase) {
-          supabase.from('messages').update({ reactions: updatedReactions as any }).eq('id', messageId).catch(() => {});
-        }
+        const updatedMsg = updatedDms.find(dm => dm.id === messageId);
+        if (updatedMsg) { cloudSave('messages', messageId, updatedMsg); }
       },
       syncPreferencesToFirebase: async (customPrefs?: any) => {
         await syncPreferencesToFirestore(customPrefs);
@@ -630,6 +627,52 @@ export const useStore = create<AppState>()(
 
           if (remoteComments.length > 0) {
             set({ comments: remoteComments as any });
+          }
+
+          // ---- Cross-device sync of user-generated content (MongoDB Atlas) ----
+          // Pull messages, notifications, friends and interactions that were
+          // persisted via the central API so they survive reloads/devices.
+          try {
+            const [cloudMessages, cloudNotifications, cloudFriends, cloudInteractions] = await Promise.all([
+              cloudLoadCollection('messages'),
+              cloudLoadCollection('notifications'),
+              cloudLoadCollection('friends'),
+              cloudLoadCollection('interactions')
+            ]);
+
+            if (cloudMessages.length > 0) {
+              const local = get().directMessages || [];
+              const idSet = new Set(local.map(m => m.id));
+              const merged = [...local, ...cloudMessages.filter(m => m.id && !idSet.has(m.id))]
+                .sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+              set({ directMessages: merged });
+            }
+
+            if (cloudNotifications.length > 0) {
+              const local = get().notifications || [];
+              const idSet = new Set(local.map(n => n.id));
+              const merged = [...local, ...cloudNotifications.filter(n => n.id && !idSet.has(n.id))];
+              set({ notifications: merged });
+            }
+
+            if (cloudFriends.length > 0) {
+              const local = get().friends || [];
+              const emailSet = new Set(local.map(f => (f.email || '').toLowerCase().trim()));
+              const merged = [...local, ...cloudFriends.filter(f => {
+                const em = (f.email || '').toLowerCase().trim();
+                return em && !emailSet.has(em);
+              })];
+              set({ friends: merged });
+            }
+
+            if (cloudInteractions.length > 0) {
+              const local = get().interactions || [];
+              const idSet = new Set(local.map(i => i.id));
+              const merged = [...local, ...cloudInteractions.filter(i => i.id && !idSet.has(i.id))];
+              set({ interactions: merged });
+            }
+          } catch (cloudErr) {
+            console.warn('[Sync] Cloud user-content notice:', cloudErr);
           }
         } catch (err) {
           console.warn("[Sync Notice] Remote sync note:", err);
@@ -854,11 +897,7 @@ export const useStore = create<AppState>()(
         set({ directMessages: [...dms, newMsg] });
 
         try {
-          if (supabase) {
-            supabase.from('messages').insert({ id: msgId, ...newMsg }).then(({ error }) => {
-              if (error) console.warn('[Supabase notice]', error?.message || error);
-            }).catch(() => {});
-          }
+          cloudSave('messages', msgId, newMsg);
         } catch (err) {
           console.warn("Message sync notice:", err);
         }
@@ -920,9 +959,7 @@ export const useStore = create<AppState>()(
               };
 
               set(state => ({ directMessages: [...(state.directMessages || []), abdelMsg] }));
-              if (supabase) {
-                await supabase.from('messages').insert({ id: abdelMsgId, ...abdelMsg }).catch(() => {});
-              }
+              cloudSave('messages', abdelMsgId, abdelMsg);
             } catch (err) {
               console.warn("[Abdel Messenger] Direct AI response notice:", err);
             }
@@ -932,7 +969,7 @@ export const useStore = create<AppState>()(
       deleteDirectMessage: (id) => {
         const dms = get().directMessages || [];
         set({ directMessages: dms.filter(dm => dm.id !== id) });
-        if (supabase) { supabase.from('messages').delete().eq('id', id).catch(() => {}); }
+        cloudDelete('messages', id);
       },
       markDirectMessagesAsRead: (contactEmail, userEmail) => {
         const dms = get().directMessages || [];
@@ -943,7 +980,7 @@ export const useStore = create<AppState>()(
         const newDms = dms.map(dm => {
           if (!dm.read && dm.receiver?.toLowerCase() === receiverClean && (!senderClean || dm.sender?.toLowerCase() === senderClean)) {
             updated = true;
-            if (supabase) { supabase.from('messages').update({ read: true }).eq('id', dm.id).catch(() => {}); }
+            cloudSave('messages', dm.id, { ...dm, read: true });
             return { ...dm, read: true };
           }
           return dm;
@@ -963,8 +1000,14 @@ export const useStore = create<AppState>()(
         set({ notifications: updatedNotifs });
       },
       friends: [],
-      addFriend: (friend) => set(state => ({ friends: [...(state.friends || []), friend] })),
-      deleteFriend: (email) => set(state => ({ friends: (state.friends || []).filter(f => f.email !== email) })),
+      addFriend: (friend) => {
+        set(state => ({ friends: [...(state.friends || []), friend] }));
+        if (friend?.email) cloudSave('friends', friend.email, friend);
+      },
+      deleteFriend: (email) => {
+        set(state => ({ friends: (state.friends || []).filter(f => f.email !== email) }));
+        if (email) cloudDelete('friends', email);
+      },
       // Fuse accounts with the same email into one account
       fuseAccounts: async () => {
         const allUsers = get().users || [];
@@ -1386,6 +1429,8 @@ export const useStore = create<AppState>()(
           }
         }
         set({ notifications: [notification, ...(get().notifications || [])] });
+        // Persist so notifications survive reloads and appear on other devices
+        cloudSave('notifications', notification.id, { ...notification, isRead: false });
 
         // Trigger browser notification if permitted
         if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -1423,8 +1468,14 @@ export const useStore = create<AppState>()(
             n.email.toLowerCase() === email.toLowerCase() ? { ...n, isRead: true } : n
           )
         });
+        // Persist read state per user
+        list.filter(n => n.email.toLowerCase() === email.toLowerCase() && !n.isRead)
+          .forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
       },
-      deleteNotification: (id) => set({ notifications: (get().notifications || []).filter(n => n.id !== id) }),
+      deleteNotification: (id) => {
+        set({ notifications: (get().notifications || []).filter(n => n.id !== id) });
+        cloudDelete('notifications', id);
+      },
       notificationResponses: {},
       respondToNotification: (notifId, response) => {
         set({
@@ -1433,6 +1484,7 @@ export const useStore = create<AppState>()(
             [notifId]: response
           }
         });
+        cloudSave('notification_responses', notifId, { id: notifId, response });
       },
       subscribers: [
         { email: 'sylla.editor@gmail.com', date: '2026-06-15' },
@@ -1663,23 +1715,23 @@ export const useStore = create<AppState>()(
           link
         };
         set({ interactions: [newInteraction, ...interactions] });
-        if (supabase) {
-          supabase.from('analytics_events').insert({
-            id: newInteraction.id,
-            session_id: 'session-' + Date.now(),
-            event_name: type,
-            path: link || '/',
-            article_id: '',
-            article_title: '',
-            category: 'General',
-            device_type: 'Desktop',
-            country: '',
-            city: '',
-            timestamp: new Date().toISOString(),
-            user_email: email,
-            metadata: detail as any
-          }).catch(() => {});
-        }
+        cloudSave('analytics_events', newInteraction.id, {
+          id: newInteraction.id,
+          session_id: 'session-' + Date.now(),
+          event_name: type,
+          path: link || '/',
+          article_id: '',
+          article_title: '',
+          category: 'General',
+          device_type: 'Desktop',
+          country: '',
+          city: '',
+          timestamp: new Date().toISOString(),
+          user_email: email,
+          metadata: detail
+        });
+        // Also persist the interaction itself so the audit feed survives reloads
+        cloudSave('interactions', newInteraction.id, newInteraction);
       },
       siteSettings: {
         isMaintenanceMode: false,
@@ -2269,7 +2321,11 @@ export const useStore = create<AppState>()(
         notificationPreferences: state.notificationPreferences,
         notificationResponses: state.notificationResponses,
         readerProfile: state.readerProfile,
-        users: state.users
+        users: state.users,
+        directMessages: state.directMessages,
+        notifications: state.notifications,
+        friends: state.friends,
+        interactions: state.interactions
       }),
       onRehydrateStorage: () => (state) => {
         // Note: Shared content is centralized in Supabase and NOT persisted locally.
