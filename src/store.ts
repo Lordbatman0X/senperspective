@@ -2298,19 +2298,35 @@ export const useStore = create<AppState>()(
       // This guarantees cross-browser consistency: only valid UI prefs survive,
       // every shared-domain (articles/users/comments/messages/... ) is discarded
       // and re-fetched from MongoDB.
+      // IMPORTANT: only copy keys whose value is defined, otherwise a missing
+      // persisted field would overwrite the live default (e.g. savedArticles: [])
+      // with `undefined` and crash every `.length`/`.map()` that reads it.
       migrate: (persistedState: any) => {
         const safe: any = {};
         if (persistedState && typeof persistedState === 'object') {
-          safe.theme = persistedState.theme;
-          safe.language = persistedState.language;
-          safe.savedArticles = persistedState.savedArticles;
-          safe.activeMessengerContact = persistedState.activeMessengerContact;
-          safe.messengerTextScale = persistedState.messengerTextScale;
-          safe.notificationPreferences = persistedState.notificationPreferences;
-          safe.notificationResponses = persistedState.notificationResponses;
-          safe.readerProfile = persistedState.readerProfile;
+          const keys = [
+            'theme', 'language', 'savedArticles', 'activeMessengerContact',
+            'messengerTextScale', 'notificationPreferences',
+            'notificationResponses', 'readerProfile'
+          ];
+          for (const k of keys) {
+            if (persistedState[k] !== undefined && persistedState[k] !== null) {
+              safe[k] = persistedState[k];
+            }
+          }
         }
         return safe;
+      },
+      // Never let rehydrated `undefined` values clobber valid in-memory defaults.
+      merge: (persistedState: any, currentState: any) => {
+        const out = { ...currentState };
+        if (persistedState && typeof persistedState === 'object') {
+          for (const k of Object.keys(persistedState)) {
+            const v = persistedState[k];
+            if (v !== undefined && v !== null) out[k] = v;
+          }
+        }
+        return out;
       },
       partialize: (state) => ({
         // ONLY persist pure UI preferences

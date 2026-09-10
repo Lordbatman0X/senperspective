@@ -10,7 +10,7 @@ const BACKEND_URL_STORAGE_KEY = 'perspective_backend_api_url';
  * site reach the real API out of the box. Overridable per-user in Admin → API,
  * or globally at build time via VITE_BACKEND_URL.
  */
-export const DEFAULT_STATIC_BACKEND = 'https://senperspective-api.onrender.com';
+export const DEFAULT_STATIC_BACKEND = 'https://senperspective-api-56o8.onrender.com';
 
 function isStaticHost(): boolean {
   if (typeof window === 'undefined' || !window.location) return false;

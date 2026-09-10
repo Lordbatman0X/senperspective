@@ -1,4 +1,4 @@
-const BASE = 'https://senperspective-api.onrender.com';
+const BASE = 'https://senperspective-api-56o8.onrender.com';
 const KEEP_EMAILS = ['kadersdiaz3@gmail.com', 'admin@perspective.sn'];
 
 async function wipeCollection(name) {
