@@ -48,6 +48,31 @@ export const FloatingChatWidget: React.FC = () => {
     ...authUsers
   ];
 
+  // Fetch users from server if not available locally (fixes "no contact to message" issue)
+  useEffect(() => {
+    const fetchUsersFromServer = async () => {
+      // Only fetch if we have no users at all
+      if (authUsers.length === 0 && storeUsers.length === 0) {
+        try {
+          const res = await fetch('/api/mongodb/collection/users');
+          const data = await res.json();
+          if (data?.success && Array.isArray(data.documents) && data.documents.length > 0) {
+            const serverUsers = data.documents.map((d: any) => d.data);
+            // Merge with existing users, avoiding duplicates
+            const existingEmails = new Set(storeUsers.map((u: any) => (u.email || '').toLowerCase().trim()));
+            const newUsers = serverUsers.filter((u: any) => !existingEmails.has((u.email || '').toLowerCase().trim()));
+            if (newUsers.length > 0) {
+              useStore.setState({ users: [...storeUsers, ...newUsers] });
+            }
+          }
+        } catch (err) {
+          console.warn('[FloatingChat] Could not fetch users from server:', err);
+        }
+      }
+    };
+    fetchUsersFromServer();
+  }, [authUsers.length, storeUsers.length]);
+
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [inputText, setInputText] = useState("");

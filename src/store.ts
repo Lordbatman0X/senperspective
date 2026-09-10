@@ -2388,34 +2388,24 @@ export const useStore = create<AppState>()(
     {
       name: 'perspective-group-storage',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ 
+      partialize: (state) => ({
+        // ONLY persist user preferences and profile data
+        // DO NOT persist articles, messages, notifications, friends - these must
+        // always be fetched fresh from the server to ensure cross-device sync
         theme: state.theme,
-        language: state.language, 
+        language: state.language,
         savedArticles: state.savedArticles,
         activeMessengerContact: state.activeMessengerContact,
         messengerTextScale: state.messengerTextScale,
         notificationPreferences: state.notificationPreferences,
         notificationResponses: state.notificationResponses,
         readerProfile: state.readerProfile,
-        users: state.users,
-        // Cache the last-synced content so returning devices instantly show
-        // fresh articles instead of stale seed placeholders during cold starts
-        articles: state.articles,
-        directMessages: state.directMessages,
-        notifications: state.notifications,
-        friends: state.friends,
-        interactions: state.interactions
+        users: state.users
       }),
       onRehydrateStorage: () => (state) => {
-        // Note: Shared content is centralized in Supabase and NOT persisted locally.
-        // `syncFromSupabase()` (run in App.tsx) loads the authoritative data from Supabase.
-        // We only seed a minimal offline placeholder so the shell doesn't flash empty
-        // while the Supabase sync resolves — it is overwritten by the Supabase truth.
-        if (state) {
-          if (!state.articles || state.articles.length === 0) {
-            state.articles = seedArticles;
-          }
-        }
+        // Note: Shared content is fetched from the server on app load.
+        // We do NOT seed articles here - loadArticles() handles fetching from the server.
+        // This ensures all browsers/devices show the same articles from the database.
       }
     }
   )
