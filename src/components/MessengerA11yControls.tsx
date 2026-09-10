@@ -291,7 +291,7 @@ export const A11yMessageReactions: React.FC<{
   const cleanEmail = (userEmail || 'visitor@perspective.sn').toLowerCase().trim();
   const availableEmojis = ['👍', '❤️', '💡', '👏', '🎯'];
 
-  const entries = Object.entries(reactions || {}).filter(([_, users]) => Array.isArray(users) && users.length > 0);
+  const entries = Object.entries(reactions || {}).filter(([_, users]) => Array.isArray(users) && (users ?? []).length > 0);
 
   return (
     <div className={`flex items-center flex-wrap gap-1 mt-1 ${className}`}>
@@ -302,7 +302,7 @@ export const A11yMessageReactions: React.FC<{
             key={emoji}
             type="button"
             onClick={() => reactToDirectMessage(messageId, emoji, cleanEmail)}
-            aria-label={`${users.length} réactions ${emoji}. Cliquez pour ${hasReacted ? 'retirer' : 'ajouter'}`}
+            aria-label={`${(users ?? []).length} réactions ${emoji}. Cliquez pour ${hasReacted ? 'retirer' : 'ajouter'}`}
             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-sans transition-transform active:scale-90 cursor-pointer ${
               hasReacted
                 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 font-bold"
@@ -310,7 +310,7 @@ export const A11yMessageReactions: React.FC<{
             }`}
           >
             <span>{emoji}</span>
-            <span>{users.length}</span>
+            <span>{(users ?? []).length}</span>
           </button>
         );
       })}

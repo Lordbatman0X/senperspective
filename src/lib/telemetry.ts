@@ -31,7 +31,7 @@ export function getUserConsent(): { essential: boolean; analytics: boolean; pers
   const stored = localStorage.getItem(STORAGE_CONSENT_KEY);
   if (!stored) return { essential: true, analytics: true, personalization: true, marketing: false };
   try {
-    return JSON.parse(stored);
+    return safeJsonParse(stored, {});
   } catch (e) {
     return { essential: true, analytics: true, personalization: true, marketing: false };
   }

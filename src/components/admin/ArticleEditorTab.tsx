@@ -134,7 +134,7 @@ export function ArticleEditorTab({
 
         // Shared key actors
         const candActors = Array.isArray(cand.keyActors) ? cand.keyActors.map(a => a.name?.toLowerCase()).filter(Boolean) : [];
-        const sharedActors = (keyActors || []).filter(a => a.name && candActors.includes(a.name.toLowerCase()));
+        const sharedActors = (keyActors || []).filter(a => a.name && candActors.includes((a.name ?? '').toLowerCase()));
         if (sharedActors.length > 0) {
           score += sharedActors.length * 25;
           reasons.push(language === 'fr' ? `Acteur(s) : ${sharedActors.map(a => a.name).join(', ')}` : `Actor(s): ${sharedActors.map(a => a.name).join(', ')}`);
@@ -346,8 +346,8 @@ export function ArticleEditorTab({
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string;
-        if (file.name.endsWith('.json')) {
-          const data = JSON.parse(text);
+        if ((file.name ?? '').endsWith('.json')) {
+          const data = safeJsonParse(text, {});
           if (data.title) {
             setTitleFr(data.title.fr || data.title || titleFr);
             setTitleEn(data.title.en || titleEn);
@@ -364,7 +364,7 @@ export function ArticleEditorTab({
           if (data.type) setType(data.type);
           if (data.imageUrl) setImageUrl(data.imageUrl);
           if (data.tags) setTags(data.tags);
-        } else if (file.name.endsWith('.md')) {
+        } else if ((file.name ?? '').endsWith('.md')) {
           // Assume markdown is the body of the current editor language tab
           if (activeLangTab === 'fr') {
             setBodyFr(text);
@@ -397,7 +397,7 @@ export function ArticleEditorTab({
       return;
     }
     try {
-      const cleanName = file.name.replace(/\.[^/.]+$/, "") || "Illustration";
+      const cleanName = (file.name ?? '').replace(/\.[^/.]+$/, "") || "Illustration";
       const compressed = await compressImageFile(file, 1200, 800, 0.72);
       insertImageIntoActiveBody(compressed, cleanName);
     } catch (e) {

@@ -38,7 +38,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
       const saved = localStorage.getItem('perspective_campaign_dispatches');
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
+          const parsed = safeJsonParse(saved, []);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed;
         } catch (e) {}
       }
@@ -200,7 +200,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
   };
 
   const filtered = (subscribers || []).filter(s =>
-    s.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (s.email ?? '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (

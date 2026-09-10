@@ -22,7 +22,7 @@ export function LArenePage() {
   const [activeStatus, setActiveStatus] = useState<"all" | "live" | "upcoming" | "finished">("all");
 
   // Get ONLY sports articles - strictly no non-sports fallback
-  const displayedArticles = articles.filter(
+  const displayedArticles = (articles ?? []).filter(
     (a) => a.isPublished !== false && (a as any).status !== 'draft' && (
       a.category?.toLowerCase() === "sports" ||
       a.category?.toLowerCase() === "sport" ||
@@ -46,7 +46,7 @@ export function LArenePage() {
     const isBAL = match.league === "nba-bal";
     const isNavetane = match.league === "navetane";
     const isD1 = match.league === "d1-basket";
-    const includesSenegal = match.teamA.name.includes("🇸🇳") || match.teamB.name.includes("🇸🇳") || match.teamA.name.includes("Sénégal") || match.teamB.name.includes("Senegal");
+    const includesSenegal = (match.teamA.name ?? '').includes("🇸🇳") || (match.teamB.name ?? '').includes("🇸🇳") || (match.teamA.name ?? '').includes("Sénégal") || (match.teamB.name ?? '').includes("Senegal");
 
     if (isWrestling) return 10;
     if (isNavetane) return 9;
@@ -259,7 +259,7 @@ export function LArenePage() {
               <div className="flex flex-col gap-2">
                 {[
                   { id: "all", label: { fr: "Tous les statuts", en: "All Matches" } },
-                  { id: "live", label: { fr: "En direct (Live)", en: "Live Only" }, count: matches.filter(m => m.status === "live").length },
+                  { id: "live", label: { fr: "En direct (Live)", en: "Live Only" }, count: (matches ?? []).filter(m => m.status === "live").length },
                   { id: "upcoming", label: { fr: "À venir", en: "Upcoming" } },
                   { id: "finished", label: { fr: "Résultats passés", en: "Finished" } }
                 ].map((stat) => {

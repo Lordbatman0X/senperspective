@@ -470,10 +470,10 @@ export const useStore = create<AppState>()(
       setAuthTab: (tab) => set({ authTab: tab }),
       savedArticles: [],
       toggleSavedArticle: (id) => {
-        const saved = get().savedArticles || [];
+        const saved = Array.isArray(get().savedArticles) ? get().savedArticles : [];
         const isSaving = !saved.includes(id);
         const email = get().readerProfile?.email || 'anonymous';
-        const art = get().articles.find(a => a.id === id);
+        const art = (Array.isArray(get().articles) ? get().articles : []).find(a => a.id === id);
         
         let nextSaved: string[];
         if (saved.includes(id)) {
@@ -601,7 +601,7 @@ export const useStore = create<AppState>()(
                 email: f.email || f.friend_email || '',
                 name: f.name || (f.friend_email ? f.friend_email.split('@')[0] : 'Friend'),
                 role: f.role || 'Member',
-                avatar: f.avatar || (f.name ? f.name.charAt(0).toUpperCase() : 'F'),
+                avatar: f.avatar || (f.name ? (f.name ?? '').charAt(0).toUpperCase() : 'F'),
                 status: f.status || 'connected'
               }));
               set({ friends: normalizedCloudFriends });
@@ -638,7 +638,7 @@ export const useStore = create<AppState>()(
         }
       },
       addArticle: async (article) => {
-        set({ articles: [article, ...get().articles] });
+        set({ articles: [article, ...(Array.isArray(get().articles) ? get().articles : [])] });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
           // Save to Supabase (shim routes to MongoDB API)
@@ -683,7 +683,7 @@ export const useStore = create<AppState>()(
         }
       },
       updateArticle: async (article) => {
-        set({ articles: get().articles.map(a => a.id === article.id ? article : a) });
+        set({ articles: (Array.isArray(get().articles) ? get().articles : []).map(a => a.id === article.id ? article : a) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
           // Save to Supabase (shim routes to MongoDB API)
@@ -710,12 +710,12 @@ export const useStore = create<AppState>()(
         }
       },
       deleteArticle: (id) => {
-        set({ articles: get().articles.filter(a => a.id !== id) });
+        set({ articles: (Array.isArray(get().articles) ? get().articles : []).filter(a => a.id !== id) });
         if (supabase) { supabase.from('articles').delete().eq('id', id).catch(() => {}); }
         safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(id)), { method: 'DELETE' }).catch(() => {});
       },
       purgeAllArticles: async () => {
-        const currentArticles = [...(get().articles || [])];
+        const currentArticles = [...(Array.isArray(get().articles) ? get().articles : [])];
         set({ articles: [] });
 
         if (supabase) {
@@ -973,7 +973,7 @@ export const useStore = create<AppState>()(
 
         const notifs = get().notifications || [];
         const updatedNotifs = notifs.map(n => {
-          if ((!n.email || n.email.toLowerCase() === receiverClean) && n.category === 'messages' && !n.isRead) {
+          if ((!n.email || ((n.email ?? '').toLowerCase()) === receiverClean) && n.category === 'messages' && !n.isRead) {
             return { ...n, isRead: true };
           }
           return n;
@@ -1120,7 +1120,7 @@ export const useStore = create<AppState>()(
       },
       addComment: (comment) => {
         const comments = get().comments || [];
-        const filtered = comments.filter(c => c.id !== comment.id);
+        const filtered = (comments ?? []).filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
         
         try {
@@ -1147,8 +1147,8 @@ export const useStore = create<AppState>()(
 
         // Notify parent author if this is a reply!
         if (comment.parentId) {
-          const parent = comments.find(p => p.id === comment.parentId);
-          if (parent && parent.email && parent.email.toLowerCase() !== comment.email?.toLowerCase()) {
+          const parent = (comments ?? []).find(p => p.id === comment.parentId);
+          if (parent && parent.email && ((parent.email ?? '').toLowerCase()) !== comment.email?.toLowerCase()) {
             get().addNotification({
               id: 'notif-reply-' + Date.now(),
               email: parent.email,
@@ -1167,7 +1167,7 @@ export const useStore = create<AppState>()(
         // Notify reader friends about the new comment/activity across the app
         const friendsList = get().friends || [];
         friendsList.forEach(friend => {
-          if (friend.email && friend.email.toLowerCase() !== comment.email?.toLowerCase()) {
+          if (friend.email && ((friend.email ?? '').toLowerCase()) !== comment.email?.toLowerCase()) {
             get().addNotification({
               id: 'notif-friend-comment-' + Date.now() + '-' + Math.random().toString(36).substring(4),
               email: friend.email,
@@ -1189,18 +1189,18 @@ export const useStore = create<AppState>()(
       },
       deleteComment: (id, requesterEmail) => {
         const comments = get().comments || [];
-        const comment = comments.find(c => c.id === id);
+        const comment = (comments ?? []).find(c => c.id === id);
         if (!comment) return;
 
         if (requesterEmail) {
-          const isOwner = comment.email && requesterEmail.trim().toLowerCase() === comment.email.trim().toLowerCase();
+          const isOwner = comment.email && requesterEmail.trim().toLowerCase() === (comment.email ?? '').trim().toLowerCase();
           if (!isOwner) {
             console.warn("Unauthorized attempt to delete comment by non-owner:", requesterEmail);
             return;
           }
         }
 
-        set({ comments: comments.filter(c => c.id !== id) });
+        set({ comments: (comments ?? []).filter(c => c.id !== id) });
         if (supabase) { supabase.from('comments').delete().eq('id', id).catch(() => {}); }
 
         if (comment && comment.email) {
@@ -1216,11 +1216,11 @@ export const useStore = create<AppState>()(
       },
       updateCommentText: (id, text, requesterEmail) => {
         const comments = get().comments || [];
-        const comment = comments.find(c => c.id === id);
+        const comment = (comments ?? []).find(c => c.id === id);
         if (!comment) return false;
 
         if (requesterEmail) {
-          const isOwner = comment.email && requesterEmail.trim().toLowerCase() === comment.email.trim().toLowerCase();
+          const isOwner = comment.email && requesterEmail.trim().toLowerCase() === (comment.email ?? '').trim().toLowerCase();
           if (!isOwner) {
             console.warn("Unauthorized attempt to modify comment by non-owner:", requesterEmail);
             return false;
@@ -1228,7 +1228,7 @@ export const useStore = create<AppState>()(
         }
 
         set({
-          comments: comments.map(c => c.id === id ? { ...c, text, isApproved: true } : c)
+          comments: (comments ?? []).map(c => c.id === id ? { ...c, text, isApproved: true } : c)
         });
         if (supabase) { supabase.from('comments').update({ text, isApproved: true } as any).eq('id', id).catch(() => {}); }
 
@@ -1246,7 +1246,7 @@ export const useStore = create<AppState>()(
       },
       likeComment: (id, userEmail) => {
         const comments = get().comments || [];
-        const comment = comments.find(c => c.id === id);
+        const comment = (comments ?? []).find(c => c.id === id);
         if (!comment) return;
 
         const likedBy = comment.likedBy || [];
@@ -1284,7 +1284,7 @@ export const useStore = create<AppState>()(
         }
 
         set({
-          comments: comments.map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
+          comments: (comments ?? []).map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
 
         if (supabase) {
@@ -1302,7 +1302,7 @@ export const useStore = create<AppState>()(
       },
       dislikeComment: (id, userEmail) => {
         const comments = get().comments || [];
-        const comment = comments.find(c => c.id === id);
+        const comment = (comments ?? []).find(c => c.id === id);
         if (!comment) return;
 
         const likedBy = comment.likedBy || [];
@@ -1341,7 +1341,7 @@ export const useStore = create<AppState>()(
         }
 
         set({
-          comments: comments.map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
+          comments: (comments ?? []).map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
 
         get().addInteraction(
@@ -1442,15 +1442,15 @@ export const useStore = create<AppState>()(
       },
       clearNotifications: (email) => {
         const list = get().notifications || [];
-        const hasUnread = list.some(n => n.email.toLowerCase() === email.toLowerCase() && !n.isRead);
+        const hasUnread = list.some(n => ((n.email ?? '').toLowerCase()) === email.toLowerCase() && !n.isRead);
         if (!hasUnread) return;
         set({
           notifications: list.map(n =>
-            n.email.toLowerCase() === email.toLowerCase() ? { ...n, isRead: true } : n
+            ((n.email ?? '').toLowerCase()) === email.toLowerCase() ? { ...n, isRead: true } : n
           )
         });
         // Persist read state per user
-        list.filter(n => n.email.toLowerCase() === email.toLowerCase() && !n.isRead)
+        list.filter(n => ((n.email ?? '').toLowerCase()) === email.toLowerCase() && !n.isRead)
           .forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
       },
       deleteNotification: (id) => {
@@ -1476,7 +1476,7 @@ export const useStore = create<AppState>()(
         const clean = email.trim().toLowerCase();
         if (!clean || !clean.includes('@')) return;
         const current = get().subscribers || [];
-        if (!current.some(s => s.email.toLowerCase() === clean)) {
+        if (!current.some(s => ((s.email ?? '').toLowerCase()) === clean)) {
           const newSub = { email: clean, date: new Date().toISOString().split('T')[0] };
           set({ subscribers: [newSub, ...current] });
           trackConversion('newsletter_subscription', clean, { source: 'subscription_form' });
@@ -1492,7 +1492,7 @@ export const useStore = create<AppState>()(
       },
       deleteSubscriber: async (email) => {
         const clean = email.trim().toLowerCase();
-        set({ subscribers: (get().subscribers || []).filter(s => s.email.toLowerCase() !== clean) });
+        set({ subscribers: (get().subscribers || []).filter(s => ((s.email ?? '').toLowerCase()) !== clean) });
         try {
           const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
           if (supabase) {
@@ -1505,7 +1505,7 @@ export const useStore = create<AppState>()(
       readerProfile: null,
       setReaderProfile: (profile) => set((state) => {
         const updatedUsers = (state.users || []).map(u => 
-          profile && u.email.toLowerCase() === profile.email.toLowerCase()
+          profile && ((u.email ?? '').toLowerCase()) === ((profile.email ?? '').toLowerCase())
             ? { ...u, ...profile }
             : u
         );
@@ -1535,7 +1535,7 @@ export const useStore = create<AppState>()(
         const users = get().users || [];
         const normalized = email.toLowerCase().trim();
         set({
-          users: users.map(u => u.email.toLowerCase().trim() === normalized ? { ...u, isPrivate } : u)
+          users: (users ?? []).map(u => ((u.email ?? '').toLowerCase()).trim() === normalized ? { ...u, isPrivate } : u)
         });
         if (supabase) {
           supabase.from('users').update({ hide_personal_info: isPrivate }).eq('id', normalized).catch(() => {});
@@ -1546,8 +1546,8 @@ export const useStore = create<AppState>()(
         const fromNorm = fromEmail.toLowerCase().trim();
         const toNorm = toEmail.toLowerCase().trim();
         set({
-          users: users.map(u => {
-            const currentEmail = u.email.toLowerCase().trim();
+          users: (users ?? []).map(u => {
+            const currentEmail = ((u.email ?? '').toLowerCase()).trim();
             if (currentEmail === fromNorm) {
               return { ...u, sentFriendRequests: [...(u.sentFriendRequests || []), toNorm] };
             }
@@ -1566,8 +1566,8 @@ export const useStore = create<AppState>()(
         const fromNorm = fromEmail.toLowerCase().trim();
         const toNorm = toEmail.toLowerCase().trim();
         set({
-          users: users.map(u => {
-            const currentEmail = u.email.toLowerCase().trim();
+          users: (users ?? []).map(u => {
+            const currentEmail = ((u.email ?? '').toLowerCase()).trim();
             if (currentEmail === fromNorm) {
               return { ...u, friends: [...(u.friends || []), toNorm], sentFriendRequests: (u.sentFriendRequests || []).filter(e => e !== toNorm) };
             }
@@ -1588,8 +1588,8 @@ export const useStore = create<AppState>()(
         const norm1 = email1.toLowerCase().trim();
         const norm2 = email2.toLowerCase().trim();
         set({
-          users: users.map(u => {
-            const currentEmail = u.email.toLowerCase().trim();
+          users: (users ?? []).map(u => {
+            const currentEmail = ((u.email ?? '').toLowerCase()).trim();
             if (currentEmail === norm1) {
               return { ...u, friends: (u.friends || []).filter(e => e !== norm2) };
             }
@@ -1607,8 +1607,8 @@ export const useStore = create<AppState>()(
 
       registerUser: (newUser) => {
         const users = get().users || [];
-        const normalizedEmail = newUser.email.trim().toLowerCase();
-        if (users.some(u => u.email.trim().toLowerCase() === normalizedEmail)) {
+        const normalizedEmail = (newUser.email ?? '').trim().toLowerCase();
+        if ((users ?? []).some(u => (u.email ?? '').trim().toLowerCase() === normalizedEmail)) {
           return false;
         }
         const normalizedUser = {
@@ -1640,7 +1640,7 @@ export const useStore = create<AppState>()(
         const trimmedEmail = email.trim().toLowerCase();
         
         // First try to find user in local state
-        let user = (get().users || []).find(u => u.email.trim().toLowerCase() === trimmedEmail);
+        let user = (get().users || []).find(u => (u.email ?? '').trim().toLowerCase() === trimmedEmail);
         
         // If not found locally, try Supabase
         if (!user && supabase) {
@@ -1893,7 +1893,7 @@ export const useStore = create<AppState>()(
         // FIX (disappearing accounts): never hard-delete. Soft-delete instead so
         // the account is recoverable and matches the soft-delete policy adopted
         // in ConnectionsAndProfile.tsx and usersQuery().
-        set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
+        set({ users: (get().users || []).filter(u => ((u.email ?? '').toLowerCase()) !== normalized) });
         if (supabase) { supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('email', normalized).catch(() => {}); }
         safeFetchJson(resolveApiUrl(`/api/users/` + encodeURIComponent(normalized)), { method: 'DELETE' }).catch(() => {});
         safeFetchJson(resolveApiUrl(`/api/mongodb/doc/users/` + encodeURIComponent(normalized)), { method: 'DELETE' }).catch(() => {});
@@ -1901,7 +1901,7 @@ export const useStore = create<AppState>()(
       updateUserRole: (email, role) => {
         const normalized = email.toLowerCase().trim();
         set({
-          users: (get().users || []).map(u => u.email.toLowerCase() === normalized ? { ...u, role } : u)
+          users: (get().users || []).map(u => ((u.email ?? '').toLowerCase()) === normalized ? { ...u, role } : u)
         });
         if (supabase) { supabase.from('users').update({ role }).eq('id', normalized).catch(() => {}); }
         fetch(resolveApiUrl('/api/users'), {
@@ -1913,9 +1913,9 @@ export const useStore = create<AppState>()(
       updateUserSecurity: (email, emailVerified, mfaEnabled) => {
         const normalized = email.toLowerCase().trim();
         const users = get().users || [];
-        const updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, emailVerified, mfaEnabled } : u);
+        const updatedUsers = (users ?? []).map(u => ((u.email ?? '').toLowerCase()) === normalized ? { ...u, emailVerified, mfaEnabled } : u);
         const readerProfile = get().readerProfile;
-        const updatedProfile = readerProfile && readerProfile.email.toLowerCase() === normalized
+        const updatedProfile = readerProfile && ((readerProfile.email ?? '').toLowerCase()) === normalized
           ? { ...readerProfile, emailVerified, mfaEnabled }
           : readerProfile;
         set({
@@ -1934,8 +1934,8 @@ export const useStore = create<AppState>()(
         // SECURITY (audit fix): store only the hash — never the plaintext password.
         const passwordHash = await hashPassword(password);
         const users = get().users || [];
-        const exists = users.some(u => u.email.toLowerCase() === normalized);
-        let updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, passwordHash } : u);
+        const exists = (users ?? []).some(u => ((u.email ?? '').toLowerCase()) === normalized);
+        let updatedUsers = (users ?? []).map(u => ((u.email ?? '').toLowerCase()) === normalized ? { ...u, passwordHash } : u);
         if (!exists) {
           updatedUsers.push({
             id: 'admin-' + Date.now(),
@@ -1963,9 +1963,9 @@ export const useStore = create<AppState>()(
       updateUserPin: (email, pin) => {
         const normalized = email.toLowerCase().trim();
         const users = get().users || [];
-        const updatedUsers = users.map(u => u.email.toLowerCase() === normalized ? { ...u, pin, authType: 'pin' as const } : u);
+        const updatedUsers = (users ?? []).map(u => ((u.email ?? '').toLowerCase()) === normalized ? { ...u, pin, authType: 'pin' as const } : u);
         const readerProfile = get().readerProfile;
-        const updatedProfile = readerProfile && readerProfile.email.toLowerCase() === normalized
+        const updatedProfile = readerProfile && ((readerProfile.email ?? '').toLowerCase()) === normalized
           ? { ...readerProfile, mfaEnabled: true }
           : readerProfile;
         set({
@@ -2266,7 +2266,7 @@ export const useStore = create<AppState>()(
       updateMatch: async (matchId, updated) => {
         const matches = (get().matches || []).map(m => m.id === matchId ? { ...m, ...updated } : m);
         set({ matches });
-        const target = matches.find(m => m.id === matchId);
+        const target = (matches ?? []).find(m => m.id === matchId);
         if (target) {
           try {
             const clean = await sanitizeFirestorePayload(target as any);
@@ -2292,12 +2292,11 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'perspective-group-storage',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => localStorage),
-      // Force every browser to drop ALL stale persisted data on the next load.
-      // This guarantees cross-browser consistency: only valid UI prefs survive,
-      // every shared-domain (articles/users/comments/messages/... ) is discarded
-      // and re-fetched from MongoDB.
+      // v3: every browser drops ALL stale persisted data on next load.
+      // Shared-domain data (articles/users/comments/messages/...) is never
+      // persisted anymore — it is always re-fetched fresh from MongoDB.
       // IMPORTANT: only copy keys whose value is defined, otherwise a missing
       // persisted field would overwrite the live default (e.g. savedArticles: [])
       // with `undefined` and crash every `.length`/`.map()` that reads it.
@@ -2355,23 +2354,13 @@ export const useStore = create<AppState>()(
         // REMOVED: users - must be fetched from MongoDB on every page load
       }),
       onRehydrateStorage: () => (state: any) => {
-        // CRITICAL: Clear any stale MongoDB data that may have been persisted by older
-        // versions of the app. This prevents cross-browser article divergence caused
-        // by leftover localStorage data. All content is fetched fresh from MongoDB
-        // via loadAllDataFromMongoDB() on every page load.
-        if (state) {
-          delete state.articles;
-          delete state.users;
-          delete state.comments;
-          delete state.directMessages;
-          delete state.notifications;
-          delete state.friends;
-          delete state.interactions;
-          delete state.media;
-          delete state.ads;
-          delete state.subscribers;
-          delete state.matches;
-        }
+        // NOTE: previously this callback used `delete state.X` to clear stale
+        // persisted data — but zustand v5 passes the ALREADY-MERGED state here,
+        // so `delete` corrupts the live in-memory store and leaves keys
+        // `undefined`, crashing every `.filter/.map/.length` on first render.
+        // Stale-data protection is now handled by `migrate` + `partialize`
+        // above (shared data is never persisted). Intentionally a no-op.
+        return undefined;
       }
     }
   )

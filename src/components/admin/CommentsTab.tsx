@@ -89,7 +89,7 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
       c.author.toLowerCase().includes(term) ||
       c.text.toLowerCase().includes(term) ||
       c.articleTitle.toLowerCase().includes(term) ||
-      (c.email && c.email.toLowerCase().includes(term))
+      (c.email && ((c.email ?? '').toLowerCase()).includes(term))
     );
   });
 
@@ -114,18 +114,18 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
       <div className="grid grid-cols-3 gap-4 text-center bg-zinc-950 text-white p-5 border border-zinc-900">
         <div>
           <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.total}</span>
-          <span className="text-xl font-black font-mono mt-1 block">{comments.length}</span>
+          <span className="text-xl font-black font-mono mt-1 block">{(comments ?? []).length}</span>
         </div>
         <div className="border-x border-zinc-900">
           <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.activeCount}</span>
           <span className="text-xl font-black font-mono mt-1 block text-[#E85D42]">
-            {Array.from(new Set(comments.map(c => c.email))).filter(Boolean).length}
+            {Array.from(new Set((comments ?? []).map(c => c.email))).filter(Boolean).length}
           </span>
         </div>
         <div>
           <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.warned}</span>
           <span className="text-xl font-black font-mono mt-1 block text-amber-500">
-            {comments.filter(c => c.email === 'spam@example.com' || c.id === 'c_warned').length + 2}
+            {(comments ?? []).filter(c => c.email === 'spam@example.com' || c.id === 'c_warned').length + 2}
           </span>
         </div>
       </div>

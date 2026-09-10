@@ -96,7 +96,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
   // 1. Fetch real-time friends
   useEffect(() => {
     if (!isOpen || !readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
 
     const loadFriends = async () => {
       const { data } = await supabase
@@ -116,7 +116,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     const unsubscribe = subscribeToTable(
       'users',
       (payload) => {
-        if (payload.new?.email && payload.new.email.toLowerCase().trim() === myEmail) {
+        if (((payload.new as any)?.email ?? '') && (((payload.new as any)?.email ?? '').toLowerCase()).trim() === myEmail) {
           loadFriends();
         }
       },
@@ -133,7 +133,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     if (initialItem && !selectedItemType) return initialItem;
 
     if (selectedItemType === 'article') {
-      const art = articles.find(a => a.id === selectedArticleId || a.slug === selectedArticleId) || articles[0];
+      const art = (articles ?? []).find(a => a.id === selectedArticleId || a.slug === selectedArticleId) || articles[0];
       const title = typeof art?.title === 'string' ? art.title : (art?.title?.[language] || 'Article');
       const subtitle = typeof art?.excerpt === 'string' ? art.excerpt : (art?.excerpt?.[language] || '');
       return {
@@ -153,7 +153,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
         subtitle: language === 'fr' ? 'Analyse stratégique - Perspective Group' : 'Strategic intel - Perspective Group'
       };
     } else {
-      const targetUser = allUsers.find(u => u.email.toLowerCase().trim() === selectedProfileEmail.toLowerCase().trim())
+      const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === selectedProfileEmail.toLowerCase().trim())
         || (readerProfile?.email?.toLowerCase().trim() === selectedProfileEmail.toLowerCase().trim() ? readerProfile : null)
         || { name: selectedProfileEmail.split('@')[0], email: selectedProfileEmail, avatarUrl: undefined };
 
@@ -185,7 +185,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
 
     // Add friends first
     friendsList.forEach(email => {
-      const matched = allUsers.find(u => u.email.toLowerCase().trim() === email);
+      const matched = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === email);
       list.push({
         email,
         name: matched?.name || email.split('@')[0],
@@ -202,20 +202,20 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     ];
 
     editorialTeam.forEach(e => {
-      if (!addedEmails.has(e.email.toLowerCase().trim())) {
+      if (!addedEmails.has(((e.email ?? '').toLowerCase()).trim())) {
         list.push({
           email: e.email,
           name: e.name,
           isFriend: false,
           role: e.role
         });
-        addedEmails.add(e.email.toLowerCase().trim());
+        addedEmails.add(((e.email ?? '').toLowerCase()).trim());
       }
     });
 
     // Add all remaining app users
     allUsers.forEach(u => {
-      const cleanEmail = u.email.toLowerCase().trim();
+      const cleanEmail = ((u.email ?? '').toLowerCase()).trim();
       if (!addedEmails.has(cleanEmail) && cleanEmail !== readerProfile?.email?.toLowerCase().trim()) {
         list.push({
           email: u.email,
@@ -229,12 +229,12 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     });
 
     // Add remaining subscribers
-    subscribers.forEach(s => {
-      const cleanEmail = s.email.toLowerCase().trim();
+    (subscribers ?? []).forEach(s => {
+      const cleanEmail = ((s.email ?? '').toLowerCase()).trim();
       if (!addedEmails.has(cleanEmail)) {
         list.push({
           email: s.email,
-          name: s.email.split('@')[0],
+          name: (s.email ?? '').split('@')[0],
           isFriend: false,
           role: 'Abonné'
         });
@@ -249,14 +249,14 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
   const filteredContacts = useMemo(() => {
     if (!searchQuery.trim()) return allContacts;
     const q = searchQuery.toLowerCase().trim();
-    return allContacts.filter(c => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q));
+    return allContacts.filter(c => (c.name ?? '').toLowerCase().includes(q) || ((c.email ?? '').toLowerCase()).includes(q));
   }, [allContacts, searchQuery]);
 
   // 5. Filtered articles for discussion
   const filteredArticles = useMemo(() => {
     if (!searchQuery.trim()) return articles;
     const q = searchQuery.toLowerCase().trim();
-    return articles.filter(a => {
+    return (articles ?? []).filter(a => {
       const titleStr = typeof a.title === 'string' ? a.title : a.title?.[language] || '';
       return titleStr.toLowerCase().includes(q);
     });
@@ -311,7 +311,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
 
   // Action: Post to Discussion
   const handlePostDiscussion = () => {
-    const targetArt = articles.find(a => a.id === commentArticleId || a.slug === commentArticleId) || articles[0];
+    const targetArt = (articles ?? []).find(a => a.id === commentArticleId || a.slug === commentArticleId) || articles[0];
     if (!targetArt) return;
 
     const commentText = captionNote.trim()
@@ -549,7 +549,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                   </div>
                 ) : (
                   filteredContacts.map(contact => {
-                    const isSelected = selectedRecipientEmail.toLowerCase().trim() === contact.email.toLowerCase().trim();
+                    const isSelected = selectedRecipientEmail.toLowerCase().trim() === ((contact.email ?? '').toLowerCase()).trim();
                     return (
                       <div
                         key={'contact-' + contact.email}
@@ -569,7 +569,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                             />
                           ) : (
                             <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center font-black text-xs text-zinc-700 dark:text-zinc-200 uppercase shrink-0">
-                              {contact.name.slice(0, 2)}
+                              {(contact.name ?? '').slice(0, 2)}
                             </div>
                           )}
 
@@ -817,7 +817,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                     }}
                     className="bg-transparent font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer truncate max-w-[150px]"
                   >
-                    {articles.map(art => {
+                    {(articles ?? []).map(art => {
                       const t = typeof art.title === 'string' ? art.title : art.title?.[language] || 'Article';
                       return (
                         <option key={art.id} value={art.id} className="dark:bg-zinc-900">

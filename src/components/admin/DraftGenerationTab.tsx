@@ -11,7 +11,7 @@ export function DraftGenerationTab({ onEditArticle, onRefreshArticles }: DraftGe
   const { articles, deleteArticle, language } = useStore();
   const isFr = language === 'fr';
   
-  const draftArticles = articles.filter(a => !a.isPublished);
+  const draftArticles = (articles ?? []).filter(a => !a.isPublished);
 
   const handleDeleteSingleDraft = (id: string) => {
     if (!window.confirm(isFr ? 'Supprimer ce brouillon ?' : 'Delete this draft?')) return;

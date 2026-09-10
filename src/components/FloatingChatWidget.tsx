@@ -114,13 +114,13 @@ export const FloatingChatWidget: React.FC = () => {
         behavior: 'smooth'
       });
     }
-  }, [directMessages.length, isOpen, isMinimized, selectedUser]);
+  }, [(directMessages ?? []).length, isOpen, isMinimized, selectedUser]);
 
   useEffect(() => {
     if (isOpen && !isMinimized && userEmail) {
       markDirectMessagesAsRead(selectedUser || '', userEmail);
     }
-  }, [isOpen, isMinimized, selectedUser, directMessages.length, userEmail, markDirectMessagesAsRead]);
+  }, [isOpen, isMinimized, selectedUser, (directMessages ?? []).length, userEmail, markDirectMessagesAsRead]);
 
   if (isDiscussionPage || isAdminPage) {
     return null;
@@ -141,7 +141,7 @@ export const FloatingChatWidget: React.FC = () => {
 
   const showBubbleBadge = unreadCount > 0 && (!isOpen || isMinimized);
 
-  const currentContact: MessengerContact = contacts.find(c => c.email.toLowerCase().trim() === selectedUserLower) || contacts[0] || {
+  const currentContact: MessengerContact = contacts.find(c => ((c.email ?? '').toLowerCase()).trim() === selectedUserLower) || contacts[0] || {
     email: "contact@perspective.sn",
     name: language === "fr" ? "Admin Rédaction" : "Editorial Admin",
     role: "Perspective Group",
@@ -155,7 +155,7 @@ export const FloatingChatWidget: React.FC = () => {
 
     let attachmentObj = undefined;
     if (selectedArticleId) {
-      const art = articles.find(a => a.id === selectedArticleId || a.slug === selectedArticleId);
+      const art = (articles ?? []).find(a => a.id === selectedArticleId || a.slug === selectedArticleId);
       if (art) {
         attachmentObj = {
           type: "article",
@@ -306,7 +306,7 @@ export const FloatingChatWidget: React.FC = () => {
         className="p-2 bg-zinc-50/80 dark:bg-zinc-900/60 border-b border-zinc-200 dark:border-zinc-800 flex gap-1.5 overflow-x-auto shrink-0 no-scrollbar"
       >
         {contacts.slice(0, 8).map(c => {
-          const isSelected = selectedUserLower === c.email.toLowerCase().trim();
+          const isSelected = selectedUserLower === ((c.email ?? '').toLowerCase()).trim();
           return (
             <button
               key={c.email}
@@ -320,7 +320,7 @@ export const FloatingChatWidget: React.FC = () => {
               }`}
             >
               {c.isAi ? <Bot size={11} /> : <span>{c.avatar}.</span>}
-              <span className="truncate max-w-[85px]">{c.name.split(' ')[0]}</span>
+              <span className="truncate max-w-[85px]">{(c.name ?? '').split(' ')[0]}</span>
             </button>
           );
         })}
@@ -437,7 +437,7 @@ export const FloatingChatWidget: React.FC = () => {
               <X size={12} />
             </button>
           </div>
-          {articles.slice(0, 6).map((art, idx) => (
+          {(articles ?? []).slice(0, 6).map((art, idx) => (
             <button
               key={`${art.id}-${idx}`}
               type="button"

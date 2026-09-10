@@ -31,8 +31,8 @@ export function SportsQuadrant() {
       if (isWrestLiveA && !isWrestLiveB) return -1;
       if (!isWrestLiveA && isWrestLiveB) return 1;
 
-      const hasSenegalA = a.teamA.name.includes("🇸🇳") || a.teamB.name.includes("🇸🇳") || a.league === "wrestling" || a.league === "navetane";
-      const hasSenegalB = b.teamA.name.includes("🇸🇳") || b.teamB.name.includes("🇸🇳") || b.league === "wrestling" || b.league === "navetane";
+      const hasSenegalA = (a.teamA.name ?? '').includes("🇸🇳") || (a.teamB.name ?? '').includes("🇸🇳") || a.league === "wrestling" || a.league === "navetane";
+      const hasSenegalB = (b.teamA.name ?? '').includes("🇸🇳") || (b.teamB.name ?? '').includes("🇸🇳") || b.league === "wrestling" || b.league === "navetane";
 
       const isLiveSenegalA = hasSenegalA && a.status === "live";
       const isLiveSenegalB = hasSenegalB && b.status === "live";
@@ -60,10 +60,10 @@ export function SportsQuadrant() {
 
     if (zoneId && zoneType) {
       if (zoneType === "article") {
-        const art = articles.find((a) => a.id === zoneId);
+        const art = (articles ?? []).find((a) => a.id === zoneId);
         if (art) return { type: "article" as const, data: art };
       } else {
-        const match = matches.find((m) => m.id === zoneId);
+        const match = (matches ?? []).find((m) => m.id === zoneId);
         if (match) return { type: "match" as const, data: match };
       }
     }
@@ -78,7 +78,7 @@ export function SportsQuadrant() {
       const completed = sortedMatches.find((m) => m.status === "finished") || sortedMatches[2];
       if (completed) return { type: "match" as const, data: completed };
     } else if (zoneNum === 4) {
-      const sportsArticle = articles.find((a) => a.category === "Sports" && a.isPublished) || articles.find((a) => a.isPublished);
+      const sportsArticle = (articles ?? []).find((a) => a.category === "Sports" && a.isPublished) || (articles ?? []).find((a) => a.isPublished);
       if (sportsArticle) return { type: "article" as const, data: sportsArticle };
       if (sortedMatches[3]) return { type: "match" as const, data: sortedMatches[3] };
     }
@@ -146,7 +146,7 @@ export function SportsQuadrant() {
           <div className="flex items-center gap-1.5 bg-red-500/10 px-2.5 py-1 border border-red-500/20">
             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
             <span className="text-[9px] font-black text-red-600 dark:text-red-400 tracking-wider">
-              {matches.filter((m) => m.status === "live").length} EN DIRECT
+              {(matches ?? []).filter((m) => m.status === "live").length} EN DIRECT
             </span>
           </div>
           <div className="text-[10px] font-mono text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 flex items-center gap-1 border border-zinc-200 dark:border-zinc-700">

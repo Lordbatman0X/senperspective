@@ -19,7 +19,7 @@ export function SearchPage() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem('recentSearches');
-      if (stored) setRecentSearches(JSON.parse(stored));
+      if (stored) setRecentSearches(safeJsonParse<string[]>(stored, []));
     } catch (e) {
       console.error(e);
     }
@@ -102,7 +102,7 @@ export function SearchPage() {
                     </div>
                     <div className="min-w-0">
                       <Link to={`/profile/${encodeURIComponent(usr.email)}`} className="font-serif font-extrabold text-sm text-brand-dark dark:text-zinc-100 hover:text-[#E85D42] truncate block">
-                        {usr.name || usr.email.split('@')[0]}
+                        {usr.name || (usr.email ?? '').split('@')[0]}
                       </Link>
                       <p className="text-xs text-zinc-500 font-mono truncate">{usr.email}</p>
                       <span className="inline-block mt-1 text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 bg-[#E85D42]/10 text-[#E85D42] border border-[#E85D42]/20 rounded-xs">

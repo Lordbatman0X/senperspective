@@ -302,7 +302,7 @@ export function TaxonomyTab() {
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
                 {categories.map(c => {
-                  const count = articles.filter(a => 
+                  const count = (articles ?? []).filter(a => 
                     (a.category as string)?.toLowerCase() === c.id.toLowerCase() || 
                     (a.category as string)?.toLowerCase() === c.fr.toLowerCase()
                   ).length;
@@ -381,7 +381,7 @@ export function TaxonomyTab() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {tags.map(t => {
-              const count = articles.filter(a => a.tags?.some(tag => tag.toLowerCase() === t.fr.toLowerCase() || tag.toLowerCase() === t.id.toLowerCase())).length;
+              const count = (articles ?? []).filter(a => a.tags?.some(tag => tag.toLowerCase() === t.fr.toLowerCase() || tag.toLowerCase() === t.id.toLowerCase())).length;
 
               return (
                 <div key={t.id} className="bg-zinc-900 border border-zinc-800 p-4 rounded-lg flex justify-between items-center hover:border-zinc-700 transition-all">

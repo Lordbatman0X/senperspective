@@ -261,7 +261,7 @@ export function AccountDrawer({
 
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const email = readerProfile.email.toLowerCase().trim();
+    const email = ((readerProfile.email ?? '').toLowerCase()).trim();
 
     const loadFriendRequests = async () => {
       const { data } = await supabase.from('friend_requests').select('*').eq('user_id', email);
@@ -309,7 +309,7 @@ export function AccountDrawer({
 
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const email = readerProfile.email.toLowerCase().trim();
+    const email = ((readerProfile.email ?? '').toLowerCase()).trim();
 
     const loadFriends = async () => {
       try {
@@ -352,7 +352,7 @@ export function AccountDrawer({
 
   const toggleFriend = async (friendEmail: string) => {
     if (!readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const targetEmail = friendEmail.toLowerCase().trim();
     if (myEmail === targetEmail) return;
 
@@ -360,7 +360,7 @@ export function AccountDrawer({
     const hasSentRequest = sentRequests.includes(targetEmail);
     const hasReceivedRequest = friendRequests.includes(targetEmail);
 
-    const targetUser = allUsers.find(u => u.email.toLowerCase().trim() === targetEmail);
+    const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
     const isPrivate = targetUser?.hidePersonalInfo;
 
     try {
@@ -397,7 +397,7 @@ export function AccountDrawer({
 
   const syncProfileToFirestore = async (updatedFields: Record<string, any>) => {
     if (readerProfile && readerProfile.email) {
-      const cleanEmail = readerProfile.email.toLowerCase().trim();
+      const cleanEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
       try {
         const safeFields = await sanitizeFirestorePayload(updatedFields);
         if (supabase) {
@@ -603,7 +603,7 @@ export function AccountDrawer({
                               </span>
                             </div>
                             <p className="text-[9.5px] text-zinc-500 dark:text-zinc-400 font-mono truncate max-w-[200px] mt-1 leading-none">
-                              {readerProfile.email.toLowerCase()}
+                              {((readerProfile.email ?? '').toLowerCase())}
                             </p>
                           </div>
                         </div>
@@ -664,8 +664,8 @@ export function AccountDrawer({
                             {language === "fr" ? "Dépêches Récents" : "Recent Dispatches"}
                           </span>
                           <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                            {notifications && notifications.length > 0 ? (
-                              notifications.slice(0, 3).map((n) => (
+                            {notifications && (notifications ?? []).length > 0 ? (
+                              (notifications ?? []).slice(0, 3).map((n) => (
                                 <div key={n.id} className="p-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[9px] font-mono flex flex-col gap-1 text-left">
                                   <div className="flex justify-between font-bold text-zinc-900 dark:text-zinc-100 text-[8.5px]">
                                     <span>{n.date || "TODAY"}</span>
@@ -703,8 +703,8 @@ export function AccountDrawer({
                         </div>
 
                         <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                          {comments && comments.length > 0 ? (
-                            comments.slice(0, 3).map((comment, index) => (
+                          {comments && (comments ?? []).length > 0 ? (
+                            (comments ?? []).slice(0, 3).map((comment, index) => (
                               <div key={index} className="p-3 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 font-mono text-[8.5px] text-zinc-900 dark:text-zinc-100 space-y-1 text-left">
                                 <div className="flex justify-between text-zinc-500">
                                   <span>LOG #{index + 101}</span>
@@ -745,7 +745,7 @@ export function AccountDrawer({
                         </span>
 
                         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {articles && articles.filter((a) => savedArticles?.includes(a.id)).length > 0 ? (
+                          {articles && (articles ?? []).filter((a) => savedArticles?.includes(a.id)).length > 0 ? (
                             articles
                               .filter((a) => savedArticles?.includes(a.id))
                               .map((article, idx) => (
@@ -791,7 +791,7 @@ export function AccountDrawer({
                         </span>
 
                         <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                          {comments && comments.filter(c => c.email?.toLowerCase() === readerProfile.email?.toLowerCase()).length > 0 ? (
+                          {comments && (comments ?? []).filter(c => c.email?.toLowerCase() === readerProfile.email?.toLowerCase()).length > 0 ? (
                             comments
                               .filter(c => c.email?.toLowerCase() === readerProfile.email?.toLowerCase())
                               .map((comment) => (
@@ -926,16 +926,16 @@ export function AccountDrawer({
                           const rawContacts = Array.from(contactMap.values());
                           // Sort friends to top
                           rawContacts.sort((a, b) => {
-                            const aIsFriend = friendsList.includes(a.email.toLowerCase().trim());
-                            const bIsFriend = friendsList.includes(b.email.toLowerCase().trim());
+                            const aIsFriend = friendsList.includes(((a.email ?? '').toLowerCase()).trim());
+                            const bIsFriend = friendsList.includes(((b.email ?? '').toLowerCase()).trim());
                             if (aIsFriend && !bIsFriend) return -1;
                             if (!aIsFriend && bIsFriend) return 1;
                             return a.name.localeCompare(b.name);
                           });
 
                           const filtered = rawContacts.filter(c =>
-                            c.name.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
-                            c.email.toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
+                            (c.name ?? '').toLowerCase().includes(chatSearchTerm.toLowerCase()) ||
+                            ((c.email ?? '').toLowerCase()).includes(chatSearchTerm.toLowerCase()) ||
                             (c.role || "").toLowerCase().includes(chatSearchTerm.toLowerCase())
                           );
 
@@ -954,7 +954,7 @@ export function AccountDrawer({
 
                           return filtered.map((contact) => {
                             const isSelected = selectedChatUser === contact.email;
-                            const firstName = contact.name.split(" ")[0];
+                            const firstName = (contact.name ?? '').split(" ")[0];
                             const brandAccent = currentSettings?.accentColor || "#E85D42";
 
                             return (
@@ -995,7 +995,7 @@ export function AccountDrawer({
 
                       {/* Active Conversation Header */}
                       {(() => {
-                        const activeContact = allUsers.find(u => u.email.toLowerCase().trim() === selectedChatUser.toLowerCase().trim())
+                        const activeContact = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === selectedChatUser.toLowerCase().trim())
                           || { email: selectedChatUser, name: selectedChatUser.split("@")[0], role: "Member", avatarUrl: "preset-male" };
 
                         return (
@@ -1064,7 +1064,7 @@ export function AccountDrawer({
                           return activeConversation.map((dm) => {
                             const isMe = (dm.sender || "").toLowerCase().trim() === myEmailLow;
                             const isLikeEmoji = dm.text === "👍";
-                            const activeContact = allUsers.find(u => u.email.toLowerCase().trim() === activeUserLow);
+                            const activeContact = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === activeUserLow);
 
                               return (
                                 <div key={dm.id} className={`flex items-end gap-2 max-w-[85%] ${isMe ? "ml-auto flex-row-reverse" : "mr-auto flex-row"}`}>

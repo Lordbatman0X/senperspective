@@ -63,7 +63,7 @@ export const DiscussionPage: React.FC = () => {
   const [selectedArticleId, setSelectedArticleId] = useState("");
   const [showArticlePicker, setShowArticlePicker] = useState(false);
 
-  const activeContact: MessengerContact = contacts.find(c => c.email.toLowerCase().trim() === activeContactEmailLow) || contacts[0] || {
+  const activeContact: MessengerContact = contacts.find(c => ((c.email ?? '').toLowerCase()).trim() === activeContactEmailLow) || contacts[0] || {
     email: "contact@perspective.sn", 
     name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", 
     role: "Perspective Group", 
@@ -99,7 +99,7 @@ export const DiscussionPage: React.FC = () => {
 
     let attachmentObj = undefined;
     if (selectedArticleId) {
-      const art = articles.find(a => a.id === selectedArticleId || a.slug === selectedArticleId);
+      const art = (articles ?? []).find(a => a.id === selectedArticleId || a.slug === selectedArticleId);
       if (art) {
         attachmentObj = {
           type: "article",
@@ -132,8 +132,8 @@ export const DiscussionPage: React.FC = () => {
 
   // Filter contacts by search query
   const filteredContacts = contacts.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    ((c.email ?? '').toLowerCase()).includes(searchQuery.toLowerCase()) ||
     c.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -191,16 +191,16 @@ export const DiscussionPage: React.FC = () => {
             className="flex-1 overflow-y-auto divide-y divide-zinc-800/40"
           >
             {filteredContacts.map(c => {
-              const isSelected = c.email.toLowerCase().trim() === activeContactEmailLow;
+              const isSelected = ((c.email ?? '').toLowerCase()).trim() === activeContactEmailLow;
               const contactUnread = (directMessages || []).filter(
-                dm => (dm.sender || '').toLowerCase().trim() === c.email.toLowerCase().trim() &&
+                dm => (dm.sender || '').toLowerCase().trim() === ((c.email ?? '').toLowerCase()).trim() &&
                       (dm.receiver || '').toLowerCase().trim() === myEmailLower &&
                       !dm.read
               ).length;
 
               const lastMsg = (directMessages || []).filter(
-                dm => ((dm.sender || '').toLowerCase().trim() === c.email.toLowerCase().trim() && (dm.receiver || '').toLowerCase().trim() === myEmailLower) ||
-                      ((dm.sender || '').toLowerCase().trim() === myEmailLower && (dm.receiver || '').toLowerCase().trim() === c.email.toLowerCase().trim())
+                dm => ((dm.sender || '').toLowerCase().trim() === ((c.email ?? '').toLowerCase()).trim() && (dm.receiver || '').toLowerCase().trim() === myEmailLower) ||
+                      ((dm.sender || '').toLowerCase().trim() === myEmailLower && (dm.receiver || '').toLowerCase().trim() === ((c.email ?? '').toLowerCase()).trim())
               ).slice(-1)[0];
 
               return (
@@ -417,7 +417,7 @@ export const DiscussionPage: React.FC = () => {
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {articles.slice(0, 8).map(art => (
+                {(articles ?? []).slice(0, 8).map(art => (
                   <button
                     key={art.id}
                     type="button"

@@ -14,7 +14,7 @@ export function MediaSelector({ onSelect, onClose }: MediaSelectorProps) {
 
   const filtered = (media || []).filter(m => {
     const matchesFilter = filter === 'all' || m.type === filter;
-    const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (m.name ?? '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 

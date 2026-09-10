@@ -883,7 +883,7 @@ export function FlashesAndCurationTab() {
               </div>
             </div>
 
-            {media && media.length > 0 && (
+            {media && (media ?? []).length > 0 && (
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
                   {language === 'fr' ? 'Ou sÃ©lectionner depuis la MÃ©diathÃ¨que' : 'Or select from Media Library'}
@@ -899,7 +899,7 @@ export function FlashesAndCurationTab() {
                   className="w-full bg-zinc-900 border border-zinc-700 text-zinc-200 p-2 text-xs rounded focus:outline-none focus:border-[#E85D42]"
                 >
                   <option value="" disabled>{language === 'fr' ? '-- Choisir une image de la mÃ©diathÃ¨que --' : '-- Choose image from media library --'}</option>
-                  {media.map((m: any) => (
+                  {(media ?? []).map((m: any) => (
                     <option key={m.id || m.url} value={m.url}>{m.title || m.name || m.url}</option>
                   ))}
                 </select>
@@ -1049,7 +1049,7 @@ export function FlashesAndCurationTab() {
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
               <option value="">{language === 'fr' ? '-- Choisir un article Ã  ajouter aux Tendances --' : '-- Choose article to add to Trendings --'}</option>
-              {articles.map(art => (
+              {(articles ?? []).map(art => (
                 <option key={art.id} value={art.id}>
                   {art.title?.[language] || art.title?.fr || art.id}
                 </option>
@@ -1067,7 +1067,7 @@ export function FlashesAndCurationTab() {
           {/* List of Curated Trendings */}
           <div className="space-y-2 mt-4">
             {curatedTrendingIds.map((artId, idx) => {
-              const foundArt = articles.find(a => a.id === artId || a.slug === artId);
+              const foundArt = (articles ?? []).find(a => a.id === artId || a.slug === artId);
               return (
                 <div key={`${artId}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1088,7 +1088,7 @@ export function FlashesAndCurationTab() {
                       title={language === 'fr' ? 'Remplacer cet article' : 'Replace article'}
                     >
                       <option value="">{language === 'fr' ? 'Remplacer...' : 'Replace...'}</option>
-                      {articles.map(a => (
+                      {(articles ?? []).map(a => (
                         <option key={a.id} value={a.id}>
                           {a.title?.[language] || a.title?.fr}
                         </option>
@@ -1144,7 +1144,7 @@ export function FlashesAndCurationTab() {
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
               <option value="">{language === 'fr' ? '-- Choisir un article Ã  ajouter aux DerniÃ¨res ActualitÃ©s --' : '-- Choose article to add to Latest News --'}</option>
-              {articles.map(art => (
+              {(articles ?? []).map(art => (
                 <option key={art.id} value={art.id}>
                   {art.title?.[language] || art.title?.fr || art.id}
                 </option>
@@ -1162,7 +1162,7 @@ export function FlashesAndCurationTab() {
           {/* List of Curated Latest */}
           <div className="space-y-2 mt-4">
             {curatedLatestIds.map((artId, idx) => {
-              const foundArt = articles.find(a => a.id === artId || a.slug === artId);
+              const foundArt = (articles ?? []).find(a => a.id === artId || a.slug === artId);
               return (
                 <div key={`${artId}-${idx}`} className="flex items-center justify-between gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1183,7 +1183,7 @@ export function FlashesAndCurationTab() {
                       title={language === 'fr' ? 'Remplacer cet article' : 'Replace article'}
                     >
                       <option value="">{language === 'fr' ? 'Remplacer...' : 'Replace...'}</option>
-                      {articles.map(a => (
+                      {(articles ?? []).map(a => (
                         <option key={a.id} value={a.id}>
                           {a.title?.[language] || a.title?.fr}
                         </option>
@@ -1245,7 +1245,7 @@ export function FlashesAndCurationTab() {
                   ðŸ“ [Dossier] {dos.titleFr || dos.titleEn || dos.id}
                 </option>
               ))}
-              {articles.map(art => (
+              {(articles ?? []).map(art => (
                 <option key={art.id} value={art.id}>
                   ðŸ“° [Article] {art.title?.[language] || art.title?.fr || art.id}
                 </option>
@@ -1265,7 +1265,7 @@ export function FlashesAndCurationTab() {
           <div className="space-y-2 mt-4">
             {curatedDossierIds.map((dosId, idx) => {
               const customDos = dossiersList.find((d: any) => d.id === dosId);
-              const foundArt = articles.find(a => a.id === dosId || a.slug === dosId);
+              const foundArt = (articles ?? []).find(a => a.id === dosId || a.slug === dosId);
               const title = customDos ? customDos.titleFr : (foundArt ? (foundArt.title?.[language] || foundArt.title?.fr) : `Dossier ID: ${dosId}`);
               
               return (
@@ -1295,7 +1295,7 @@ export function FlashesAndCurationTab() {
                           ðŸ“ {d.titleFr}
                         </option>
                       ))}
-                      {articles.map(a => (
+                      {(articles ?? []).map(a => (
                         <option key={a.id} value={a.id}>
                           ðŸ“° {a.title?.[language] || a.title?.fr}
                         </option>

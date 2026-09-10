@@ -154,7 +154,7 @@ export function ProfilePage() {
   // Following of CURRENT user (accounts they follow)
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const load = async () => setFollowing(await loadRelations('followers', 'user_id', myEmail, 'follower_email'));
     load();
   }, [readerProfile?.email]);
@@ -178,7 +178,7 @@ export function ProfilePage() {
   // Blocks of CURRENT user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const load = async () => setBlocks(await loadRelations('blocks', 'user_id', myEmail, 'blocked_email', 'block'));
     load();
   }, [readerProfile?.email]);
@@ -186,7 +186,7 @@ export function ProfilePage() {
   // Mutes of CURRENT user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const load = async () => setMutes(await loadRelations('blocks', 'user_id', myEmail, 'blocked_email', 'mute'));
     load();
   }, [readerProfile?.email]);
@@ -195,7 +195,7 @@ export function ProfilePage() {
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec || !readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const check = async () => {
       const rows: any[] = await cloudLoadCollection('blocks');
       setHasBlockedMe(rows.some(r => String(r?.user_id || "").toLowerCase().trim() === dec && String(r?.blocked_email || "").toLowerCase().trim() === myEmail && String(r?.type || "block").toLowerCase() === 'block'));
@@ -206,7 +206,7 @@ export function ProfilePage() {
   // Friends of CURRENT user
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const myEmail = readerProfile.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const load = async () => setFriends(await loadRelations('friends', 'user_id', myEmail, 'email'));
     load();
   }, [readerProfile?.email]);
@@ -280,7 +280,7 @@ export function ProfilePage() {
     );
   }
 
-  const userEmailLow = readerProfile?.email ? readerProfile.email.toLowerCase().trim() : "";
+  const userEmailLow = readerProfile?.email ? ((readerProfile.email ?? '').toLowerCase()).trim() : "";
   const targetEmailLow = (targetUser.email || decodedEmail).toLowerCase().trim();
   const isSelf = userEmailLow.length > 0 && userEmailLow === targetEmailLow;
   const isFriend = friends.includes(targetEmailLow) || friends.includes(decodedEmail);
@@ -299,15 +299,15 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = readerProfile.email.toLowerCase().trim();
-    const targetEmail = targetUser.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
+    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
     if (myEmail === targetEmail) return;
     const a = myEmail, b = targetEmail;
     try {
       if (isFriend) {
         await cloudDelete('friends', `${a}:${b}`);
         await cloudDelete('friends', `${b}:${a}`);
-        setFriends(friends.filter(f => f !== b));
+        setFriends((friends ?? []).filter(f => f !== b));
         useStore().deleteFriend(b);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
@@ -336,8 +336,8 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = readerProfile.email.toLowerCase().trim();
-    const targetEmail = targetUser.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
+    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
     if (myEmail === targetEmail) return;
 
     const isFollowing = following.includes(targetEmail);
@@ -366,8 +366,8 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = readerProfile.email.toLowerCase().trim();
-    const targetEmail = targetUser.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
+    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
     if (myEmail === targetEmail) return;
 
     const isCurrentlyBlocked = blocks.includes(targetEmail);
@@ -384,7 +384,7 @@ export function ProfilePage() {
         await cloudDelete('friends', `${myEmail}:${targetEmail}`);
         await cloudDelete('friends', `${targetEmail}:${myEmail}`);
         await cloudDelete('followers', `${myEmail}:${targetEmail}`);
-        setFriends(friends.filter(f => f !== targetEmail));
+        setFriends((friends ?? []).filter(f => f !== targetEmail));
         setFollowing(following.filter(f => f !== targetEmail));
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -400,8 +400,8 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = readerProfile.email.toLowerCase().trim();
-    const targetEmail = targetUser.email.toLowerCase().trim();
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
+    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
     if (myEmail === targetEmail) return;
 
     const isCurrentlyMuted = mutes.includes(targetEmail);
@@ -477,7 +477,7 @@ export function ProfilePage() {
     try {
       const isCover = type === "coverPhotoUrl";
       const compressedDataUrl = await compressImageFile(file, isCover ? 800 : 400, isCover ? 500 : 400, 0.75);
-      const userEmail = readerProfile.email.toLowerCase().trim();
+      const userEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
       await persistUserUpdate(userEmail, { [type]: compressedDataUrl });
       
       // Update store immediately if updating self
@@ -501,7 +501,7 @@ export function ProfilePage() {
   const togglePrivacy = async () => {
     try {
       const newStatus = !targetUser.hidePersonalInfo;
-      const userEmail = readerProfile.email.toLowerCase().trim();
+      const userEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
       await persistUserUpdate(userEmail, { hide_personal_info: newStatus, hidePersonalInfo: newStatus });
       
       if (isSelf) {
@@ -523,7 +523,7 @@ export function ProfilePage() {
     if (!readerProfile?.email) return;
     try {
       const newStatus = !targetUser.hideEmail;
-      const userEmail = readerProfile.email.toLowerCase().trim();
+      const userEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
       await persistUserUpdate(userEmail, { hide_email: newStatus, hideEmail: newStatus });
       
       if (isSelf) {
@@ -543,7 +543,7 @@ export function ProfilePage() {
   // Bio updates
   const saveBio = async () => {
     try {
-      const userEmail = readerProfile.email.toLowerCase().trim();
+      const userEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
       await persistUserUpdate(userEmail, { bio: editedBio });
       if (isSelf) {
         setReaderProfile({ ...readerProfile, bio: editedBio });
@@ -568,7 +568,7 @@ export function ProfilePage() {
     }
 
     try {
-      const userEmail = targetUser.email.toLowerCase().trim();
+      const userEmail = ((targetUser.email ?? '').toLowerCase()).trim();
       await persistUserUpdate(userEmail, { accolades: updatedAccolades });
       if (isSelf) {
         setReaderProfile({ ...readerProfile, accolades: updatedAccolades });
@@ -581,7 +581,7 @@ export function ProfilePage() {
   };
 
   // User comments list
-  const userComments = comments.filter(c => c.email?.toLowerCase().trim() === decodedEmail);
+  const userComments = (comments ?? []).filter(c => c.email?.toLowerCase().trim() === decodedEmail);
 
   // Trigger secured chat dispatch
   const handleOpenSecureDispatch = () => {
@@ -754,8 +754,8 @@ export function ProfilePage() {
                 {(targetUser.hideEmail || targetUser.hidePersonalInfo) && !isSelf
                   ? (language === "fr" ? "••••••••@••••.com (E-mail masqué)" : "••••••••@••••.com (Hidden email)")
                   : (isSelf && targetUser.hideEmail
-                      ? `${targetUser.email.toLowerCase()} (${language === "fr" ? "Masqué aux visiteurs" : "Hidden from visitors"})`
-                      : targetUser.email.toLowerCase())}
+                      ? `${((targetUser.email ?? '').toLowerCase())} (${language === "fr" ? "Masqué aux visiteurs" : "Hidden from visitors"})`
+                      : ((targetUser.email ?? '').toLowerCase()))}
               </p>
 
               {isSelf && (
@@ -869,13 +869,13 @@ export function ProfilePage() {
                     <button
                       onClick={handleFollow}
                       className={`px-3.5 py-2 font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all rounded-lg border shadow-xs ${
-                        following.includes(targetUser.email.toLowerCase().trim()) 
+                        following.includes(((targetUser.email ?? '').toLowerCase()).trim()) 
                           ? "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800" 
                           : "bg-white text-zinc-900 border-zinc-300 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800"
                       }`}
                     >
                       <Activity size={13} />
-                      <span>{following.includes(targetUser.email.toLowerCase().trim()) ? (language === "fr" ? "ABONNÉ(E)" : "FOLLOWING") : (language === "fr" ? "SUIVRE" : "FOLLOW")}</span>
+                      <span>{following.includes(((targetUser.email ?? '').toLowerCase()).trim()) ? (language === "fr" ? "ABONNÉ(E)" : "FOLLOWING") : (language === "fr" ? "SUIVRE" : "FOLLOW")}</span>
                     </button>
                   </div>
 
@@ -885,14 +885,14 @@ export function ProfilePage() {
                     <button
                       onClick={handleMute}
                       className={`px-2.5 py-1.5 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all rounded-md border shadow-xs ${
-                        mutes.includes(targetUser.email.toLowerCase().trim()) 
+                        mutes.includes(((targetUser.email ?? '').toLowerCase()).trim()) 
                           ? "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800" 
                           : "bg-zinc-100 text-zinc-700 border-zinc-200 dark:bg-zinc-900/80 dark:text-zinc-300 dark:border-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                       }`}
                       title={language === "fr" ? "Masquer les notifications" : "Mute notifications"}
                     >
                       <EyeOff size={11} />
-                      <span>{mutes.includes(targetUser.email.toLowerCase().trim()) ? (language === "fr" ? "MASQUÉ" : "MUTED") : (language === "fr" ? "MASQUER" : "MUTE")}</span>
+                      <span>{mutes.includes(((targetUser.email ?? '').toLowerCase()).trim()) ? (language === "fr" ? "MASQUÉ" : "MUTED") : (language === "fr" ? "MASQUER" : "MUTE")}</span>
                     </button>
 
                     {/* Block button */}
@@ -1062,9 +1062,9 @@ export function ProfilePage() {
 
                 {isSelf ? (
                   // Real saved articles for logged-in viewer
-                  savedArticles && savedArticles.length > 0 ? (
+                  savedArticles && (savedArticles ?? []).length > 0 ? (
                     <div className="divide-y divide-brand-border/10">
-                      {articles.filter(a => savedArticles.includes(a.id)).map(art => (
+                      {(articles ?? []).filter(a => savedArticles.includes(a.id)).map(art => (
                         <div key={art.id} className="py-3 flex justify-between items-center gap-3">
                           <Link 
                             to={`/article/${art.slug}`}
@@ -1096,7 +1096,7 @@ export function ProfilePage() {
                         : "Strategic investigation reports consulted recently by this member:"}
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 font-mono text-[9px]">
-                      {articles.slice(0, 3).map((art, idx) => (
+                      {(articles ?? []).slice(0, 3).map((art, idx) => (
                         <Link 
                           key={art.id}
                           to={`/article/${art.slug}`}
@@ -1121,7 +1121,7 @@ export function ProfilePage() {
                 {userComments.length > 0 ? (
                   <div className="space-y-4">
                     {userComments.map(c => {
-                      const relatedArticle = articles.find(a => a.id === c.articleId || a.slug === c.articleId);
+                      const relatedArticle = (articles ?? []).find(a => a.id === c.articleId || a.slug === c.articleId);
                       return (
                         <div key={c.id} className="p-4 bg-brand-soft/25 border border-brand-border/15 text-left rounded-none">
                           <div className="flex justify-between items-center gap-2 mb-2 font-mono text-[8px] text-brand-muted font-bold uppercase tracking-wider">

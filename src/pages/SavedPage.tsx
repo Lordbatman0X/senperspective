@@ -7,7 +7,7 @@ import { getSafeImageUrl } from '../lib/imageUtils';
 export function SavedPage() {
   const { articles, savedArticles, language, toggleSavedArticle } = useStore();
   
-  const saved = articles.filter(a => savedArticles?.includes(a.id));
+  const saved = (articles ?? []).filter(a => savedArticles?.includes(a.id));
 
   useEffect(() => {
     window.scrollTo(0, 0);

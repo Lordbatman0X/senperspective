@@ -163,12 +163,12 @@ function MiniCard({ article }: { article: Article }) {
 }
 
 function CategorySection({ title, subTitle, articles }: { title: string, subTitle?: string, articles: Article[] }) {
-  if (articles.length === 0) return null;
+  if ((articles ?? []).length === 0) return null;
   
   // Show first 8 articles in a grid
-  const mainGrid = articles.slice(0, 8);
+  const mainGrid = (articles ?? []).slice(0, 8);
   // Show rest in a horizontal mini-carousel
-  const subCarousel = articles.slice(8, 14);
+  const subCarousel = (articles ?? []).slice(8, 14);
 
   return (
     <section className="mb-14">
@@ -220,31 +220,31 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
   };
 
   useEffect(() => {
-    if (articles.length <= 1) return;
+    if ((articles ?? []).length <= 1) return;
     const timer = setInterval(() => {
       setActiveHero(prev => {
-        const next = (prev + 1) % articles.length;
+        const next = (prev + 1) % (articles ?? []).length;
         scrollTo(next);
         return next;
       });
     }, 10000);
     return () => clearInterval(timer);
-  }, [articles.length]);
+  }, [(articles ?? []).length]);
 
-  if (articles.length === 0) return null;
+  if ((articles ?? []).length === 0) return null;
 
   return (
         <section className="block mb-8 relative group overflow-hidden bg-white dark:bg-zinc-900 shadow-sm border border-brand-border dark:border-zinc-800" >
           {/* Navigation Arrows */}
           <button 
-             onClick={(e) => { e.stopPropagation(); scrollTo(activeHero === 0 ? articles.length - 1 : activeHero - 1); }} 
+             onClick={(e) => { e.stopPropagation(); scrollTo(activeHero === 0 ? (articles ?? []).length - 1 : activeHero - 1); }} 
              className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
              aria-label="Previous slide"
           >
              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m15 18-6-6 6-6"/></svg>
           </button>
           <button 
-             onClick={(e) => { e.stopPropagation(); scrollTo((activeHero + 1) % articles.length); }} 
+             onClick={(e) => { e.stopPropagation(); scrollTo((activeHero + 1) % (articles ?? []).length); }} 
              className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
              aria-label="Next slide"
           >
@@ -253,7 +253,7 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
 
           {/* Indication Dots */}
           <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 backdrop-blur-xs border border-white/20 shadow-md">
-             {articles.map((_, idx) => (
+             {(articles ?? []).map((_, idx) => (
                 <button 
                   key={idx}
                   onClick={(e) => {
@@ -271,7 +271,7 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
              onScroll={handleScroll}
              className="flex w-full max-w-full overflow-x-auto hide-scrollbar snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing"
           >
-             {articles.map((article, idx) => (
+             {(articles ?? []).map((article, idx) => (
                 <div 
                   key={`${article.id}-${idx}`} 
                   className="w-full min-w-full max-w-full shrink-0 flex-shrink-0 snap-start" 
@@ -385,16 +385,16 @@ export function HomePage() {
   };
   const [activeCoastTab, setActiveCoastTab] = useState<'tide' | 'goree' | 'meteo' | 'gale' | null>(null);
   
-  let featuredArticles = articles.filter(a => a.isFeatured).slice(0, 6);
+  let featuredArticles = (articles ?? []).filter(a => a.isFeatured).slice(0, 6);
   if (featuredArticles.length < 6) {
     const existingIds = new Set(featuredArticles.map(a => a.id));
-    const additional = articles.filter(a => !existingIds.has(a.id)).slice(0, 6 - featuredArticles.length);
+    const additional = (articles ?? []).filter(a => !existingIds.has(a.id)).slice(0, 6 - featuredArticles.length);
     featuredArticles = [...featuredArticles, ...additional];
   }
-  const flashArticles = articles.filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');
-  const arenaArticles = articles.filter(a => a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
-  const dossierArticles = articles.filter(a => a.category === 'Dossiers' || a.category === 'Dossier' || a.category?.toLowerCase().includes('dossier'));
-  const maritimeArticles = articles.filter(a => a.category === 'Météo & Maritime' || a.category === 'Chaloupe & Transports' || a.category?.toLowerCase().includes('météo') || a.category?.toLowerCase().includes('chaloupe'));
+  const flashArticles = (articles ?? []).filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');
+  const arenaArticles = (articles ?? []).filter(a => a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
+  const dossierArticles = (articles ?? []).filter(a => a.category === 'Dossiers' || a.category === 'Dossier' || a.category?.toLowerCase().includes('dossier'));
+  const maritimeArticles = (articles ?? []).filter(a => a.category === 'Météo & Maritime' || a.category === 'Chaloupe & Transports' || a.category?.toLowerCase().includes('météo') || a.category?.toLowerCase().includes('chaloupe'));
 
   const largeSet = [...articles, ...articles, ...articles]; // Mock more articles for layout
   const allMixedSet = [...largeSet].sort(() => Math.random() - 0.5);
@@ -606,11 +606,11 @@ export function HomePage() {
               {(() => {
                 const curatedIds: string[] = currentSettings.curatedTrendingArticleIds || [];
                 const curatedList = curatedIds
-                  .map(id => articles.find(a => a.id === id || a.slug === id))
+                  .map(id => (articles ?? []).find(a => a.id === id || a.slug === id))
                   .filter((a): a is any => Boolean(a));
                 const listToRender = curatedList.length > 0
                   ? curatedList
-                  : articles.slice(1, (currentSettings.trendingCount || 4));
+                  : (articles ?? []).slice(1, (currentSettings.trendingCount || 4));
 
                 return listToRender.map((article, idx) => (
                   <Link 
@@ -753,7 +753,7 @@ export function HomePage() {
               {(() => {
                 const curatedIds: string[] = currentSettings.curatedLatestNewsArticleIds || [];
                 const curatedList = curatedIds
-                  .map(id => articles.find(a => a.id === id || a.slug === id))
+                  .map(id => (articles ?? []).find(a => a.id === id || a.slug === id))
                   .filter((a): a is any => Boolean(a));
                 const listToRender = curatedList.length > 0
                   ? curatedList

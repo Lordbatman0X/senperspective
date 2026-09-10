@@ -90,7 +90,7 @@ export function AdminPortal() {
 
     // 0. Check localStorage updated passwords first
     try {
-      const storedPasses = JSON.parse(localStorage.getItem('perspective_admin_passwords') || '{}');
+      const storedPasses = safeJsonParse(localStorage.getItem('perspective_admin_passwords') || '{}', {});
       if (storedPasses[cleanUser] === cleanPass) {
         isAuthenticated = true;
       }
@@ -107,10 +107,10 @@ export function AdminPortal() {
       const storeUsers = useStore.getState().users || [];
       const matchedUser = storeUsers.find(
         u => (
-          u.email.toLowerCase() === cleanUser || 
+          (u.email ?? '').toLowerCase() === cleanUser || 
           u.name?.toLowerCase() === cleanUser || 
-          u.email.split('@')[0].toLowerCase() === cleanUser ||
-          (u.email.toLowerCase() === `${cleanUser}@perspective.sn`)
+          (u.email ?? '').split('@')[0].toLowerCase() === cleanUser ||
+          ((u.email ?? '').toLowerCase() === `${cleanUser}@perspective.sn`)
         )
       );
 
@@ -179,7 +179,7 @@ export function AdminPortal() {
     // BOOTSTRAP ACCESS: if the DB has no row (or no credential) for a platform
     // admin email, allow the bootstrap password (hash-compared, never plaintext).
     if (!isAuthenticated && BOOTSTRAP_ADMIN_EMAILS.includes(resolvedEmailForLogin)) {
-      const hasRow = (useStore.getState().users || []).some(u => u.email.toLowerCase().trim() === resolvedEmailForLogin && ((u as any).passwordHash || (u as any).password));
+      const hasRow = (useStore.getState().users || []).some(u => (u.email ?? '').toLowerCase().trim() === resolvedEmailForLogin && ((u as any).passwordHash || (u as any).password));
       if (!hasRow && await verifyBootstrapAdminPassword(cleanPass)) {
         isAuthenticated = true;
         matchedRole = 'Admin';
@@ -1830,7 +1830,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div key={f.email} className="flex items-center justify-between p-3 bg-zinc-950/80 border border-zinc-800/80 rounded-xl text-xs">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center font-bold text-[#E85D42]">
-                        {f.avatar || f.name.charAt(0)}
+                        {f.avatar || (f.name ?? '').charAt(0)}
                       </div>
                       <div>
                         <p className="font-bold text-zinc-200">{f.name}</p>

@@ -105,7 +105,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user || !user.email) return;
 
-    const currentUserEmail = user.email.toLowerCase().trim();
+    const currentUserEmail = (user.email ?? '').toLowerCase().trim();
 
     const updatePresence = async (online: boolean) => {
       try {
@@ -717,9 +717,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         if (authUser.email) {
           try {
-            const { data, error } = await supabase.from('users').select('*').eq('email', authUser.email.toLowerCase().trim()).single();
+            const { data, error } = await supabase.from('users').select('*').eq('email', (authUser.email ?? '').toLowerCase().trim()).single();
             if (data && !error) {
-              const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || data.role === "Admin" || authUser.email.includes("admin");
+              const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || data.role === "Admin" || (authUser.email ?? '').includes("admin");
               const updatedProfile = {
                 id: authUser.id,
                 name: data.name || authUser.user_metadata?.full_name || "Anonymous",
@@ -743,11 +743,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 localStorage.setItem('perspective_auth_session', JSON.stringify(updatedProfile));
               } catch {}
             } else {
-              const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || authUser.email.includes("admin");
+              const isAdminUser = authUser.email === "kadersdiaz3@gmail.com" || authUser.email === "admin@perspective.sn" || (authUser.email ?? '').includes("admin");
               const fallbackProfile = {
                 id: authUser.id,
                 email: authUser.email,
-                name: authUser.user_metadata?.full_name || authUser.email.split("@")[0],
+                name: authUser.user_metadata?.full_name || (authUser.email ?? '').split("@")[0],
                 avatarUrl: authUser.user_metadata?.avatar_url || "preset-male",
                 role: isAdminUser ? "Admin" : "Member",
                 coverPhotoUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
@@ -790,7 +790,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const localSessionStr = localStorage.getItem('perspective_auth_session');
         const storeProfile = useStore.getState().readerProfile;
-        const targetEmail = storeProfile?.email || (localSessionStr ? JSON.parse(localSessionStr)?.email : null);
+        const targetEmail = storeProfile?.email || (localSessionStr ? safeJsonParse(localSessionStr, {})?.email : null);
 
         if (targetEmail) {
           const cleanEmail = targetEmail.toLowerCase().trim();
@@ -831,7 +831,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setReaderProfile(storeProfile);
           } else if (localSessionStr) {
             try {
-              const parsed = JSON.parse(localSessionStr);
+              const parsed = safeJsonParse(localSessionStr, {});
               if (parsed && parsed.email === cleanEmail) {
                 setReaderProfile(parsed);
               }
@@ -1138,7 +1138,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 5. Check local store registered accounts
     const storeUsers = useStore.getState().users || [];
-    const localMatched = storeUsers.find(u => u.email.toLowerCase().trim() === cleanEmail);
+    const localMatched = storeUsers.find(u => (u.email ?? '').toLowerCase().trim() === cleanEmail);
     if (localMatched) {
       const lm: any = localMatched;
       const hasLocalCredential = Boolean(lm.passwordHash || lm.password || lm.pin);
@@ -1374,7 +1374,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setAllUsers(prev => {
-      const withoutSelf = prev.filter(u => u.email.toLowerCase().trim() !== cleanEmail);
+      const withoutSelf = prev.filter(u => (u.email ?? '').toLowerCase().trim() !== cleanEmail);
       return [...withoutSelf, {
         email: cleanEmail,
         name: cleanName,
@@ -1389,7 +1389,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     const currentUsers = useStore.getState().users || [];
-    if (!currentUsers.some(u => u.email.toLowerCase().trim() === cleanEmail)) {
+    if (!currentUsers.some(u => (u.email ?? '').toLowerCase().trim() === cleanEmail)) {
       useStore.setState({
         users: [...currentUsers, {
           id: finalUid,

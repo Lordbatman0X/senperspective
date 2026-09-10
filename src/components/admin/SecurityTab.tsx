@@ -113,22 +113,22 @@ export function SecurityTab() {
 
   // Merge admin users
   const adminMap = new Map<string, any>();
-  seedAdmins.forEach(a => adminMap.set(a.email.toLowerCase(), a));
+  seedAdmins.forEach(a => adminMap.set((a.email ?? '').toLowerCase(), a));
   (storeUsers || []).forEach(u => {
-    if (u.role === 'Admin' || u.role === 'Éditeur' || u.role === 'Abonné' || u.email.includes('admin') || u.email.includes('perspective')) {
-      adminMap.set(u.email.toLowerCase(), {
+    if (u.role === 'Admin' || u.role === 'Éditeur' || u.role === 'Abonné' || (u.email ?? '').includes('admin') || (u.email ?? '').includes('perspective')) {
+      adminMap.set((u.email ?? '').toLowerCase(), {
         email: u.email,
-        name: u.name || u.email.split('@')[0],
+        name: u.name || (u.email ?? '').split('@')[0],
         role: u.role || 'Admin',
         authType: u.authType || 'password'
       });
     }
   });
   (firestoreUsers || []).forEach(u => {
-    if (u.role === 'Admin' || u.role === 'Éditeur' || u.email.includes('admin') || u.email.includes('perspective')) {
-      adminMap.set(u.email.toLowerCase(), {
+    if (u.role === 'Admin' || u.role === 'Éditeur' || (u.email ?? '').includes('admin') || (u.email ?? '').includes('perspective')) {
+      adminMap.set((u.email ?? '').toLowerCase(), {
         email: u.email,
-        name: u.name || u.email.split('@')[0],
+        name: u.name || (u.email ?? '').split('@')[0],
         role: u.role || 'Admin',
         authType: u.authType || 'password'
       });
@@ -170,7 +170,7 @@ export function SecurityTab() {
     }
 
     setIsUpdatingPassword(true);
-    const targetEmail = selectedAdminForPassword.email.toLowerCase().trim();
+    const targetEmail = (selectedAdminForPassword.email ?? '').toLowerCase().trim();
 
     try {
       const pHash = await hashPassword(newPasswordValue);
@@ -180,7 +180,7 @@ export function SecurityTab() {
 
       // Save to localStorage as immediate offline/instant fallback
       try {
-        const storedPasses = JSON.parse(localStorage.getItem('perspective_admin_passwords') || '{}');
+        const storedPasses = safeJsonParse(localStorage.getItem('perspective_admin_passwords') || '{}', {});
         storedPasses[targetEmail] = newPasswordValue;
         if (targetEmail.includes('@')) {
           const usernameKey = targetEmail.split('@')[0];
@@ -502,13 +502,13 @@ export function SecurityTab() {
                 </thead>
                 <tbody className="divide-y divide-zinc-800/60">
                   {allAdminsList.map((adm) => {
-                    const isSelf = adm.email.toLowerCase() === currentAdminEmail.toLowerCase();
+                    const isSelf = (adm.email ?? '').toLowerCase() === currentAdminEmail.toLowerCase();
                     return (
                       <tr key={adm.email} className="hover:bg-zinc-800/40 transition-colors">
                         <td className="p-3">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-orange-600/20 border border-orange-500/40 text-orange-400 font-bold flex items-center justify-center text-xs">
-                              {adm.name ? adm.name.charAt(0).toUpperCase() : 'A'}
+                              {adm.name ? (adm.name ?? '').charAt(0).toUpperCase() : 'A'}
                             </div>
                             <div>
                               <div className="font-bold text-zinc-100 flex items-center gap-1.5">

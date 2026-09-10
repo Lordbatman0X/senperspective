@@ -79,7 +79,7 @@ export function AudienceAnalyticsTab() {
       const storeInteractionEvents = (interactions || []).map(i => ({
         id: i.id,
         eventName: i.type === 'login' ? 'user_login' : (i.type === 'read' ? 'pageview' : 'conversion_lead'),
-        sessionId: `sess_${i.email ? i.email.replace(/[^a-zA-Z0-9]/g, '_') : 'guest'}`,
+        sessionId: `sess_${i.email ? (i.email ?? '').replace(/[^a-zA-Z0-9]/g, '_') : 'guest'}`,
         path: i.link || '/article',
         userEmail: i.email,
         timestamp: i.date ? new Date(i.date).toISOString() : new Date().toISOString(),
@@ -89,8 +89,8 @@ export function AudienceAnalyticsTab() {
 
       // 2. Convert subscribers into consents & lead conversions
       const storeSubscriberConsents = (subscribers || []).map(s => ({
-        id: `sub_${s.email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        sessionId: `sess_${s.email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        id: `sub_${(s.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
+        sessionId: `sess_${(s.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
         userEmail: s.email,
         marketing: true,
         analytics: true,
@@ -102,8 +102,8 @@ export function AudienceAnalyticsTab() {
 
       // 3. Convert friends / reader profiles into consents
       const friendConsents = (friends || []).map(f => ({
-        id: `friend_${f.email.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        sessionId: `sess_${f.email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+        id: `friend_${(f.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
+        sessionId: `sess_${(f.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
         userEmail: f.email,
         marketing: true,
         analytics: true,
@@ -310,7 +310,7 @@ export function AudienceAnalyticsTab() {
     // Sync subscribers to Firestore user_consents as well
     try {
       for (const sub of (subscribers || [])) {
-        const subDocId = sub.email.replace(/[^a-zA-Z0-9]/g, '_');
+        const subDocId = (sub.email ?? '').replace(/[^a-zA-Z0-9]/g, '_');
         await supabase.from('user_consents').upsert({
           id: subDocId,
           sessionId: `sess_${subDocId}`,
@@ -319,8 +319,8 @@ export function AudienceAnalyticsTab() {
           analytics: true,
           marketing: true,
           personalization: true,
-          deviceType: sub.email.includes('gmail') ? 'Mobile' : 'Desktop',
-          country: sub.email.endsWith('.sn') || sub.email.includes('orange.sn') ? 'Sénégal (Dakar, Thiès, Saint-Louis)' : 'Diaspora (France, États-Unis, Canada, Italie)',
+          deviceType: (sub.email ?? '').includes('gmail') ? 'Mobile' : 'Desktop',
+          country: (sub.email ?? '').endsWith('.sn') || (sub.email ?? '').includes('orange.sn') ? 'Sénégal (Dakar, Thiès, Saint-Louis)' : 'Diaspora (France, États-Unis, Canada, Italie)',
           updatedAt: sub.date ? new Date(sub.date).toISOString() : new Date().toISOString()
         });
       }
@@ -584,7 +584,7 @@ export function AudienceAnalyticsTab() {
           </div>
           <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-800/80">
             <p className="text-[10px] text-amber-400 uppercase">3. Engagés Newsletter</p>
-            <p className="text-xl font-bold font-serif text-amber-400 mt-1">{subscribers.length}</p>
+            <p className="text-xl font-bold font-serif text-amber-400 mt-1">{(subscribers ?? []).length}</p>
             <p className="text-[9px] text-amber-500 mt-1">Abonnés vérifiés</p>
           </div>
           <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-800/80">

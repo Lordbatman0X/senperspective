@@ -25,7 +25,7 @@ export function HeaderAccountMenu() {
           </div>
           {(notifications || []).filter(
             (n) =>
-              n.email.toLowerCase() === readerProfile.email.toLowerCase() &&
+              ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase()) &&
               !n.isRead
           ).length > 0 && (
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border border-[#111]" />

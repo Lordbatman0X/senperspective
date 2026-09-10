@@ -7,17 +7,17 @@ export const CloudSqlTab: React.FC = () => {
   const [query, setQuery] = useState('SELECT id, category, views, is_published FROM articles ORDER BY views DESC LIMIT 5;');
   const [queryResult, setQueryResult] = useState<{ columns: string[]; rows: any[][]; timeMs: number; rowCount: number } | null>({
     columns: ['id', 'category', 'views', 'is_published'],
-    rows: articles.slice(0, 5).map(a => [a.id, a.category, a.views || 142, a.isPublished ? 'TRUE' : 'FALSE']),
+    rows: (articles ?? []).slice(0, 5).map(a => [a.id, a.category, a.views || 142, a.isPublished ? 'TRUE' : 'FALSE']),
     timeMs: 12,
-    rowCount: Math.min(articles.length, 5)
+    rowCount: Math.min((articles ?? []).length, 5)
   });
   const [isExecuting, setIsExecuting] = useState(false);
   const [selectedTable, setSelectedTable] = useState('articles');
 
   const tables = [
-    { name: 'articles', count: articles.length, cols: ['id', 'slug', 'title', 'category', 'views', 'is_published', 'created_at'] },
-    { name: 'subscribers', count: subscribers.length, cols: ['id', 'email', 'topics', 'language', 'status', 'created_at'] },
-    { name: 'comments', count: comments.length, cols: ['id', 'article_id', 'author', 'email', 'content', 'is_approved', 'created_at'] },
+    { name: 'articles', count: (articles ?? []).length, cols: ['id', 'slug', 'title', 'category', 'views', 'is_published', 'created_at'] },
+    { name: 'subscribers', count: (subscribers ?? []).length, cols: ['id', 'email', 'topics', 'language', 'status', 'created_at'] },
+    { name: 'comments', count: (comments ?? []).length, cols: ['id', 'article_id', 'author', 'email', 'content', 'is_approved', 'created_at'] },
     { name: 'site_settings', count: 1, cols: ['key', 'value', 'updated_at'] },
     { name: 'direct_messages', count: 12, cols: ['id', 'sender_email', 'recipient_email', 'content', 'created_at'] }
   ];
@@ -40,18 +40,18 @@ export const CloudSqlTab: React.FC = () => {
 
       if (q.includes('subscribers')) {
         cols = ['id', 'email', 'status', 'created_at'];
-        rows = subscribers.map((s, idx) => [`sub-${idx + 100}`, s.email, 'Active', new Date().toISOString().split('T')[0]]);
+        rows = (subscribers ?? []).map((s, idx) => [`sub-${idx + 100}`, s.email, 'Active', new Date().toISOString().split('T')[0]]);
       } else if (q.includes('comments')) {
         cols = ['id', 'author', 'content', 'is_approved'];
-        rows = comments.map(c => [c.id, c.author, c.text?.substring(0, 40) + '...', c.isApproved ? 'TRUE' : 'FALSE']);
+        rows = (comments ?? []).map(c => [c.id, c.author, c.text?.substring(0, 40) + '...', c.isApproved ? 'TRUE' : 'FALSE']);
       } else if (q.includes('group by category')) {
         cols = ['category', 'article_count'];
         const counts: Record<string, number> = {};
-        articles.forEach(a => { counts[a.category] = (counts[a.category] || 0) + 1; });
+        (articles ?? []).forEach(a => { counts[a.category] = (counts[a.category] || 0) + 1; });
         rows = Object.entries(counts).map(([cat, cnt]) => [cat, cnt]);
       } else {
         cols = ['id', 'category', 'views', 'is_published'];
-        rows = articles.slice(0, 8).map(a => [a.id, a.category, a.views || 210, a.isPublished ? 'TRUE' : 'FALSE']);
+        rows = (articles ?? []).slice(0, 8).map(a => [a.id, a.category, a.views || 210, a.isPublished ? 'TRUE' : 'FALSE']);
       }
 
       const elapsed = Math.round(performance.now() - start + 8);

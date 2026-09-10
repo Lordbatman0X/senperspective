@@ -44,8 +44,8 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
 
 
   // Global Stats
-  const totalImpressions = ads.reduce((acc, ad) => acc + (ad.impressions || 0), 0);
-  const totalClicks = ads.reduce((acc, ad) => acc + (ad.clicks || 0), 0);
+  const totalImpressions = (ads ?? []).reduce((acc, ad) => acc + (ad.impressions || 0), 0);
+  const totalClicks = (ads ?? []).reduce((acc, ad) => acc + (ad.clicks || 0), 0);
   const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
 
   const handleEdit = (ad: AdItem) => {
@@ -101,7 +101,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
           <MonitorPlay size={14} />
           <span>{isFr ? 'Régie & Monitor Publicitaire' : 'Ad Monitor'}</span>
           <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-mono text-[9px]">
-            {ads.length}
+            {(ads ?? []).length}
           </span>
         </button>
 
@@ -168,7 +168,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/80">
-                  {ads.length === 0 && (
+                  {(ads ?? []).length === 0 && (
                     <tr>
                       <td colSpan={4} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-zinc-500">
@@ -184,7 +184,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                       </td>
                     </tr>
                   )}
-                  {ads.map(ad => {
+                  {(ads ?? []).map(ad => {
                     const adCtr = (ad.impressions || 0) > 0 ? ((ad.clicks || 0) / (ad.impressions || 0)) * 100 : 0;
                     return (
                       <tr key={ad.id} className="hover:bg-zinc-800/40 transition-colors">

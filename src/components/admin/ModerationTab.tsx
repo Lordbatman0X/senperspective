@@ -76,7 +76,7 @@ export function ModerationTab() {
   const [deletedEmails, setDeletedEmails] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('perspective_deleted_user_emails');
-      return saved ? JSON.parse(saved) : [];
+      return saved ? safeJsonParse(saved, []) : [];
     } catch {
       return [];
     }
@@ -108,13 +108,13 @@ export function ModerationTab() {
   ];
 
   const userMap = new Map<string, any>();
-  defaultAdminUsers.forEach(u => userMap.set(u.email.toLowerCase().trim(), u));
-  (storeUsers || []).forEach(u => userMap.set(u.email.toLowerCase().trim(), u));
-  (allUsers || []).forEach(u => userMap.set(u.email.toLowerCase().trim(), u));
-  (firestoreUsers || []).forEach(u => userMap.set(u.email.toLowerCase().trim(), u));
+  defaultAdminUsers.forEach(u => userMap.set((u.email ?? '').toLowerCase().trim(), u));
+  (storeUsers || []).forEach(u => userMap.set((u.email ?? '').toLowerCase().trim(), u));
+  (allUsers || []).forEach(u => userMap.set((u.email ?? '').toLowerCase().trim(), u));
+  (firestoreUsers || []).forEach(u => userMap.set((u.email ?? '').toLowerCase().trim(), u));
 
   const mergedUsers = Array.from(userMap.values()).filter(u => {
-    const clean = u.email ? u.email.toLowerCase().trim() : '';
+    const clean = u.email ? (u.email ?? '').toLowerCase().trim() : '';
     return clean && !deletedEmails.includes(clean);
   });
 
@@ -239,8 +239,8 @@ export function ModerationTab() {
   };
 
   const filteredUsers = mergedUsers.filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          u.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (u.name ?? '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (u.email ?? '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });
@@ -445,7 +445,7 @@ export function ModerationTab() {
                         </div>
                       ) : (
                         <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-extrabold uppercase text-zinc-100 shrink-0">
-                          {user.name.substring(0, 1)}
+                          {(user.name ?? '').substring(0, 1)}
                         </div>
                       )}
                       <div>

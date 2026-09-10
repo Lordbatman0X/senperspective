@@ -94,7 +94,7 @@ async function seedCoreAccounts() {
       const identity: any = { ...acct.identity };
       if (current?.avatarUrl && String(current.avatarUrl).trim() !== '') {
         delete identity.avatarUrl; // keep the admin's custom photo
-      } else if (!acct.email.includes('@perspective.sn')) {
+      } else if (!(acct.email ?? '').includes('@perspective.sn')) {
         identity.avatarUrl = acct.avatar;
       }
       const setOnInsert: any = { ...acct.identity, avatarUrl: acct.avatar, passwordHash: hashPasswordServer(acct.password) };
@@ -186,7 +186,7 @@ function loadCentralDB(): CentralDB {
   try {
     if (fs.existsSync(DB_FILE_PATH)) {
       const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-      inMemoryDB = JSON.parse(raw);
+      inMemoryDB = safeJsonParse(raw, {});
       if (!inMemoryDB!.users) inMemoryDB!.users = {};
       if (!inMemoryDB!.users["kadersdiaz3@gmail.com"]) {
         inMemoryDB!.users["kadersdiaz3@gmail.com"] = getInitialDB().users["kadersdiaz3@gmail.com"];

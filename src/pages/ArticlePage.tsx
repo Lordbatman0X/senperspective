@@ -326,7 +326,7 @@ export function ArticlePage() {
   };
 
   const decodedId = id ? decodeURIComponent(id) : '';
-  const article = articles.find(a => 
+  const article = (articles ?? []).find(a => 
     a.slug === id || 
     a.id === id || 
     a.slug === decodedId || 
@@ -400,7 +400,7 @@ export function ArticlePage() {
       replyTo: parentCommenter
     });
 
-    if (parentEmail && parentEmail.toLowerCase() !== readerProfile.email.toLowerCase()) {
+    if (parentEmail && parentEmail.toLowerCase() !== ((readerProfile.email ?? '').toLowerCase())) {
       useStore.getState().addNotification({
         id: "notif-" + Date.now().toString(),
         email: parentEmail,
@@ -422,7 +422,7 @@ export function ArticlePage() {
     window.scrollTo(0, 0);
   }, [id]);
 
-  if (!article && (isArticleLoading || articles.length === 0)) {
+  if (!article && (isArticleLoading || (articles ?? []).length === 0)) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center space-y-4">
         <div className="w-8 h-8 border-2 border-[#E85D42] border-t-transparent rounded-full animate-spin"></div>
@@ -446,8 +446,8 @@ export function ArticlePage() {
   }
 
   const isSaved = savedArticles?.includes(article.id) || false;
-  const related = articles.filter(a => article.relatedArticleIds?.includes(a.id));
-  const carouselRelated = related.length >= 3 ? related : articles.filter(a => a.category === article.category && a.id !== article.id).slice(0, 5);
+  const related = (articles ?? []).filter(a => article.relatedArticleIds?.includes(a.id));
+  const carouselRelated = related.length >= 3 ? related : (articles ?? []).filter(a => a.category === article.category && a.id !== article.id).slice(0, 5);
 
   const articleAds = ads?.filter(a => a.active && a.position === 'in-article') || [];
   const globalAd = articleAds.length > 0 ? articleAds[Math.floor(Math.random() * articleAds.length)] : null;
@@ -1083,7 +1083,7 @@ export function ArticlePage() {
                         </button>
 
                         {/* Edit & Delete Controls - Strictly author only */}
-                        {Boolean(readerProfile?.email && c.email && readerProfile.email.trim().toLowerCase() === c.email.trim().toLowerCase()) && (
+                        {Boolean(readerProfile?.email && c.email && (readerProfile.email ?? '').trim().toLowerCase() === (c.email ?? '').trim().toLowerCase()) && (
                           <>
                             <button
                               onClick={() => {
@@ -1269,7 +1269,7 @@ export function ArticlePage() {
                               </button>
 
                               {/* Edit & Delete for reply - Strictly author only */}
-                              {Boolean(readerProfile?.email && reply.email && readerProfile.email.trim().toLowerCase() === reply.email.trim().toLowerCase()) && (
+                              {Boolean(readerProfile?.email && reply.email && (readerProfile.email ?? '').trim().toLowerCase() === (reply.email ?? '').trim().toLowerCase()) && (
                                 <>
                                   <button
                                     onClick={() => {

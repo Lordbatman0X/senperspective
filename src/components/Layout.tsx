@@ -29,7 +29,7 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   
   if (isArticle) {
     const slug = location.pathname.split('/')[2];
-    contextArticle = articles.find(a => a.slug === slug || a.id === slug);
+    contextArticle = (articles ?? []).find(a => a.slug === slug || a.id === slug);
   }
 
   React.useEffect(() => {

@@ -57,7 +57,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const [realFriendsList, setRealFriendsList] = useState<string[]>([]);
   useEffect(() => {
     if (!readerProfile?.email) return;
-    const email = readerProfile.email.toLowerCase().trim();
+    const email = ((readerProfile.email ?? '').toLowerCase()).trim();
 
     const loadRealFriends = async () => {
       try {
@@ -177,7 +177,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   // Add friends to the FloatingHub chat contact list.
   // First pass: use allUsers data for friends that are in the registered users list.
   allUsers.forEach(u => {
-    const emailLow = u.email.toLowerCase().trim();
+    const emailLow = ((u.email ?? '').toLowerCase()).trim();
     if (emailLow && emailLow !== myEmailLower && realFriendsList.includes(emailLow)) {
       contactMap.set(emailLow, {
         name: u.name || emailLow.split("@")[0],
@@ -208,7 +208,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   // Third pass: add all registered users (not just friends) so users can discover
   // and message other community members
   allUsers.forEach(u => {
-    const emailLow = u.email.toLowerCase().trim();
+    const emailLow = ((u.email ?? '').toLowerCase()).trim();
     if (emailLow && emailLow !== myEmailLower && !contactMap.has(emailLow)) {
       contactMap.set(emailLow, {
         name: u.name || emailLow.split("@")[0],
@@ -223,8 +223,8 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const contactsList = Array.from(contactMap.values());
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const filteredContacts = contactsList.filter(c => 
-    c.name.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-    c.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    (c.name ?? '').toLowerCase().includes(userSearchQuery.toLowerCase()) || 
+    ((c.email ?? '').toLowerCase()).includes(userSearchQuery.toLowerCase()) ||
     (c.role || "").toLowerCase().includes(userSearchQuery.toLowerCase())
   );
 
@@ -237,13 +237,13 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
   // Sync selected contact if contacts change and current isn't valid
   useEffect(() => {
-    if (contactsList.length > 0 && !contactsList.some(c => c.email.toLowerCase() === selectedContact.toLowerCase())) {
+    if (contactsList.length > 0 && !contactsList.some(c => ((c.email ?? '').toLowerCase()) === selectedContact.toLowerCase())) {
       setSelectedContact(contactsList[0].email);
     }
   }, [allUsers, friends]);
 
   const notifications = useStore().notifications || [];
-  const unreadNotifsCount = notifications.filter(n => (n.email === userEmail || !n.email) && !n.isRead).length;
+  const unreadNotifsCount = (notifications ?? []).filter(n => (n.email === userEmail || !n.email) && !n.isRead).length;
 
   // Unread chat messages count directly from database
   const unreadDMsCount = (directMessages || []).filter(
@@ -425,7 +425,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
     let attachmentObj = undefined;
     if (selectedArticleId) {
-      const art = articles.find(a => a.id === selectedArticleId);
+      const art = (articles ?? []).find(a => a.id === selectedArticleId);
       if (art) {
         attachmentObj = {
           type: "article" as const,
@@ -691,7 +691,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                       {filteredContacts.map((c) => {
                         const contactUnread = (directMessages || []).filter(
-                          dm => dm.sender.toLowerCase() === c.email.toLowerCase() && dm.receiver.toLowerCase() === userEmail.toLowerCase() && !dm.read
+                          dm => dm.sender.toLowerCase() === ((c.email ?? '').toLowerCase()) && dm.receiver.toLowerCase() === userEmail.toLowerCase() && !dm.read
                         ).length;
 
                         return (
@@ -806,7 +806,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                       </span>
                       <button onClick={() => setShowArticlePicker(false)} className="text-zinc-400 hover:text-white text-xs">✕</button>
                     </div>
-                    {articles.slice(0, 10).map(art => (
+                    {(articles ?? []).slice(0, 10).map(art => (
                       <button
                         key={art.id}
                         onClick={() => {

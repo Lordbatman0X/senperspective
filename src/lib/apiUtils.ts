@@ -97,6 +97,20 @@ export function getAuthHeaders(): Record<string, string> {
 }
 
 /**
+ * Crash-proof JSON parsing — a corrupted localStorage blob must NEVER
+ * white-screen the app behind the ErrorBoundary.
+ */
+export function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
+  if (raw == null || raw === '') return fallback;
+  try {
+    const v = JSON.parse(raw);
+    return (v ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
  * Result returned by safeFetchJson
  */
 export interface SafeFetchResult<T = any> {

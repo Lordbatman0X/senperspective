@@ -24,22 +24,22 @@ export function DashboardOverview({
   const registeredProfiles = useStore(s => (s as any).registeredProfiles) || [];
   const currentSettings = useStore(s => s.siteSettings);
 
-  const pendingComments = comments.filter(c => !c.isApproved);
-  const liveArticles = articles.filter(a => a.isPublished);
-  const drafts = articles.filter(a => !a.isPublished);
+  const pendingComments = (comments ?? []).filter(c => !c.isApproved);
+  const liveArticles = (articles ?? []).filter(a => a.isPublished);
+  const drafts = (articles ?? []).filter(a => !a.isPublished);
 
   // Analyze articles by category for our visual indicator bars
   const categories = ['Politique', 'Économie', 'Société', 'International', 'Tech', 'Sports', 'Gouvernance'];
   const categoryStats = categories.map(cat => {
-    const count = articles.filter(a => a.category === cat).length;
-    const percentage = articles.length > 0 ? (count / articles.length) * 100 : 0;
+    const count = (articles ?? []).filter(a => a.category === cat).length;
+    const percentage = (articles ?? []).length > 0 ? (count / (articles ?? []).length) * 100 : 0;
     return { name: cat, count, percentage };
   }).filter(c => c.count > 0 || c.name === 'Politique' || c.name === 'Économie' || c.name === 'Société');
 
   // Real interaction metrics
-  const totalReads = interactions.filter(i => i.type === 'read').length;
-  const totalLikes = interactions.filter(i => i.type === 'like_article' || i.type === 'like_comment').length;
-  const totalShares = interactions.filter(i => i.type === 'share_abdel').length;
+  const totalReads = (interactions ?? []).filter(i => i.type === 'read').length;
+  const totalLikes = (interactions ?? []).filter(i => i.type === 'like_article' || i.type === 'like_comment').length;
+  const totalShares = (interactions ?? []).filter(i => i.type === 'share_abdel').length;
 
   const t = {
     title: language === 'fr' ? 'Tableau de bord' : 'Dashboard Overview',
@@ -81,7 +81,7 @@ export function DashboardOverview({
           <p className="text-xs text-zinc-300 font-mono">{t.headerDesc}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {articles.length === 0 ? (
+          {(articles ?? []).length === 0 ? (
             <button
               onClick={seedSampleArticles}
               className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md rounded-xs"
@@ -125,7 +125,7 @@ export function DashboardOverview({
           <p className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">{t.liveArts}</p>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-white">{liveArticles.length}</span>
-            <span className="text-xs text-zinc-400 font-mono">/ {articles.length} total</span>
+            <span className="text-xs text-zinc-400 font-mono">/ {(articles ?? []).length} total</span>
           </div>
           <p className="text-xs text-zinc-400 mt-4 flex items-center gap-1 group-hover:text-[#E85D42] font-semibold transition-colors">
             {t.manageFiles} <ArrowUpRight size={14} />
@@ -157,11 +157,11 @@ export function DashboardOverview({
               <Users size={20} />
             </span>
             <span className="text-[10px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800/50 px-2 py-0.5 font-mono rounded-xs">
-              +{subscribers.length > 0 ? subscribers.length : 0}
+              +{(subscribers ?? []).length > 0 ? (subscribers ?? []).length : 0}
             </span>
           </div>
           <p className="text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">{t.activeSubs}</p>
-          <span className="text-3xl font-black text-white">{subscribers.length}</span>
+          <span className="text-3xl font-black text-white">{(subscribers ?? []).length}</span>
           <p className="text-xs text-zinc-400 mt-4 flex items-center gap-1 group-hover:text-[#E85D42] font-semibold transition-colors">
             {t.launchNewsletter} <ArrowUpRight size={14} />
           </p>
@@ -248,13 +248,13 @@ export function DashboardOverview({
           <div>
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 font-mono">{t.latestSubs}</p>
             <div className="space-y-2">
-              {subscribers.slice(0, 3).map((sub, i) => (
+              {(subscribers ?? []).slice(0, 3).map((sub, i) => (
                 <div key={i} className="flex justify-between items-center bg-zinc-950/80 p-2.5 text-xs border border-zinc-800 rounded-md">
                   <span className="font-semibold truncate max-w-[150px] text-zinc-100">{sub.email}</span>
                   <span className="text-[10px] text-zinc-400 font-mono">{sub.date}</span>
                 </div>
               ))}
-              {subscribers.length === 0 && (
+              {(subscribers ?? []).length === 0 && (
                 <p className="text-xs text-zinc-500 italic">{t.noSubs}</p>
               )}
             </div>
@@ -281,7 +281,7 @@ export function DashboardOverview({
           <div>
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2 font-mono">{t.recentInteractions}</p>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {interactions.slice(0, 4).map((item) => (
+              {(interactions ?? []).slice(0, 4).map((item) => (
                 <div key={item.id} className="p-2.5 bg-zinc-950/80 border border-zinc-800 text-xs rounded-md">
                   <div className="flex justify-between text-[10px] font-mono text-zinc-400 mb-0.5">
                     <span className="font-bold text-zinc-200 truncate max-w-[120px]">{item.email}</span>

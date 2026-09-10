@@ -37,7 +37,7 @@ export function CookieConsentBanner() {
       return () => clearTimeout(timer);
     } else {
       try {
-        setPreferences(JSON.parse(stored));
+        setPreferences(safeJsonParse(stored, {}));
       } catch (e) {
         setIsVisible(true);
       }

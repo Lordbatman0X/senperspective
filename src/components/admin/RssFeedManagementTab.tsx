@@ -39,7 +39,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   // State for Feeds list
   const [rssFeeds, setRssFeeds] = useState<any[]>(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    const parsed = saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const parsed = saved ? safeJsonParse(saved, {}) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
     const uniqueIds = new Set<string>();
     return parsed.filter((f: any) => {
       if (!f || !f.id) return false;
@@ -52,7 +52,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   // Health Map State
   const [feedHealthMap, setFeedHealthMap] = useState<Record<string, FeedHealthRecord>>(() => {
     const saved = localStorage.getItem('perspective_rss_health');
-    return saved ? JSON.parse(saved) : {};
+    return saved ? safeJsonParse(saved, {}) : {};
   });
 
   // Scheduler State
@@ -767,7 +767,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
 
   // Filter logic
   const filteredFeeds = rssFeeds.filter(feed => {
-    const matchesSearch = feed.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch = (feed.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                           feed.url.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPack = selectedPack === 'all' || feed.pack === selectedPack;
     return matchesSearch && matchesPack;

@@ -23,7 +23,7 @@ export function SportsSlider() {
 
   const filteredMatches = activeCategory === "all" 
     ? matches 
-    : matches.filter(m => m.league === activeCategory);
+    : (matches ?? []).filter(m => m.league === activeCategory);
 
   const carouselRef = useRef<HTMLDivElement>(null);
 
@@ -178,7 +178,7 @@ export function SportsSlider() {
         <div className="flex items-center gap-1.5 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
           <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
           <span className="text-[8px] font-black text-red-500 tracking-wider">
-            {matches.filter(m => m.status === "live").length} LIVE
+            {(matches ?? []).filter(m => m.status === "live").length} LIVE
           </span>
         </div>
       </div>

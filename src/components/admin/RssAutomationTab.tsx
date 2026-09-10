@@ -226,7 +226,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // RSS Feed Sources State
   const [rssFeeds, setRssFeeds] = useState(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    const parsed = saved ? JSON.parse(saved) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const parsed = saved ? safeJsonParse(saved, {}) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
     const uniqueIds = new Set<string>();
     return parsed.filter((f: any) => {
       if (!f || !f.id) return false;
@@ -239,7 +239,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // Health Map State
   const [feedHealthMap, setFeedHealthMap] = useState<Record<string, FeedHealthRecord>>(() => {
     const saved = localStorage.getItem('perspective_rss_health');
-    return saved ? JSON.parse(saved) : {};
+    return saved ? safeJsonParse(saved, {}) : {};
   });
 
   // Dual AI Engine Status

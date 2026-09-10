@@ -1554,7 +1554,7 @@ export function Header() {
                         </span>
                       </div>
                       <p className="text-[9.5px] text-brand-muted font-mono truncate max-w-[170px] mt-1.5 leading-none">
-                        {readerProfile.email.toLowerCase()}
+                        {((readerProfile.email ?? '').toLowerCase())}
                       </p>
                     </div>
                   </div>
@@ -1574,7 +1574,7 @@ export function Header() {
                     <div className="flex items-center gap-1" title={language === "fr" ? "Notes" : "Notes"}>
                       <span className="text-[8px] text-brand-muted font-bold">NOTE:</span>
                       <span className="font-bold text-brand-dark">
-                        {comments?.filter(c => c.email.toLowerCase() === readerProfile.email.toLowerCase()).length || 3}
+                        {comments?.filter(c => ((c.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase())).length || 3}
                       </span>
                     </div>
                   </div>
@@ -1780,7 +1780,7 @@ export function Header() {
                             </div>
                             <div className="flex items-center gap-1.5">
                               <span className="text-[9px] font-bold bg-[#E85D42]/10 text-[#E85D42] px-2 py-0.5 rounded-none" style={{ color: currentSettings.accentColor, backgroundColor: currentSettings.accentColor + '15' }}>
-                                {notifications?.filter(n => n.email.toLowerCase() === readerProfile.email.toLowerCase()).length || 0}
+                                {notifications?.filter(n => ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase())).length || 0}
                               </span>
                               <ChevronRight size={14} className="text-zinc-400 group-hover:translate-x-0.5 transition-transform" />
                             </div>
@@ -1896,7 +1896,7 @@ export function Header() {
                         <span className="text-white">{language === "fr" ? "Articles Sauvegardés" : "Saved Articles"}</span>
                       </span>
                       <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
-                        {articles.filter((a) => savedArticles?.includes(a.id)).length > 0 ? (
+                        {(articles ?? []).filter((a) => savedArticles?.includes(a.id)).length > 0 ? (
                           articles
                             .filter((a) => savedArticles?.includes(a.id))
                             .map((article, idx) => (
@@ -1934,7 +1934,7 @@ export function Header() {
                         <span>{language === "fr" ? "Mes Commentaires" : "My Comments"}</span>
                       </span>
                       <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {comments.filter(c => c.email === readerProfile.email).length > 0 ? (
+                        {(comments ?? []).filter(c => c.email === readerProfile.email).length > 0 ? (
                           comments
                             .filter(c => c.email === readerProfile.email)
                             .map((comment) => (
@@ -1968,9 +1968,9 @@ export function Header() {
                       <span>{language === "fr" ? "Historique des Notifications" : "Notifications History"}</span>
                     </span>
                     <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                      {notifications && notifications.filter(n => n.email.toLowerCase() === readerProfile.email.toLowerCase()).length > 0 ? (
+                      {notifications && (notifications ?? []).filter(n => ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase())).length > 0 ? (
                         notifications
-                          .filter(n => n.email.toLowerCase() === readerProfile.email.toLowerCase())
+                          .filter(n => ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase()))
                           .map((notif) => {
                             const response = notificationResponses?.[notif.id];
                             const isWarning = notif.text?.en?.toLowerCase().includes("warning") || 
@@ -2222,9 +2222,9 @@ export function Header() {
                       </div>
 
                       <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                        {interactions.filter(i => i.email.toLowerCase() === readerProfile.email.toLowerCase()).length > 0 ? (
+                        {(interactions ?? []).filter(i => ((i.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase())).length > 0 ? (
                           interactions
-                            .filter(i => i.email.toLowerCase() === readerProfile.email.toLowerCase())
+                            .filter(i => ((i.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase()))
                             .map((log) => (
                               <div key={log.id} className="p-2 bg-zinc-950 border border-zinc-900 font-mono text-[7.5px] text-zinc-400 space-y-0.5">
                                 <div className="flex justify-between text-zinc-600">
@@ -2388,7 +2388,7 @@ export function Header() {
 
                     {/* Chat Messages History */}
                     <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#0c0c0e]">
-                      {directMessages && directMessages.filter(
+                      {directMessages && (directMessages ?? []).filter(
                         (dm) =>
                           (dm.sender === readerProfile.email && dm.receiver === selectedChatUser) ||
                           (dm.sender === selectedChatUser && dm.receiver === readerProfile.email)
@@ -2497,7 +2497,7 @@ export function Header() {
                       {/* Attachment Selector Body */}
                       {attachedMaterialType === "article" && (
                         <div className="mb-2 bg-zinc-950 border border-zinc-800 max-h-32 overflow-y-auto p-2 space-y-1">
-                          {articles && articles.map((art) => (
+                          {articles && (articles ?? []).map((art) => (
                             <button
                               key={art.id}
                               type="button"
@@ -2512,7 +2512,7 @@ export function Header() {
 
                       {attachedMaterialType === "comment" && (
                         <div className="mb-2 bg-zinc-950 border border-zinc-800 max-h-32 overflow-y-auto p-2 space-y-1">
-                          {comments && comments.slice(0, 10).map((c) => (
+                          {comments && (comments ?? []).slice(0, 10).map((c) => (
                             <button
                               key={c.id}
                               type="button"

@@ -250,12 +250,12 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                   onClick={() => toggleFriend(selectedUserForDetail.email)}
                   className="px-2.5 py-1 text-[8px] font-mono font-bold uppercase tracking-wider border rounded-none cursor-pointer transition-all bg-transparent"
                   style={{
-                    color: friendsList.includes(selectedUserForDetail.email.toLowerCase().trim()) ? "#e11d48" : currentSettings.accentColor,
-                    borderColor: friendsList.includes(selectedUserForDetail.email.toLowerCase().trim()) ? "rgba(225, 29, 72, 0.3)" : `${currentSettings.accentColor}30`
+                    color: friendsList.includes((selectedUserForDetail.email ?? '').toLowerCase().trim()) ? "#e11d48" : currentSettings.accentColor,
+                    borderColor: friendsList.includes((selectedUserForDetail.email ?? '').toLowerCase().trim()) ? "rgba(225, 29, 72, 0.3)" : `${currentSettings.accentColor}30`
                   }}
                 >
                   {(() => {
-                    const email = selectedUserForDetail.email.toLowerCase().trim();
+                    const email = (selectedUserForDetail.email ?? '').toLowerCase().trim();
                     if (friendsList.includes(email)) return language === "fr" ? "Retirer Ami" : "Remove Friend";
                     if (sentRequests.includes(email)) return language === "fr" ? "Annuler Demande" : "Cancel Request";
                     if (friendRequests.includes(email)) return language === "fr" ? "Accepter" : "Accept Request";
@@ -311,7 +311,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                     </span>
                   </div>
                   <p className="text-[10px] font-mono text-brand-muted truncate mt-1">
-                    {(selectedUserForDetail.hideEmail || selectedUserForDetail.hidePersonalInfo) && selectedUserForDetail.email.toLowerCase() !== readerProfile?.email.toLowerCase()
+                    {(selectedUserForDetail.hideEmail || selectedUserForDetail.hidePersonalInfo) && (selectedUserForDetail.email ?? '').toLowerCase() !== readerProfile?.email.toLowerCase()
                       ? (language === "fr" ? "••••••••@••••.com (E-mail masqué)" : "••••••••@••••.com (Hidden email)")
                       : selectedUserForDetail.email}
                   </p>
@@ -459,7 +459,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
               {(() => {
                 const myEmail = readerProfile?.email?.toLowerCase().trim() || "";
                 // Filter out self
-                const members = allUsers.filter(u => u && u.email && u.email.toLowerCase().trim() !== myEmail);
+                const members = allUsers.filter(u => u && u.email && (u.email ?? '').toLowerCase().trim() !== myEmail);
                 const query = (networkSearchQuery || "").toLowerCase().trim();
                 const filteredMembers = members.filter(m => 
                   (m.name || "").toLowerCase().includes(query) ||
@@ -478,7 +478,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                 return (
                   <div className="grid grid-cols-1 gap-3">
                     {filteredMembers.map((member) => {
-                      const isFriend = friendsList.includes(member.email.toLowerCase().trim());
+                      const isFriend = friendsList.includes((member.email ?? '').toLowerCase().trim());
                       const memberCover = member.coverPhotoUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=300&fit=crop";
                       
                       return (
@@ -512,7 +512,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                                 {member.name}
                               </Link>
                               <p className="text-[9px] font-mono text-brand-muted truncate mt-0.5">
-                                {(member.hideEmail || member.hidePersonalInfo) && member.email.toLowerCase() !== readerProfile?.email.toLowerCase()
+                                {(member.hideEmail || member.hidePersonalInfo) && (member.email ?? '').toLowerCase() !== readerProfile?.email.toLowerCase()
                                   ? (language === "fr" ? "••••••••@••••.com (E-mail masqué)" : "••••••••@••••.com (Hidden email)")
                                   : member.email}
                               </p>
@@ -530,12 +530,12 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                                     ✓ {language === "fr" ? "AMI" : "FRIEND"}
                                   </span>
                                 )}
-                                {!isFriend && sentRequests.includes(member.email.toLowerCase().trim()) && (
+                                {!isFriend && sentRequests.includes((member.email ?? '').toLowerCase().trim()) && (
                                   <span className="text-[8.5px] font-mono text-amber-600 dark:text-amber-400 font-black tracking-wider uppercase">
                                     {language === "fr" ? "EN ATTENTE" : "PENDING"}
                                   </span>
                                 )}
-                                {!isFriend && friendRequests.includes(member.email.toLowerCase().trim()) && (
+                                {!isFriend && friendRequests.includes((member.email ?? '').toLowerCase().trim()) && (
                                   <span className="text-[8.5px] font-mono text-blue-600 dark:text-blue-400 font-black tracking-wider uppercase">
                                     {language === "fr" ? "DEMANDE REÇUE" : "REQUESTED"}
                                   </span>
@@ -554,12 +554,12 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                                 }}
                                 title={
                                   isFriend ? (language === "fr" ? "Retirer" : "Remove Friend") :
-                                  sentRequests.includes(member.email.toLowerCase().trim()) ? (language === "fr" ? "Annuler" : "Cancel Request") :
-                                  friendRequests.includes(member.email.toLowerCase().trim()) ? (language === "fr" ? "Accepter" : "Accept Request") :
+                                  sentRequests.includes((member.email ?? '').toLowerCase().trim()) ? (language === "fr" ? "Annuler" : "Cancel Request") :
+                                  friendRequests.includes((member.email ?? '').toLowerCase().trim()) ? (language === "fr" ? "Accepter" : "Accept Request") :
                                   (language === "fr" ? "Ajouter" : "Add Friend")
                                 }
                               >
-                                {isFriend ? <UserMinus size={13} /> : (sentRequests.includes(member.email.toLowerCase().trim()) || friendRequests.includes(member.email.toLowerCase().trim())) ? <Clock size={13} /> : <UserPlus size={13} />}
+                                {isFriend ? <UserMinus size={13} /> : (sentRequests.includes((member.email ?? '').toLowerCase().trim()) || friendRequests.includes((member.email ?? '').toLowerCase().trim())) ? <Clock size={13} /> : <UserPlus size={13} />}
                               </button>
                               <Link
                                 to={`/profile/${encodeURIComponent(member.email)}`}
@@ -1086,10 +1086,10 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                         type="button"
                         onClick={async () => {
                           if (readerProfile?.email) {
-                            const clean = readerProfile.email.toLowerCase().trim();
+                            const clean = (readerProfile.email ?? '').toLowerCase().trim();
                             try {
                               const saved = localStorage.getItem('perspective_deleted_user_emails');
-                              const list = saved ? JSON.parse(saved) : [];
+                              const list = saved ? safeJsonParse(saved, []) : [];
                               if (!list.includes(clean)) {
                                 list.push(clean);
                                 localStorage.setItem('perspective_deleted_user_emails', JSON.stringify(list));

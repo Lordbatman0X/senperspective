@@ -36,7 +36,7 @@ let _sessionUser: any = null;
 try {
   if (typeof window !== 'undefined') {
     const stored = localStorage.getItem('perspective_auth_session');
-    if (stored) _sessionUser = JSON.parse(stored);
+    if (stored) _sessionUser = safeJsonParse(stored, {});
   }
 } catch {}
 
@@ -353,7 +353,7 @@ export const supabase: any = {
       try {
         const stored = localStorage.getItem('perspective_auth_session');
         if (stored) {
-          const parsed = JSON.parse(stored);
+          const parsed = safeJsonParse(stored, {});
           _sessionUser = parsed;
           const sessUser: User = {
             id: parsed.id || parsed.email,

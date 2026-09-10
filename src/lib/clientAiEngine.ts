@@ -604,14 +604,14 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
   let cleaned = rawContent.replace(/```json/gi, '').replace(/```/g, '').trim();
 
   try {
-    parsedArticle = JSON.parse(cleaned);
+    parsedArticle = safeJsonParse(cleaned, {});
   } catch (_) {
     const firstBrace = cleaned.indexOf('{');
     const lastBrace = cleaned.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace > firstBrace) {
       try {
         const candidate = cleaned.substring(firstBrace, lastBrace + 1).replace(/,(\s*[}\]])/g, '$1');
-        parsedArticle = JSON.parse(candidate);
+        parsedArticle = safeJsonParse(candidate, {});
       } catch (e2: any) {
         throw new Error('Le modèle IA n\'a pas renvoyé un format JSON valide: ' + e2.message);
       }
@@ -705,7 +705,7 @@ Réponds UNIQUEMENT par un tableau JSON d'objets :
 
   try {
     const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const parsed = safeJsonParse(cleaned, []);
     const events = Array.isArray(parsed) ? parsed : (parsed.events || []);
     return { success: true, events };
   } catch (_) {

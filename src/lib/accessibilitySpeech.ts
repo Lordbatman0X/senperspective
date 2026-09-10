@@ -72,7 +72,7 @@ export function speakMessage(
     const voices = window.speechSynthesis.getVoices();
     if (voices && voices.length > 0) {
       const targetPrefix = lang === 'fr' ? 'fr' : 'en';
-      const bestVoice = voices.find(v => v.lang.toLowerCase().startsWith(targetPrefix) && !v.name.includes('Google') === false)
+      const bestVoice = voices.find(v => v.lang.toLowerCase().startsWith(targetPrefix) && !(v.name ?? '').includes('Google') === false)
         || voices.find(v => v.lang.toLowerCase().startsWith(targetPrefix))
         || voices[0];
       if (bestVoice) {

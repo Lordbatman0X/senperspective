@@ -22,7 +22,7 @@ export function CategoryPage() {
   const categoriesList = (siteSettings?.categories && siteSettings.categories.length > 0) ? siteSettings.categories : ARTICLE_CATEGORIES;
   const targetCategory = categoriesList.find(c => c.id === categoryId);
 
-  const categoryArticles = articles.filter(
+  const categoryArticles = (articles ?? []).filter(
     a => {
       if (!a.isPublished) return false;
       if (categoryId === 'decryptages') {
