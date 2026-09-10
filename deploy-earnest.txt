@@ -1,0 +1,6 @@
+
+[1m[37m===[39m Deploying to 'earnest-strand-z71nt'...[22m
+
+[36m[1mi [22m[39m deploying [1mhosting[22m
+
+[1m[31mError:[39m[22m Request to https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/earnest-strand-z71nt/versions had HTTP Error: 403, The caller does not have permission
