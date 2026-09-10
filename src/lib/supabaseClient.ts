@@ -128,6 +128,7 @@ function createQueryBuilder(table: string): any {
     _selectFields: '*',
     _eqFilters: [] as Array<{ col: string; val: any }>,
     _isFilter: null as { col: string; val: any } | null,
+    _includeDeleted: false,
 
     select(fields?: string) { qb._selectFields = fields || '*'; return qb; },
     eq(col: string, val: any) { qb._eqFilters.push({ col, val }); return qb; },
@@ -135,6 +136,7 @@ function createQueryBuilder(table: string): any {
     is(col: string, val: any) { qb._isFilter = { col, val }; return qb; },
     order(_col: string, _opts?: any) { return qb; },
     limit(_n: number) { return qb; },
+    includeDeleted() { qb._includeDeleted = true; return qb; },
 
     upsert(data: any, _opts?: any) { qb._operation = 'upsert'; qb._data = data; return qb; },
     insert(data: any) { qb._operation = 'insert'; qb._data = data; return qb; },
@@ -206,6 +208,12 @@ async function executeQuery(qb: any): Promise<{ data: any; error: any | null }> 
   // Apply .is() filter (soft-delete filtering)
   if (qb._isFilter && qb._isFilter.val === null) {
     filtered = filtered.filter((d: any) => !d[qb._isFilter.col] && !d[qb._isFilter.col?.replace(/_/g, '')]);
+  }
+
+  // FIX (disappearing accounts): Automatically filter out soft-deleted users for ALL users table queries.
+  // This ensures consistency - soft-deleted accounts are invisible everywhere unless explicitly queried.
+  if (table === 'users' && !qb._includeDeleted) {
+    filtered = filtered.filter((d: any) => !d.deletedAt && !d.deleted_at);
   }
 
   if (table === 'users') {
@@ -459,8 +467,11 @@ export async function getCurrentUser(): Promise<User | null> {
 }
 
 // Auth state change listener — checks localStorage every 1s
+// FIX (disappearing accounts): Don't call callback(null) on transient errors - this was causing
+// authenticated users to "disappear" from the auth state when there was a temporary issue.
 export function onAuthStateChanged(callback: (user: User | null) => void) {
   let lastSig = '';
+  let lastUser: User | null = null;
   const check = async () => {
     try {
       const r = await supabase.auth.getSession();
@@ -468,9 +479,14 @@ export function onAuthStateChanged(callback: (user: User | null) => void) {
       const sig = u?.email || '';
       if (sig !== lastSig) {
         lastSig = sig;
+        lastUser = u;
         callback(u);
       }
-    } catch { callback(null); }
+    } catch (err) {
+      // FIX (disappearing accounts): Log the error but don't clear the auth state on transient errors.
+      // The user should remain authenticated unless they explicitly sign out.
+      console.warn('[Auth] onAuthStateChanged check notice (keeping current session):', err);
+    }
   };
   check();
   const iv = setInterval(check, 1000);
