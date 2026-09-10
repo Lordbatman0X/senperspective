@@ -2317,14 +2317,25 @@ export const useStore = create<AppState>()(
         }
         return safe;
       },
-      // Never let rehydrated `undefined` values clobber valid in-memory defaults.
+      // Never let rehydrated `undefined` values clobber valid in-memory defaults,
+      // and guarantee every known array field is ALWAYS an array so that no
+      // `.length`/`.map()` anywhere in the app can crash on `undefined`.
       merge: (persistedState: any, currentState: any) => {
-        const out = { ...currentState };
+        const out: any = { ...currentState };
         if (persistedState && typeof persistedState === 'object') {
           for (const k of Object.keys(persistedState)) {
             const v = persistedState[k];
-            if (v !== undefined && v !== null) out[k] = v;
+            if (k && v !== undefined && v !== null) out[k] = v;
           }
+        }
+        // Array-field safety net — never allow these to be non-arrays.
+        const ARRAY_KEYS = [
+          'articles', 'savedArticles', 'users', 'comments', 'directMessages',
+          'notifications', 'friends', 'interactions', 'media', 'ads',
+          'subscribers', 'matches'
+        ];
+        for (const k of ARRAY_KEYS) {
+          if (!Array.isArray(out[k])) out[k] = [];
         }
         return out;
       },

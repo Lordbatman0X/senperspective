@@ -19,7 +19,9 @@ import { useStore } from './store';
 function App() {
   const loadAllDataFromMongoDB = useStore(state => state.loadAllDataFromMongoDB);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
-  const rawArticles = useStore(state => state.articles);
+  // Defensive: state.articles can be undefined if stale persisted data ever
+  // bypasses rehydration guards — always default to [] so .length/.map never crash.
+  const rawArticles = useStore(state => state.articles ?? []);
 
   useEffect(() => {
     // CRITICAL (cross-browser sync): Clear stale localStorage data from older app versions
