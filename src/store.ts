@@ -2292,7 +2292,26 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'perspective-group-storage',
+      version: 2,
       storage: createJSONStorage(() => localStorage),
+      // Force every browser to drop ALL stale persisted data on the next load.
+      // This guarantees cross-browser consistency: only valid UI prefs survive,
+      // every shared-domain (articles/users/comments/messages/... ) is discarded
+      // and re-fetched from MongoDB.
+      migrate: (persistedState: any) => {
+        const safe: any = {};
+        if (persistedState && typeof persistedState === 'object') {
+          safe.theme = persistedState.theme;
+          safe.language = persistedState.language;
+          safe.savedArticles = persistedState.savedArticles;
+          safe.activeMessengerContact = persistedState.activeMessengerContact;
+          safe.messengerTextScale = persistedState.messengerTextScale;
+          safe.notificationPreferences = persistedState.notificationPreferences;
+          safe.notificationResponses = persistedState.notificationResponses;
+          safe.readerProfile = persistedState.readerProfile;
+        }
+        return safe;
+      },
       partialize: (state) => ({
         // ONLY persist pure UI preferences
         // DO NOT persist ANY data that comes from MongoDB:

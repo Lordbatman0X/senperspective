@@ -145,9 +145,13 @@ function createQueryBuilder(table: string): any {
       return await executeQuery(qb);
     },
 
-    // thenable — so `await qb` and `Promise.all([qb, ...])` work
+        // thenable — so `await qb` and `Promise.all([qb, ...])` work
     then(onResolve: any, onReject?: any) {
       return executeQuery(qb).then(onResolve, onReject);
+    },
+    // catch — so `.catch()` chains work on thenables (many call-sites use .catch())
+    catch(onReject: any) {
+      return executeQuery(qb).catch(onReject);
     },
 
     async single() {
