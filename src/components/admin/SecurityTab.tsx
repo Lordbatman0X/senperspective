@@ -8,6 +8,7 @@ import {
 import { supabase, usersQuery, saveUserToSupabase, formatUserFromSupabase } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 import { hashPassword, stableUserId } from '../../lib/authCrypto';
+import { resolveApiUrl } from '../../lib/apiUtils';
 
 export function SecurityTab() {
   const { language, siteSettings, updateSiteSettings, readerProfile, users: storeUsers, updateUserPassword, updateUserRole, deleteUser } = useStore();
@@ -58,7 +59,7 @@ export function SecurityTab() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch("/api/users");
+        const res = await fetch(resolveApiUrl("/api/users"));
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.users)) {
@@ -196,8 +197,8 @@ export function SecurityTab() {
         passwordUpdatedAt: new Date().toISOString()
       });
 
-      // 3. Update via backend Express endpoint
-      await fetch('/api/mongodb/auth/update-password', {
+            // 3. Update via backend Express endpoint
+      await fetch(resolveApiUrl('/api/mongodb/auth/update-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: targetEmail, password: newPasswordValue })
@@ -320,7 +321,7 @@ export function SecurityTab() {
       });
 
       // 3. Save via backend Express
-      await fetch('/api/mongodb/auth/register', {
+      await fetch(resolveApiUrl('/api/mongodb/auth/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: cleanEmail, password: addAdminPassword, name: addAdminName })

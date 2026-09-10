@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText, formatCategory } from '../lib/utils';
 import { verifyPassword, stableUserId, verifyBootstrapAdminPassword, BOOTSTRAP_ADMIN_EMAILS } from '../lib/authCrypto';
+import { resolveApiUrl } from '../lib/apiUtils';
 
 // Modular Tab components
 import { DashboardOverview } from '../components/admin/DashboardOverview';
@@ -613,7 +614,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const handlePurgeTestArticles = async () => {
     // 1. Purge server-side RSS drafts cache
     try {
-      await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
+            await fetch(resolveApiUrl('/api/webhooks/make-rss'), { method: 'DELETE' });
     } catch (e) {}
 
     // 2. Filter test articles in local/Firestore state

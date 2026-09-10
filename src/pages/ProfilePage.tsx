@@ -312,7 +312,7 @@ export function ProfilePage() {
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
         const ts = Date.now();
-        const contact = { id: b, email: b, name: targetUser.name || b.split('@')[0], role: targetUser.role || 'Member', avatarUrl: targetUser.avatarUrl || '', status: 'friend' };
+        const contact = { id: b, email: b, name: targetUser.name || b.split('@')[0], role: targetUser.role || 'Member', avatar: targetUser.avatarUrl || '', avatarUrl: targetUser.avatarUrl || '', status: 'friend' };
         // Unified friend record (keyed per direction). The bubble/drawer read `.email`,
         // the profile reads `.user_id` → `.email`. Persisted to MongoDB Atlas via cloudStore.
         await cloudSave('friends', `${a}:${b}`, { id: `${a}:${b}`, user_id: a, friend_email: b, email: b, name: contact.name, role: contact.role, avatarUrl: contact.avatarUrl, connected_at: ts, type: 'friend' });

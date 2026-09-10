@@ -4,6 +4,7 @@ import { useStore } from '../store';
 import { useAuth } from '../contexts/AuthContext';
 import { getSafeText } from '../lib/utils';
 import { getMessengerContacts, MessengerContact } from '../lib/messengerContacts';
+import { resolveApiUrl, safeFetchJson } from '../lib/apiUtils';
 import { 
   MessengerA11yToolbar, 
   A11ySpeechButton, 
@@ -54,10 +55,9 @@ export const FloatingChatWidget: React.FC = () => {
       // Only fetch if we have no users at all
       if (authUsers.length === 0 && storeUsers.length === 0) {
         try {
-          const res = await fetch('/api/mongodb/collection/users');
-          const data = await res.json();
-          if (data?.success && Array.isArray(data.documents) && data.documents.length > 0) {
-            const serverUsers = data.documents.map((d: any) => d.data);
+          const res = await safeFetchJson(resolveApiUrl('/api/mongodb/collection/users'));
+          if (res.ok && res.data && Array.isArray((res.data as any).documents) && (res.data as any).documents.length > 0) {
+            const serverUsers = (res.data as any).documents.map((d: any) => d.data || d);
             // Merge with existing users, avoiding duplicates
             const existingEmails = new Set(storeUsers.map((u: any) => (u.email || '').toLowerCase().trim()));
             const newUsers = serverUsers.filter((u: any) => !existingEmails.has((u.email || '').toLowerCase().trim()));

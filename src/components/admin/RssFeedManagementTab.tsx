@@ -7,7 +7,7 @@ import {
   Key, AlertTriangle, EyeOff
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { safeFetchJson } from '../../lib/apiUtils';
+import { resolveApiUrl, safeFetchJson } from '../../lib/apiUtils';
 import { 
   clientFetchRssFeed, 
   clientRewriteArticle, 
@@ -751,7 +751,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   const handlePurgeTestArticles = async () => {
     setPurgeLoading(true);
     try {
-      const res = await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
+      const res = await fetch(resolveApiUrl('/api/webhooks/make-rss'), { method: 'DELETE' });
       if (res.ok) {
         showStatus(isFr ? "Brouillons tests et cache temporaire purgés." : "Test drafts and server caches purged.");
         if (onRefreshArticles) onRefreshArticles();

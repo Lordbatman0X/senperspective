@@ -17,13 +17,22 @@ import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 
 function App() {
-  const loadArticles = useStore(state => state.loadArticles);
+  const loadAllDataFromMongoDB = useStore(state => state.loadAllDataFromMongoDB);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
-  const articles = useStore(state => state.articles);
+  const rawArticles = useStore(state => state.articles);
 
   useEffect(() => {
-    loadArticles();
-  }, [loadArticles]);
+    // CRITICAL (cross-browser sync): Clear stale localStorage data from older app versions
+    // so that no browser retains old article/article caches that would diverge from MongoDB.
+    try {
+      localStorage.removeItem('perspective-group-storage');
+      localStorage.removeItem('perspective-storage-v1');
+    } catch (e) { /* ignore */ }
+
+    // Load ALL data from MongoDB on app startup
+    // This ensures all browsers/devices see the SAME data
+    loadAllDataFromMongoDB();
+  }, [loadAllDataFromMongoDB]);
 
   return (
     <Router>
@@ -36,7 +45,7 @@ function App() {
           </div>
         )}
         {/* Full loading screen on first visit when no articles loaded yet */}
-        {isLoadingArticles && articles.length === 0 && (
+        {isLoadingArticles && rawArticles.length === 0 && (
           <div className="fixed inset-0 z-[99] flex items-center justify-center bg-[#0a0a0a]">
             <div className="flex flex-col items-center gap-4">
               <div className="w-12 h-12 rounded-full border-4 border-[#E85D42] border-t-transparent animate-spin" />

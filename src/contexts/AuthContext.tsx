@@ -363,7 +363,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user?.email]);
 
-  // Real-time synchronization of Comments via Supabase
+  // Real-time synchronization of Comments from MongoDB
   useEffect(() => {
     const channel = subscribeToTable('comments', (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
@@ -407,7 +407,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Articles via Supabase
+  // Real-time synchronization of Articles from MongoDB (replaces dead Supabase realtime)
   useEffect(() => {
     const UNSPLASH_IMAGES = [
       "https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&w=1200&q=80",
@@ -557,7 +557,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Media via Supabase
+  // Real-time synchronization of Media from MongoDB
   useEffect(() => {
     const channel = subscribeToTable('media', (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
@@ -582,7 +582,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Ads via Supabase
+  // Real-time synchronization of Ads from MongoDB
   useEffect(() => {
     const channel = subscribeToTable('ads', (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
@@ -609,7 +609,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Site Settings via Supabase
+  // Real-time synchronization of Site Settings from MongoDB
   useEffect(() => {
     const channel = subscribeToTable('siteSettings', (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
@@ -643,7 +643,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Matches via Supabase
+  // Real-time synchronization of Matches from MongoDB
   useEffect(() => {
     const channel = subscribeToTable('matches', (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
@@ -670,7 +670,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // Real-time synchronization of Subscribers via Supabase
+  // Real-time synchronization of Subscribers from MongoDB
   useEffect(() => {
     const channel = subscribeToTable('subscribers', (payload) => {
       if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE' || payload.eventType === 'DELETE') {
@@ -1100,7 +1100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // 4. Check Central Server Database API for cross-device accounts
     try {
-      const srvRes = await fetch(`/api/mongodb/doc/users/${encodeURIComponent(cleanEmail)}`);
+      const srvRes = await fetch(resolveApiUrl(`/api/mongodb/doc/users/${encodeURIComponent(cleanEmail)}`));
       if (srvRes.ok) {
         const srvData = await srvRes.json();
         if (srvData && srvData.data) {
@@ -1347,7 +1347,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     let serverDurable = false;
     try {
       const safeProfile = await sanitizeFirestorePayload(profileData);
-      const sRes = await fetch("/api/users", {
+      const sRes = await fetch(resolveApiUrl("/api/users"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...safeProfile, password: pass })

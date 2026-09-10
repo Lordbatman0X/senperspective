@@ -8,6 +8,7 @@ import { useStore } from '../../store';
 import { supabase, usersQuery } from '../../lib/supabaseClient';
 import { subscribeToTable } from '../../lib/supabaseClient';
 import { sampleArticles } from '../../data';
+import { resolveApiUrl } from '../../lib/apiUtils';
 
 interface CollectionStats {
   name: string;
@@ -147,7 +148,7 @@ export function AdminDashboard() {
       // If clearing articles or all, also purge server RSS drafts
       if (wipeTarget === 'ALL' || wipeTarget === 'articles') {
         setWipeLogs(prev => [...prev, isFr ? 'Vidage du cache serveur RSS (/api/webhooks/make-rss)...' : 'Purging server RSS webhook cache...']);
-        await fetch('/api/webhooks/make-rss', { method: 'DELETE' });
+                await fetch(resolveApiUrl('/api/webhooks/make-rss'), { method: 'DELETE' });
       }
 
       setWipeLogs(prev => [...prev, isFr ? '✅ Nettoyage terminé avec succès.' : '✅ Wipe operation completed successfully.']);

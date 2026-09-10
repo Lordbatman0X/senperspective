@@ -376,6 +376,7 @@ interface AppState {
   updateUserPin: (email: string, pin: string) => void;
   purgeDatabaseAndArticles: () => Promise<void>;
   seedSampleArticles: () => void;
+  loadAllDataFromMongoDB: () => Promise<void>;
   matches: Match[];
   updateMatch: (matchId: string, updated: Partial<Match>) => void;
   addMatch: (match: Match) => void;
@@ -503,168 +504,73 @@ export const useStore = create<AppState>()(
         set({ isLoadingArticles: true });
         
         try {
-          // Fetch articles from MongoDB API
-          const res = await fetch('/api/mongodb/collection/articles');
-          const data = await res.json();
+          // Fetch articles from MongoDB API - this is the SINGLE SOURCE OF TRUTH
+// Fetch articles from MongoDB — resolveApiUrl ensures static hosts reach the real backend
+          const res = await safeFetchJson(resolveApiUrl('/api/mongodb/collection/articles'));
           
-          if (data?.success && Array.isArray(data.documents)) {
-            const remoteArticles = data.documents;
-            const combined = [...remoteArticles].sort(
-              (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-            );
-            set({ articles: combined, isLoadingArticles: false });
-            return combined;
-          } else {
-            // API returned no articles - check for local fallback
-            console.warn("[LoadArticles] No articles from API, checking local fallback");
-            const persisted = localStorage.getItem('perspective-store');
-            const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
-            if (!hasPersistedData) {
-              // First ever visit with no data - use seed articles
-              set({ articles: seedArticles, isLoadingArticles: false });
-              return seedArticles;
-            }
-            // Has persisted data - keep it
-            set({ isLoadingArticles: false });
-            return get().articles;
+          let remoteArticles: Article[] = [];
+          if (res.ok && res.data && Array.isArray((res.data as any).documents) && (res.data as any).documents.length > 0) {
+            remoteArticles = (res.data as any).documents.map((d: any) => d.data || d);
+            remoteArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
           }
+          // DO NOT fall back to localStorage or seed data — all browsers must see the same MongoDB truth
+          set({ articles: remoteArticles, isLoadingArticles: false });
+          return remoteArticles;
         } catch (err) {
-          console.warn("[LoadArticles] Error fetching articles:", err);
-          // On error, keep persisted articles or use seed
-          const current = get().articles;
-          if (!current || current.length === 0) {
-            const persisted = localStorage.getItem('perspective-store');
-            const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
-            if (!hasPersistedData) {
-              set({ articles: seedArticles, isLoadingArticles: false });
-              return seedArticles;
-            }
-          }
-          set({ isLoadingArticles: false });
-          return get().articles;
+          console.warn('[LoadArticles] Error fetching articles:', err);
+          set({ articles: [], isLoadingArticles: false });
+          return [];
         }
       },
       syncFromSupabase: async () => {
-        set({ isSyncing: true });
+        // DEPRECATED: Use loadAllDataFromMongoDB() instead
+        await get().loadAllDataFromMongoDB();
+      },
+      
+      loadAllDataFromMongoDB: async () => {
+        set({ isSyncing: true, isLoadingArticles: true });
+        
         try {
-          // Use direct backend API calls instead of Supabase shim to ensure
-          // all browsers hit the same authoritative MongoDB endpoint
-          const [articlesRes, adsRes, usersRes, commentsRes] = await Promise.all([
+          // Fetch ALL data from MongoDB in parallel - MongoDB is the SINGLE SOURCE OF TRUTH
+          const [articlesRes, usersRes, commentsRes, adsRes] = await Promise.all([
             safeFetchJson(resolveApiUrl('/api/mongodb/collection/articles')),
-            safeFetchJson(resolveApiUrl('/api/mongodb/collection/ads')),
-            usersQuery(),
-            safeFetchJson(resolveApiUrl('/api/mongodb/collection/comments'))
+            safeFetchJson(resolveApiUrl('/api/mongodb/collection/users')),
+            safeFetchJson(resolveApiUrl('/api/mongodb/collection/comments')),
+            safeFetchJson(resolveApiUrl('/api/mongodb/collection/ads'))
           ]);
 
+          // Process articles - ONLY from MongoDB, no localStorage fallback
           let remoteArticles: Article[] = [];
           if (articlesRes.ok && articlesRes.data && Array.isArray((articlesRes.data as any).documents) && (articlesRes.data as any).documents.length > 0) {
-            // Extract articles from { id, data } wrapper
-            remoteArticles = (articlesRes.data as any).documents.map((d: any) => d.data);
+            remoteArticles = (articlesRes.data as any).documents.map((d: any) => d.data || d);
+            remoteArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
           }
+          set({ articles: remoteArticles, isLoadingArticles: false });
 
-          let remoteAds: any[] = [];
-          if (adsRes.ok && adsRes.data && Array.isArray((adsRes.data as any).documents) && (adsRes.data as any).documents.length > 0) {
-            remoteAds = (adsRes.data as any).documents.map((d: any) => d.data);
-          }
-
+          // Process users - ONLY from MongoDB, NO localStorage merge
           let remoteUsers: any[] = [];
-          if (usersRes && usersRes.data && Array.isArray(usersRes.data) && usersRes.data.length > 0) {
-            remoteUsers = usersRes.data as any;
+          if (usersRes.ok && usersRes.data && Array.isArray((usersRes.data as any).documents) && (usersRes.data as any).documents.length > 0) {
+            remoteUsers = (usersRes.data as any).documents.map((d: any) => d.data || d);
           }
+          set({ users: remoteUsers });
 
+          // Process comments - ONLY from MongoDB
           let remoteComments: any[] = [];
           if (commentsRes.ok && commentsRes.data && Array.isArray((commentsRes.data as any).documents) && (commentsRes.data as any).documents.length > 0) {
-            remoteComments = (commentsRes.data as any).documents.map((d: any) => d.data);
+            remoteComments = (commentsRes.data as any).documents.map((d: any) => d.data || d);
           }
+          set({ comments: remoteComments });
 
-          // REMOVED: Fragile fallback chain to /api/sync/state and /api/users
-          // All data must come from authoritative MongoDB endpoints above.
-          // If MongoDB is unavailable, we keep locally persisted data (below)
-          // instead of silently accepting different fallback data per browser.
-
-          if (remoteArticles.length > 0) {
-            const combined = [...remoteArticles].sort(
-              (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
-            );
-            set({ articles: combined, isLoadingArticles: false });
-          } else {
-            // Keep locally persisted articles — do NOT overwrite with seed data
-            // if the backend is temporarily unreachable.
-            const current = get().articles;
-            if (!current || current.length === 0) {
-              // Only use seed articles on FIRST EVER visit (no persisted data)
-              // This ensures published articles are never overwritten by seed data
-              const persisted = localStorage.getItem('perspective-store');
-              const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
-              if (!hasPersistedData) {
-                set({ articles: seedArticles, isLoadingArticles: false });
-              } else {
-                // Has persisted data but API returned empty - keep persisted data
-                set({ isLoadingArticles: false });
-              }
-            } else {
-              set({ isLoadingArticles: false });
-            }
+          // Process ads - ONLY from MongoDB
+          let remoteAds: any[] = [];
+          if (adsRes.ok && adsRes.data && Array.isArray((adsRes.data as any).documents) && (adsRes.data as any).documents.length > 0) {
+            remoteAds = (adsRes.data as any).documents.map((d: any) => d.data || d);
           }
-
           if (remoteAds.length > 0) {
-            set({ ads: remoteAds as any });
+            set({ ads: remoteAds });
           }
 
-          const localUsers = get().users || [];
-          const emailMap = new Map<string, any>();
-          
-          // Seed with existing local users so accounts NEVER disappear
-          localUsers.forEach(user => {
-            const em = (user.email || user.id || '').toLowerCase().trim();
-            if (em) emailMap.set(em, user);
-          });
-
-          // Merge in remote users
-          remoteUsers.forEach(user => {
-            const email = (user.email || user.id || '').toLowerCase().trim();
-            if (!email) return;
-            if (emailMap.has(email)) {
-              const existing = emailMap.get(email);
-              emailMap.set(email, {
-                ...existing,
-                ...user,
-                email,
-                // Preserve local credentials if remote omitted them
-                password: user.password || existing.password,
-                passwordHash: user.passwordHash || existing.passwordHash,
-                pin: user.pin || existing.pin,
-                authType: user.authType || existing.authType
-              });
-            } else {
-              emailMap.set(email, user);
-            }
-          });
-
-          // Always ensure Kader S. Diaz (Super Admin) is present and protected
-          if (!emailMap.has('kadersdiaz3@gmail.com')) {
-            emailMap.set('kadersdiaz3@gmail.com', {
-              id: 'kadersdiaz3-admin-founder',
-              email: 'kadersdiaz3@gmail.com',
-              name: 'Kader S. Diaz',
-              avatarUrl: 'preset-male',
-              role: 'Admin',
-              authType: 'password',
-              password: 'Perspective2026!',
-              registeredAt: new Date().toISOString(),
-              isOnline: true
-            });
-          }
-
-          set({ users: Array.from(emailMap.values()) });
-
-          if (remoteComments.length > 0) {
-            set({ comments: remoteComments as any });
-          }
-
-          // ---- Cross-device sync of user-generated content (MongoDB Atlas) ----
-          // Pull messages, notifications, friends and interactions that were
-          // persisted via the central API so they survive reloads/devices.
+          // Fetch user-generated content from MongoDB - NO localStorage merge
           try {
             const [cloudMessages, cloudNotifications, cloudFriends, cloudInteractions] = await Promise.all([
               cloudLoadCollection('messages'),
@@ -673,25 +579,23 @@ export const useStore = create<AppState>()(
               cloudLoadCollection('interactions')
             ]);
 
+            // Messages - ONLY from MongoDB, no local merge
             if (cloudMessages.length > 0) {
-              const local = get().directMessages || [];
-              const idSet = new Set(local.map(m => m.id));
-              const merged = [...local, ...cloudMessages.filter(m => m.id && !idSet.has(m.id))]
-                .sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
-              set({ directMessages: merged });
+              const sortedMessages = cloudMessages.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+              set({ directMessages: sortedMessages });
+            } else {
+              set({ directMessages: [] });
             }
 
+            // Notifications - ONLY from MongoDB, no local merge
             if (cloudNotifications.length > 0) {
-              const local = get().notifications || [];
-              const idSet = new Set(local.map(n => n.id));
-              const merged = [...local, ...cloudNotifications.filter(n => n.id && !idSet.has(n.id))];
-              set({ notifications: merged });
+              set({ notifications: cloudNotifications });
+            } else {
+              set({ notifications: [] });
             }
 
+            // Friends - ONLY from MongoDB, no local merge
             if (cloudFriends.length > 0) {
-              const local = get().friends || [];
-              const emailSet = new Set(local.map(f => (f.email || '').toLowerCase().trim()));
-              // Normalize cloud friends data - map friend_email to email if needed
               const normalizedCloudFriends = cloudFriends.map((f: any) => ({
                 ...f,
                 email: f.email || f.friend_email || '',
@@ -700,34 +604,35 @@ export const useStore = create<AppState>()(
                 avatar: f.avatar || (f.name ? f.name.charAt(0).toUpperCase() : 'F'),
                 status: f.status || 'connected'
               }));
-              const merged = [...local, ...normalizedCloudFriends.filter(f => {
-                const em = (f.email || '').toLowerCase().trim();
-                return em && !emailSet.has(em);
-              })];
-              set({ friends: merged });
+              set({ friends: normalizedCloudFriends });
+            } else {
+              set({ friends: [] });
             }
 
+            // Interactions - ONLY from MongoDB, no local merge
             if (cloudInteractions.length > 0) {
-              const local = get().interactions || [];
-              const idSet = new Set(local.map(i => i.id));
-              const merged = [...local, ...cloudInteractions.filter(i => i.id && !idSet.has(i.id))];
-              set({ interactions: merged });
+              set({ interactions: cloudInteractions });
+            } else {
+              set({ interactions: [] });
             }
           } catch (cloudErr) {
-            console.warn('[Sync] Cloud user-content notice:', cloudErr);
+            console.warn('[MongoDB] User-content load notice:', cloudErr);
+            // On error, set empty arrays - DO NOT fall back to localStorage
+            set({ directMessages: [], notifications: [], friends: [], interactions: [] });
           }
         } catch (err) {
-          console.warn("[Sync Notice] Remote sync note:", err);
-          const current = get().articles;
-          if (!current || current.length === 0) {
-            // Only use seed articles on FIRST EVER visit (no persisted data)
-            const persisted = localStorage.getItem('perspective-store');
-            const hasPersistedData = persisted && JSON.parse(persisted)?.state?.articles?.length > 0;
-            if (!hasPersistedData) {
-              set({ articles: seedArticles });
-            }
-          }
-          set({ isLoadingArticles: false });
+          console.warn("[MongoDB] Error loading data:", err);
+          // On error, set empty arrays - DO NOT fall back to localStorage or seed data
+          set({ 
+            articles: [], 
+            users: [], 
+            comments: [],
+            directMessages: [],
+            notifications: [],
+            friends: [],
+            interactions: [],
+            isLoadingArticles: false 
+          });
         } finally {
           set({ isSyncing: false });
         }
@@ -742,18 +647,18 @@ export const useStore = create<AppState>()(
               console.warn("[Supabase save notice]:", err?.message || err);
             }); 
           }
-          // Save directly to MongoDB API with await to ensure it completes
+          // Save directly to MongoDB API using resolveApiUrl (fixes static-host broken saves)
           try {
-            const res = await fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
+            const saveRes = await safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(article.id)), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ data: clean, merge: true })
             });
-            if (!res.ok) {
-              console.warn("[MongoDB save notice]: Server returned", res.status);
+            if (!saveRes.ok) {
+              console.warn('[MongoDB save notice]: Server returned', saveRes.status);
             }
           } catch (fetchErr) {
-            console.warn("[MongoDB save notice]:", fetchErr);
+            console.warn('[MongoDB save notice]:', fetchErr);
           }
         } catch (err) {
           console.error("[Persistence notice] Error writing article:", err);
@@ -787,18 +692,18 @@ export const useStore = create<AppState>()(
               console.warn("[Supabase update notice]:", err?.message || err);
             }); 
           }
-          // Save directly to MongoDB API with await to ensure it completes
+          // Save directly to MongoDB API using resolveApiUrl (fixes static-host broken updates)
           try {
-            const res = await fetch(`/api/mongodb/doc/articles/${encodeURIComponent(article.id)}`, {
+            const saveRes = await safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(article.id)), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ data: clean, merge: true })
             });
-            if (!res.ok) {
-              console.warn("[MongoDB update notice]: Server returned", res.status);
+            if (!saveRes.ok) {
+              console.warn('[MongoDB update notice]: Server returned', saveRes.status);
             }
           } catch (fetchErr) {
-            console.warn("[MongoDB update notice]:", fetchErr);
+            console.warn('[MongoDB update notice]:', fetchErr);
           }
         } catch (err) {
           console.error("[Persistence notice] Error updating article:", err);
@@ -807,7 +712,7 @@ export const useStore = create<AppState>()(
       deleteArticle: (id) => {
         set({ articles: get().articles.filter(a => a.id !== id) });
         if (supabase) { supabase.from('articles').delete().eq('id', id).catch(() => {}); }
-        fetch(`/api/mongodb/doc/articles/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {});
+        safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(id)), { method: 'DELETE' }).catch(() => {});
       },
       purgeAllArticles: async () => {
         const currentArticles = [...(get().articles || [])];
@@ -1990,8 +1895,8 @@ export const useStore = create<AppState>()(
         // in ConnectionsAndProfile.tsx and usersQuery().
         set({ users: (get().users || []).filter(u => u.email.toLowerCase() !== normalized) });
         if (supabase) { supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('email', normalized).catch(() => {}); }
-        fetch(`/api/users/${encodeURIComponent(normalized)}`, { method: 'DELETE' }).catch(() => {});
-        fetch(`/api/mongodb/doc/users/${encodeURIComponent(normalized)}`, { method: 'DELETE' }).catch(() => {});
+        safeFetchJson(resolveApiUrl(`/api/users/` + encodeURIComponent(normalized)), { method: 'DELETE' }).catch(() => {});
+        safeFetchJson(resolveApiUrl(`/api/mongodb/doc/users/` + encodeURIComponent(normalized)), { method: 'DELETE' }).catch(() => {});
       },
       updateUserRole: (email, role) => {
         const normalized = email.toLowerCase().trim();
@@ -2389,9 +2294,10 @@ export const useStore = create<AppState>()(
       name: 'perspective-group-storage',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // ONLY persist user preferences and profile data
-        // DO NOT persist articles, messages, notifications, friends - these must
-        // always be fetched fresh from the server to ensure cross-device sync
+        // ONLY persist pure UI preferences
+        // DO NOT persist ANY data that comes from MongoDB:
+        // - articles, messages, notifications, friends, users, comments, media, ads
+        // These must always be fetched fresh from MongoDB to ensure cross-device sync
         theme: state.theme,
         language: state.language,
         savedArticles: state.savedArticles,
@@ -2399,13 +2305,27 @@ export const useStore = create<AppState>()(
         messengerTextScale: state.messengerTextScale,
         notificationPreferences: state.notificationPreferences,
         notificationResponses: state.notificationResponses,
-        readerProfile: state.readerProfile,
-        users: state.users
+        readerProfile: state.readerProfile
+        // REMOVED: users - must be fetched from MongoDB on every page load
       }),
-      onRehydrateStorage: () => (state) => {
-        // Note: Shared content is fetched from the server on app load.
-        // We do NOT seed articles here - loadArticles() handles fetching from the server.
-        // This ensures all browsers/devices show the same articles from the database.
+      onRehydrateStorage: () => (state: any) => {
+        // CRITICAL: Clear any stale MongoDB data that may have been persisted by older
+        // versions of the app. This prevents cross-browser article divergence caused
+        // by leftover localStorage data. All content is fetched fresh from MongoDB
+        // via loadAllDataFromMongoDB() on every page load.
+        if (state) {
+          delete state.articles;
+          delete state.users;
+          delete state.comments;
+          delete state.directMessages;
+          delete state.notifications;
+          delete state.friends;
+          delete state.interactions;
+          delete state.media;
+          delete state.ads;
+          delete state.subscribers;
+          delete state.matches;
+        }
       }
     }
   )

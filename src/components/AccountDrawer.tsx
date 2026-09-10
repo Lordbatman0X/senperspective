@@ -8,6 +8,7 @@ import { InternalShareModal } from "./InternalShareModal";
 import { supabase, subscribeToTable, formatUserForSupabase } from '../lib/supabaseClient';
 import { cloudLoadCollection } from '../lib/cloudStore';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
+import { resolveApiUrl } from "../lib/apiUtils";
 import {
   X,
   Sun,
@@ -407,7 +408,7 @@ export function AccountDrawer({
       }
       try {
         // /api/users merges profile fields into the MongoDB users collection
-        await fetch('/api/users', {
+        await fetch(resolveApiUrl('/api/users'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...updatedFields, email: cleanEmail, id: cleanEmail })
