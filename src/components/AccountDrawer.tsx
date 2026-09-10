@@ -315,8 +315,6 @@ export function AccountDrawer({
       try {
         // Load friends from MongoDB via cloudStore
         const rows = await cloudLoadCollection('friends');
-        console.log('[AccountDrawer] All friends from MongoDB:', rows);
-        console.log('[AccountDrawer] Current user email:', email);
 
         const userFriends = rows.filter((row: any) => {
           const userId = String(row?.user_id || '').toLowerCase().trim();
@@ -327,8 +325,9 @@ export function AccountDrawer({
           .map((row: any) => (row.friend_email || row.email || '').toLowerCase().trim())
           .filter(Boolean);
 
-        console.log('[AccountDrawer] Friends list:', list);
         setFriendsList(list);
+        // CRITICAL: Sync to store so FloatingChatWidget and DiscussionPage see the same friends
+        useStore.getState().setFriends(list);
       } catch (err) {
         console.warn("[AccountDrawer] Error fetching friends:", err);
       }

@@ -206,6 +206,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         });
 
+        // 4. CRITICAL FALLBACK: If userMap is still empty, fetch directly from MongoDB
+        // This ensures accounts NEVER disappear even if Supabase + Central API both fail
+        if (userMap.size === 0) {
+          try {
+            const mongoRes = await fetch(resolveApiUrl('/api/mongodb/collection/users'));
+            if (mongoRes.ok) {
+              const mongoData = await mongoRes.json();
+              if (mongoData.success && Array.isArray(mongoData.documents)) {
+                mongoData.documents.forEach((doc: any) => {
+                  const u = doc.data || doc;
+                  const em = (u.email || u.id || "").toLowerCase().trim();
+                  if (em && !userMap.has(em)) {
+                    userMap.set(em, u);
+                  }
+                });
+              }
+            }
+          } catch (mongoErr) {
+            console.warn("[MongoDB Users] Notice fetching users from MongoDB:", mongoErr);
+          }
+        }
+
         userRecords = Array.from(userMap.values());
 
         if (userRecords.length > 0) {
@@ -260,8 +282,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             });
           }
 
+          // ALWAYS set allUsers — even if empty — so the UI never shows "loading" forever
+          // The getMessengerContacts function will add default contacts (Abdel, editorial)
           setAllUsers(formatted as any);
           useStore.setState({ users: formatted as any });
+        } else {
+          // No records found — still set empty array so UI stops loading
+          setAllUsers([]);
         }
       } catch (err) {
         console.warn("[Users Refresh] Notice during user sync:", err);

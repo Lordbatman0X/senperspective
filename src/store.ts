@@ -630,6 +630,7 @@ export const useStore = create<AppState>()(
             directMessages: [],
             notifications: [],
             friends: [],
+      setFriends: (list: string[]) => set({ friends: list }),
             interactions: [],
             isLoadingArticles: false 
           });
