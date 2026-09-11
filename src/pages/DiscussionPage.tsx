@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/SimpleAuth';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText } from '../lib/utils';
 import { getMessengerContacts, MessengerContact } from '../lib/messengerContacts';
@@ -37,13 +37,13 @@ export const DiscussionPage: React.FC = () => {
     messengerTextScale
   } = useStore();
 
-  const auth = useAuth();
+  const auth = useSimpleAuth();
   const allUsers = auth?.allUsers || [];
 
   useSEO({
     title: 'Messenger',
     description: language === 'fr' 
-      ? 'Messagerie directe et échanges synchronisés avec le réseau Perspective.'
+      ? 'Messagerie directe et Ã©changes synchronisÃ©s avec le rÃ©seau Perspective.'
       : 'Direct messaging and synchronized exchanges with the Perspective network.'
   });
 
@@ -65,7 +65,7 @@ export const DiscussionPage: React.FC = () => {
 
   const activeContact: MessengerContact = contacts.find(c => ((c.email ?? '').toLowerCase()).trim() === activeContactEmailLow) || contacts[0] || {
     email: "contact@perspective.sn", 
-    name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", 
+    name: language === "fr" ? "Admin RÃ©daction" : "Editorial Admin", 
     role: "Perspective Group", 
     avatar: "P", 
     isOnline: true
@@ -113,7 +113,7 @@ export const DiscussionPage: React.FC = () => {
     sendDirectMessage({
       sender: userEmail,
       receiver: activeContact.email,
-      text: inputText.trim() || (language === "fr" ? "Article Partagé" : "Shared Article"),
+      text: inputText.trim() || (language === "fr" ? "Article PartagÃ©" : "Shared Article"),
       attachment: attachmentObj
     });
 
@@ -152,7 +152,7 @@ export const DiscussionPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#E85D42] animate-pulse" />
             <h1 className="text-sm font-bold tracking-tight text-white uppercase font-mono">
-              {language === 'fr' ? 'Messagerie Réseau Synchrone' : 'Synchronous Network Messenger'}
+              {language === 'fr' ? 'Messagerie RÃ©seau Synchrone' : 'Synchronous Network Messenger'}
             </h1>
           </div>
         </div>
@@ -160,7 +160,7 @@ export const DiscussionPage: React.FC = () => {
         <div className="flex items-center gap-2 text-xs font-mono text-zinc-400">
           <span className="hidden sm:inline">{userEmail}</span>
           <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px]">
-            {language === 'fr' ? 'Temps Réel Cloud' : 'Cloud Realtime'}
+            {language === 'fr' ? 'Temps RÃ©el Cloud' : 'Cloud Realtime'}
           </span>
         </div>
       </div>
@@ -268,7 +268,7 @@ export const DiscussionPage: React.FC = () => {
                 className="md:hidden p-1.5 text-zinc-400 hover:text-white rounded-lg bg-zinc-800 cursor-pointer"
                 aria-label="Retour aux contacts"
               >
-                ←
+                â†
               </button>
               <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-md ${
                 activeContact.isAi ? 'bg-purple-600 text-white' : 'bg-[#E85D42] text-white'
@@ -287,7 +287,7 @@ export const DiscussionPage: React.FC = () => {
                     </span>
                   )}
                 </h3>
-                <p className="text-xs text-zinc-400 font-mono">{activeContact.role} • {activeContact.email}</p>
+                <p className="text-xs text-zinc-400 font-mono">{activeContact.role} â€¢ {activeContact.email}</p>
               </div>
             </div>
             {activeContact.email && (
@@ -318,15 +318,15 @@ export const DiscussionPage: React.FC = () => {
               <div className="h-full flex flex-col items-center justify-center text-center p-8 text-zinc-500 space-y-3">
                 <MessageSquare size={40} className="text-zinc-700" />
                 <h3 className="text-sm font-bold text-zinc-300 font-mono">
-                  {language === 'fr' ? 'Début de la conversation' : 'Start of conversation'}
+                  {language === 'fr' ? 'DÃ©but de la conversation' : 'Start of conversation'}
                 </h3>
                 <p className="text-xs text-zinc-500 max-w-sm">
                   {activeContact.isAi
                     ? (language === 'fr' 
-                        ? 'Abdel est votre assistant éditorial IA. Posez vos questions sur la géopolitique, l\'économie et la culture africaine.'
+                        ? 'Abdel est votre assistant Ã©ditorial IA. Posez vos questions sur la gÃ©opolitique, l\'Ã©conomie et la culture africaine.'
                         : 'Abdel is your editorial AI assistant. Ask questions on African geopolitics, economics, and culture.')
                     : (language === 'fr' 
-                        ? 'Transmettez directement vos analyses, questions ou pièces jointes en temps réel.' 
+                        ? 'Transmettez directement vos analyses, questions ou piÃ¨ces jointes en temps rÃ©el.' 
                         : 'Send your analysis, inquiries, or attachments directly in real-time.')}
                 </p>
               </div>
@@ -339,7 +339,7 @@ export const DiscussionPage: React.FC = () => {
                     className={`flex flex-col max-w-[78%] ${isMe ? "ml-auto items-end" : "mr-auto items-start"}`}
                   >
                     <span className="text-[10px] font-mono text-zinc-500 mb-1 px-1">
-                      {isMe ? (language === "fr" ? "Vous" : "You") : dm.sender.split("@")[0]} • {dm.date}
+                      {isMe ? (language === "fr" ? "Vous" : "You") : dm.sender.split("@")[0]} â€¢ {dm.date}
                     </span>
 
                     <div className="relative group">
@@ -355,7 +355,7 @@ export const DiscussionPage: React.FC = () => {
                           <div className="mt-3 p-3 bg-zinc-950 border border-zinc-800 rounded-xl space-y-1.5">
                             <div className="flex items-center gap-1.5 text-[#E85D42] font-mono font-bold text-xs uppercase">
                               <Newspaper size={13} />
-                              <span>{language === "fr" ? "Article Partagé" : "Shared Article"}</span>
+                              <span>{language === "fr" ? "Article PartagÃ©" : "Shared Article"}</span>
                             </div>
                             <p className="font-bold text-white text-xs">
                               {typeof dm.attachment.title === 'object'
@@ -411,9 +411,9 @@ export const DiscussionPage: React.FC = () => {
           {showArticlePicker && (
             <div className="p-3 bg-zinc-900 border-t border-zinc-800 max-h-48 overflow-y-auto space-y-1 shrink-0 animate-fadeIn">
               <div className="flex justify-between items-center text-xs font-mono text-zinc-400 mb-2 px-1">
-                <span>{language === "fr" ? "Sélectionnez un article de la rédaction à joindre :" : "Select article to attach:"}</span>
+                <span>{language === "fr" ? "SÃ©lectionnez un article de la rÃ©daction Ã  joindre :" : "Select article to attach:"}</span>
                 <button type="button" onClick={() => setShowArticlePicker(false)} className="text-zinc-400 hover:text-white">
-                  ✕
+                  âœ•
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -457,7 +457,7 @@ export const DiscussionPage: React.FC = () => {
               type="text"
               value={inputText}
               onChange={e => setInputText(e.target.value)}
-              placeholder={language === "fr" ? `Écrire à ${activeContact.name}...` : `Message ${activeContact.name}...`}
+              placeholder={language === "fr" ? `Ã‰crire Ã  ${activeContact.name}...` : `Message ${activeContact.name}...`}
               aria-label={language === "fr" ? `Message pour ${activeContact.name}` : `Message for ${activeContact.name}`}
               className="flex-1 bg-zinc-950 border border-zinc-800 text-sm font-sans text-white px-4 py-3 rounded-xl focus:outline-none focus:border-[#E85D42] transition-colors"
             />

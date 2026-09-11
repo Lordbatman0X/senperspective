@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/SimpleAuth';
 import { getSafeImageUrl } from '../lib/imageUtils';
 import { formatCategory } from '../lib/utils';
 import { User, MessageSquare, ArrowRight, ShieldCheck } from 'lucide-react';
@@ -10,7 +10,7 @@ export function SearchPage() {
   const [params] = useSearchParams();
   const query = params.get('q') || '';
   const { articles, language } = useStore();
-  const { allUsers } = useAuth();
+  const { allUsers } = useSimpleAuth();
   const [articleResults, setArticleResults] = useState(articles);
   const [userResults, setUserResults] = useState<any[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -80,7 +80,7 @@ export function SearchPage() {
             {language === 'fr' ? 'Recherche' : 'Search'}
           </h1>
           <p className="text-brand-muted dark:text-zinc-400 font-semibold text-base">
-            {totalResults} {language === 'fr' ? 'résultat(s) pour' : 'result(s) for'} <span className="text-brand-dark dark:text-white font-bold">"{query}"</span>
+            {totalResults} {language === 'fr' ? 'rÃ©sultat(s) pour' : 'result(s) for'} <span className="text-brand-dark dark:text-white font-bold">"{query}"</span>
           </p>
         </header>
 
@@ -90,7 +90,7 @@ export function SearchPage() {
             <div className="flex items-center gap-2 mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-2">
               <User size={18} className="text-[#E85D42]" />
               <h2 className="text-lg font-serif font-black uppercase tracking-widest text-brand-dark dark:text-white">
-                {language === 'fr' ? `Membres du Réseau (${userResults.length})` : `Network Members (${userResults.length})`}
+                {language === 'fr' ? `Membres du RÃ©seau (${userResults.length})` : `Network Members (${userResults.length})`}
               </h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -163,7 +163,7 @@ export function SearchPage() {
           <div className="glass bg-brand-white/80 dark:bg-zinc-900/80 p-5 border-t-4 border-brand-dark">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-brand-border">
               <h2 className="font-black uppercase tracking-widest text-brand-dark dark:text-white">
-                {language === 'fr' ? 'Recherches Récentes' : 'Recent Searches'}
+                {language === 'fr' ? 'Recherches RÃ©centes' : 'Recent Searches'}
               </h2>
             </div>
             
@@ -187,7 +187,7 @@ export function SearchPage() {
               </div>
             ) : (
               <p className="text-sm text-brand-muted italic">
-                {language === 'fr' ? 'Aucune recherche récente' : 'No recent searches'}
+                {language === 'fr' ? 'Aucune recherche rÃ©cente' : 'No recent searches'}
               </p>
             )}
           </div>
@@ -199,7 +199,7 @@ export function SearchPage() {
         <div className="glass bg-brand-white/80 dark:bg-zinc-900/80 p-5 border-t-4 border-brand-dark">
           <div className="flex items-center justify-between mb-4 pb-2 border-b border-brand-border">
             <h2 className="font-black uppercase tracking-widest text-brand-dark dark:text-white">
-              {language === 'fr' ? 'Recherches Récentes' : 'Recent Searches'}
+              {language === 'fr' ? 'Recherches RÃ©centes' : 'Recent Searches'}
             </h2>
           </div>
           

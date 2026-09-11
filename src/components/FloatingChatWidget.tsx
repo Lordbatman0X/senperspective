@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/SimpleAuth';
 import { getSafeText } from '../lib/utils';
 import { getMessengerContacts, MessengerContact } from '../lib/messengerContacts';
 import { resolveApiUrl, safeFetchJson } from '../lib/apiUtils';
@@ -37,7 +37,7 @@ export const FloatingChatWidget: React.FC = () => {
     messengerTextScale
   } = useStore();
 
-  const auth = useAuth();
+  const auth = useSimpleAuth();
   // Merge auth-context users (live fetch, includes online status) with store users
   // (persisted across browsers/devices so contacts always appear even before the
   // auth context finishes loading).
@@ -143,7 +143,7 @@ export const FloatingChatWidget: React.FC = () => {
 
   const currentContact: MessengerContact = contacts.find(c => ((c.email ?? '').toLowerCase()).trim() === selectedUserLower) || contacts[0] || {
     email: "contact@perspective.sn",
-    name: language === "fr" ? "Admin Rédaction" : "Editorial Admin",
+    name: language === "fr" ? "Admin RÃ©daction" : "Editorial Admin",
     role: "Perspective Group",
     avatar: "P",
     isOnline: true
@@ -169,7 +169,7 @@ export const FloatingChatWidget: React.FC = () => {
     sendDirectMessage({
       sender: userEmail,
       receiver: selectedUser,
-      text: inputText.trim() || (language === "fr" ? "Article Partagé" : "Shared Article"),
+      text: inputText.trim() || (language === "fr" ? "Article PartagÃ©" : "Shared Article"),
       attachment: attachmentObj
     });
 
@@ -190,7 +190,7 @@ export const FloatingChatWidget: React.FC = () => {
   if (!isOpen || isMinimized) {
     return (
       <aside 
-        aria-label={language === "fr" ? "Bulle de messagerie instantanée" : "Instant messenger bubble"}
+        aria-label={language === "fr" ? "Bulle de messagerie instantanÃ©e" : "Instant messenger bubble"}
         className="fixed bottom-4 right-4 sm:right-6 z-50 flex items-center gap-2 animate-bounceIn"
       >
         <button
@@ -215,7 +215,7 @@ export const FloatingChatWidget: React.FC = () => {
           )}
 
           <span className="hidden sm:inline-block max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap text-xs font-bold font-mono text-zinc-100 pl-0 group-hover:pl-2">
-            {language === "fr" ? "Messagerie Réseau" : "Network Chat"}
+            {language === "fr" ? "Messagerie RÃ©seau" : "Network Chat"}
           </span>
         </button>
       </aside>
@@ -226,7 +226,7 @@ export const FloatingChatWidget: React.FC = () => {
   return (
     <section 
       role="region"
-      aria-label={language === "fr" ? "Fenêtre de messagerie instantanée" : "Instant chat window"}
+      aria-label={language === "fr" ? "FenÃªtre de messagerie instantanÃ©e" : "Instant chat window"}
       className="fixed bottom-4 right-4 sm:right-6 z-50 w-[350px] sm:w-[400px] h-[540px] bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden animate-scaleUp font-sans"
       style={{ boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.1)' }}
     >
@@ -266,8 +266,8 @@ export const FloatingChatWidget: React.FC = () => {
             type="button"
             onClick={() => setIsMinimized(true)}
             className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-            aria-label={language === "fr" ? "Réduire la bulle" : "Minimize window"}
-            title={language === "fr" ? "Réduire la bulle" : "Minimize window"}
+            aria-label={language === "fr" ? "RÃ©duire la bulle" : "Minimize window"}
+            title={language === "fr" ? "RÃ©duire la bulle" : "Minimize window"}
           >
             <Minus size={14} />
           </button>
@@ -279,8 +279,8 @@ export const FloatingChatWidget: React.FC = () => {
               setIsOpen(false);
             }}
             className="p-1.5 text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-            aria-label={language === "fr" ? "Ouvrir en plein écran (Discussion)" : "Open in fullscreen (Discussion)"}
-            title={language === "fr" ? "Plein Écran / Discussion" : "Open Full Discussion"}
+            aria-label={language === "fr" ? "Ouvrir en plein Ã©cran (Discussion)" : "Open in fullscreen (Discussion)"}
+            title={language === "fr" ? "Plein Ã‰cran / Discussion" : "Open Full Discussion"}
           >
             <Maximize2 size={13} />
           </button>
@@ -288,7 +288,7 @@ export const FloatingChatWidget: React.FC = () => {
             type="button"
             onClick={() => setIsOpen(false)}
             className="p-1.5 text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
-            aria-label={language === "fr" ? "Fermer la fenêtre" : "Close chat"}
+            aria-label={language === "fr" ? "Fermer la fenÃªtre" : "Close chat"}
             title={language === "fr" ? "Fermer" : "Close"}
           >
             <X size={14} />
@@ -343,8 +343,8 @@ export const FloatingChatWidget: React.FC = () => {
             </p>
             <p className="text-[11px] text-zinc-400 max-w-xs">
               {currentContact.isAi
-                ? (language === "fr" ? "Posez n'importe quelle question à Abdel sur l'actualité de Perspective Group !" : "Ask Abdel any question about Perspective Group coverage!")
-                : (language === "fr" ? "Engagez la discussion avec ce contact en temps réel !" : "Start a live conversation with this contact in real time!")}
+                ? (language === "fr" ? "Posez n'importe quelle question Ã  Abdel sur l'actualitÃ© de Perspective Group !" : "Ask Abdel any question about Perspective Group coverage!")
+                : (language === "fr" ? "Engagez la discussion avec ce contact en temps rÃ©el !" : "Start a live conversation with this contact in real time!")}
             </p>
           </div>
         ) : (
@@ -357,7 +357,7 @@ export const FloatingChatWidget: React.FC = () => {
               >
                 <header className="flex items-center gap-1 text-[9px] text-zinc-400 mb-0.5 px-1">
                   <span>{isMe ? (language === "fr" ? "Vous" : "You") : (currentContact.name || dm.sender.split("@")[0])}</span>
-                  <span>•</span>
+                  <span>â€¢</span>
                   <time>{dm.date || "Aujourd'hui"}</time>
                 </header>
 
@@ -376,7 +376,7 @@ export const FloatingChatWidget: React.FC = () => {
                     <div className="mt-2 p-2 bg-black/10 dark:bg-black/40 border border-black/10 dark:border-white/10 rounded-lg text-[10px] space-y-1">
                       <div className="flex items-center gap-1 font-mono font-bold text-[9px] uppercase tracking-wider text-[#E85D42]">
                         <Newspaper size={11} aria-hidden="true" />
-                        <span>{language === "fr" ? "Article Partagé" : "Shared Article"}</span>
+                        <span>{language === "fr" ? "Article PartagÃ©" : "Shared Article"}</span>
                       </div>
                       <p className="font-bold line-clamp-1">
                         {typeof dm.attachment.title === 'object'
@@ -423,11 +423,11 @@ export const FloatingChatWidget: React.FC = () => {
       {showArticlePicker && (
         <div 
           role="dialog"
-          aria-label={language === "fr" ? "Sélectionner un article à partager" : "Select an article to share"}
+          aria-label={language === "fr" ? "SÃ©lectionner un article Ã  partager" : "Select an article to share"}
           className="p-2.5 bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 max-h-36 overflow-y-auto space-y-1 shrink-0 animate-fadeIn"
         >
           <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 mb-1 px-1">
-            <span>{language === "fr" ? "Joindre un Article Récent :" : "Attach Recent Article:"}</span>
+            <span>{language === "fr" ? "Joindre un Article RÃ©cent :" : "Attach Recent Article:"}</span>
             <button 
               type="button"
               onClick={() => setShowArticlePicker(false)} 
@@ -485,7 +485,7 @@ export const FloatingChatWidget: React.FC = () => {
             type="text"
             value={inputText}
             onChange={e => setInputText(e.target.value)}
-            placeholder={language === "fr" ? "Écrire un message..." : "Write a message..."}
+            placeholder={language === "fr" ? "Ã‰crire un message..." : "Write a message..."}
             aria-label={language === "fr" ? `Message pour ${currentContact.name}` : `Message for ${currentContact.name}`}
             className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-sans text-zinc-900 dark:text-white px-3.5 py-2 rounded-full focus:outline-none focus:border-[#E85D42] transition-colors"
           />

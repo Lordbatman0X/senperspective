@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/AuthContext';
+import { useSimpleAuth } from '../contexts/SimpleAuth';
 import { Mail, Key, Lock, ShieldCheck, User, ArrowRight, Sparkles } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
   const { language, siteSettings, addSubscriber } = useStore();
-  const { loginWithEmail, registerWithEmail, resetUserPassword } = useAuth();
+  const { login, register } = useSimpleAuth();
 
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
   const [authType, setAuthType] = useState<'password' | 'pin'>('password');
@@ -45,7 +45,12 @@ export const AuthPage: React.FC = () => {
           return;
         }
 
-        await loginWithEmail(email.trim(), credential);
+        const result = await login(email.trim(), credential);
+        if (!result.success) {
+          setErrorMessage(result.error || 'Login failed');
+          setIsSubmitting(false);
+          return;
+        }
         setSuccessMessage(language === 'fr' ? 'Connexion réussie !' : 'Authentication successful!');
         setTimeout(() => {
           navigate('/profile/' + encodeURIComponent(email.trim()));
@@ -68,7 +73,12 @@ export const AuthPage: React.FC = () => {
           return;
         }
 
-        await registerWithEmail(email.trim(), credential, name.trim(), 'Member', '', authType, pin, true);
+        const result = await register(email.trim(), credential, name.trim());
+        if (!result.success) {
+          setErrorMessage(result.error || 'Registration failed');
+          setIsSubmitting(false);
+          return;
+        }
         await addSubscriber(email.trim());
         setSuccessMessage(
           language === 'fr'

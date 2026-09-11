@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -19,7 +19,7 @@ import {
   Globe
 } from 'lucide-react';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/SimpleAuth';
 import { supabase, subscribeToTable } from '../lib/supabaseClient';
 import { SharedAttachment } from './SharedItemCard';
 
@@ -48,7 +48,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
   } = useStore();
 
   const navigate = useNavigate();
-  const { allUsers } = useAuth();
+  const { allUsers } = useSimpleAuth();
   const accentColor = siteSettings?.accentColor || '#E85D42';
 
   // Search query
@@ -148,9 +148,9 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       return {
         type: 'dispatch',
         id: 'dispatch-' + Date.now(),
-        title: customDispatchTitle.trim() || (language === 'fr' ? 'Note de Décryptage Analytique' : 'Analytical Dispatch Note'),
+        title: customDispatchTitle.trim() || (language === 'fr' ? 'Note de DÃ©cryptage Analytique' : 'Analytical Dispatch Note'),
         link: '/about',
-        subtitle: language === 'fr' ? 'Analyse stratégique - Perspective Group' : 'Strategic intel - Perspective Group'
+        subtitle: language === 'fr' ? 'Analyse stratÃ©gique - Perspective Group' : 'Strategic intel - Perspective Group'
       };
     } else {
       const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === selectedProfileEmail.toLowerCase().trim())
@@ -198,7 +198,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
 
     // Add editorial team defaults
     const editorialTeam = [
-      { email: 'admin@perspective.sn', name: 'Rédaction Perspective (Admin)', role: 'Rédaction' },
+      { email: 'admin@perspective.sn', name: 'RÃ©daction Perspective (Admin)', role: 'RÃ©daction' },
     ];
 
     editorialTeam.forEach(e => {
@@ -236,7 +236,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
           email: s.email,
           name: (s.email ?? '').split('@')[0],
           isFriend: false,
-          role: 'Abonné'
+          role: 'AbonnÃ©'
         });
         addedEmails.add(cleanEmail);
       }
@@ -291,8 +291,8 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       id: 'notif-' + Date.now(),
       email: selectedRecipientEmail,
       text: {
-        fr: `💬 ${readerProfile?.name || 'Un membre'} vous a partagé : "${attachmentTitle}"`,
-        en: `💬 ${readerProfile?.name || 'A member'} shared intel with you: "${attachmentTitle}"`
+        fr: `ðŸ’¬ ${readerProfile?.name || 'Un membre'} vous a partagÃ© : "${attachmentTitle}"`,
+        en: `ðŸ’¬ ${readerProfile?.name || 'A member'} shared intel with you: "${attachmentTitle}"`
       },
       date: new Date().toISOString().split('T')[0],
       isRead: false,
@@ -300,7 +300,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       link: currentAttachment.link
     });
 
-    setToastMessage(language === 'fr' ? '✓ Envoyé en message direct !' : '✓ Sent in Direct Message!');
+    setToastMessage(language === 'fr' ? 'âœ“ EnvoyÃ© en message direct !' : 'âœ“ Sent in Direct Message!');
     setTimeout(() => {
       setToastMessage('');
       onClose();
@@ -315,8 +315,8 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     if (!targetArt) return;
 
     const commentText = captionNote.trim()
-      ? `📌 ${captionNote}`
-      : (language === 'fr' ? `📌 Recommandation : "${attachmentTitle}"` : `📌 Recommended intel: "${attachmentTitle}"`);
+      ? `ðŸ“Œ ${captionNote}`
+      : (language === 'fr' ? `ðŸ“Œ Recommandation : "${attachmentTitle}"` : `ðŸ“Œ Recommended intel: "${attachmentTitle}"`);
 
     const targetArticleId = targetArt.slug || targetArt.id;
 
@@ -334,7 +334,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       attachment: currentAttachment
     });
 
-    setToastMessage(language === 'fr' ? '✓ Publié dans la discussion !' : '✓ Posted to Discussion!');
+    setToastMessage(language === 'fr' ? 'âœ“ PubliÃ© dans la discussion !' : 'âœ“ Posted to Discussion!');
     setTimeout(() => {
       setToastMessage('');
       onClose();
@@ -347,7 +347,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
   const handleCopyCitation = () => {
     const citation = `[${attachmentTitle}](${fullShareUrl})`;
     navigator.clipboard.writeText(citation);
-    setToastMessage(language === 'fr' ? '✓ Lien Markdown copié !' : '✓ Markdown link copied!');
+    setToastMessage(language === 'fr' ? 'âœ“ Lien Markdown copiÃ© !' : 'âœ“ Markdown link copied!');
     setTimeout(() => setToastMessage(''), 1800);
   };
 
@@ -384,12 +384,12 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
         break;
       case 'tiktok':
         navigator.clipboard.writeText(`Perspective Sahel: ${title} #sahel #geopolitique ${fullShareUrl}`);
-        setToastMessage(language === 'fr' ? '✓ Citation TikTok copiée !' : '✓ TikTok Citation copied!');
+        setToastMessage(language === 'fr' ? 'âœ“ Citation TikTok copiÃ©e !' : 'âœ“ TikTok Citation copied!');
         setTimeout(() => setToastMessage(''), 2000);
         return;
       case 'youtube':
         navigator.clipboard.writeText(`Source: Perspective Sahel - "${title}" - Link: ${fullShareUrl}`);
-        setToastMessage(language === 'fr' ? '✓ Citation YouTube copiée !' : '✓ YouTube citation copied!');
+        setToastMessage(language === 'fr' ? 'âœ“ Citation YouTube copiÃ©e !' : 'âœ“ YouTube citation copied!');
         setTimeout(() => setToastMessage(''), 2000);
         return;
       case 'native':
@@ -408,7 +408,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
         return;
     }
 
-    setToastMessage(language === 'fr' ? '✓ Ouverture du canal...' : '✓ Launching app...');
+    setToastMessage(language === 'fr' ? 'âœ“ Ouverture du canal...' : 'âœ“ Launching app...');
     setTimeout(() => setToastMessage(''), 1800);
   };
 
@@ -442,14 +442,14 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
               </div>
               <div>
                 <h3 className="text-xs font-bold font-sans text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
-                  {language === 'fr' ? 'Transférer à...' : 'Forward to...'}
+                  {language === 'fr' ? 'TransfÃ©rer Ã ...' : 'Forward to...'}
                 </h3>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
                   {targetChannel === 'dm'
-                    ? (language === 'fr' ? 'Contact ou ami abonné' : 'Select contact or friend')
+                    ? (language === 'fr' ? 'Contact ou ami abonnÃ©' : 'Select contact or friend')
                     : targetChannel === 'comment'
-                    ? (language === 'fr' ? 'Discussion d’un article' : 'Share to article discussion')
-                    : (language === 'fr' ? 'Réseaux & applications externes' : 'External social apps')}
+                    ? (language === 'fr' ? 'Discussion dâ€™un article' : 'Share to article discussion')
+                    : (language === 'fr' ? 'RÃ©seaux & applications externes' : 'External social apps')}
                 </p>
               </div>
             </div>
@@ -543,7 +543,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                 {filteredContacts.length === 0 ? (
                   <div className="p-6 text-center text-xs text-zinc-400 font-mono">
                     {searchQuery 
-                      ? (language === 'fr' ? 'Aucun contact trouvé' : 'No contacts found')
+                      ? (language === 'fr' ? 'Aucun contact trouvÃ©' : 'No contacts found')
                       : (language === 'fr' ? 'Chargement des contacts...' : 'Loading contacts...')
                     }
                   </div>
@@ -615,7 +615,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
               <div className="p-1">
                 {filteredArticles.length === 0 ? (
                   <div className="p-6 text-center text-xs text-zinc-400 font-mono">
-                    {language === 'fr' ? 'Aucune discussion trouvée' : 'No discussions found'}
+                    {language === 'fr' ? 'Aucune discussion trouvÃ©e' : 'No discussions found'}
                   </div>
                 ) : (
                   filteredArticles.map(art => {
@@ -783,7 +783,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                     className="w-full mt-3 py-2.5 px-4 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 text-xs font-mono font-bold uppercase tracking-wider rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center justify-center gap-2 cursor-pointer transition-colors"
                   >
                     <Share2 size={15} />
-                    <span>{language === 'fr' ? 'Partager via le système mobile...' : 'Share via System...'}</span>
+                    <span>{language === 'fr' ? 'Partager via le systÃ¨me mobile...' : 'Share via System...'}</span>
                   </button>
                 )}
               </div>
@@ -794,15 +794,15 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
           {!initialItem && (
             <div className="px-3 py-1.5 bg-zinc-100 dark:bg-[#1f2c34] border-t border-zinc-200 dark:border-zinc-800 shrink-0 flex items-center justify-between gap-2 text-[10px] font-mono">
               <div className="flex items-center gap-2">
-                <span className="text-zinc-400 font-bold shrink-0">{language === 'fr' ? 'Élément :' : 'Item :'}</span>
+                <span className="text-zinc-400 font-bold shrink-0">{language === 'fr' ? 'Ã‰lÃ©ment :' : 'Item :'}</span>
                 <select
                   value={selectedItemType}
                   onChange={e => setSelectedItemType(e.target.value as any)}
                   className="bg-transparent font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none cursor-pointer"
                 >
-                  <option value="article" className="dark:bg-zinc-900">📰 Article</option>
-                  <option value="profile" className="dark:bg-zinc-900">👤 Profil Analyste</option>
-                  <option value="dispatch" className="dark:bg-zinc-900">⚡ Décryptage</option>
+                  <option value="article" className="dark:bg-zinc-900">ðŸ“° Article</option>
+                  <option value="profile" className="dark:bg-zinc-900">ðŸ‘¤ Profil Analyste</option>
+                  <option value="dispatch" className="dark:bg-zinc-900">âš¡ DÃ©cryptage</option>
                 </select>
               </div>
 
@@ -855,7 +855,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                     ? 'Article'
                     : currentAttachment.type === 'profile'
                     ? 'Profil'
-                    : 'Décryptage'}
+                    : 'DÃ©cryptage'}
                 </span>
                 <p className="text-xs font-bold font-sans text-zinc-900 dark:text-zinc-100 truncate">
                   {attachmentTitle}
@@ -871,7 +871,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
                 onChange={e => setCaptionNote(e.target.value)}
                 placeholder={
                   language === 'fr'
-                    ? 'Ajouter une légende ou commentaire...'
+                    ? 'Ajouter une lÃ©gende ou commentaire...'
                     : 'Add a caption...'
                 }
                 className="flex-1 px-3 py-2 bg-white dark:bg-[#111b21] border border-zinc-200 dark:border-zinc-700/60 rounded-full text-xs font-sans text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-[#E85D42]"

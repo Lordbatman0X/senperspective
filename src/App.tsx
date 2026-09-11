@@ -12,7 +12,7 @@ import { LArenePage } from './pages/LArenePage';
 import { DiscussionPage } from './pages/DiscussionPage';
 import { AuthPage } from './pages/AuthPage';
 import { Layout } from './components/Layout';
-import { AuthProvider } from './contexts/AuthContext';
+import { SimpleAuthProvider } from './contexts/SimpleAuth';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 
@@ -38,7 +38,7 @@ function App() {
 
   return (
     <Router>
-      <AuthProvider>
+      <SimpleAuthProvider>
         {/* Glassy sync indicator — shows while fresh content loads from the cloud */}
         {isLoadingArticles && (
           <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 overflow-hidden">
@@ -81,7 +81,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
-      </AuthProvider>
+      </SimpleAuthProvider>
     </Router>
   );
 }
