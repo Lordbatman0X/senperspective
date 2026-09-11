@@ -11,12 +11,6 @@ services:
       - key: NODE_VERSION
         value: 22
       - key: MONGODB_URI
-        sync: false   # set in Render dashboard (secret)
+        sync: false
       - key: MONGODB_DB
         value: perspective
-      - key: GEMINI_API_KEY
-        sync: false   # optional
-      - key: GROQ_API_KEY
-        sync: false   # optional
-      - key: OPENROUTER_API_KEY
-        sync: false   # optional
