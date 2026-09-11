@@ -75,8 +75,10 @@ export function formatUserForBackend(user: any): Record<string, any> {
     emailVerified: user.emailVerified !== undefined ? user.emailVerified : true,
     mfaEnabled: Boolean(user.mfaEnabled || user.twoFactorEnabled),
     twoFactorEnabled: Boolean(user.mfaEnabled || user.twoFactorEnabled),
-    deletedAt: user.deletedAt || user.deleted_at || null,
-    ...user
+    ...user,
+    // FIX (disappearing accounts): Ensure deletedAt is always set to null if not explicitly provided.
+    // This must come AFTER ...user spread to prevent it from being overridden.
+    deletedAt: user.deletedAt ?? user.deleted_at ?? null
   };
 }
 
