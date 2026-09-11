@@ -60,13 +60,48 @@ export const GEMINI_MODEL_FALLBACKS: string[] = [
   'gemini-1.5-pro',
 ];
 
+let discoveredGeminiModels: string[] | null = null;
+
+/**
+ * Asks the Generative Language API which models actually exist for this key,
+ * so we never rely on hardcoded model names that may drift over time.
+ * Prefers flash/pro generation models; falls back to the static list on error.
+ */
+async function resolveGeminiModels(apiKey: string): Promise<string[]> {
+  if (discoveredGeminiModels) return discoveredGeminiModels;
+  const fallback = GEMINI_MODEL_FALLBACKS;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=200`,
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const names: string[] = (data?.models || [])
+        .map((m: any) => String(m?.name || '').replace(/^models\//, ''))
+        .filter((n: string) => n.startsWith('gemini'));
+      if (names.length > 0) {
+        const rank = (s: string) =>
+          s.includes('flash') ? 0 : s.includes('pro') ? 1 : s.includes('lite') ? 2 : 3;
+        discoveredGeminiModels = [...new Set(names)].sort((a, b) => rank(a) - rank(b)).slice(0, 12);
+        return discoveredGeminiModels;
+      }
+    }
+  } catch (e) {
+    // ignore discovery failures; fall back to the static list
+  }
+  discoveredGeminiModels = fallback;
+  return fallback;
+}
+
 async function callGeminiGenerative(
   models: string[],
   apiKey: string,
   body: Record<string, any>
 ): Promise<{ ok: boolean; text: string; lastError: string }> {
   let lastError = '';
-  for (const model of models) {
+  const candidates = models.length > 0 ? [...new Set([...models, ...(await resolveGeminiModels(apiKey))])] : await resolveGeminiModels(apiKey);
+  for (const model of candidates) {
     try {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,

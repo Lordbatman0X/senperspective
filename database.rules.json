@@ -22,7 +22,8 @@
       ".write": "auth != null"
     },
     "site_settings": {
-      ".read": true
+      ".read": true,
+      ".write": "auth != null"
     },
     "relations": {
       ".read": true,
