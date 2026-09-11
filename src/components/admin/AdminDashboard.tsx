@@ -282,7 +282,7 @@ export function AdminDashboard() {
               </h2>
 
               <p className="text-xs text-zinc-400 font-mono flex items-center gap-4 pt-1">
-                <span>Project: <strong className="text-zinc-200">earnest-strand-z71nt</strong></span>
+                <span>Project: <strong className="text-zinc-200">ai-studio-applet-webapp-29e84</strong></span>
                 <span>Latency: <strong className="text-emerald-400">{latency !== null ? `${latency} ms` : '--'}</strong></span>
                 <span>Last Sync: <strong className="text-zinc-300">{lastChecked || 'Now'}</strong></span>
               </p>
