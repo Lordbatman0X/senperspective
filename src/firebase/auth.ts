@@ -200,7 +200,23 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
  */
 export async function signInEmail(email: string, pass: string): Promise<AppUserProfile> {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
-  return await syncUserProfile(cred.user);
+  try {
+    return await syncUserProfile(cred.user);
+  } catch (profileErr) {
+    // FIX: Firestore failures (missing DB, offline, permission) must never block login.
+    console.warn('[Firebase] Profile sync notice, using fallback profile:', profileErr);
+    const isAdmin = isBootstrapAdmin(cred.user.email);
+    return {
+      uid: cred.user.uid,
+      email: cred.user.email || '',
+      name: cred.user.displayName || cred.user.email?.split('@')[0] || 'Utilisateur',
+      role: isAdmin ? 'Admin' : 'Membre',
+      avatarUrl: cred.user.photoURL || 'preset-male',
+      streak: 1,
+      readingTime: 0,
+      accolades: isAdmin ? ['verified_identity', 'editorial_board', 'elite_clearance'] : ['verified_identity'],
+    };
+  }
 }
 
 /**

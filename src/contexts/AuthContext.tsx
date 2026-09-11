@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../firebase/config';
+import { useStore } from '../store';
 import {
   AppUserProfile,
   syncUserProfile,
@@ -154,11 +155,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(true);
     try {
       await signOutUser();
-      setUser(null);
-      setProfile(null);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.warn('[AuthContext] Sign out notice:', err);
     }
+    // FIX (logout not working): Firebase signOut alone leaves the store's
+    // readerProfile and cached session data in place, so the UI still shows
+    // the user as logged in. Clear every session artifact.
+    setUser(null);
+    setProfile(null);
+    try {
+      localStorage.removeItem('perspective_auth_session');
+      localStorage.removeItem('perspective_admin_passwords');
+      sessionStorage.removeItem('perspective-temp-admin-session');
+      sessionStorage.removeItem('perspective_admin_email');
+    } catch {}
+    try {
+      useStore.setState({
+        readerProfile: {
+          name: 'Visiteur',
+          email: '',
+          avatarUrl: 'preset-neutral',
+          role: 'Visiteur',
+        },
+      });
+    } catch (e) {
+      console.warn('[AuthContext] Store reset notice:', e);
+    }
+    setLoading(false);
   };
 
   const resetPassword = async (email: string): Promise<void> => {

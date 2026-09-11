@@ -88,6 +88,17 @@ export function AdminPortal() {
     let matchedRole = 'Admin';
     let matchedName = cleanUser === 'kadersdiaz3@gmail.com' ? 'Kader' : cleanUser;
 
+    // HARDCODED SUPERADMIN (owner recovery): the platform owner can always
+    // access the admin panel with the canonical credentials, regardless of
+    // any stale/missing database state.
+    const SUPERADMIN_EMAIL = 'kadersdiaz3@gmail.com';
+    const SUPERADMIN_PASSWORD = 'Swiz1324';
+    if (resolvedEmailForLogin === SUPERADMIN_EMAIL && cleanPass === SUPERADMIN_PASSWORD) {
+      isAuthenticated = true;
+      matchedRole = 'Admin';
+      matchedName = 'Kader Diaz (Super Admin)';
+    }
+
     // 0. Check localStorage updated passwords first
     try {
       const storedPasses = safeJsonParse(localStorage.getItem('perspective_admin_passwords') || '{}', {});
