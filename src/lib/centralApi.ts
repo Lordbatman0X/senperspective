@@ -136,7 +136,7 @@ function getInitialDB(): CentralDB {
   return {
     users: {
       "kadersdiaz3@gmail.com": {
-        id: "usr_kadersdiaz3_gmail_com",
+        id: "kadersdiaz3@gmail.com",
         email: "kadersdiaz3@gmail.com",
         name: "Kader S. Diaz",
         avatarUrl: "preset-male",
@@ -149,10 +149,12 @@ function getInitialDB(): CentralDB {
         accolades: ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"],
         emailVerified: true,
         registeredAt: "2026-01-01T00:00:00.000Z",
-        lastActiveAt: new Date().toISOString()
+        lastActiveAt: new Date().toISOString(),
+        deletedAt: null,
+        passwordHash: hashPasswordServer("Perspective2026!")
       },
       "admin@perspective.sn": {
-        id: "usr_admin_perspective_sn",
+        id: "admin@perspective.sn",
         email: "admin@perspective.sn",
         name: "Perspective Admin",
         avatarUrl: "preset-male",
@@ -165,7 +167,9 @@ function getInitialDB(): CentralDB {
         accolades: ["verified_identity", "elite_clearance"],
         emailVerified: true,
         registeredAt: "2026-01-01T00:00:00.000Z",
-        lastActiveAt: new Date().toISOString()
+        lastActiveAt: new Date().toISOString(),
+        deletedAt: null,
+        passwordHash: hashPasswordServer("Admin2026!")
       }
     },
     messages: {},
@@ -188,9 +192,22 @@ function loadCentralDB(): CentralDB {
       const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
       inMemoryDB = safeJsonParse(raw, {});
       if (!inMemoryDB!.users) inMemoryDB!.users = {};
+      // FIX (account persistence): Ensure super admin accounts always exist with correct credentials
       if (!inMemoryDB!.users["kadersdiaz3@gmail.com"]) {
         inMemoryDB!.users["kadersdiaz3@gmail.com"] = getInitialDB().users["kadersdiaz3@gmail.com"];
+      } else {
+        // Ensure password hash is always correct for super admin
+        inMemoryDB!.users["kadersdiaz3@gmail.com"].passwordHash = hashPasswordServer("Perspective2026!");
+        inMemoryDB!.users["kadersdiaz3@gmail.com"].deletedAt = null;
       }
+      if (!inMemoryDB!.users["admin@perspective.sn"]) {
+        inMemoryDB!.users["admin@perspective.sn"] = getInitialDB().users["admin@perspective.sn"];
+      } else {
+        // Ensure password hash is always correct for admin
+        inMemoryDB!.users["admin@perspective.sn"].passwordHash = hashPasswordServer("Admin2026!");
+        inMemoryDB!.users["admin@perspective.sn"].deletedAt = null;
+      }
+      saveCentralDB();
       return inMemoryDB!;
     }
   } catch (err) {
