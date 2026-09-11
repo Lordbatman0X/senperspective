@@ -4,13 +4,13 @@
 const BACKEND_URL_STORAGE_KEY = 'perspective_backend_api_url';
 
 /**
- * Default Express API base used when the app is served from a STATIC host
- * (Firebase Hosting / Vercel / Netlify) where a relative `/api` call would
- * hit the static site instead of the backend. This makes the deployed static
- * site reach the real API out of the box. Overridable per-user in Admin → API,
- * or globally at build time via VITE_BACKEND_URL.
+ * Default API base used when the app is served from a STATIC host
+ * (Firebase Hosting) where a relative `/api` call would
+ * hit the static site instead of the backend. 
+ * Set your Firebase Function URL or MongoDB Atlas App Service URL here.
+ * Overridable per-user in Admin → API, or via VITE_BACKEND_URL env var.
  */
-export const DEFAULT_STATIC_BACKEND = 'https://senperspective-api-56o8.onrender.com';
+export const DEFAULT_STATIC_BACKEND = '';
 
 function isStaticHost(): boolean {
   if (typeof window === 'undefined' || !window.location) return false;
