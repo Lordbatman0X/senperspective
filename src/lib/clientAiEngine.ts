@@ -45,6 +45,53 @@ let hasLoadedFromFirestore = false;
 let loadPromise: Promise<Record<string, string>> | null = null;
 
 /**
+ * Real, currently-supported Gemini generation models (GA / stable names).
+ * These are queried in order and the first one that answers is used.
+ * The previous hardcoded ids (gemini-3.8-flash / gemini-3.1-*) do not exist
+ * on the Generative Language API and always returned HTTP 404, which is why
+ * AI article generation was silent-failing.
+ */
+export const GEMINI_MODEL_FALLBACKS: string[] = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.5-pro',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-pro',
+];
+
+async function callGeminiGenerative(
+  models: string[],
+  apiKey: string,
+  body: Record<string, any>
+): Promise<{ ok: boolean; text: string; lastError: string }> {
+  let lastError = '';
+  for (const model of models) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text && text.trim()) return { ok: true, text: text.trim(), lastError: '' };
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        lastError = errJson?.error?.message || `HTTP ${res.status}`;
+      }
+    } catch (err: any) {
+      lastError = err?.message || String(err);
+    }
+  }
+  return { ok: false, text: '', lastError };
+}
+
+/**
  * Loads API keys from Firestore site_settings into memory and localStorage
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
@@ -218,22 +265,17 @@ export async function clientTestProvider(provider: string): Promise<{
     if (p === 'GEMINI') {
       const key = getClientApiKey('gemini');
       if (!key) throw new Error('Clé API Gemini non configurée dans le navigateur.');
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: 'Réponds uniquement par: OK' }] }]
-        })
-      });
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
-      }
+      const r = await callGeminiGenerative(
+        GEMINI_MODEL_FALLBACKS,
+        key,
+        { contents: [{ parts: [{ text: 'Réponds uniquement par: OK' }] }] }
+      );
+      if (!r.ok) throw new Error(r.lastError || 'HTTP erreur');
       return {
         success: true,
         latencyMs: Date.now() - startTime,
-        message: 'Google Gemini 3.8 Flash opérationnel (Test direct navigateur)',
-        modelUsed: 'gemini-3.8-flash'
+        message: `Google Gemini opérationnel (${GEMINI_MODEL_FALLBACKS[0]}) — Test direct navigateur`,
+        modelUsed: GEMINI_MODEL_FALLBACKS[0]
       };
     }
 
@@ -440,32 +482,18 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
 
   // Helper to query Gemini with model fallback
   const callGeminiDirect = async (apiKey: string) => {
-    const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-pro-preview', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
-    for (const model of candidateModels) {
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: promptText }] }],
-            generationConfig: { responseMimeType: 'application/json' }
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (content && content.trim()) {
-            return { content, model: `Gemini ${model} (Client Direct)` };
-          }
-        } else {
-          const errJson = await res.json().catch(() => ({}));
-          console.warn(`[Client AI] Gemini ${model} returned HTTP ${res.status}:`, errJson?.error?.message);
-        }
-      } catch (err: any) {
-        console.warn(`[Client AI] Gemini ${model} fetch failed:`, err.message);
+    const r = await callGeminiGenerative(
+      GEMINI_MODEL_FALLBACKS,
+      apiKey,
+      {
+        contents: [{ parts: [{ text: promptText }] }],
+        generationConfig: { responseMimeType: 'application/json' }
       }
+    );
+    if (!r.ok) {
+      throw new Error('Les modèles Gemini sont temporairement saturés ou la clé API est restreinte. ' + r.lastError);
     }
-    throw new Error('Les modèles Gemini sont temporairement saturés ou la clé API est restreinte.');
+    return { content: r.text, model: `Gemini (Client Direct)` };
   };
 
   // Helper to query Groq
@@ -654,18 +682,15 @@ Réponds UNIQUEMENT par un tableau JSON d'objets :
 
   let raw = '';
   if (geminiKey) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${geminiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const r = await callGeminiGenerative(
+      GEMINI_MODEL_FALLBACKS,
+      geminiKey,
+      {
         contents: [{ parts: [{ text: promptText }] }],
         generationConfig: { responseMimeType: 'application/json' }
-      })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
-    }
+      }
+    );
+    if (r.ok) raw = r.text || '[]';
   } else if (groqKey) {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -1135,25 +1160,17 @@ RÈGLES D'EXPRESSION STRICTES :
         parts: [{ text: userContext }]
       });
 
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const resp = await callGeminiGenerative(
+        GEMINI_MODEL_FALLBACKS,
+        geminiKey,
+        {
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 600
-          }
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+          generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
         }
+      );
+      if (resp.ok && resp.text) {
+        return resp.text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
       }
     } catch (_) {}
   }
