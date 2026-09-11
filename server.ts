@@ -100,7 +100,24 @@ app.use((req, res, next) => {
 
   // Health check endpoint
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // MongoDB connection status endpoint
+  app.get("/api/mongodb/status", async (req, res) => {
+    try {
+      const { getDb } = await import("./src/lib/centralApi");
+      const db = await getDb();
+      if (db) {
+        // Try a simple ping to verify connection
+        await db.command({ ping: 1 });
+        res.json({ connected: true, database: db.databaseName });
+      } else {
+        res.json({ connected: false, reason: "MONGODB_URI not set or connection failed" });
+      }
+    } catch (err: any) {
+      res.json({ connected: false, reason: err?.message || "Unknown error" });
+    }
   });
 
   // ==========================================
