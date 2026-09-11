@@ -523,18 +523,76 @@ export const useStore = create<AppState>()(
       setArticles: (articles) => set({ articles }),
       loadArticles: async () => {
         set({ isLoadingArticles: true });
+        // --- Legacy localStorage article recovery --------------------------
+        // Earlier builds persisted articles in localStorage. The current build
+        // persists only UI preferences (see partialize), and Firestore was
+        // empty/unavailable — so articles created before Firestore existed
+        // would vanish on every reload. Rescue them once per session.
+        const recovered: Article[] = [];
+        try {
+          const seedIds = new Set(seedArticles.map(a => String(a.id)));
+          const seen = new Set<string>();
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            const raw = localStorage.getItem(key);
+            if (!raw || raw.length < 20 || !raw.includes('"articles"')) continue;
+            let parsed: any = null;
+            try { parsed = JSON.parse(raw); } catch { continue; }
+            const list = Array.isArray(parsed)
+              ? parsed
+              : Array.isArray(parsed?.state?.articles)
+                ? parsed.state.articles
+                : Array.isArray(parsed?.articles)
+                  ? parsed.articles
+                  : null;
+            if (!list) continue;
+            for (const item of list) {
+              const id = String(item?.id || '');
+              if (!id || seen.has(id) || seedIds.has(id)) continue;
+              if (!item?.title && !item?.slug && !item?.content) continue;
+              seen.add(id);
+              recovered.push(item as Article);
+            }
+          }
+        } catch { /* recovery is best-effort — never block startup */ }
+
+        const backfillToFirestore = (list: Article[]) => {
+          // Fire-and-forget: once Firestore exists AND the visitor is an
+          // authenticated admin, rescued articles get persisted permanently.
+          for (const a of list) {
+            import('./firebase/db')
+              .then(m => m.saveArticleToFirestore(a))
+              .catch(() => {});
+          }
+        };
+
         try {
           const remote = await fetchAllArticles();
           if (remote && remote.length > 0) {
-            set({ articles: remote, isLoadingArticles: false });
-            return remote;
+            let merged = remote;
+            if (recovered.length > 0) {
+              const remoteIds = new Set(remote.map(a => String(a.id)));
+              const missing = recovered.filter(a => !remoteIds.has(String(a.id)));
+              if (missing.length > 0) {
+                merged = [...missing, ...remote];
+                backfillToFirestore(missing);
+              }
+            }
+            set({ articles: merged, isLoadingArticles: false });
+            return merged;
           }
-          set({ articles: seedArticles, isLoadingArticles: false });
-          return seedArticles;
+          // Firestore empty → show rescued + seed content immediately
+          if (recovered.length > 0) backfillToFirestore(recovered);
+          const fallback = recovered.length > 0 ? [...recovered, ...seedArticles] : seedArticles;
+          set({ articles: fallback, isLoadingArticles: false });
+          return fallback;
         } catch (err) {
           console.warn('[Firebase] Notice loading articles:', err);
-          set({ articles: seedArticles, isLoadingArticles: false });
-          return seedArticles;
+          if (recovered.length > 0) backfillToFirestore(recovered);
+          const fallback = recovered.length > 0 ? [...recovered, ...seedArticles] : seedArticles;
+          set({ articles: fallback, isLoadingArticles: false });
+          return fallback;
         }
       },
       syncFromSupabase: async () => {

@@ -14,6 +14,16 @@ export default defineConfig(() => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
+      chunkSizeWarningLimit: 1600,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            react: ['react', 'react-dom', 'react-router-dom'],
+            firebase: ['firebase/app', 'firebase/auth', 'firebase/database', 'firebase/storage'],
+            icons: ['lucide-react'],
+          },
+        },
+      },
     },
     server: {
       host: '0.0.0.0',

@@ -1,32 +1,18 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Use the default Firestore database when firestoreDatabaseId is "(default)"
-export const db = firebaseConfig.firestoreDatabaseId === '(default)'
-  ? getFirestore(app)
-  : getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Realtime Database — free on the Spark plan (no billing required),
+// unlike Firestore which now demands the Blaze plan on new projects.
+export const rtdb = getDatabase(app);
 
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
 
 // Initialize Firebase Storage
 export const storage = getStorage(app);
-
-// Validate connection to Firestore on initialization (Mandatory per Firebase Skill)
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('[Firebase] Client is offline or database is initializing.');
-    }
-  }
-}
-
-testConnection();

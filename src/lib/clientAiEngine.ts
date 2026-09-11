@@ -1,6 +1,7 @@
 import { resolveApiUrl, safeFetchJson, safeJsonParse } from './apiUtils';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { ref, get, update } from 'firebase/database';
+import { rtdb } from '../firebase/config';
+import { withFirestoreTimeout } from '../firebase/db';
 
 /**
  * Client-Side AI and RSS Engine
@@ -52,9 +53,9 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 
   loadPromise = (async () => {
     try {
-      const snap = await getDoc(doc(db, 'site_settings', 'api_keys'));
-      if (snap.exists()) {
-        const data = snap.data();
+      const snap = await withFirestoreTimeout(get(ref(rtdb, 'site_settings/api_keys')), 6000).catch(() => null);
+      if (snap && snap.exists()) {
+        const data = snap.val();
         const apiKeys = (data?.api_keys || data || {}) as Record<string, string>;
         cachedFirestoreKeys = { ...apiKeys };
         hasLoadedFromFirestore = true;
@@ -151,12 +152,12 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
     delete cachedFirestoreKeys[P];
   }
 
-  // 3. Persist to Firestore site_settings/api_keys
+  // 3. Persist to Realtime Database site_settings/api_keys
   try {
-    await setDoc(doc(db, 'site_settings', 'api_keys'), {
+    await withFirestoreTimeout(update(ref(rtdb, 'site_settings/api_keys'), {
       api_keys: { ...cachedFirestoreKeys, [P]: cleanKey }
-    }, { merge: true });
-    console.log(`[Firebase] Successfully saved ${P} API key to Firestore.`);
+    }));
+    console.log(`[Firebase] Successfully saved ${P} API key to the database.`);
   } catch (err) {
     console.warn(`[Firebase] Could not sync ${P} key to Firestore:`, err);
   }
@@ -696,7 +697,7 @@ Réponds UNIQUEMENT par un tableau JSON d'objets :
 
   try {
     const cleaned = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = safeJsonParse(cleaned, []);
+    const parsed = safeJsonParse<any>(cleaned, []);
     const events = Array.isArray(parsed) ? parsed : (parsed.events || []);
     return { success: true, events };
   } catch (_) {

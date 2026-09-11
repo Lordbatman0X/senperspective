@@ -347,7 +347,7 @@ export function ArticleEditorTab({
       try {
         const text = event.target?.result as string;
         if ((file.name ?? '').endsWith('.json')) {
-          const data = safeJsonParse(text, {});
+          const data = safeJsonParse<any>(text, {});
           if (data.title) {
             setTitleFr(data.title.fr || data.title || titleFr);
             setTitleEn(data.title.en || titleEn);

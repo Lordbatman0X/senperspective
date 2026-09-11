@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { fetchAllUsers, syncUserProfile } from '../../firebase/auth';
 import { hashPassword, stableUserId } from '../../lib/authCrypto';
+import { safeJsonParse } from '../../lib/apiUtils';
 
 export function SecurityTab() {
   const { language, siteSettings, updateSiteSettings, readerProfile, users: storeUsers, updateUserPassword, updateUserRole, deleteUser } = useStore();

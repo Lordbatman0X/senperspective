@@ -1,0 +1,61 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "articles": {
+      ".read": true
+    },
+    "comments": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "discussions": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "discussions_replies": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "users": {
+      ".read": true
+    },
+    "site_settings": {
+      ".read": true
+    },
+    "relations": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "blocks": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "messages": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "dispatches": {
+      ".read": "auth != null"
+    },
+    "analytics_archive": {
+      ".read": "auth != null"
+    },
+    "subscribers": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "reports": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "analytics_events": {
+      ".read": "auth != null",
+      ".write": true
+    },
+    "user_consents": {
+      ".read": "auth != null",
+      ".write": true
+    }
+  }
+}

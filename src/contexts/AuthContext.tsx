@@ -172,6 +172,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       useStore.setState({
         readerProfile: {
+          id: 'visiteur',
           name: 'Visiteur',
           email: '',
           avatarUrl: 'preset-neutral',

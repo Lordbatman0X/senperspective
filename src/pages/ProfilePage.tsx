@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { fetchUserProfile } from '../firebase/auth';
+import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
 import { saveFirestoreDoc, deleteFirestoreDoc, fetchFirestoreCollection } from '../firebase/db';
 import { 
   renderNeutralAvatar 

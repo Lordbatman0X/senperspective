@@ -1,26 +1,61 @@
 import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  limit,
-  onSnapshot,
-  serverTimestamp,
-  QuerySnapshot,
-  DocumentData,
+  ref,
+  get,
+  set,
+  update,
+  push,
+  remove,
+  onValue,
   Unsubscribe,
-} from 'firebase/firestore';
-import { db, auth } from './config';
+} from 'firebase/database';
+import { rtdb } from './config';
 import { handleFirestoreError, OperationType } from './errors';
 import { Article } from '../types';
 
+// -------------------------------------------------------------
+// TIMEOUT GUARD
+// Every network read/write races a short timeout so a slow or
+// unreachable backend can never freeze the first paint or login.
+// -------------------------------------------------------------
+export function withFirestoreTimeout<T>(promise: PromiseLike<T>, ms = 7000): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Database timeout after ${ms}ms`)), ms);
+    // Promise.resolve() accepts both native Promises and RTDB ThenableReferences
+    Promise.resolve(promise).then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
+// -------------------------------------------------------------
+// HELPERS
+// -------------------------------------------------------------
+/** RTDB rejects `undefined` values — strip them via a JSON round-trip. */
+function cleanForRtdb<T>(data: T): T {
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch {
+    return data;
+  }
+}
+
+/** Convert an RTDB object node ({key: value}) into an array with `id`. */
+function toList(val: any): any[] {
+  if (!val || typeof val !== 'object') return [];
+  return Object.entries(val).map(([id, data]) => ({
+    id,
+    ...(data && typeof data === 'object' ? data : { value: data }),
+  }));
+}
+
+function safeKey(id: string): string {
+  return String(id).replace(/[.#$/[\]]/g, '_');
+}
+
+// -------------------------------------------------------------
+// TYPES (kept for backward compatibility with existing imports)
+// -------------------------------------------------------------
 export interface FirestoreComment {
   id: string;
   articleId: string;
@@ -69,24 +104,24 @@ export interface FirestoreDirectMessage {
 // -------------------------------------------------------------
 // ARTICLES
 // -------------------------------------------------------------
+function sortByDateDesc(articles: Article[]): Article[] {
+  return [...articles].sort((a, b) => {
+    const da = new Date((a as any)?.date || (a as any)?.createdAt || 0).getTime() || 0;
+    const dbb = new Date((b as any)?.date || (b as any)?.createdAt || 0).getTime() || 0;
+    return dbb - da;
+  });
+}
 
 export function subscribeToArticles(
   callback: (articles: Article[]) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  const q = query(collection(db, 'articles'), orderBy('date', 'desc'), limit(100));
-  return onSnapshot(
-    q,
-    (snapshot: QuerySnapshot<DocumentData>) => {
-      const articles: Article[] = [];
-      snapshot.forEach(docSnap => {
-        const data = docSnap.data();
-        articles.push({
-          ...(data as Article),
-          id: docSnap.id,
-        });
-      });
-      callback(articles);
+  const articlesRef = ref(rtdb, 'articles');
+  return onValue(
+    articlesRef,
+    (snap) => {
+      const list = sortByDateDesc(toList(snap.val()) as Article[]).slice(0, 100);
+      callback(list);
     },
     (error) => {
       try {
@@ -100,16 +135,8 @@ export function subscribeToArticles(
 
 export async function fetchAllArticles(): Promise<Article[]> {
   try {
-    const q = query(collection(db, 'articles'), orderBy('date', 'desc'), limit(100));
-    const snapshot = await getDocs(q);
-    const articles: Article[] = [];
-    snapshot.forEach(docSnap => {
-      articles.push({
-        ...(docSnap.data() as Article),
-        id: docSnap.id,
-      });
-    });
-    return articles;
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')));
+    return sortByDateDesc(toList(snap.val()) as Article[]).slice(0, 100);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'articles');
   }
@@ -117,13 +144,14 @@ export async function fetchAllArticles(): Promise<Article[]> {
 
 export async function saveArticle(article: Article): Promise<void> {
   const articleId = article.id || `art-${Date.now()}`;
-  const docRef = doc(db, 'articles', articleId);
   try {
-    await setDoc(docRef, {
-      ...article,
-      id: articleId,
-      updatedAtServer: serverTimestamp(),
-    }, { merge: true });
+    await withFirestoreTimeout(
+      update(ref(rtdb, `articles/${safeKey(articleId)}`), {
+        ...cleanForRtdb(article),
+        id: articleId,
+        updatedAtServer: Date.now(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `articles/${articleId}`);
   }
@@ -131,9 +159,8 @@ export async function saveArticle(article: Article): Promise<void> {
 export const saveArticleToFirestore = saveArticle;
 
 export async function deleteArticle(articleId: string): Promise<void> {
-  const docRef = doc(db, 'articles', articleId);
   try {
-    await deleteDoc(docRef);
+    await withFirestoreTimeout(remove(ref(rtdb, `articles/${safeKey(articleId)}`)));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `articles/${articleId}`);
   }
@@ -143,39 +170,39 @@ export const deleteArticleFromFirestore = deleteArticle;
 // -------------------------------------------------------------
 // COMMENTS
 // -------------------------------------------------------------
-
 export function subscribeToComments(
   articleId: string,
-  callback: (comments: FirestoreComment[]) => void
+  callback: (comments: FirestoreComment[]) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, 'comments'),
-    where('articleId', '==', articleId),
-    orderBy('createdAt', 'desc')
-  );
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const list: FirestoreComment[] = [];
-      snapshot.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...(docSnap.data() as any) });
-      });
-      callback(list);
+  const commentsRef = ref(rtdb, 'comments');
+  return onValue(
+    commentsRef,
+    (snap) => {
+      const all = toList(snap.val()) as FirestoreComment[];
+      callback(all.filter(c => c?.articleId === articleId));
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, `comments?articleId=${articleId}`);
+      try {
+        handleFirestoreError(error, OperationType.GET, 'comments');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
     }
   );
 }
 
 export async function addComment(comment: Omit<FirestoreComment, 'id'>): Promise<string> {
   try {
-    const colRef = collection(db, 'comments');
-    const docRef = await addDoc(colRef, {
-      ...comment,
-      createdAtServer: serverTimestamp(),
-    });
-    return docRef.id;
+    const commentsRef = ref(rtdb, 'comments');
+    const docRef = await withFirestoreTimeout(push(commentsRef));
+    await withFirestoreTimeout(
+      set(docRef, {
+        ...cleanForRtdb(comment),
+        createdAtServer: Date.now(),
+      })
+    );
+    return docRef.key as string;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'comments');
   }
@@ -183,43 +210,51 @@ export async function addComment(comment: Omit<FirestoreComment, 'id'>): Promise
 
 export async function deleteComment(commentId: string): Promise<void> {
   try {
-    await deleteDoc(doc(db, 'comments', commentId));
+    await withFirestoreTimeout(remove(ref(rtdb, `comments/${safeKey(commentId)}`)));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `comments/${commentId}`);
   }
 }
 
 // -------------------------------------------------------------
-// DISCUSSIONS (L'Arène / Forum)
+// DISCUSSIONS
 // -------------------------------------------------------------
-
 export function subscribeToDiscussions(
-  callback: (discussions: FirestoreDiscussion[]) => void
+  callback: (discussions: FirestoreDiscussion[]) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
-  const q = query(collection(db, 'discussions'), orderBy('createdAt', 'desc'), limit(50));
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const list: FirestoreDiscussion[] = [];
-      snapshot.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...(docSnap.data() as any) });
-      });
+  const discussionsRef = ref(rtdb, 'discussions');
+  return onValue(
+    discussionsRef,
+    (snap) => {
+      const list = (toList(snap.val()) as FirestoreDiscussion[])
+        .sort((a, b) => new Date(b?.lastActivity || b?.createdAt || 0).getTime() - new Date(a?.lastActivity || a?.createdAt || 0).getTime());
       callback(list);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, 'discussions');
+      try {
+        handleFirestoreError(error, OperationType.GET, 'discussions');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
     }
   );
 }
 
 export async function createDiscussion(discussion: Omit<FirestoreDiscussion, 'id'>): Promise<string> {
   try {
-    const colRef = collection(db, 'discussions');
-    const docRef = await addDoc(colRef, {
-      ...discussion,
-      createdAtServer: serverTimestamp(),
-    });
-    return docRef.id;
+    const discussionsRef = ref(rtdb, 'discussions');
+    const docRef = await withFirestoreTimeout(push(discussionsRef));
+    await withFirestoreTimeout(
+      set(docRef, {
+        ...cleanForRtdb(discussion),
+        repliesCount: 0,
+        views: 0,
+        lastActivity: discussion.createdAt || new Date().toISOString(),
+        createdAtServer: Date.now(),
+      })
+    );
+    return docRef.key as string;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'discussions');
   }
@@ -227,67 +262,68 @@ export async function createDiscussion(discussion: Omit<FirestoreDiscussion, 'id
 
 export function subscribeToDiscussionReplies(
   discussionId: string,
-  callback: (replies: FirestoreDiscussionReply[]) => void
+  callback: (replies: FirestoreDiscussionReply[]) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, 'discussion_replies'),
-    where('discussionId', '==', discussionId),
-    orderBy('createdAt', 'asc')
-  );
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const list: FirestoreDiscussionReply[] = [];
-      snapshot.forEach(docSnap => {
-        list.push({ id: docSnap.id, ...(docSnap.data() as any) });
-      });
-      callback(list);
+  const repliesRef = ref(rtdb, 'discussion_replies');
+  return onValue(
+    repliesRef,
+    (snap) => {
+      const all = toList(snap.val()) as FirestoreDiscussionReply[];
+      const filtered = all
+        .filter(r => r?.discussionId === discussionId)
+        .sort((a, b) => new Date(a?.createdAt || 0).getTime() - new Date(b?.createdAt || 0).getTime());
+      callback(filtered);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, `discussion_replies?discussionId=${discussionId}`);
+      try {
+        handleFirestoreError(error, OperationType.GET, 'discussion_replies');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
     }
   );
 }
 
 export async function addDiscussionReply(reply: Omit<FirestoreDiscussionReply, 'id'>): Promise<string> {
   try {
-    const colRef = collection(db, 'discussion_replies');
-    const docRef = await addDoc(colRef, {
-      ...reply,
-      createdAtServer: serverTimestamp(),
-    });
-    // Update replies count in discussion
-    const discRef = doc(db, 'discussions', reply.discussionId);
-    await setDoc(discRef, { lastActivity: new Date().toISOString() }, { merge: true }).catch(() => {});
-    return docRef.id;
+    const repliesRef = ref(rtdb, 'discussion_replies');
+    const docRef = await withFirestoreTimeout(push(repliesRef));
+    await withFirestoreTimeout(
+      set(docRef, {
+        ...cleanForRtdb(reply),
+        createdAtServer: Date.now(),
+      })
+    );
+    // Best-effort: bump the parent discussion's activity counters
+    if (reply.discussionId) {
+      withFirestoreTimeout(
+        update(ref(rtdb, `discussions/${safeKey(reply.discussionId)}`), {
+          repliesCount: (n: any) => ((typeof n === 'number' ? n : 0) + 1),
+          lastActivity: new Date().toISOString(),
+        })
+      ).catch(() => {});
+    }
+    return docRef.key as string;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'discussion_replies');
   }
 }
 
 // -------------------------------------------------------------
-// DIRECT MESSAGES / CHAT
+// DIRECT MESSAGES
 // -------------------------------------------------------------
-
 export function subscribeToMessages(
   userEmail: string,
-  callback: (messages: FirestoreDirectMessage[]) => void
+  callback: (messages: FirestoreDirectMessage[]) => void,
+  onError?: (err: Error) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, 'messages'),
-    orderBy('timestamp', 'asc'),
-    limit(100)
-  );
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const list: FirestoreDirectMessage[] = [];
-      snapshot.forEach(docSnap => {
-        const msg = { id: docSnap.id, ...(docSnap.data() as any) };
-        if (msg.sender === userEmail || msg.receiver === userEmail) {
-          list.push(msg);
-        }
-      });
+  const messagesRef = ref(rtdb, 'messages');
+  return onValue(
+    messagesRef,
+    (snap) => {
+      const all = toList(snap.val()) as FirestoreDirectMessage[];
+      const list = all.filter(m => m?.sender === userEmail || m?.receiver === userEmail);
       callback(list);
     },
     (error) => {
@@ -298,13 +334,16 @@ export function subscribeToMessages(
 
 export async function sendDirectMessage(msg: Omit<FirestoreDirectMessage, 'id'>): Promise<string> {
   try {
-    const colRef = collection(db, 'messages');
-    const docRef = await addDoc(colRef, {
-      ...msg,
-      timestamp: msg.timestamp || Date.now(),
-      createdAtServer: serverTimestamp(),
-    });
-    return docRef.id;
+    const messagesRef = ref(rtdb, 'messages');
+    const docRef = await withFirestoreTimeout(push(messagesRef));
+    await withFirestoreTimeout(
+      set(docRef, {
+        ...cleanForRtdb(msg),
+        timestamp: msg.timestamp || Date.now(),
+        createdAtServer: Date.now(),
+      })
+    );
+    return docRef.key as string;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'messages');
   }
@@ -313,12 +352,11 @@ export async function sendDirectMessage(msg: Omit<FirestoreDirectMessage, 'id'>)
 // -------------------------------------------------------------
 // SITE SETTINGS
 // -------------------------------------------------------------
-
 export async function fetchSiteSettings(): Promise<any> {
   try {
-    const snap = await getDoc(doc(db, 'site_settings', 'global'));
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'site_settings/global')));
     if (snap.exists()) {
-      return snap.data();
+      return snap.val();
     }
     return null;
   } catch (error) {
@@ -328,10 +366,12 @@ export async function fetchSiteSettings(): Promise<any> {
 
 export async function updateSiteSettings(settings: any): Promise<void> {
   try {
-    await setDoc(doc(db, 'site_settings', 'global'), {
-      ...settings,
-      updatedAtServer: serverTimestamp(),
-    }, { merge: true });
+    await withFirestoreTimeout(
+      update(ref(rtdb, 'site_settings/global'), {
+        ...cleanForRtdb(settings),
+        updatedAtServer: Date.now(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'site_settings/global');
   }
@@ -340,31 +380,33 @@ export async function updateSiteSettings(settings: any): Promise<void> {
 // -------------------------------------------------------------
 // SUBSCRIBERS
 // -------------------------------------------------------------
-
 export async function addSubscriberEmail(email: string): Promise<void> {
   try {
-    const docRef = doc(db, 'subscribers', email.toLowerCase().trim());
-    await setDoc(docRef, {
-      email: email.toLowerCase().trim(),
-      subscribedAt: new Date().toISOString(),
-      createdAtServer: serverTimestamp(),
-    }, { merge: true });
+    const key = safeKey(email.toLowerCase().trim());
+    await withFirestoreTimeout(
+      set(ref(rtdb, `subscribers/${key}`), {
+        email: email.toLowerCase().trim(),
+        subscribedAt: new Date().toISOString(),
+        createdAtServer: Date.now(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `subscribers/${email}`);
   }
 }
 
 // -------------------------------------------------------------
-// GENERIC FIRESTORE HELPERS (Relations, Reports, Blocks, etc.)
+// GENERIC HELPERS (Relations, Reports, Blocks, Analytics, etc.)
 // -------------------------------------------------------------
-
 export async function saveFirestoreDoc(coll: string, id: string, data: any): Promise<void> {
   try {
-    const safeId = id.replace(/\//g, '_');
-    await setDoc(doc(db, coll, safeId), {
-      ...data,
-      updatedAtServer: serverTimestamp(),
-    }, { merge: true });
+    const pathId = safeKey(id);
+    await withFirestoreTimeout(
+      update(ref(rtdb, `${coll}/${pathId}`), {
+        ...cleanForRtdb(data),
+        updatedAtServer: Date.now(),
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${coll}/${id}`);
   }
@@ -372,8 +414,7 @@ export async function saveFirestoreDoc(coll: string, id: string, data: any): Pro
 
 export async function deleteFirestoreDoc(coll: string, id: string): Promise<void> {
   try {
-    const safeId = id.replace(/\//g, '_');
-    await deleteDoc(doc(db, coll, safeId));
+    await withFirestoreTimeout(remove(ref(rtdb, `${coll}/${safeKey(id)}`)));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${coll}/${id}`);
   }
@@ -381,10 +422,10 @@ export async function deleteFirestoreDoc(coll: string, id: string): Promise<void
 
 export async function fetchFirestoreCollection(coll: string): Promise<any[]> {
   try {
-    const snap = await getDocs(collection(db, coll));
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const snap = await withFirestoreTimeout(get(ref(rtdb, coll)));
+    return toList(snap.val());
   } catch (error) {
-    console.warn(`[Firestore] fetchFirestoreCollection ${coll} error:`, error);
+    console.warn(`[Firebase] fetchFirestoreCollection ${coll} error:`, error);
     return [];
   }
 }

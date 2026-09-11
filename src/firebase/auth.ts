@@ -8,9 +8,10 @@ import {
   updateProfile,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, getDocs, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from './config';
+import { ref, get, set as dbSet, update, remove } from 'firebase/database';
+import { auth, rtdb } from './config';
 import { handleFirestoreError, OperationType } from './errors';
+import { withFirestoreTimeout } from './db';
 
 export const BOOTSTRAP_ADMIN_EMAILS = [
   'admin@perspective.sn',
@@ -41,6 +42,11 @@ export interface AppUserProfile {
 
 const googleProvider = new GoogleAuthProvider();
 
+/** RTDB-safe key: these characters are forbidden in RTDB keys */
+const emailKey = (email: string): string => String(email || '').toLowerCase().trim().replace(/[.#$/[\]]/g, '_');
+/** RTDB rejects undefined values — strip them via a JSON round-trip */
+const stripUndefined = (obj: any) => JSON.parse(JSON.stringify(obj));
+
 export function isBootstrapAdmin(email?: string | null): boolean {
   if (!email) return false;
   return BOOTSTRAP_ADMIN_EMAILS.includes(email.toLowerCase().trim());
@@ -54,18 +60,18 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
   const email = (isFirebaseUser ? (userOrData as FirebaseUser).email : (userOrData as Partial<AppUserProfile>).email || '')?.toLowerCase().trim() || '';
   const uid = isFirebaseUser ? (userOrData as FirebaseUser).uid : (userOrData as Partial<AppUserProfile>).uid || email.replace(/[^a-zA-Z0-9_-]/g, '_');
   const isAdmin = isBootstrapAdmin(email);
-  const userDocRef = doc(db, 'users', uid);
 
   try {
-    const existingSnap = await getDoc(userDocRef);
+    // Timeout-guarded: a slow backend must never delay login (reads AND writes)
+    const existingSnap = await withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000).catch(() => null);
+    const data = existingSnap && existingSnap.exists() ? (existingSnap.val() as Partial<AppUserProfile>) : null;
     let profileData: AppUserProfile;
 
-    if (existingSnap.exists()) {
-      const data = existingSnap.data() as Partial<AppUserProfile>;
+    if (data) {
       profileData = {
         uid,
         email,
-        name: isFirebaseUser 
+        name: isFirebaseUser
           ? (data.name || (userOrData as FirebaseUser).displayName || extraName || email.split('@')[0])
           : (userOrData as Partial<AppUserProfile>).name || data.name || email.split('@')[0],
         role: isAdmin ? 'Admin' : ((userOrData as Partial<AppUserProfile>).role || data.role || 'Membre'),
@@ -80,12 +86,12 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         updatedAt: new Date().toISOString(),
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
-      await setDoc(userDocRef, { ...profileData, lastActive: serverTimestamp() }, { merge: true });
+      await withFirestoreTimeout(update(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, lastActive: Date.now() })), 5000).catch(() => {});
     } else {
       profileData = {
         uid,
         email,
-        name: isFirebaseUser 
+        name: isFirebaseUser
           ? ((userOrData as FirebaseUser).displayName || extraName || (isAdmin ? 'Kader S. Diaz' : email.split('@')[0]))
           : ((userOrData as Partial<AppUserProfile>).name || (isAdmin ? 'Kader S. Diaz' : email.split('@')[0])),
         role: isAdmin ? 'Admin' : ((userOrData as Partial<AppUserProfile>).role || 'Membre'),
@@ -100,24 +106,25 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         updatedAt: new Date().toISOString(),
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
-      await setDoc(userDocRef, { ...profileData, createdAtServer: serverTimestamp() }, { merge: true });
+      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, createdAtServer: Date.now() })), 5000).catch(() => {});
     }
 
-    // Also mirror to /users/{userEmail} so queries and rules support email lookup
+    // Mirror under sanitized email key so direct email lookups work
     if (email && email !== uid) {
-      const emailDocRef = doc(db, 'users', email);
-      await setDoc(emailDocRef, profileData, { merge: true }).catch(() => {});
+      await withFirestoreTimeout(update(ref(rtdb, `users/${emailKey(email)}`), stripUndefined(profileData)), 5000).catch(() => {});
     }
 
-    // If Admin, register in /admins/{uid} for Firestore security rules
+    // If Admin, register in /admins/{uid} for security rules
     if (isAdmin) {
-      const adminDocRef = doc(db, 'admins', uid);
-      await setDoc(adminDocRef, {
-        email,
-        uid,
-        name: profileData.name,
-        grantedAt: serverTimestamp(),
-      }, { merge: true }).catch(() => {});
+      await withFirestoreTimeout(
+        update(ref(rtdb, `admins/${uid}`), stripUndefined({
+          email,
+          uid,
+          name: profileData.name,
+          grantedAt: Date.now(),
+        })),
+        5000
+      ).catch(() => {});
     }
 
     return profileData;
@@ -133,17 +140,15 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
   if (!identifier) return null;
   const clean = identifier.trim();
   try {
-    // Try direct lookup
-    const docRef = doc(db, 'users', clean);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return snap.data() as AppUserProfile;
-    }
-    // Try by lowercase email
-    if (clean.includes('@')) {
-      const emailSnap = await getDoc(doc(db, 'users', clean.toLowerCase()));
-      if (emailSnap.exists()) {
-        return emailSnap.data() as AppUserProfile;
+    // Try raw key, lowercase key, and sanitized email key (timeout-guarded)
+    const tryKeys = [clean, clean.toLowerCase()];
+    if (clean.includes('@')) tryKeys.push(emailKey(clean));
+    for (const key of tryKeys) {
+      if (!key) continue;
+      const snap = await withFirestoreTimeout(get(ref(rtdb, `users/${key}`)), 5000).catch(() => null);
+      if (snap && snap.exists()) {
+        const val = snap.val() as AppUserProfile;
+        return { ...val, uid: val.uid || key };
       }
     }
     return null;
@@ -158,18 +163,19 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
  */
 export async function fetchAllUsers(): Promise<AppUserProfile[]> {
   try {
-    const colRef = collection(db, 'users');
-    const snap = await getDocs(colRef);
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')));
     const seen = new Set<string>();
     const users: AppUserProfile[] = [];
-    snap.docs.forEach(docSnap => {
-      const data = docSnap.data() as AppUserProfile;
-      const key = (data.email || docSnap.id).toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        users.push({ ...data, uid: data.uid || docSnap.id });
-      }
-    });
+    if (snap.exists() && typeof snap.val() === 'object') {
+      Object.entries(snap.val() as Record<string, any>).forEach(([key, data]) => {
+        const profile = (data || {}) as AppUserProfile;
+        const k = (profile.email || key).toLowerCase();
+        if (!seen.has(k)) {
+          seen.add(k);
+          users.push({ ...profile, uid: profile.uid || key });
+        }
+      });
+    }
     return users;
   } catch (err) {
     console.warn('[Firebase] Notice fetching all users:', err);
@@ -184,11 +190,15 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
   if (!emailOrUid) return;
   const clean = emailOrUid.trim();
   try {
-    await deleteDoc(doc(db, 'users', clean)).catch(() => {});
+    const targets = new Set<string>([clean]);
     if (clean.includes('@')) {
-      await deleteDoc(doc(db, 'users', clean.toLowerCase())).catch(() => {});
-      const safeId = clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
-      await deleteDoc(doc(db, 'users', safeId)).catch(() => {});
+      targets.add(clean.toLowerCase());
+      targets.add(emailKey(clean));
+      targets.add(clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_'));
+    }
+    for (const key of targets) {
+      if (!key) continue;
+      await withFirestoreTimeout(remove(ref(rtdb, `users/${key}`)), 5000).catch(() => {});
     }
   } catch (err) {
     console.warn('[Firebase] Notice deleting user profile:', err);
