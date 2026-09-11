@@ -18,7 +18,8 @@
       ".write": "auth != null"
     },
     "users": {
-      ".read": true
+      ".read": true,
+      ".write": "auth != null"
     },
     "site_settings": {
       ".read": true

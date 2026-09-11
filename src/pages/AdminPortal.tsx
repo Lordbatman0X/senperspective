@@ -229,7 +229,7 @@ export function AdminPortal() {
     } else {
       setError(
         language === 'fr' 
-          ? "Mot de passe incorrect ou nom d'utilisateur non autorisÃ©." 
+          ? "Mot de passe incorrect ou nom d'utilisateur non autorisé." 
           : "Invalid password or unauthorized username."
       );
     }
@@ -256,7 +256,7 @@ export function AdminPortal() {
               </span>
             </div>
             <p className="text-[10px] font-bold tracking-[0.25em] text-zinc-400 uppercase text-center mt-4">
-              {language === 'fr' ? 'Espace RÃ©daction (Admin)' : 'Editorial Workspace (Admin)'}
+              {language === 'fr' ? 'Espace Rédaction (Admin)' : 'Editorial Workspace (Admin)'}
             </p>
           </div>
           
@@ -339,7 +339,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     paywallThreshold: 9999,
     paywallEnabled: false,
     cookieConsentEnabled: true,
-    privacyPolicyTextFr: "Perspective Group traite les donnÃ©es de ses lecteurs (compte, newsletter, commentaires) conformÃ©ment au RÃ¨glement GÃ©nÃ©ral sur la Protection des DonnÃ©es (RGPD) et aux lois sÃ©nÃ©galaises sur les donnÃ©es personnelles. Vos donnÃ©es ne sont jamais cÃ©dÃ©es Ã  des tiers.",
+    privacyPolicyTextFr: "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.",
     privacyPolicyTextEn: "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.",
     dataRetentionDays: 365,
     fontPairing: 'modern',
@@ -348,8 +348,8 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     aiModelMode: 'flash',
     seoTitleSuffix: '| Perspective Group Dakar',
     seoCanonicalBase: 'https://perspective.sn',
-    seoDefaultDesc: "Journal d'information indÃ©pendant depuis Dakar. Analyses stratÃ©giques de l'actualitÃ© politique et socio-Ã©conomique ouest-africaine.",
-    seoDefaultKeywords: "SÃ©nÃ©gal, Dakar, Perspective Group, L'ArÃ¨ne, politique, gÃ©opolitique, Ã©conomie, afrique",
+    seoDefaultDesc: "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.",
+    seoDefaultKeywords: "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique",
     seoOgImage: "https://perspective.sn/og-preview.jpg",
     seoRobotsIndex: "index, follow, max-image-preview:large",
     seoGoogleSiteVerification: "",
@@ -438,8 +438,8 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   // SEO Form States
   const [seoTitleSuffix, setSeoTitleSuffix] = useState(currentSettings.seoTitleSuffix !== undefined ? currentSettings.seoTitleSuffix : '| Perspective Group Dakar');
   const [seoCanonicalBase, setSeoCanonicalBase] = useState(currentSettings.seoCanonicalBase !== undefined ? currentSettings.seoCanonicalBase : 'https://perspective.sn');
-  const [seoDefaultDesc, setSeoDefaultDesc] = useState(currentSettings.seoDefaultDesc !== undefined ? currentSettings.seoDefaultDesc : "Journal d'information indÃ©pendant depuis Dakar. Analyses stratÃ©giques de l'actualitÃ© politique et socio-Ã©conomique ouest-africaine.");
-  const [seoKeywords, setSeoKeywords] = useState(currentSettings.seoDefaultKeywords !== undefined ? currentSettings.seoDefaultKeywords : "SÃ©nÃ©gal, Dakar, Perspective Group, L'ArÃ¨ne, politique, gÃ©opolitique, Ã©conomie, afrique");
+  const [seoDefaultDesc, setSeoDefaultDesc] = useState(currentSettings.seoDefaultDesc !== undefined ? currentSettings.seoDefaultDesc : "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+  const [seoKeywords, setSeoKeywords] = useState(currentSettings.seoDefaultKeywords !== undefined ? currentSettings.seoDefaultKeywords : "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
   const [seoOgImage, setSeoOgImage] = useState(currentSettings.seoOgImage !== undefined ? currentSettings.seoOgImage : "https://perspective.sn/og-preview.jpg");
   const [seoRobotsIndex, setSeoRobotsIndex] = useState(currentSettings.seoRobotsIndex !== undefined ? currentSettings.seoRobotsIndex : "index, follow, max-image-preview:large");
   const [seoGoogleVerification, setSeoGoogleVerification] = useState(currentSettings.seoGoogleSiteVerification !== undefined ? currentSettings.seoGoogleSiteVerification : "");
@@ -452,7 +452,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
   // Privacy & Personal Data Form States
   const [cookieConsentEnabled, setCookieConsentEnabled] = useState(currentSettings.cookieConsentEnabled !== false);
-  const [privacyPolicyTextFr, setPrivacyPolicyTextFr] = useState(currentSettings.privacyPolicyTextFr !== undefined ? currentSettings.privacyPolicyTextFr : "Perspective Group traite les donnÃ©es de ses lecteurs (compte, newsletter, commentaires) conformÃ©ment au RÃ¨glement GÃ©nÃ©ral sur la Protection des DonnÃ©es (RGPD) et aux lois sÃ©nÃ©galaises sur les donnÃ©es personnelles. Vos donnÃ©es ne sont jamais cÃ©dÃ©es Ã  des tiers.");
+  const [privacyPolicyTextFr, setPrivacyPolicyTextFr] = useState(currentSettings.privacyPolicyTextFr !== undefined ? currentSettings.privacyPolicyTextFr : "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.");
   const [privacyPolicyTextEn, setPrivacyPolicyTextEn] = useState(currentSettings.privacyPolicyTextEn !== undefined ? currentSettings.privacyPolicyTextEn : "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.");
   const [dataRetentionDays, setDataRetentionDays] = useState(currentSettings.dataRetentionDays || 365);
 
@@ -473,15 +473,15 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       setSettingsPaywallEnabled(siteSettings.paywallEnabled !== false);
       setSeoTitleSuffix(siteSettings.seoTitleSuffix !== undefined ? siteSettings.seoTitleSuffix : '| Perspective Group Dakar');
       setSeoCanonicalBase(siteSettings.seoCanonicalBase !== undefined ? siteSettings.seoCanonicalBase : 'https://perspective.sn');
-      setSeoDefaultDesc(siteSettings.seoDefaultDesc !== undefined ? siteSettings.seoDefaultDesc : "Journal d'information indÃ©pendant depuis Dakar. Analyses stratÃ©giques de l'actualitÃ© politique et socio-Ã©conomique ouest-africaine.");
-      setSeoKeywords(siteSettings.seoDefaultKeywords !== undefined ? siteSettings.seoDefaultKeywords : "SÃ©nÃ©gal, Dakar, Perspective Group, L'ArÃ¨ne, politique, gÃ©opolitique, Ã©conomie, afrique");
+      setSeoDefaultDesc(siteSettings.seoDefaultDesc !== undefined ? siteSettings.seoDefaultDesc : "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
+      setSeoKeywords(siteSettings.seoDefaultKeywords !== undefined ? siteSettings.seoDefaultKeywords : "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
       setSeoOgImage(siteSettings.seoOgImage !== undefined ? siteSettings.seoOgImage : "https://perspective.sn/og-preview.jpg");
       setSeoRobotsIndex(siteSettings.seoRobotsIndex !== undefined ? siteSettings.seoRobotsIndex : "index, follow, max-image-preview:large");
       setSeoGoogleVerification(siteSettings.seoGoogleSiteVerification !== undefined ? siteSettings.seoGoogleSiteVerification : "");
       setSettingsAIExecutionMode(siteSettings.aiModelMode || 'flash');
       setSettingsDatabaseProvider(siteSettings.databaseProvider || 'firestore');
       setCookieConsentEnabled(siteSettings.cookieConsentEnabled !== false);
-      setPrivacyPolicyTextFr(siteSettings.privacyPolicyTextFr || "Perspective Group traite les donnÃ©es de ses lecteurs (compte, newsletter, commentaires) conformÃ©ment au RÃ¨glement GÃ©nÃ©ral sur la Protection des DonnÃ©es (RGPD) et aux lois sÃ©nÃ©galaises sur les donnÃ©es personnelles. Vos donnÃ©es ne sont jamais cÃ©dÃ©es Ã  des tiers.");
+      setPrivacyPolicyTextFr(siteSettings.privacyPolicyTextFr || "Perspective Group traite les données de ses lecteurs (compte, newsletter, commentaires) conformément au Règlement Général sur la Protection des Données (RGPD) et aux lois sénégalaises sur les données personnelles. Vos données ne sont jamais cédées à des tiers.");
       setPrivacyPolicyTextEn(siteSettings.privacyPolicyTextEn || "Perspective Group processes reader data (accounts, newsletters, comments) in strict compliance with GDPR and Senegalese data protection legislation. Your personal data is never sold or shared with third parties.");
       setDataRetentionDays(siteSettings.dataRetentionDays || 365);
       
@@ -642,25 +642,25 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     });
 
     if (testArts.length === 0) {
-      alert(language === 'fr' ? 'Pipeline rÃ©initialisÃ© ! Aucun article de test supplÃ©mentaire en attente.' : 'Pipeline reset! No test articles found.');
+      alert(language === 'fr' ? 'Pipeline réinitialisé ! Aucun article de test supplémentaire en attente.' : 'Pipeline reset! No test articles found.');
       return;
     }
 
     testArts.forEach(a => deleteArticle(a.id));
     alert(language === 'fr' 
-      ? `Pipeline rÃ©initialisÃ© et ${testArts.length} article(s) de test supprimÃ©(s) avec succÃ¨s !`
+      ? `Pipeline réinitialisé et ${testArts.length} article(s) de test supprimé(s) avec succès !`
       : `Pipeline reset and ${testArts.length} test article(s) purged successfully!`);
   };
 
   const handlePurgeAllArticles = async () => {
     if (!confirm(language === 'fr' 
-      ? 'ÃŠtes-vous SÃ›R de vouloir PURGER TOUS LES ARTICLES (brouillons et publiÃ©s) ? Cette action est irrÃ©versible.' 
+      ? 'Êtes-vous SÛR de vouloir PURGER TOUS LES ARTICLES (brouillons et publiés) ? Cette action est irréversible.' 
       : 'Are you SURE you want to PURGE ALL ARTICLES (drafts and live)? This action cannot be undone.')) {
       return;
     }
     await purgeAllArticles();
     setEditingArticle(null);
-    showToast(language === 'fr' ? 'Tous les articles (brouillons et publiÃ©s) ont Ã©tÃ© purgÃ©s avec succÃ¨s !' : 'All articles (drafts and live) purged successfully!');
+    showToast(language === 'fr' ? 'Tous les articles (brouillons et publiés) ont été purgés avec succès !' : 'All articles (drafts and live) purged successfully!');
   };
 
   const handleSaveArticle = async (saved: Article) => {
@@ -694,25 +694,25 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const menuItems = [
     { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
     { id: 'list', label: language === 'fr' ? 'Gestion des Contenus' : 'Content & RSS Suite', icon: FileText, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
-    { id: 'taxonomy', label: language === 'fr' ? 'CatÃ©gories & Taxonomie' : 'Categories & Taxonomy', icon: Tag, badge: 0 },
+    { id: 'taxonomy', label: language === 'fr' ? 'Catégories & Taxonomie' : 'Categories & Taxonomy', icon: Tag, badge: 0 },
     { id: 'flashes_curation', label: language === 'fr' ? 'Flashes, International & Sagesse' : 'Flashes, News & Wisdom', icon: Bell, badge: 0 },
-    { id: 'homepage_curation', label: language === 'fr' ? 'Curation Page dâ€™accueil' : 'Homepage Curation', icon: Home, badge: 0 },
-    { id: 'media', label: language === 'fr' ? 'BibliothÃ¨que MÃ©dia' : 'Media Library', icon: ImageIcon, badge: 0 },
-    { id: 'matches', label: language === 'fr' ? 'Lâ€™ArÃ¨ne (Sports)' : 'Lâ€™ArÃ¨ne (Sports)', icon: Trophy, badge: 0 },
-    { id: 'comments', label: language === 'fr' ? 'CommunautÃ© & ModÃ©ration' : 'Community & Comments', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
-    { id: 'audience', label: language === 'fr' ? 'Analyses dâ€™Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
-    { id: 'subscribers', label: language === 'fr' ? 'Newsletters & AbonnÃ©s' : 'Newsletters & Subscribers', icon: Mail, badge: subscribers?.length || 0 },
-    { id: 'google_integrations', label: language === 'fr' ? 'IntÃ©grations Google' : 'Google Hub', icon: Zap, badge: 0 },
-    { id: 'ads', label: language === 'fr' ? 'MonÃ©tisation & PublicitÃ©' : 'Monetization & Ads', icon: DollarSign, badge: 0 },
+    { id: 'homepage_curation', label: language === 'fr' ? 'Curation Page d’accueil' : 'Homepage Curation', icon: Home, badge: 0 },
+    { id: 'media', label: language === 'fr' ? 'Bibliothèque Média' : 'Media Library', icon: ImageIcon, badge: 0 },
+    { id: 'matches', label: language === 'fr' ? 'L’Arène (Sports)' : 'L’Arène (Sports)', icon: Trophy, badge: 0 },
+    { id: 'comments', label: language === 'fr' ? 'Communauté & Modération' : 'Community & Comments', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
+    { id: 'audience', label: language === 'fr' ? 'Analyses d’Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
+    { id: 'subscribers', label: language === 'fr' ? 'Newsletters & Abonnés' : 'Newsletters & Subscribers', icon: Mail, badge: subscribers?.length || 0 },
+    { id: 'google_integrations', label: language === 'fr' ? 'Intégrations Google' : 'Google Hub', icon: Zap, badge: 0 },
+    { id: 'ads', label: language === 'fr' ? 'Monétisation & Publicité' : 'Monetization & Ads', icon: DollarSign, badge: 0 },
     { id: 'customizer', label: language === 'fr' ? 'Apparence & Style' : 'Appearance & Style', icon: Palette, badge: 0 },
     { id: 'navigation', label: language === 'fr' ? 'Navigation & Menus' : 'Menu Navigation', icon: Compass, badge: 0 },
     { id: 'seo_distribution', label: language === 'fr' ? 'SEO & Distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
     { id: 'abdel_chat_config', label: language === 'fr' ? 'Assistant Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
-    { id: 'security', label: language === 'fr' ? 'SÃ©curitÃ© & AccÃ¨s' : 'Security & Access', icon: ShieldCheck, badge: 0 },
+    { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Access', icon: ShieldCheck, badge: 0 },
     { id: 'accounts', label: language === 'fr' ? 'Gestion des Comptes' : 'Account Management', icon: UserCog, badge: 0 },
-    { id: 'admin_dashboard', label: language === 'fr' ? 'Base de DonnÃ©es (MongoDB)' : 'Database Manager', icon: Database, badge: 0 },
-    { id: 'settings', label: language === 'fr' ? 'ParamÃ¨tres Globaux' : 'Global Settings', icon: Settings, badge: 0 },
-    { id: 'activity_log', label: language === 'fr' ? 'Journal dâ€™activitÃ©' : 'Activity Logs', icon: History, badge: 0 },
+    { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données (MongoDB)' : 'Database Manager', icon: Database, badge: 0 },
+    { id: 'settings', label: language === 'fr' ? 'Paramètres Globaux' : 'Global Settings', icon: Settings, badge: 0 },
+    { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
   ] as const;
 
   return (
@@ -720,7 +720,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 bg-orange-600 text-white px-5 py-3 shadow-2xl font-mono text-xs font-black uppercase tracking-widest border border-white/20 transition-all duration-300 ease-in-out">
-          âœ“ {toastMessage}
+          ✓ {toastMessage}
         </div>
       )}
 
@@ -828,7 +828,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             onClick={onLogout}
             className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-bold uppercase tracking-wider text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition-all cursor-pointer rounded-lg"
           >
-            <LogOut size={16} /> {language === 'fr' ? 'DÃ©connexion' : 'Logout'}
+            <LogOut size={16} /> {language === 'fr' ? 'Déconnexion' : 'Logout'}
           </button>
         </div>
       </aside>
@@ -855,7 +855,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   siteSettings?.isMaintenanceMode === true ? 'text-amber-300' : 'text-emerald-400'
                 }`}>
                   {siteSettings?.isMaintenanceMode === true 
-                    ? (language === 'fr' ? 'MODE MAINTENANCE : ACTIF (SITE PRIVÃ‰)' : 'MAINTENANCE MODE: ACTIVE (SITE PRIVATE)')
+                    ? (language === 'fr' ? 'MODE MAINTENANCE : ACTIF (SITE PRIVÉ)' : 'MAINTENANCE MODE: ACTIVE (SITE PRIVATE)')
                     : (language === 'fr' ? 'STATUT DU SITE : EN LIGNE (PUBLIC)' : 'SITE STATUS: ONLINE (PUBLIC)')}
                 </span>
                 <span className={`text-[9px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
@@ -872,7 +872,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       ? 'Le site senperspective.com affiche la page de maintenance aux visiteurs. Seul l\'Espace Admin est accessible.' 
                       : 'The site displays the maintenance page to public visitors. Only Admin Portal is accessible.')
                   : (language === 'fr' 
-                      ? 'Le site est ouvert et accessible Ã  tous les visiteurs publics.' 
+                      ? 'Le site est ouvert et accessible à tous les visiteurs publics.' 
                       : 'The website is currently open and accessible to all public visitors.')}
               </p>
             </div>
@@ -888,7 +888,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           >
             <span>
               {siteSettings?.isMaintenanceMode === true 
-                ? (language === 'fr' ? 'RÃ‰OUVRIR LE SITE (EN LIGNE)' : 'RE-OPEN SITE (GO LIVE)')
+                ? (language === 'fr' ? 'RÉOUVRIR LE SITE (EN LIGNE)' : 'RE-OPEN SITE (GO LIVE)')
                 : (language === 'fr' ? 'PASSER EN MODE MAINTENANCE' : 'ENABLE MAINTENANCE MODE')}
             </span>
           </button>
@@ -977,7 +977,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
             <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
               <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">
-                {language === 'fr' ? 'Curation Page dâ€™Accueil' : 'Homepage Curation'}
+                {language === 'fr' ? 'Curation Page d’Accueil' : 'Homepage Curation'}
               </h2>
               <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Curate spotlight features, select visual themes & toggle columns</p>
             </div>
@@ -996,7 +996,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5 text-zinc-400">Couleur dâ€™Accents / Theme Accent Color</label>
+                  <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5 text-zinc-400">Couleur d’Accents / Theme Accent Color</label>
                   <div className="flex items-center gap-2">
                     <input 
                       type="color" 
@@ -1036,14 +1036,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </select>
                 <p className="text-[10px] text-zinc-400 font-mono mt-1">
                   {language === 'fr' 
-                    ? "* Cet article sera mis en Ã©vidence dans le grand carrousel de la page d'accueil."
+                    ? "* Cet article sera mis en évidence dans le grand carrousel de la page d'accueil."
                     : "* This article will be set as a priority spotlight item in the hero carousel."}
                 </p>
               </div>
 
               {/* Header Style */}
               <div>
-                <h3 className="text-xs font-black uppercase tracking-widest mb-2 text-zinc-400">2. Style d'En-tÃªte de la Page</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest mb-2 text-zinc-400">2. Style d'En-tête de la Page</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {[
                     { id: 'glass', title: language === 'fr' ? 'Verre Translucide' : 'Translucent Glass', desc: 'Maximise transparency & subtle blurs' },
@@ -1072,7 +1072,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   </h3>
                   <p className="text-xs text-brand-muted font-mono mt-1">
                     {language === 'fr'
-                      ? "Associez chaque zone Ã  un match de Sports ou Ã  une analyse sportive. Glissez ou remplacez le contenu instantanÃ©ment."
+                      ? "Associez chaque zone à un match de Sports ou à une analyse sportive. Glissez ou remplacez le contenu instantanément."
                       : "Map each zone to a specific Sports match outcome or custom sports story analysis."}
                   </p>
                 </div>
@@ -1096,7 +1096,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       onChange={(e) => setQuadZone1Id(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-bold text-brand-dark dark:text-brand-white"
                     >
-                      <option value="">{language === 'fr' ? 'SÃ©lection automatique (Prioritaire)' : 'Auto selection (Priority)'}</option>
+                      <option value="">{language === 'fr' ? 'Sélection automatique (Prioritaire)' : 'Auto selection (Priority)'}</option>
                       {quadZone1Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
@@ -1131,7 +1131,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       onChange={(e) => setQuadZone2Id(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-bold text-brand-dark dark:text-brand-white"
                     >
-                      <option value="">{language === 'fr' ? 'SÃ©lection automatique' : 'Auto selection'}</option>
+                      <option value="">{language === 'fr' ? 'Sélection automatique' : 'Auto selection'}</option>
                       {quadZone2Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
@@ -1166,7 +1166,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       onChange={(e) => setQuadZone3Id(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-bold text-brand-dark dark:text-brand-white"
                     >
-                      <option value="">{language === 'fr' ? 'SÃ©lection automatique' : 'Auto selection'}</option>
+                      <option value="">{language === 'fr' ? 'Sélection automatique' : 'Auto selection'}</option>
                       {quadZone3Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
@@ -1201,7 +1201,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       onChange={(e) => setQuadZone4Id(e.target.value)}
                       className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2 text-xs font-bold text-brand-dark dark:text-brand-white"
                     >
-                      <option value="">{language === 'fr' ? 'SÃ©lection automatique' : 'Auto selection'}</option>
+                      <option value="">{language === 'fr' ? 'Sélection automatique' : 'Auto selection'}</option>
                       {quadZone4Type === 'match' ? (
                         matches.map(m => (
                           <option key={m.id} value={m.id}>
@@ -1223,7 +1223,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 <div className="p-4 border border-brand-border/20 bg-zinc-500/5 font-sans">
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
-                      {language === 'fr' ? `AperÃ§u interactif (${viewportPreview})` : `Interactive Live Mock Preview (${viewportPreview})`}
+                      {language === 'fr' ? `Aperçu interactif (${viewportPreview})` : `Interactive Live Mock Preview (${viewportPreview})`}
                     </span>
                     <div className="flex gap-1.5">
                       <button 
@@ -1247,7 +1247,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <div className="grid grid-cols-12 gap-3 text-white text-[10px] select-none">
                       <div className="col-span-6 bg-emerald-950/80 border border-emerald-800 p-3 flex flex-col justify-between h-28">
                         <div className="flex justify-between text-[8px] font-bold text-emerald-400">
-                          <span>ZONE 1 â€¢ MAIN EVENT</span>
+                          <span>ZONE 1 • MAIN EVENT</span>
                           <span>{quadZone1Type.toUpperCase()}</span>
                         </div>
                         <div className="font-extrabold text-xs text-center truncate">
@@ -1337,7 +1337,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       }
                     });
 
-                    showToast(language === 'fr' ? 'Configuration dâ€™accueil et quadrant de sports sauvegardÃ©s !' : 'Homepage layout & sports quadrant curation updated successfully!');
+                    showToast(language === 'fr' ? 'Configuration d’accueil et quadrant de sports sauvegardés !' : 'Homepage layout & sports quadrant curation updated successfully!');
                   }}
                   className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer" 
                   style={{ backgroundColor: curationAccentColor }}
@@ -1352,10 +1352,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               <div className="flex items-center justify-between border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-wider text-brand-dark dark:text-brand-white">
-                    {language === 'fr' ? 'Carte de ContrÃ´le des Modules de la Barre LatÃ©rale' : 'Sidebar Modules Control Map'}
+                    {language === 'fr' ? 'Carte de Contrôle des Modules de la Barre Latérale' : 'Sidebar Modules Control Map'}
                   </h3>
                   <p className="text-[10px] text-brand-muted font-mono uppercase mt-0.5">
-                    {language === 'fr' ? 'Emplacements et accÃ¨s rapide aux rÃ©glages de la colonne de droite' : 'Layout locations and quick access to right sidebar settings'}
+                    {language === 'fr' ? 'Emplacements et accès rapide aux réglages de la colonne de droite' : 'Layout locations and quick access to right sidebar settings'}
                   </p>
                 </div>
               </div>
@@ -1370,13 +1370,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 border border-emerald-800">ACTIF SUR SITE</span>
                   </div>
                   <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    PositionnÃ© directement sous la section <strong>Tendances</strong>. Affiche les alertes en temps rÃ©el et dÃ©pÃªches d'analystes.
+                    Positionné directement sous la section <strong>Tendances</strong>. Affiche les alertes en temps réel et dépêches d'analystes.
                   </p>
                   <button 
                     onClick={() => setActiveTab('live_alerts')}
                     className="mt-2 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 bg-[#E85D42] text-white hover:bg-[#c94931] cursor-pointer transition-all"
                   >
-                    GÃ©rer les Flashes â†’ (Direct et Alertes)
+                    Gérer les Flashes → (Direct et Alertes)
                   </button>
                 </div>
 
@@ -1389,32 +1389,32 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 border border-emerald-800">ACTIF SUR SITE</span>
                   </div>
                   <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    DÃ©pÃªches et synthÃ¨ses internationales synthÃ©tiques avec horaires GMT et Ã©tiquettes thÃ©matiques.
+                    Dépêches et synthèses internationales synthétiques avec horaires GMT et étiquettes thématiques.
                   </p>
                   <button 
                     onClick={() => setActiveTab('customizer')}
                     className="mt-2 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer transition-all border border-zinc-700"
                   >
-                    GÃ©rer "Le Monde" â†’ (Apparence)
+                    Gérer "Le Monde" → (Apparence)
                   </button>
                 </div>
 
-                {/* Module 3: Ports & MÃ©tÃ©o Dakar */}
+                {/* Module 3: Ports & Météo Dakar */}
                 <div className="p-4 bg-zinc-900/60 border border-zinc-800 space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="font-extrabold text-[#E85D42] uppercase text-[11px] flex items-center gap-1.5">
-                      <Ship size={13} /> 3. Ports & MÃ©tÃ©o Dakar
+                      <Ship size={13} /> 3. Ports & Météo Dakar
                     </span>
                     <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 border border-emerald-800">ACTIF SUR SITE</span>
                   </div>
                   <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    Affichage maritime : MarÃ©e du port de Dakar, navettes GorÃ©e, tempÃ©rature et avis de vent.
+                    Affichage maritime : Marée du port de Dakar, navettes Gorée, température et avis de vent.
                   </p>
                   <button 
                     onClick={() => setActiveTab('customizer')}
                     className="mt-2 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer transition-all border border-zinc-700"
                   >
-                    GÃ©rer Ports & MÃ©tÃ©o â†’ (Apparence)
+                    Gérer Ports & Météo → (Apparence)
                   </button>
                 </div>
 
@@ -1427,13 +1427,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 border border-emerald-800">ACTIF SUR SITE</span>
                   </div>
                   <p className="text-zinc-400 text-[11px] leading-relaxed">
-                    Proverbe Wolof quotidien avec traductions bilingues FR/EN et crÃ©dit de source.
+                    Proverbe Wolof quotidien avec traductions bilingues FR/EN et crédit de source.
                   </p>
                   <button 
                     onClick={() => setActiveTab('customizer')}
                     className="mt-2 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white cursor-pointer transition-all border border-zinc-700"
                   >
-                    GÃ©rer le Proverbe â†’ (Apparence)
+                    Gérer le Proverbe → (Apparence)
                   </button>
                 </div>
               </div>
@@ -1457,16 +1457,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             </div>
 
             <div className="glass p-6 border border-brand-border/10 bg-brand-white/40 dark:bg-zinc-900/40 space-y-4">
-              <h3 className="text-xs font-black uppercase tracking-widest mb-3 text-[#E85D42]" style={{ color: currentSettings.accentColor }}>HiÃ©rarchie des Menus Actuels</h3>
+              <h3 className="text-xs font-black uppercase tracking-widest mb-3 text-[#E85D42]" style={{ color: currentSettings.accentColor }}>Hiérarchie des Menus Actuels</h3>
               <div className="space-y-2 border border-brand-border/10 p-4 bg-zinc-500/5">
                 {[
-                  { label: 'Ã€ la une (Home)', type: 'SystÃ¨me' },
-                  { label: 'SÃ©nÃ©gal', type: 'CatÃ©gorie dynamique' },
-                  { label: 'Politique', type: 'CatÃ©gorie dynamique' },
-                  { label: 'Ã‰conomie', type: 'CatÃ©gorie dynamique' },
-                  { label: 'Sports', type: 'Module customisÃ©' },
-                  { label: 'SociÃ©tÃ©', type: 'CatÃ©gorie dynamique' },
-                  { label: 'Opinions (Plus)', type: 'CatÃ©gorie dynamique' }
+                  { label: 'À la une (Home)', type: 'Système' },
+                  { label: 'Sénégal', type: 'Catégorie dynamique' },
+                  { label: 'Politique', type: 'Catégorie dynamique' },
+                  { label: 'Économie', type: 'Catégorie dynamique' },
+                  { label: 'Sports', type: 'Module customisé' },
+                  { label: 'Société', type: 'Catégorie dynamique' },
+                  { label: 'Opinions (Plus)', type: 'Catégorie dynamique' }
                 ].map((menu, idx) => (
                   <div key={menu.label} className="flex justify-between items-center p-2.5 bg-brand-white/60 dark:bg-zinc-900/60 border border-brand-border/20 text-xs font-bold">
                     <span className="flex items-center gap-2">
@@ -1481,7 +1481,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               <div className="pt-4 border-t border-zinc-200/10">
                 <button 
                   onClick={() => {
-                    showToast(language === 'fr' ? 'Structure de menu publiÃ©e aux serveurs CDN !' : 'Menu layout successfully published to CDN nodes!');
+                    showToast(language === 'fr' ? 'Structure de menu publiée aux serveurs CDN !' : 'Menu layout successfully published to CDN nodes!');
                   }}
                   className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer" 
                   style={{ backgroundColor: currentSettings.accentColor }}
@@ -1515,7 +1515,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             <div className="glass p-6 border border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 space-y-6 rounded-xl">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Suffixe de Titre MÃ©tadonnÃ©e / SEO Title Suffix</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Suffixe de Titre Métadonnée / SEO Title Suffix</label>
                   <input 
                     type="text" 
                     value={seoTitleSuffix}
@@ -1535,7 +1535,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Description Par DÃ©faut (OpenGraph & Search Excerpt)</label>
+                <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Description Par Défaut (OpenGraph & Search Excerpt)</label>
                 <textarea 
                   value={seoDefaultDesc}
                   onChange={(e) => setSeoDefaultDesc(e.target.value)}
@@ -1545,17 +1545,17 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Mots-clÃ©s SEO (SÃ©parÃ©s par des virgules)</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Mots-clés SEO (Séparés par des virgules)</label>
                   <input 
                     type="text" 
                     value={seoKeywords}
                     onChange={(e) => setSeoKeywords(e.target.value)}
-                    placeholder="SÃ©nÃ©gal, Dakar, politique, gÃ©opolitique, Ã©conomie..."
+                    placeholder="Sénégal, Dakar, politique, géopolitique, économie..."
                     className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Image OpenGraph Par DÃ©faut (Social Banner URL)</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider mb-1 text-zinc-700 dark:text-zinc-200">Image OpenGraph Par Défaut (Social Banner URL)</label>
                   <input 
                     type="text" 
                     value={seoOgImage}
@@ -1574,7 +1574,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     onChange={(e) => setSeoRobotsIndex(e.target.value)}
                     className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-2.5 text-xs font-mono font-bold outline-none text-zinc-900 dark:text-zinc-100 focus:border-[#E85D42] rounded-lg" 
                   >
-                    <option value="index, follow, max-image-preview:large">AUTORISER TOUT (index, follow - RecommandÃ©)</option>
+                    <option value="index, follow, max-image-preview:large">AUTORISER TOUT (index, follow - Recommandé)</option>
                     <option value="noindex, nofollow">BLOQUER LES ROBOTS (noindex, nofollow)</option>
                     <option value="noindex, follow">NE PAS INDEXER MAIS SUIVRE LES LIENS (noindex, follow)</option>
                   </select>
@@ -1595,7 +1595,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-zinc-100 dark:bg-zinc-950/80 border border-zinc-200 dark:border-zinc-800 rounded-xl space-y-3">
                   <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-400 block">
-                    {language === 'fr' ? 'AperÃ§u Carte OpenGraph / Twitter & LinkedIn' : 'OpenGraph / Social Media Card Preview'}
+                    {language === 'fr' ? 'Aperçu Carte OpenGraph / Twitter & LinkedIn' : 'OpenGraph / Social Media Card Preview'}
                   </span>
                   
                   <div className="border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg overflow-hidden shadow-sm">
@@ -1612,7 +1612,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <div className="p-3 space-y-1 bg-zinc-900 text-white">
                       <span className="text-[10px] font-mono text-zinc-400 uppercase">perspective.sn</span>
                       <h4 className="text-xs font-bold text-white truncate">
-                        L'Ã‰conomie SÃ©nÃ©galaise & GÃ©opolitique du Sahel {seoTitleSuffix}
+                        L'Économie Sénégalaise & Géopolitique du Sahel {seoTitleSuffix}
                       </h4>
                       <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
                         {seoDefaultDesc}
@@ -1626,7 +1626,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      {language === 'fr' ? 'AperÃ§u Direct RÃ©sultats Google (SERP)' : 'Live Google SERP Preview'}
+                      {language === 'fr' ? 'Aperçu Direct Résultats Google (SERP)' : 'Live Google SERP Preview'}
                     </span>
                     <span className="text-[10px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
                       Google Index: Active
@@ -1638,18 +1638,18 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
                       <div className="w-4 h-4 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-[9px]">G</div>
                       <span className="truncate">{seoCanonicalBase || 'https://perspective.sn'}</span>
-                      <span className="text-zinc-400">â€º article â€º ...</span>
+                      <span className="text-zinc-400">› article › ...</span>
                     </div>
 
                     {/* Clickable Title */}
                     <h3 className="text-sm font-medium text-blue-600 dark:text-[#8ab4f8] hover:underline cursor-pointer leading-snug line-clamp-1">
-                      L'ActualitÃ© & GÃ©opolitique au SÃ©nÃ©gal {seoTitleSuffix}
+                      L'Actualité & Géopolitique au Sénégal {seoTitleSuffix}
                     </h3>
 
                     {/* Description Snippet */}
                     <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-2 leading-relaxed">
                       <span className="text-zinc-500 dark:text-zinc-400 font-mono text-[10px] mr-1">
-                        {new Date().toLocaleDateString()} â€”
+                        {new Date().toLocaleDateString()} —
                       </span>
                       {seoDefaultDesc}
                     </p>
@@ -1662,7 +1662,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 <div className="p-4 border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl space-y-2">
                   <span className="text-xs font-mono font-bold uppercase text-zinc-300 block">Sitemap XML Dynamic Generator</span>
                   <p className="text-[11px] text-zinc-400">
-                    {language === 'fr' ? `GÃ©nÃ¨re le sitemap XML contenant les ${articles.length} articles publiÃ©s.` : `Generates XML sitemap index with ${articles.length} published articles.`}
+                    {language === 'fr' ? `Génère le sitemap XML contenant les ${articles.length} articles publiés.` : `Generates XML sitemap index with ${articles.length} published articles.`}
                   </p>
                   <button
                     onClick={() => {
@@ -1675,18 +1675,18 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       a.href = url;
                       a.download = 'sitemap.xml';
                       a.click();
-                      showToast(language === 'fr' ? 'Sitemap.xml tÃ©lÃ©chargÃ© !' : 'Sitemap.xml generated and downloaded!');
+                      showToast(language === 'fr' ? 'Sitemap.xml téléchargé !' : 'Sitemap.xml generated and downloaded!');
                     }}
                     className="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-mono font-bold rounded-lg cursor-pointer flex items-center gap-1.5"
                   >
-                    <span>TÃ©lÃ©charger sitemap.xml</span>
+                    <span>Télécharger sitemap.xml</span>
                   </button>
                 </div>
 
                 <div className="p-4 border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 rounded-xl space-y-2">
                   <span className="text-xs font-mono font-bold uppercase text-zinc-300 block">Flux RSS 2.0 / Atom Feed</span>
                   <p className="text-[11px] text-zinc-400">
-                    {language === 'fr' ? 'Exportation du flux d\'actualitÃ© pour aggrÃ©gateurs et syndication.' : 'Newsfeed export for RSS readers and article syndication.'}
+                    {language === 'fr' ? 'Exportation du flux d\'actualité pour aggrégateurs et syndication.' : 'Newsfeed export for RSS readers and article syndication.'}
                   </p>
                   <button
                     onClick={() => {
@@ -1711,12 +1711,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       seoRobotsIndex,
                       seoGoogleSiteVerification: seoGoogleVerification
                     } as any);
-                    showToast(language === 'fr' ? 'MÃ©tadonnÃ©es SEO sauvegardÃ©es en direct !' : 'SEO Metadata tags saved live!');
+                    showToast(language === 'fr' ? 'Métadonnées SEO sauvegardées en direct !' : 'SEO Metadata tags saved live!');
                   }}
                   className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer rounded-lg shadow-md" 
                   style={{ backgroundColor: currentSettings.accentColor }}
                 >
-                  {language === 'fr' ? 'Sauvegarder les mÃ©tadonnÃ©es SEO' : 'Save Search Settings'}
+                  {language === 'fr' ? 'Sauvegarder les métadonnées SEO' : 'Save Search Settings'}
                 </button>
               </div>
             </div>
@@ -1732,7 +1732,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </h1>
                 <p className="text-xs text-zinc-400 mt-1">
                   {language === 'fr'
-                    ? 'Modifiez les suggestions de questions dâ€™Abdel AI liÃ©es aux articles du journal et gÃ©rez les contacts amis de messagerie.'
+                    ? 'Modifiez les suggestions de questions d’Abdel AI liées aux articles du journal et gérez les contacts amis de messagerie.'
                     : 'Modify Abdel AI journal article questions and manage reader friend contacts.'}
                 </p>
               </div>
@@ -1746,14 +1746,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               </h2>
               <p className="text-xs text-zinc-400">
                 {language === 'fr'
-                  ? 'Ces questions sâ€™affichent comme suggestions automatiques pour interroger Abdel AI sur les articles du journal.'
+                  ? 'Ces questions s’affichent comme suggestions automatiques pour interroger Abdel AI sur les articles du journal.'
                   : 'These questions appear as quick suggestions when querying Abdel AI about journal articles.'}
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <label className="text-xs font-mono font-bold uppercase text-zinc-300 block">
-                    {language === 'fr' ? 'Questions en FranÃ§ais (une par ligne)' : 'French Questions (one per line)'}
+                    {language === 'fr' ? 'Questions en Français (une par ligne)' : 'French Questions (one per line)'}
                   </label>
                   <textarea
                     rows={6}
@@ -1780,7 +1780,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   const frList = frPromptsText.split('\n').map(s => s.trim()).filter(Boolean);
                   const enList = enPromptsText.split('\n').map(s => s.trim()).filter(Boolean);
                   updateAbdelPrompts({ fr: frList, en: enList });
-                  showToast(language === 'fr' ? 'Questions dâ€™Abdel AI mises Ã  jour' : 'Abdel AI questions updated');
+                  showToast(language === 'fr' ? 'Questions d’Abdel AI mises à jour' : 'Abdel AI questions updated');
                 }}
                 className="px-5 py-2.5 bg-[#E85D42] hover:bg-[#d04a30] text-white text-xs font-bold uppercase tracking-wider rounded-xl transition-colors cursor-pointer shadow-md"
               >
@@ -1796,7 +1796,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               </h2>
               <p className="text-xs text-zinc-400">
                 {language === 'fr'
-                  ? 'GÃ©rez la liste des lecteurs et amis suggÃ©rÃ©s pour les messages directs Ã  la place des administrateurs.'
+                  ? 'Gérez la liste des lecteurs et amis suggérés pour les messages directs à la place des administrateurs.'
                   : 'Manage reader friends and peer contacts suggested for direct messaging instead of admins.'}
               </p>
 
@@ -1818,7 +1818,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 />
                 <input
                   type="text"
-                  placeholder={language === 'fr' ? "RÃ´le / Statut" : "Role / Status"}
+                  placeholder={language === 'fr' ? "Rôle / Statut" : "Role / Status"}
                   value={newFriendRole}
                   onChange={(e) => setNewFriendRole(e.target.value)}
                   className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#E85D42]"
@@ -1839,7 +1839,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     setNewFriendName("");
                     setNewFriendEmail("");
                     setNewFriendRole("");
-                    showToast(language === 'fr' ? 'Ami ajoutÃ© avec succÃ¨s' : 'Friend added successfully');
+                    showToast(language === 'fr' ? 'Ami ajouté avec succès' : 'Friend added successfully');
                   }}
                   className="bg-zinc-800 hover:bg-[#E85D42] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-colors cursor-pointer py-2"
                 >
@@ -1857,13 +1857,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       </div>
                       <div>
                         <p className="font-bold text-zinc-200">{f.name}</p>
-                        <p className="text-[10px] text-zinc-400">{f.email} â€¢ {f.role}</p>
+                        <p className="text-[10px] text-zinc-400">{f.email} • {f.role}</p>
                       </div>
                     </div>
                     <button
                       onClick={() => {
                         deleteFriend(f.email);
-                        showToast(language === 'fr' ? 'Ami supprimÃ©' : 'Friend removed');
+                        showToast(language === 'fr' ? 'Ami supprimé' : 'Friend removed');
                       }}
                       className="p-1.5 bg-zinc-900 hover:bg-red-600 rounded text-zinc-400 hover:text-white transition-colors cursor-pointer"
                       title="Supprimer"
@@ -1880,7 +1880,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         {activeTab === 'settings' && (
           <div className="space-y-6 max-w-4xl mx-auto animate-fadeIn">
             <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
-              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">ParamÃ¨tres GÃ©nÃ©raux</h2>
+              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Paramètres Généraux</h2>
               <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">System parameters, security & paywall integration settings</p>
             </div>
 
@@ -1902,7 +1902,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       </h3>
                       <p className="text-xs text-zinc-400 font-sans">
                         {language === 'fr' 
-                          ? 'Affiche une page de maintenance technique Ã  tous les visiteurs de senperspective.com.' 
+                          ? 'Affiche une page de maintenance technique à tous les visiteurs de senperspective.com.' 
                           : 'Displays a technical maintenance page to all public visitors of senperspective.com.'}
                       </p>
                     </div>
@@ -1918,7 +1918,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     }`}
                   >
                     {siteSettings?.isMaintenanceMode !== false 
-                      ? (language === 'fr' ? 'DÃ‰SACTIVER (RÃ‰OUVRIR LE SITE)' : 'DISABLE (RE-OPEN SITE)')
+                      ? (language === 'fr' ? 'DÉSACTIVER (RÉOUVRIR LE SITE)' : 'DISABLE (RE-OPEN SITE)')
                       : (language === 'fr' ? 'ACTIVER LA MAINTENANCE' : 'ENABLE MAINTENANCE')}
                   </button>
                 </div>
@@ -1926,31 +1926,31 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Moteur / Mode d'exÃ©cution Abdel AI</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Moteur / Mode d'exécution Abdel AI</label>
                   <select 
                     value={settingsAIExecutionMode}
                     onChange={(e) => setSettingsAIExecutionMode(e.target.value)}
                     className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs focus:outline-none font-bold font-mono text-brand-dark dark:text-brand-white rounded"
                   >
-                    <option value="auto">ðŸ”„ Auto (Smart Failover Cascade)</option>
-                    <option value="anthropic">ðŸ§  Anthropic Claude 3.5 Sonnet</option>
-                    <option value="deepseek">ðŸ’¡ DeepSeek Chat / Reasoner R1</option>
-                    <option value="flash">âœ¨ Google Gemini 2.5 Flash</option>
-                    <option value="pro">âœ¨ Google Gemini 1.5 Pro</option>
-                    <option value="openai">âš¡ OpenAI GPT-4o / GPT-4o-mini</option>
-                    <option value="groq">ðŸš€ Groq Llama 3.3 70B</option>
-                    <option value="openrouter">ðŸŒ OpenRouter Multi-Model</option>
+                    <option value="auto">🔄 Auto (Smart Failover Cascade)</option>
+                    <option value="anthropic">🧠 Anthropic Claude 3.5 Sonnet</option>
+                    <option value="deepseek">💡 DeepSeek Chat / Reasoner R1</option>
+                    <option value="flash">✨ Google Gemini 2.5 Flash</option>
+                    <option value="pro">✨ Google Gemini 1.5 Pro</option>
+                    <option value="openai">⚡ OpenAI GPT-4o / GPT-4o-mini</option>
+                    <option value="groq">🚀 Groq Llama 3.3 70B</option>
+                    <option value="openrouter">🌐 OpenRouter Multi-Model</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Moteur Base de DonnÃ©es / DB Provider</label>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-zinc-400">Moteur Base de Données / DB Provider</label>
                   <select 
                     value={settingsDatabaseProvider}
                     onChange={(e) => setSettingsDatabaseProvider(e.target.value)}
                     className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs focus:outline-none font-bold font-mono text-brand-dark dark:text-brand-white"
                   >
-                    <option value="firestore">{language === 'fr' ? 'Base de DonnÃ©es Document Cloud (Production ClÃ©-en-main)' : 'Cloud Document Database (Production Ready)'}</option>
-                    <option value="local">Local Storage Client (Fallback dâ€™urgence)</option>
+                    <option value="firestore">{language === 'fr' ? 'Base de Données Document Cloud (Production Clé-en-main)' : 'Cloud Document Database (Production Ready)'}</option>
+                    <option value="local">Local Storage Client (Fallback d’urgence)</option>
                   </select>
                 </div>
               </div>
@@ -1961,12 +1961,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="flex items-center gap-2 mb-1">
                     <ShieldCheck size={16} className="text-[#E85D42]" />
                     <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-serif">
-                      {language === 'fr' ? 'Architecture Paywall & StratÃ©gie de MonÃ©tisation' : 'Paywall Architecture & Monetization Strategy'}
+                      {language === 'fr' ? 'Architecture Paywall & Stratégie de Monétisation' : 'Paywall Architecture & Monetization Strategy'}
                     </h3>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">
                     {language === 'fr' 
-                      ? 'Rationalisation claire des 3 niveaux dâ€™accÃ¨s aux contenus de Perspective Group.' 
+                      ? 'Rationalisation claire des 3 niveaux d’accès aux contenus de Perspective Group.' 
                       : 'Clear rationalization of the 3 content access tiers across Perspective Group.'}
                   </p>
                 </div>
@@ -1977,16 +1977,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-none space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Niveau 1</span>
-                      <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">AccÃ¨s Libre</span>
+                      <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Accès Libre</span>
                     </div>
-                    <h4 className="font-bold text-zinc-100 text-sm">ðŸŸ¢ Free / News</h4>
+                    <h4 className="font-bold text-zinc-100 text-sm">🟢 Free / News</h4>
                     <p className="text-[11px] text-zinc-300 leading-relaxed">
                       {language === 'fr' 
-                        ? 'BrÃ¨ves et actualitÃ©s Ã  chaud (type "News"). EntiÃ¨rement gratuites pour tous les visiteurs. Nâ€™entament aucun quota.' 
+                        ? 'Brèves et actualités à chaud (type "News"). Entièrement gratuites pour tous les visiteurs. N’entament aucun quota.' 
                         : 'Breaking news articles ("News"). 100% free for all visitors. Does not consume reading quotas.'}
                     </p>
                     <div className="pt-2 border-t border-emerald-500/20 text-[9.5px] text-emerald-400/90 font-mono">
-                      Target: Audience gÃ©nÃ©rale & SEO
+                      Target: Audience générale & SEO
                     </div>
                   </div>
 
@@ -1996,14 +1996,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       <span className="text-[10px] font-black uppercase tracking-wider text-amber-400">Niveau 2</span>
                       <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">Paywall Compteur</span>
                     </div>
-                    <h4 className="font-bold text-zinc-100 text-sm">ðŸŸ¡ Metered / Analyses</h4>
+                    <h4 className="font-bold text-zinc-100 text-sm">🟡 Metered / Analyses</h4>
                     <p className="text-[11px] text-zinc-300 leading-relaxed">
                       {language === 'fr' 
-                        ? `Analyses, Explainers et Opinions. AccÃ¨s gratuit jusqu'Ã  ${settingsPaywallThreshold} articles/mois. Propose la crÃ©ation de compte au-delÃ .` 
+                        ? `Analyses, Explainers et Opinions. Accès gratuit jusqu'à ${settingsPaywallThreshold} articles/mois. Propose la création de compte au-delà.` 
                         : `Analyses, Explainers & Opinions. Free up to ${settingsPaywallThreshold} articles/month. Prompts sign-up beyond limit.`}
                     </p>
                     <div className="pt-2 border-t border-amber-500/20 text-[9.5px] text-amber-400/90 font-mono">
-                      Target: Conversion de lecteurs rÃ©guliers
+                      Target: Conversion de lecteurs réguliers
                     </div>
                   </div>
 
@@ -2013,10 +2013,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       <span className="text-[10px] font-black uppercase tracking-wider text-rose-400">Niveau 3</span>
                       <span className="px-2 py-0.5 text-[9px] font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">Paywall Stricte</span>
                     </div>
-                    <h4 className="font-bold text-zinc-100 text-sm">ðŸ”’ Deep Dive / Exclusif</h4>
+                    <h4 className="font-bold text-zinc-100 text-sm">🔒 Deep Dive / Exclusif</h4>
                     <p className="text-[11px] text-zinc-300 leading-relaxed">
                       {language === 'fr' 
-                        ? 'Dossiers dâ€™investigation Ã  forte valeur ajoutÃ©e ("Deep Dive"). Contenu verrouillÃ© rÃ©servÃ© exclusivement aux Membres enregistrÃ©s.' 
+                        ? 'Dossiers d’investigation à forte valeur ajoutée ("Deep Dive"). Contenu verrouillé réservé exclusivement aux Membres enregistrés.' 
                         : 'High-value investigative reports ("Deep Dive"). Hard-locked exclusively for registered Members & Admins.'}
                     </p>
                     <div className="pt-2 border-t border-rose-500/20 text-[9.5px] text-rose-400/90 font-mono">
@@ -2034,7 +2034,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       </span>
                       <p className="text-[11px] text-zinc-400">
                         {language === 'fr' 
-                          ? 'Comptabilise les consultations dâ€™articles par visiteur anonyme et affiche une carte dâ€™inscription une fois le quota atteint.' 
+                          ? 'Comptabilise les consultations d’articles par visiteur anonyme et affiche une carte d’inscription une fois le quota atteint.' 
                           : 'Tracks article reads per anonymous visitor and prompts registration once the quota threshold is met.'}
                       </p>
                     </div>
@@ -2046,7 +2046,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           onChange={(e) => setSettingsPaywallEnabled(e.target.checked)}
                           className="w-4 h-4 accent-[#E85D42] cursor-pointer"
                         />
-                        <span className="text-xs font-bold text-zinc-200">{settingsPaywallEnabled ? 'Actif' : 'DÃ©sactivÃ©'}</span>
+                        <span className="text-xs font-bold text-zinc-200">{settingsPaywallEnabled ? 'Actif' : 'Désactivé'}</span>
                       </label>
                     </div>
                   </div>
@@ -2055,7 +2055,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <div className="pt-3 border-t border-zinc-800 flex flex-wrap items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-2">
                         <span className="text-zinc-400 font-medium">
-                          {language === 'fr' ? 'Quota dâ€™articles gratuits autorisÃ©s par visiteur :' : 'Free articles quota allowed per visitor :'}
+                          {language === 'fr' ? 'Quota d’articles gratuits autorisés par visiteur :' : 'Free articles quota allowed per visitor :'}
                         </span>
                         <input 
                           type="number"
@@ -2068,7 +2068,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         <span className="text-zinc-400">articles / mois</span>
                       </div>
                       <span className="text-[10px] text-amber-400/90 font-mono bg-amber-950/40 border border-amber-800/40 px-2.5 py-1">
-                        ðŸ’¡ Recommandation Ã©ditoriale : 3 articles / mois
+                        💡 Recommandation éditoriale : 3 articles / mois
                       </span>
                     </div>
                   )}
@@ -2081,12 +2081,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="flex items-center gap-2 mb-1">
                     <Shield size={18} className="text-orange-500" />
                     <h3 className="text-sm font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-100 font-serif">
-                      {language === 'fr' ? 'Gestion des DonnÃ©es Personnelles & ConformitÃ© RGPD' : 'Personal Data Usage & Privacy Control'}
+                      {language === 'fr' ? 'Gestion des Données Personnelles & Conformité RGPD' : 'Personal Data Usage & Privacy Control'}
                     </h3>
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">
                     {language === 'fr' 
-                      ? 'Transparence sur le traitement des donnÃ©es des lecteurs, gestion du consentement cookies et export des registres.' 
+                      ? 'Transparence sur le traitement des données des lecteurs, gestion du consentement cookies et export des registres.' 
                       : 'Transparency on reader data processing, cookie consent policy, and compliance data exports.'}
                   </p>
                 </div>
@@ -2094,21 +2094,21 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 {/* Personal Data Key Indicators */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-sans">
                   <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">ðŸ‘¥ Comptes Lecteurs</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">👥 Comptes Lecteurs</span>
                     <span className="text-lg font-black text-white">{users?.length || 0}</span>
                   </div>
                   <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">ðŸ“§ Newsletter</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">📧 Newsletter</span>
                     <span className="text-lg font-black text-emerald-400">{subscribers?.length || 0}</span>
                   </div>
                   <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">ðŸ’¬ Interactions LoggÃ©es</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">💬 Interactions Loggées</span>
                     <span className="text-lg font-black text-amber-400">{interactions?.length || 0}</span>
                   </div>
                   <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">ðŸª SystÃ¨me Cookies</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-400 block mb-1">🍪 Système Cookies</span>
                     <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">
-                      {cookieConsentEnabled ? 'ðŸŸ¢ RGPD Actif' : 'ðŸ”´ Inactif'}
+                      {cookieConsentEnabled ? '🟢 RGPD Actif' : '🔴 Inactif'}
                     </span>
                   </div>
                 </div>
@@ -2118,11 +2118,11 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="space-y-1">
                       <span className="text-xs font-bold uppercase text-zinc-100">
-                        {language === 'fr' ? 'BanniÃ¨re de Consentement Cookies (RGPD)' : 'Cookie Consent Banner System'}
+                        {language === 'fr' ? 'Bannière de Consentement Cookies (RGPD)' : 'Cookie Consent Banner System'}
                       </span>
                       <p className="text-[11px] text-zinc-400">
                         {language === 'fr' 
-                          ? 'Affiche la banniÃ¨re flottante de consentement pour les nouveaux visiteurs.' 
+                          ? 'Affiche la bannière flottante de consentement pour les nouveaux visiteurs.' 
                           : 'Displays the floating consent banner to new visitors for tracking compliance.'}
                       </p>
                     </div>
@@ -2135,7 +2135,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           onChange={(e) => setCookieConsentEnabled(e.target.checked)}
                           className="w-4 h-4 accent-[#E85D42] cursor-pointer"
                         />
-                        <span className="text-xs font-bold text-zinc-200">{cookieConsentEnabled ? 'ActivÃ©e' : 'DÃ©sactivÃ©e'}</span>
+                        <span className="text-xs font-bold text-zinc-200">{cookieConsentEnabled ? 'Activée' : 'Désactivée'}</span>
                       </label>
 
                       <button
@@ -2143,7 +2143,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         onClick={() => window.dispatchEvent(new CustomEvent('open-cookie-settings'))}
                         className="px-3 py-1.5 text-[10px] font-mono font-bold uppercase bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded transition-all cursor-pointer"
                       >
-                        {language === 'fr' ? 'âš™ï¸ Tester le Modal' : 'âš™ï¸ Test Modal'}
+                        {language === 'fr' ? '⚙️ Tester le Modal' : '⚙️ Test Modal'}
                       </button>
                     </div>
                   </div>
@@ -2151,7 +2151,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="pt-3 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                     <div>
                       <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
-                        Politique de ConfidentialitÃ© (FranÃ§ais)
+                        Politique de Confidentialité (Français)
                       </label>
                       <textarea
                         value={privacyPolicyTextFr}
@@ -2174,7 +2174,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
                     <div className="flex items-center gap-2">
                       <span className="text-zinc-400 font-medium">
-                        {language === 'fr' ? 'RÃ©tention maximale des logs de donnÃ©es :' : 'Maximum data retention policy :'}
+                        {language === 'fr' ? 'Rétention maximale des logs de données :' : 'Maximum data retention policy :'}
                       </span>
                       <input 
                         type="number"
@@ -2203,11 +2203,11 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         a.href = url;
                         a.download = `perspective-gdpr-data-export-${Date.now()}.json`;
                         a.click();
-                        showToast(language === 'fr' ? 'Export des donnÃ©es RGPD tÃ©lÃ©chargÃ© !' : 'GDPR Data Export downloaded!');
+                        showToast(language === 'fr' ? 'Export des données RGPD téléchargé !' : 'GDPR Data Export downloaded!');
                       }}
                       className="px-3.5 py-1.5 text-[10px] font-mono font-bold uppercase bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-700/50 rounded transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>ðŸ“¥ Exporter Registre RGPD (JSON)</span>
+                      <span>📥 Exporter Registre RGPD (JSON)</span>
                     </button>
                   </div>
                 </div>
@@ -2224,7 +2224,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   </div>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 font-sans">
                     {language === 'fr' 
-                      ? 'RÃ©glages dâ€™indexation pour Google Search Console, URL canonique officielle et balises sociales.' 
+                      ? 'Réglages d’indexation pour Google Search Console, URL canonique officielle et balises sociales.' 
                       : 'Indexing rules for search engines, official canonical URL, and OpenGraph social tags.'}
                   </p>
                 </div>
@@ -2244,7 +2244,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   </div>
                   <div>
                     <label className="block text-[10px] font-mono font-bold uppercase text-zinc-400 mb-1">
-                      Suffixe de Titre MÃ©tadonnÃ©e / Title Suffix
+                      Suffixe de Titre Métadonnée / Title Suffix
                     </label>
                     <input 
                       type="text" 
@@ -2265,8 +2265,8 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       onChange={(e) => setSeoRobotsIndex(e.target.value)}
                       className="w-full bg-zinc-950 border border-zinc-800 p-2.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#E85D42] rounded" 
                     >
-                      <option value="index, follow, max-image-preview:large">Indexation Active (index, follow - RecommandÃ©)</option>
-                      <option value="noindex, nofollow">DÃ©sactiver l'indexation (noindex, nofollow)</option>
+                      <option value="index, follow, max-image-preview:large">Indexation Active (index, follow - Recommandé)</option>
+                      <option value="noindex, nofollow">Désactiver l'indexation (noindex, nofollow)</option>
                     </select>
                   </div>
 
@@ -2288,7 +2288,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span className="text-zinc-300 font-bold">Sitemap XML Dynamic Generator:</span>
-                    <span className="text-zinc-400">{articles.length} articles indexÃ©s</span>
+                    <span className="text-zinc-400">{articles.length} articles indexés</span>
                   </div>
 
                   <button
@@ -2303,11 +2303,11 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       a.href = url;
                       a.download = 'sitemap.xml';
                       a.click();
-                      showToast(language === 'fr' ? 'Sitemap.xml tÃ©lÃ©chargÃ© !' : 'Sitemap.xml generated!');
+                      showToast(language === 'fr' ? 'Sitemap.xml téléchargé !' : 'Sitemap.xml generated!');
                     }}
                     className="px-3 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-mono font-bold uppercase rounded cursor-pointer"
                   >
-                    ðŸ“„ GÃ©nÃ©rer sitemap.xml
+                    📄 Générer sitemap.xml
                   </button>
                 </div>
               </div>
@@ -2317,7 +2317,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 <div className="flex flex-wrap gap-3">
                   <button 
                     onClick={() => {
-                      showToast(language === 'fr' ? 'Static CDN cache purgÃ© avec succÃ¨s !' : 'Static CDN cache purged globally!');
+                      showToast(language === 'fr' ? 'Static CDN cache purgé avec succès !' : 'Static CDN cache purged globally!');
                     }}
                     className="btn btn-secondary px-4 py-2 text-[9px] uppercase font-black tracking-widest bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 text-brand-dark dark:text-brand-white cursor-pointer"
                   >
@@ -2325,7 +2325,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   </button>
                   <button 
                     onClick={() => {
-                      showToast(language === 'fr' ? 'Sessions utilisateurs inactives terminÃ©es.' : 'Inactive visitor sessions terminated.');
+                      showToast(language === 'fr' ? 'Sessions utilisateurs inactives terminées.' : 'Inactive visitor sessions terminated.');
                     }}
                     className="btn btn-secondary px-4 py-2 text-[9px] uppercase font-black tracking-widest bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 text-brand-dark dark:text-brand-white cursor-pointer"
                   >
@@ -2354,7 +2354,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       seoRobotsIndex,
                       seoGoogleSiteVerification: seoGoogleVerification
                     } as any);
-                    showToast(language === 'fr' ? 'Configurations globales & SEO sauvegardÃ©s !' : 'Global system parameters & SEO applied!');
+                    showToast(language === 'fr' ? 'Configurations globales & SEO sauvegardés !' : 'Global system parameters & SEO applied!');
                   }}
                   className="btn btn-primary px-6 py-2.5 text-xs uppercase font-black tracking-widest bg-brand-primary text-white cursor-pointer rounded-lg shadow-md" 
                   style={{ backgroundColor: currentSettings.accentColor }}
@@ -2369,7 +2369,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         {activeTab === 'activity_log' && (
           <div className="space-y-6 max-w-4xl mx-auto">
             <div className="border-b border-zinc-200/20 dark:border-zinc-800 pb-3">
-              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Journal d'ActivitÃ©</h2>
+              <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100">Journal d'Activité</h2>
               <p className="text-xs text-brand-muted uppercase tracking-wider font-mono">Immutable audit trails of redactorial actions</p>
             </div>
 
@@ -2386,10 +2386,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   </thead>
                   <tbody className="divide-y divide-zinc-200/10 dark:divide-zinc-800/10">
                     {[
-                      { time: '14:32:01', user: 'admin', action: 'Classification de lâ€™article de "Finances publiques" vers "Ã‰conomie"', status: 'SUCCESS' },
+                      { time: '14:32:01', user: 'admin', action: 'Classification de l’article de "Finances publiques" vers "Économie"', status: 'SUCCESS' },
                       { time: '13:10:45', user: 'admin', action: 'Correction du contraste texte sur ArticlePage (.prose-article-reader)', status: 'SUCCESS' },
-                      { time: '11:45:12', user: 'kadersdiaz3@gmail.com', action: 'CrÃ©ation du combat royal de lutte (Balla Gaye 2 vs Boy Niang 2)', status: 'SUCCESS' },
-                      { time: '09:24:55', user: 'system', action: 'Purger le cache statique de la page dâ€™accueil', status: 'SUCCESS' }
+                      { time: '11:45:12', user: 'kadersdiaz3@gmail.com', action: 'Création du combat royal de lutte (Balla Gaye 2 vs Boy Niang 2)', status: 'SUCCESS' },
+                      { time: '09:24:55', user: 'system', action: 'Purger le cache statique de la page d’accueil', status: 'SUCCESS' }
                     ].map((log, idx) => (
                       <tr key={idx} className="hover:bg-zinc-500/5 text-zinc-800 dark:text-zinc-100">
                         <td className="py-3 pr-4 font-bold text-zinc-500">{log.time}</td>
@@ -2446,7 +2446,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   {/* League configuration */}
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-muted border-b border-brand-border/10 pb-1">
-                      {language === 'fr' ? "1. PARAMÃˆTRES DE LA COMPÃ‰TITION" : "1. COMPETITION PROFILE"}
+                      {language === 'fr' ? "1. PARAMÈTRES DE LA COMPÉTITION" : "1. COMPETITION PROFILE"}
                     </h4>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -2473,7 +2473,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                               setMatchLeagueFr("Lutte avec Frappe");
                               setMatchLeagueEn("Senegalese Wrestling");
                             } else if (val === "navetane") {
-                              setMatchLeagueFr("Championnat NavÃ©tanes");
+                              setMatchLeagueFr("Championnat Navétanes");
                               setMatchLeagueEn("Navetane League");
                             }
                           }}
@@ -2482,9 +2482,9 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           <option value="champions-league">Champions League (UCL)</option>
                           <option value="world-cup">World Cup (Mondial)</option>
                           <option value="nba-bal">NBA / BAL Basketball</option>
-                          <option value="d1-basket">D1 Basket SÃ©nÃ©gal</option>
-                          <option value="wrestling">Lutte SÃ©nÃ©galaise</option>
-                          <option value="navetane">NavÃ©tanes Championnat</option>
+                          <option value="d1-basket">D1 Basket Sénégal</option>
+                          <option value="wrestling">Lutte Sénégalaise</option>
+                          <option value="navetane">Navétanes Championnat</option>
                         </select>
                       </div>
                       <div>
@@ -2494,9 +2494,9 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           onChange={(e) => setMatchStatus(e.target.value as any)}
                           className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2.5 text-xs focus:outline-none font-bold"
                         >
-                          <option value="upcoming">UPCOMING (Ã€ venir)</option>
+                          <option value="upcoming">UPCOMING (À venir)</option>
                           <option value="live">LIVE (En cours)</option>
-                          <option value="finished">FINISHED (TerminÃ©)</option>
+                          <option value="finished">FINISHED (Terminé)</option>
                         </select>
                       </div>
                     </div>
@@ -2509,7 +2509,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           value={matchLeagueFr}
                           onChange={(e) => setMatchLeagueFr(e.target.value)}
                           className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2.5 text-xs focus:outline-none"
-                          placeholder="ex. Ligue 1 SÃ©nÃ©gal"
+                          placeholder="ex. Ligue 1 Sénégal"
                         />
                       </div>
                       <div>
@@ -2553,20 +2553,20 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   {/* Team performance profiles */}
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-black uppercase tracking-wider text-brand-muted border-b border-zinc-800 pb-1">
-                      {language === 'fr' ? "2. Ã‰QUIPES ET CLASSEMENTS" : "2. TEAMS PROFILE & STATS"}
+                      {language === 'fr' ? "2. ÉQUIPES ET CLASSEMENTS" : "2. TEAMS PROFILE & STATS"}
                     </h4>
 
                     <div className="grid grid-cols-2 gap-4 border-l-4 border-l-[#E85D42] pl-3 py-1 bg-zinc-500/5" style={{ borderLeftColor: currentSettings.accentColor }}>
                       <div className={matchLeague === "wrestling" ? "col-span-2" : "col-span-1"}>
                         <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
-                          {matchLeague === "wrestling" ? "Lutteur A (Ã‰curie A)" : "Team A Name"}
+                          {matchLeague === "wrestling" ? "Lutteur A (Écurie A)" : "Team A Name"}
                         </label>
                         <input 
                           type="text"
                           value={matchTeamAName}
                           onChange={(e) => setMatchTeamAName(e.target.value)}
                           className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2.5 text-xs focus:outline-none font-bold"
-                          placeholder={matchLeague === "wrestling" ? "ex. Modou LÃ´" : "ex. AS Douanes"}
+                          placeholder={matchLeague === "wrestling" ? "ex. Modou Lô" : "ex. AS Douanes"}
                         />
                       </div>
                       {matchLeague !== "wrestling" && (
@@ -2586,7 +2586,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     <div className="grid grid-cols-2 gap-4 border-l-4 border-l-zinc-500 pl-3 py-1 bg-zinc-500/5">
                       <div className={matchLeague === "wrestling" ? "col-span-2" : "col-span-1"}>
                         <label className="block text-[9px] font-bold uppercase tracking-wider text-zinc-200 mb-1">
-                          {matchLeague === "wrestling" ? "Lutteur B (Ã‰curie B)" : "Team B Name"}
+                          {matchLeague === "wrestling" ? "Lutteur B (Écurie B)" : "Team B Name"}
                         </label>
                         <input 
                           type="text"
@@ -2614,7 +2614,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     {matchLeague === "wrestling" && (
                       <div className="p-3.5 bg-[#E85D42]/5 border border-dashed border-[#E85D42]/20 space-y-2 col-span-2">
                         <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-200 mb-1">
-                          {language === "fr" ? "Verdict du Combat (RÃ¨glement CNG)" : "CNG Combat Official Verdict"}
+                          {language === "fr" ? "Verdict du Combat (Règlement CNG)" : "CNG Combat Official Verdict"}
                         </label>
                         <select
                           value={
@@ -2644,14 +2644,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           }}
                           className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-2.5 text-xs focus:outline-none font-bold"
                         >
-                          <option value="pending">{language === "fr" ? "Ã€ venir / En cours (Non dÃ©cidÃ©)" : "Upcoming / Live (Undecided)"}</option>
+                          <option value="pending">{language === "fr" ? "À venir / En cours (Non décidé)" : "Upcoming / Live (Undecided)"}</option>
                           <option value="winnerA">{language === "fr" ? `Victoire de ${matchTeamAName || "Lutteur A"}` : `Victory for ${matchTeamAName || "Wrestler A"}`}</option>
                           <option value="winnerB">{language === "fr" ? `Victoire de ${matchTeamBName || "Lutteur B"}` : `Victory for ${matchTeamBName || "Wrestler B"}`}</option>
                           <option value="draw">{language === "fr" ? "Sans Verdict / Match Nul" : "No Verdict / Draw"}</option>
                         </select>
                         <p className="text-[9px] text-brand-muted font-mono">
                           {language === "fr" 
-                            ? "* Le rÃ¨glement de la CNG de Lutte n'inclut pas de scores numÃ©riques, mais sanctionne par Victoire (par chute, dÃ©cision, KO, avertissements) ou Match Nul."
+                            ? "* Le règlement de la CNG de Lutte n'inclut pas de scores numériques, mais sanctionne par Victoire (par chute, décision, KO, avertissements) ou Match Nul."
                             : "* CNG Wrestling rules sanction combats strictly with Victory (via fall, decision, KO, warning penalty thresholds) or Draw, rather than numeric points."
                           }
                         </p>
@@ -2673,7 +2673,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         value={matchContextFr}
                         onChange={(e) => setMatchContextFr(e.target.value)}
                         className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border p-3 text-xs focus:outline-none h-20"
-                        placeholder="ex. Domination Ã©crasante au premier quart-temps. ASC Jeanne d'Arc maintient la pression."
+                        placeholder="ex. Domination écrasante au premier quart-temps. ASC Jeanne d'Arc maintient la pression."
                       />
                     </div>
                     <div>
@@ -2723,7 +2723,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                               ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
                               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700"
                         }`}>
-                          {match.status === "live" ? "â— LIVE" : match.status === "upcoming" ? "UPCOMING" : "FINISHED"}
+                          {match.status === "live" ? "● LIVE" : match.status === "upcoming" ? "UPCOMING" : "FINISHED"}
                         </span>
                       </div>
 
@@ -2731,10 +2731,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       <div className="flex items-center justify-between border-y border-zinc-100 dark:border-brand-border/10 py-3">
                         <div className="flex-1 space-y-1">
                           <p className="font-serif font-black text-sm text-zinc-800 dark:text-zinc-100 truncate">
-                            {match.league === "wrestling" && language === "fr" ? `ðŸ’¥ ${match.teamA.name}` : match.teamA.name}
+                            {match.league === "wrestling" && language === "fr" ? `💥 ${match.teamA.name}` : match.teamA.name}
                           </p>
                           <p className="font-serif font-black text-sm text-zinc-800 dark:text-zinc-100 truncate">
-                            {match.league === "wrestling" && language === "fr" ? `ðŸ’¥ ${match.teamB.name}` : match.teamB.name}
+                            {match.league === "wrestling" && language === "fr" ? `💥 ${match.teamB.name}` : match.teamB.name}
                           </p>
                         </div>
                         <div className="pl-4 font-mono text-center shrink-0">
@@ -2742,7 +2742,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                             <div className="flex flex-col gap-1 items-end">
                               {match.status === "upcoming" ? (
                                 <span className="text-[8px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5">
-                                  {language === "fr" ? "Non disputÃ©" : "Not Fought"}
+                                  {language === "fr" ? "Non disputé" : "Not Fought"}
                                 </span>
                               ) : match.teamA.score === 1 ? (
                                 <>
@@ -2782,7 +2782,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                         <p className="text-[10px] text-zinc-500 font-mono flex items-center gap-1.5">
                           <Clock size={10} />
                           <span>
-                            {match.status === "live" ? `${language === 'fr' ? 'Temps rÃ©el' : 'Live Clock'}: ${match.time}` : match.date}
+                            {match.status === "live" ? `${language === 'fr' ? 'Temps réel' : 'Live Clock'}: ${match.time}` : match.date}
                           </span>
                         </p>
                         {match.arena && (
@@ -2812,7 +2812,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           if (confirmDeleteMatchId === match.id) {
                             deleteMatch(match.id);
                             setConfirmDeleteMatchId(null);
-                            showToast(language === 'fr' ? 'Match supprimÃ© du registre' : 'Match removed from register');
+                            showToast(language === 'fr' ? 'Match supprimé du registre' : 'Match removed from register');
                           } else {
                             setConfirmDeleteMatchId(match.id);
                           }
@@ -2858,12 +2858,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 <div className="flex items-center gap-2">
                   <FileText className="w-6 h-6 text-[#E85D42]" />
                   <h2 className="text-2xl font-serif font-black uppercase tracking-tight text-zinc-100">
-                    {language === 'fr' ? 'Ã‰cosystÃ¨me Ã‰ditorial & Contenus' : 'Content Ecosystem & Editorial Suite'}
+                    {language === 'fr' ? 'Écosystème Éditorial & Contenus' : 'Content Ecosystem & Editorial Suite'}
                   </h2>
                 </div>
                 <p className="text-xs text-zinc-400 font-sans mt-1">
                   {language === 'fr' 
-                    ? 'Plateforme unifiÃ©e : gestion des publications, brouillons gÃ©nÃ©rÃ©s par lâ€™IA et flux dâ€™automatisation RSS' 
+                    ? 'Plateforme unifiée : gestion des publications, brouillons générés par l’IA et flux d’automatisation RSS' 
                     : 'Unified hub: manage published articles, AI-generated RSS drafts, and automated feed ingestion'}
                 </p>
               </div>
@@ -2896,7 +2896,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 }`}
               >
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Articles PubliÃ©s</span>
+                  <span className="text-[10px] font-mono uppercase font-bold text-zinc-400">Articles Publiés</span>
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                 </div>
                 <span className="text-xl font-black text-white">{articles.filter(a => a.isPublished).length}</span>
@@ -2948,7 +2948,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 border border-emerald-800 rounded">READY</span>
                 </div>
                 <span className="text-xl font-black text-zinc-100">Diagnostics</span>
-                <span className="text-[10px] text-zinc-500 block font-mono">Statuts des clÃ©s & API</span>
+                <span className="text-[10px] text-zinc-500 block font-mono">Statuts des clés & API</span>
               </div>
             </div>
 
@@ -2978,7 +2978,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 }`}
               >
                 <Bot size={15} />
-                <span>{language === 'fr' ? '2. RÃ©daction & Brouillons IA' : '2. AI Draft Generation'}</span>
+                <span>{language === 'fr' ? '2. Rédaction & Brouillons IA' : '2. AI Draft Generation'}</span>
                 {articles.filter(a => !a.isPublished).length > 0 && (
                   <span className="px-2 py-0.5 text-[10px] font-mono font-black bg-amber-500 text-black rounded-full">
                     {articles.filter(a => !a.isPublished).length}
@@ -2995,7 +2995,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 }`}
               >
                 <Zap size={15} />
-                <span>{language === 'fr' ? '3. RÃ©gie de Flux RSS' : '3. RSS Feed Management'}</span>
+                <span>{language === 'fr' ? '3. Régie de Flux RSS' : '3. RSS Feed Management'}</span>
               </button>
 
               <button
@@ -3027,7 +3027,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                             : 'bg-zinc-900 text-zinc-300 border-zinc-800 hover:border-[#E85D42]'
                         }`}
                       >
-                        {f === 'all' ? (language === 'fr' ? 'Tous' : 'All') : f === 'published' ? (language === 'fr' ? 'PubliÃ©s' : 'Live') : (language === 'fr' ? 'Brouillons' : 'Drafts')}
+                        {f === 'all' ? (language === 'fr' ? 'Tous' : 'All') : f === 'published' ? (language === 'fr' ? 'Publiés' : 'Live') : (language === 'fr' ? 'Brouillons' : 'Drafts')}
                       </button>
                     ))}
                   </div>
@@ -3048,8 +3048,8 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                   <table className="w-full text-left font-cambria text-xs sm:text-sm whitespace-nowrap text-zinc-200">
                     <thead className="bg-zinc-900 border-b border-zinc-800 text-xs uppercase tracking-widest text-[#E85D42] font-black">
                       <tr>
-                        <th className="px-6 py-4">{language === 'fr' ? 'Titre de lâ€™Article' : 'Title Heading'}</th>
-                        <th className="px-6 py-4">{language === 'fr' ? 'CatÃ©gorie' : 'Category'}</th>
+                        <th className="px-6 py-4">{language === 'fr' ? 'Titre de l’Article' : 'Title Heading'}</th>
+                        <th className="px-6 py-4">{language === 'fr' ? 'Catégorie' : 'Category'}</th>
                         <th className="px-6 py-4">{language === 'fr' ? 'Statut' : 'Status'}</th>
                         <th className="px-6 py-4">{language === 'fr' ? 'Date de Publication' : 'Serving Date'}</th>
                         <th className="px-6 py-4 text-right">Actions</th>
@@ -3069,7 +3069,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                                 ? 'bg-blue-950/80 text-blue-300 border-blue-800' 
                                 : 'bg-amber-950/80 text-amber-300 border-amber-800'
                             }`}>
-                              {a.isPublished ? (language === 'fr' ? 'PubliÃ©' : 'Live') : (language === 'fr' ? 'Brouillon' : 'Draft')}
+                              {a.isPublished ? (language === 'fr' ? 'Publié' : 'Live') : (language === 'fr' ? 'Brouillon' : 'Draft')}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-zinc-400 font-mono text-[11px] font-semibold">
@@ -3080,7 +3080,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                               <button 
                                 onClick={() => handleEdit(a)} 
                                 className="p-1.5 text-zinc-400 hover:text-[#E85D42] hover:bg-[#E85D42]/10 transition-colors rounded-md cursor-pointer" 
-                                title={language === 'fr' ? 'Ã‰diter lâ€™article' : 'Edit article'}
+                                title={language === 'fr' ? 'Éditer l’article' : 'Edit article'}
                               >
                                 <Edit2 size={15} />
                               </button>
@@ -3099,7 +3099,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       {filteredArticles.length === 0 && (
                         <tr>
                           <td colSpan={5} className="px-6 py-12 text-center text-zinc-500 font-bold text-xs uppercase tracking-widest bg-zinc-950 border-b border-zinc-800">
-                            {language === 'fr' ? 'Aucun article ne correspond Ã  votre recherche.' : 'No articles match selected filter.'}
+                            {language === 'fr' ? 'Aucun article ne correspond à votre recherche.' : 'No articles match selected filter.'}
                           </td>
                         </tr>
                       )}

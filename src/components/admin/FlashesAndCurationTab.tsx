@@ -12,7 +12,7 @@ export function FlashesAndCurationTab() {
   };
 
   // Abdel Intro Message state
-  const [abdelIntroFr, setAbdelIntroFr] = useState(siteSettings?.abdelIntroMessageFr || "Bonjour ! Je suis Abdel, votre guide d'actualitÃ© sur Perspective Group. Que souhaitez-vous dÃ©crypter aujourd'hui ?");
+  const [abdelIntroFr, setAbdelIntroFr] = useState(siteSettings?.abdelIntroMessageFr || "Bonjour ! Je suis Abdel, votre guide d'actualité sur Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?");
   const [abdelIntroEn, setAbdelIntroEn] = useState(siteSettings?.abdelIntroMessageEn || "Hello! I am Abdel, your news guide on Perspective Group. What would you like to unpack today?");
 
   const handleSaveAbdelIntro = (e: React.FormEvent) => {
@@ -21,13 +21,13 @@ export function FlashesAndCurationTab() {
       abdelIntroMessageFr: abdelIntroFr,
       abdelIntroMessageEn: abdelIntroEn
     });
-    showToast(language === 'fr' ? 'Message d\'introduction d\'Abdel mis Ã  jour et enregistrÃ© !' : 'Abdel introduction message updated and saved!');
+    showToast(language === 'fr' ? 'Message d\'introduction d\'Abdel mis à jour et enregistré !' : 'Abdel introduction message updated and saved!');
   };
 
   // 1. Flash Info (Analyst Dispatches) State
   const [analystDispatches, setAnalystDispatches] = useState<any[]>(siteSettings?.analystDispatches || [
-    { id: 'disp-0', time: '16:00 DKR', contentFr: "Lancement des travaux de curage des canaux Ã  Wakhinane, Yeumbeul et Rufisque par la DPGI et la SONAGED face aux risques d'inondations.", contentEn: "Launch of canal dredging operations in Wakhinane, Yeumbeul, and Rufisque by DPGI and SONAGED ahead of flood risks.", level: 'pulse' },
-    { id: 'disp-1', time: '14:22 DKR', contentFr: "Tensions d'arbitrage levÃ©es sur l'axe maritime Dakar-GorÃ©e.", contentEn: "Maritime transit clearance issued for the Dakar-GorÃ©e axis.", level: 'standard' }
+    { id: 'disp-0', time: '16:00 DKR', contentFr: "Lancement des travaux de curage des canaux à Wakhinane, Yeumbeul et Rufisque par la DPGI et la SONAGED face aux risques d'inondations.", contentEn: "Launch of canal dredging operations in Wakhinane, Yeumbeul, and Rufisque by DPGI and SONAGED ahead of flood risks.", level: 'pulse' },
+    { id: 'disp-1', time: '14:22 DKR', contentFr: "Tensions d'arbitrage levées sur l'axe maritime Dakar-Gorée.", contentEn: "Maritime transit clearance issued for the Dakar-Gorée axis.", level: 'standard' }
   ]);
 
   const [newFlashFr, setNewFlashFr] = useState('');
@@ -37,7 +37,7 @@ export function FlashesAndCurationTab() {
 
   const handleAddFlash = () => {
     if (!newFlashFr.trim() || !newFlashEn.trim()) {
-      showToast(language === 'fr' ? 'Veuillez remplir le flash en franÃ§ais et en anglais.' : 'Please provide flash text in both languages.');
+      showToast(language === 'fr' ? 'Veuillez remplir le flash en français et en anglais.' : 'Please provide flash text in both languages.');
       return;
     }
     const updated = [
@@ -54,14 +54,14 @@ export function FlashesAndCurationTab() {
     updateSiteSettings({ analystDispatches: updated });
     setNewFlashFr('');
     setNewFlashEn('');
-    showToast(language === 'fr' ? 'Flash info ajoutÃ© et enregistrÃ© en MongoDB !' : 'Flash bulletin added and saved in MongoDB!');
+    showToast(language === 'fr' ? 'Flash info ajouté et enregistré en MongoDB !' : 'Flash bulletin added and saved in MongoDB!');
   };
 
   const handleDeleteFlash = (id: string) => {
     const updated = analystDispatches.filter(d => d.id !== id);
     setAnalystDispatches(updated);
     updateSiteSettings({ analystDispatches: updated });
-    showToast(language === 'fr' ? 'Flash info supprimÃ©.' : 'Flash bulletin deleted.');
+    showToast(language === 'fr' ? 'Flash info supprimé.' : 'Flash bulletin deleted.');
   };
 
   // 2. International News (Le Monde Global Briefs) State
@@ -71,15 +71,15 @@ export function FlashesAndCurationTab() {
       time: '14:22 GMT',
       tagFr: 'Sommet CEDEAO',
       tagEn: 'ECOWAS Summit',
-      titleFr: 'NÃ©gociations commerciales & accords de libre-Ã©change Ouest-Africains.',
+      titleFr: 'Négociations commerciales & accords de libre-échange Ouest-Africains.',
       titleEn: 'West African trade negotiations and free trade agreements update.',
-      excerptFr: 'Les ministres des Finances se sont rÃ©unis Ã  Abuja.',
+      excerptFr: 'Les ministres des Finances se sont réunis à Abuja.',
       excerptEn: 'Finance ministers convened in Abuja for tariff consensus.'
     }
   ]);
 
   const [intTime, setIntTime] = useState('14:30 GMT');
-  const [intTagFr, setIntTagFr] = useState('GÃ©opolitique');
+  const [intTagFr, setIntTagFr] = useState('Géopolitique');
   const [intTagEn, setIntTagEn] = useState('Geopolitics');
   const [intTitleFr, setIntTitleFr] = useState('');
   const [intTitleEn, setIntTitleEn] = useState('');
@@ -88,7 +88,7 @@ export function FlashesAndCurationTab() {
 
   const handleAddInternational = () => {
     if (!intTitleFr.trim() || !intTitleEn.trim()) {
-      showToast(language === 'fr' ? 'Le titre international en franÃ§ais et anglais est requis.' : 'International title in FR and EN is required.');
+      showToast(language === 'fr' ? 'Le titre international en français et anglais est requis.' : 'International title in FR and EN is required.');
       return;
     }
     const updated = [
@@ -110,17 +110,17 @@ export function FlashesAndCurationTab() {
     setIntTitleEn('');
     setIntExcerptFr('');
     setIntExcerptEn('');
-    showToast(language === 'fr' ? 'ActualitÃ© internationale ajoutÃ©e et enregistrÃ©e !' : 'International brief added and saved!');
+    showToast(language === 'fr' ? 'Actualité internationale ajoutée et enregistrée !' : 'International brief added and saved!');
   };
 
   const handleDeleteInternational = (id: string) => {
     const updated = internationalNews.filter(i => i.id !== id);
     setInternationalNews(updated);
     updateSiteSettings({ leMondeDispatches: updated });
-    showToast(language === 'fr' ? 'ActualitÃ© internationale supprimÃ©e.' : 'International brief deleted.');
+    showToast(language === 'fr' ? 'Actualité internationale supprimée.' : 'International brief deleted.');
   };
 
-  // 3. Dossiers & EnquÃªtes Management State
+  // 3. Dossiers & Enquêtes Management State
   const [dossiersList, setDossiersList] = useState<any[]>(siteSettings?.dossiers || []);
   const [dosTagFr, setDosTagFr] = useState('Dossier Macro');
   const [dosTagEn, setDosTagEn] = useState('Macro Dossier');
@@ -150,7 +150,7 @@ export function FlashesAndCurationTab() {
         fullTextEn: dosFullEn.trim() || dosDescEn.trim(),
         key1Fr: 'Analyse sectorielle approfondie',
         key1En: 'In-depth sector analysis',
-        key2Fr: 'Enjeux Ã©conomiques et stratÃ©giques majeurs',
+        key2Fr: 'Enjeux économiques et stratégiques majeurs',
         key2En: 'Major economic and strategic stakes'
       },
       ...dossiersList
@@ -163,14 +163,14 @@ export function FlashesAndCurationTab() {
     setDosDescEn('');
     setDosFullFr('');
     setDosFullEn('');
-    showToast(language === 'fr' ? 'Dossier ajoutÃ© et enregistrÃ© en MongoDB !' : 'Dossier added and saved in MongoDB!');
+    showToast(language === 'fr' ? 'Dossier ajouté et enregistré en MongoDB !' : 'Dossier added and saved in MongoDB!');
   };
 
   const handleDeleteDossier = (id: string) => {
     const updated = dossiersList.filter(d => d.id !== id);
     setDossiersList(updated);
     updateSiteSettings({ dossiers: updated });
-    showToast(language === 'fr' ? 'Dossier supprimÃ©.' : 'Dossier deleted.');
+    showToast(language === 'fr' ? 'Dossier supprimé.' : 'Dossier deleted.');
   };
 
   // 4. Announcements / Annonces Management State
@@ -207,19 +207,19 @@ export function FlashesAndCurationTab() {
     setAnnTextEn('');
     setAnnImageUrl('');
     setAnnLink('#');
-    showToast(language === 'fr' ? 'Annonce publiÃ©e et enregistrÃ©e en MongoDB !' : 'Announcement published and saved in MongoDB!');
+    showToast(language === 'fr' ? 'Annonce publiée et enregistrée en MongoDB !' : 'Announcement published and saved in MongoDB!');
   };
 
   const handleDeleteAnnouncement = (id: string) => {
     const updated = announcementsList.filter(a => a.id !== id);
     setAnnouncementsList(updated);
     updateSiteSettings({ announcements: updated });
-    showToast(language === 'fr' ? 'Annonce supprimÃ©e.' : 'Announcement deleted.');
+    showToast(language === 'fr' ? 'Annonce supprimée.' : 'Announcement deleted.');
   };
 
   // 5. Daily Wisdom (Proverbe du Jour) State
-  const [wisdomWolof, setWisdomWolof] = useState(siteSettings?.dailyWisdom?.wolof || "Nila lay doxÃ©, sa gÃ«nÃ«g du lÃ«nk.");
-  const [wisdomFr, setWisdomFr] = useState(siteSettings?.dailyWisdom?.translationFr || "Ceux qui avancent avec sagesse et vÃ©ritÃ© ne craignent point l'obscuritÃ©.");
+  const [wisdomWolof, setWisdomWolof] = useState(siteSettings?.dailyWisdom?.wolof || "Nila lay doxé, sa gënëg du lënk.");
+  const [wisdomFr, setWisdomFr] = useState(siteSettings?.dailyWisdom?.translationFr || "Ceux qui avancent avec sagesse et vérité ne craignent point l'obscurité.");
   const [wisdomEn, setWisdomEn] = useState(siteSettings?.dailyWisdom?.translationEn || "Those who walk in integrity and light never fear the shadow.");
   const [wisdomSrcFr, setWisdomSrcFr] = useState(siteSettings?.dailyWisdom?.sourceFr || "EXP: PROVERBE WOLOF");
   const [wisdomSrcEn, setWisdomSrcEn] = useState(siteSettings?.dailyWisdom?.sourceEn || "EXP: WOLOF PROVERB");
@@ -234,7 +234,7 @@ export function FlashesAndCurationTab() {
       sourceEn: wisdomSrcEn
     };
     updateSiteSettings({ dailyWisdom: updatedWisdom });
-    showToast(language === 'fr' ? 'Proverbe du jour mis Ã  jour et enregistrÃ© dÃ©finitivement !' : 'Daily wisdom updated and permanently saved!');
+    showToast(language === 'fr' ? 'Proverbe du jour mis à jour et enregistré définitivement !' : 'Daily wisdom updated and permanently saved!');
   };
 
   // Track pending changes for curation confirmation
@@ -251,7 +251,7 @@ export function FlashesAndCurationTab() {
     setHasUnsavedChanges(false);
   }, [siteSettings?.curatedTrendingArticleIds, siteSettings?.curatedLatestNewsArticleIds, siteSettings?.curatedDossierArticleIds]);
 
-  // 6. Curation des Sections LatÃ©rales (Trendings, Latest News & Dossiers)
+  // 6. Curation des Sections Latérales (Trendings, Latest News & Dossiers)
   const [curatedTrendingIds, setCuratedTrendingIds] = useState<string[]>(pendingTrendingIds);
   const [curatedLatestIds, setCuratedLatestIds] = useState<string[]>(pendingLatestIds);
   const [curatedDossierIds, setCuratedDossierIds] = useState<string[]>(pendingDossierIds);
@@ -263,21 +263,21 @@ export function FlashesAndCurationTab() {
   const handleAddTrendingArticle = () => {
     if (!selectedTrendingToAdd) return;
     if (curatedTrendingIds.includes(selectedTrendingToAdd)) {
-      showToast(language === 'fr' ? 'Cet article est dÃ©jÃ  dans la section Tendances.' : 'Article is already in Trendings.');
+      showToast(language === 'fr' ? 'Cet article est déjà dans la section Tendances.' : 'Article is already in Trendings.');
       return;
     }
     const updated = [...curatedTrendingIds, selectedTrendingToAdd];
     setCuratedTrendingIds(updated);
     setHasUnsavedChanges(true);
     setSelectedTrendingToAdd('');
-    showToast(language === 'fr' ? 'Article ajoutÃ© aux Tendances !' : 'Article added to Trendings!');
+    showToast(language === 'fr' ? 'Article ajouté aux Tendances !' : 'Article added to Trendings!');
   };
 
   const handleRemoveTrendingArticle = (id: string) => {
     const updated = curatedTrendingIds.filter(i => i !== id);
     setCuratedTrendingIds(updated);
     setHasUnsavedChanges(true);
-    showToast(language === 'fr' ? 'Article retirÃ© des Tendances.' : 'Article removed from Trendings.');
+    showToast(language === 'fr' ? 'Article retiré des Tendances.' : 'Article removed from Trendings.');
   };
 
   const handleMoveTrending = (index: number, direction: 'up' | 'down') => {
@@ -297,27 +297,27 @@ export function FlashesAndCurationTab() {
     updated[index] = newArticleId;
     setCuratedTrendingIds(updated);
     setHasUnsavedChanges(true);
-    showToast(language === 'fr' ? 'Article remplacÃ© dans les Tendances !' : 'Article replaced in Trendings!');
+    showToast(language === 'fr' ? 'Article remplacé dans les Tendances !' : 'Article replaced in Trendings!');
   };
 
   const handleAddLatestArticle = () => {
     if (!selectedLatestToAdd) return;
     if (curatedLatestIds.includes(selectedLatestToAdd)) {
-      showToast(language === 'fr' ? 'Cet article est dÃ©jÃ  dans DerniÃ¨res ActualitÃ©s.' : 'Article is already in Latest News.');
+      showToast(language === 'fr' ? 'Cet article est déjà dans Dernières Actualités.' : 'Article is already in Latest News.');
       return;
     }
     const updated = [...curatedLatestIds, selectedLatestToAdd];
     setCuratedLatestIds(updated);
     setHasUnsavedChanges(true);
     setSelectedLatestToAdd('');
-    showToast(language === 'fr' ? 'Article ajoutÃ© aux DerniÃ¨res ActualitÃ©s !' : 'Article added to Latest News!');
+    showToast(language === 'fr' ? 'Article ajouté aux Dernières Actualités !' : 'Article added to Latest News!');
   };
 
   const handleRemoveLatestArticle = (id: string) => {
     const updated = curatedLatestIds.filter(i => i !== id);
     setCuratedLatestIds(updated);
     setHasUnsavedChanges(true);
-    showToast(language === 'fr' ? 'Article retirÃ© des DerniÃ¨res ActualitÃ©s.' : 'Article removed from Latest News.');
+    showToast(language === 'fr' ? 'Article retiré des Dernières Actualités.' : 'Article removed from Latest News.');
   };
 
   const handleMoveLatest = (index: number, direction: 'up' | 'down') => {
@@ -337,31 +337,31 @@ export function FlashesAndCurationTab() {
     updated[index] = newArticleId;
     setCuratedLatestIds(updated);
     setHasUnsavedChanges(true);
-    showToast(language === 'fr' ? 'Article remplacÃ© dans DerniÃ¨res ActualitÃ©s !' : 'Article replaced in Latest News!');
+    showToast(language === 'fr' ? 'Article remplacé dans Dernières Actualités !' : 'Article replaced in Latest News!');
   };
 
   const handleAddDossierArticle = () => {
     if (!selectedDossierToAdd) return;
     if (curatedDossierIds.length >= 4) {
-      showToast(language === 'fr' ? 'Limite maximale de 4 dossiers atteinte pour Dossiers & EnquÃªtes !' : 'Maximum limit of 4 dossiers reached for Dossiers & Investigations!');
+      showToast(language === 'fr' ? 'Limite maximale de 4 dossiers atteinte pour Dossiers & Enquêtes !' : 'Maximum limit of 4 dossiers reached for Dossiers & Investigations!');
       return;
     }
     if (curatedDossierIds.includes(selectedDossierToAdd)) {
-      showToast(language === 'fr' ? 'Ce dossier est dÃ©jÃ  sÃ©lectionnÃ©.' : 'Dossier is already selected.');
+      showToast(language === 'fr' ? 'Ce dossier est déjà sélectionné.' : 'Dossier is already selected.');
       return;
     }
     const updated = [...curatedDossierIds, selectedDossierToAdd];
     setCuratedDossierIds(updated);
     setHasUnsavedChanges(true);
     setSelectedDossierToAdd('');
-    showToast(language === 'fr' ? 'Dossier ajoutÃ© avec succÃ¨s (max 4) !' : 'Dossier added successfully (max 4)!');
+    showToast(language === 'fr' ? 'Dossier ajouté avec succès (max 4) !' : 'Dossier added successfully (max 4)!');
   };
 
   const handleRemoveDossierArticle = (id: string) => {
     const updated = curatedDossierIds.filter(i => i !== id);
     setCuratedDossierIds(updated);
     setHasUnsavedChanges(true);
-    showToast(language === 'fr' ? 'Dossier retirÃ©.' : 'Dossier removed.');
+    showToast(language === 'fr' ? 'Dossier retiré.' : 'Dossier removed.');
   };
 
   const handleMoveDossier = (index: number, direction: 'up' | 'down') => {
@@ -381,7 +381,7 @@ export function FlashesAndCurationTab() {
     updated[index] = newId;
     setCuratedDossierIds(updated);
     setHasUnsavedChanges(true);
-    showToast(language === 'fr' ? 'Dossier remplacÃ© !' : 'Dossier replaced!');
+    showToast(language === 'fr' ? 'Dossier remplacé !' : 'Dossier replaced!');
   };
 
   // Confirm and save all curation changes
@@ -395,7 +395,7 @@ export function FlashesAndCurationTab() {
     setPendingLatestIds(curatedLatestIds);
     setPendingDossierIds(curatedDossierIds);
     setHasUnsavedChanges(false);
-    showToast(language === 'fr' ? 'âœ… Curation confirmÃ©e et sauvegardÃ©e avec succÃ¨s !' : 'âœ… Curation confirmed and saved successfully!');
+    showToast(language === 'fr' ? '✅ Curation confirmée et sauvegardée avec succès !' : '✅ Curation confirmed and saved successfully!');
   };
 
   // Reset to last saved state
@@ -404,7 +404,7 @@ export function FlashesAndCurationTab() {
     setCuratedLatestIds(pendingLatestIds);
     setCuratedDossierIds(pendingDossierIds);
     setHasUnsavedChanges(false);
-    showToast(language === 'fr' ? 'Modifications annulÃ©es.' : 'Changes reverted.');
+    showToast(language === 'fr' ? 'Modifications annulées.' : 'Changes reverted.');
   };
 
   return (
@@ -412,7 +412,7 @@ export function FlashesAndCurationTab() {
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 bg-[#E85D42] text-white px-5 py-3 shadow-2xl font-mono text-xs font-black uppercase tracking-widest border border-white/20 animate-pulse">
-          âœ“ {toastMessage}
+          ✓ {toastMessage}
         </div>
       )}
 
@@ -420,11 +420,11 @@ export function FlashesAndCurationTab() {
       <div className="border-b border-zinc-800 pb-4">
         <h2 className="text-3xl font-serif font-black uppercase tracking-tight text-zinc-100 flex items-center gap-3">
           <Zap className="text-[#E85D42]" size={32} />
-          {language === 'fr' ? 'Flashes, ActualitÃ©s, Dossiers & Abdel' : 'Flashes, Curation, Dossiers & Abdel'}
+          {language === 'fr' ? 'Flashes, Actualités, Dossiers & Abdel' : 'Flashes, Curation, Dossiers & Abdel'}
         </h2>
         <p className="text-xs text-zinc-400 uppercase tracking-wider font-mono mt-1">
           {language === 'fr' 
-            ? "Gestion centralisÃ©e et persistance MongoDB des alertes flash, brÃ¨ves internationales, dossiers, annonces et message d'Abdel."
+            ? "Gestion centralisée et persistance MongoDB des alertes flash, brèves internationales, dossiers, annonces et message d'Abdel."
             : "Centralized management and MongoDB persistence for flash alerts, international briefs, dossiers, announcements, and Abdel's intro."}
         </p>
       </div>
@@ -477,7 +477,7 @@ export function FlashesAndCurationTab() {
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100 flex items-center gap-2">
             <Zap className="text-[#E85D42]" size={18} />
-            {language === 'fr' ? '1. Flashes d\'ActualitÃ© en Direct (Live Ticker)' : '1. Live Breaking Flash Ticker'}
+            {language === 'fr' ? '1. Flashes d\'Actualité en Direct (Live Ticker)' : '1. Live Breaking Flash Ticker'}
           </h3>
           <span className="text-[10px] font-mono px-2 py-0.5 bg-orange-950/60 text-orange-400 border border-orange-800">
             {analystDispatches.length} {language === 'fr' ? 'actifs' : 'active'}
@@ -495,7 +495,7 @@ export function FlashesAndCurationTab() {
               <textarea 
                 value={newFlashFr}
                 onChange={e => setNewFlashFr(e.target.value)}
-                placeholder="Ex: Tensions d'arbitrage levÃ©es..."
+                placeholder="Ex: Tensions d'arbitrage levées..."
                 className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42] h-20 resize-none"
               />
             </div>
@@ -569,7 +569,7 @@ export function FlashesAndCurationTab() {
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100 flex items-center gap-2">
             <Globe className="text-[#E85D42]" size={18} />
-            {language === 'fr' ? '2. ActualitÃ©s Internationales (Le Monde / Global Briefs)' : '2. International News & Global Briefs'}
+            {language === 'fr' ? '2. Actualités Internationales (Le Monde / Global Briefs)' : '2. International News & Global Briefs'}
           </h3>
           <span className="text-[10px] font-mono px-2 py-0.5 bg-blue-950/60 text-blue-400 border border-blue-800">
             {internationalNews.length} {language === 'fr' ? 'en ligne' : 'online'}
@@ -578,7 +578,7 @@ export function FlashesAndCurationTab() {
 
         <div className="bg-zinc-950/60 border border-zinc-800/80 p-5 rounded-lg space-y-4">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42]">
-            {language === 'fr' ? '+ Ajouter une brÃ¨ve internationale' : '+ Add International Brief'}
+            {language === 'fr' ? '+ Ajouter une brève internationale' : '+ Add International Brief'}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -651,7 +651,7 @@ export function FlashesAndCurationTab() {
             onClick={handleAddInternational}
             className="px-5 py-2.5 bg-[#E85D42] text-white font-black text-xs uppercase tracking-widest hover:bg-[#d04930] transition-all cursor-pointer rounded"
           >
-            {language === 'fr' ? 'Ajouter la brÃ¨ve internationale' : 'Add International Brief'}
+            {language === 'fr' ? 'Ajouter la brève internationale' : 'Add International Brief'}
           </button>
         </div>
 
@@ -679,12 +679,12 @@ export function FlashesAndCurationTab() {
         </div>
       </div>
 
-      {/* SECTION 3: Dossiers & EnquÃªtes Management */}
+      {/* SECTION 3: Dossiers & Enquêtes Management */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 shadow-xl space-y-6">
         <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
           <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100 flex items-center gap-2">
             <FolderKanban className="text-[#E85D42]" size={18} />
-            {language === 'fr' ? '3. Dossiers & EnquÃªtes (Sidebar Section)' : '3. Dossiers & Investigations'}
+            {language === 'fr' ? '3. Dossiers & Enquêtes (Sidebar Section)' : '3. Dossiers & Investigations'}
           </h3>
           <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-950/60 text-emerald-400 border border-emerald-800">
             {dossiersList.length} {language === 'fr' ? 'dossiers' : 'dossiers'}
@@ -693,7 +693,7 @@ export function FlashesAndCurationTab() {
 
         <div className="bg-zinc-950/60 border border-zinc-800/80 p-5 rounded-lg space-y-4">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42]">
-            {language === 'fr' ? '+ CrÃ©er un nouveau Dossier' : '+ Create New Dossier'}
+            {language === 'fr' ? '+ Créer un nouveau Dossier' : '+ Create New Dossier'}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -848,7 +848,7 @@ export function FlashesAndCurationTab() {
           <div className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
-                {language === 'fr' ? 'Image de l\'annonce (URL, Fichier Appareil ou MÃ©diathÃ¨que)' : 'Announcement Image (URL, Device File or Media Library)'}
+                {language === 'fr' ? 'Image de l\'annonce (URL, Fichier Appareil ou Médiathèque)' : 'Announcement Image (URL, Device File or Media Library)'}
               </label>
               <div className="flex gap-2">
                 <input 
@@ -872,7 +872,7 @@ export function FlashesAndCurationTab() {
                         reader.onload = (uploadEvent) => {
                           if (uploadEvent.target?.result) {
                             setAnnImageUrl(uploadEvent.target.result as string);
-                            showToast(language === 'fr' ? 'Image chargÃ©e depuis l\'appareil avec succÃ¨s !' : 'Image loaded from device successfully!');
+                            showToast(language === 'fr' ? 'Image chargée depuis l\'appareil avec succès !' : 'Image loaded from device successfully!');
                           }
                         };
                         reader.readAsDataURL(file);
@@ -886,19 +886,19 @@ export function FlashesAndCurationTab() {
             {media && (media ?? []).length > 0 && (
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1">
-                  {language === 'fr' ? 'Ou sÃ©lectionner depuis la MÃ©diathÃ¨que' : 'Or select from Media Library'}
+                  {language === 'fr' ? 'Ou sélectionner depuis la Médiathèque' : 'Or select from Media Library'}
                 </label>
                 <select 
                   onChange={(e) => {
                     if (e.target.value) {
                       setAnnImageUrl(e.target.value);
-                      showToast(language === 'fr' ? 'Image sÃ©lectionnÃ©e depuis la mÃ©diathÃ¨que' : 'Image selected from media library');
+                      showToast(language === 'fr' ? 'Image sélectionnée depuis la médiathèque' : 'Image selected from media library');
                     }
                   }}
                   defaultValue=""
                   className="w-full bg-zinc-900 border border-zinc-700 text-zinc-200 p-2 text-xs rounded focus:outline-none focus:border-[#E85D42]"
                 >
-                  <option value="" disabled>{language === 'fr' ? '-- Choisir une image de la mÃ©diathÃ¨que --' : '-- Choose image from media library --'}</option>
+                  <option value="" disabled>{language === 'fr' ? '-- Choisir une image de la médiathèque --' : '-- Choose image from media library --'}</option>
                   {(media ?? []).map((m: any) => (
                     <option key={m.id || m.url} value={m.url}>{m.title || m.name || m.url}</option>
                   ))}
@@ -1021,12 +1021,12 @@ export function FlashesAndCurationTab() {
         </form>
       </div>
 
-      {/* SECTION 6: Curation des Articles de la Barre LatÃ©rale (Trendings & DerniÃ¨res ActualitÃ©s) */}
+      {/* SECTION 6: Curation des Articles de la Barre Latérale (Trendings & Dernières Actualités) */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-6 shadow-xl space-y-8">
         <div className="flex items-center gap-3 border-b border-zinc-800 pb-3">
           <TrendingUp className="text-[#E85D42]" size={20} />
           <h3 className="text-base font-extrabold uppercase tracking-wider text-zinc-100">
-            {language === 'fr' ? '6. Curation des Articles de la Barre LatÃ©rale (Trendings & DerniÃ¨res ActualitÃ©s)' : '6. Sidebar Articles Curation (Trendings & Latest News)'}
+            {language === 'fr' ? '6. Curation des Articles de la Barre Latérale (Trendings & Dernières Actualités)' : '6. Sidebar Articles Curation (Trendings & Latest News)'}
           </h3>
         </div>
 
@@ -1038,7 +1038,7 @@ export function FlashesAndCurationTab() {
               {language === 'fr' ? 'Section Tendances (Trendings Sidebar)' : 'Trendings Section'}
             </h4>
             <span className="text-xs font-mono text-zinc-400">
-              {curatedTrendingIds.length} {language === 'fr' ? 'article(s) sÃ©lectionnÃ©(s)' : 'article(s) selected'}
+              {curatedTrendingIds.length} {language === 'fr' ? 'article(s) sélectionné(s)' : 'article(s) selected'}
             </span>
           </div>
 
@@ -1048,7 +1048,7 @@ export function FlashesAndCurationTab() {
               onChange={e => setSelectedTrendingToAdd(e.target.value)}
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
-              <option value="">{language === 'fr' ? '-- Choisir un article Ã  ajouter aux Tendances --' : '-- Choose article to add to Trendings --'}</option>
+              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Tendances --' : '-- Choose article to add to Trendings --'}</option>
               {(articles ?? []).map(art => (
                 <option key={art.id} value={art.id}>
                   {art.title?.[language] || art.title?.fr || art.id}
@@ -1125,15 +1125,15 @@ export function FlashesAndCurationTab() {
           </div>
         </div>
 
-        {/* 6B. DerniÃ¨res ActualitÃ©s (Latest News) */}
+        {/* 6B. Dernières Actualités (Latest News) */}
         <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
               <Zap size={16} />
-              {language === 'fr' ? 'Section DerniÃ¨res ActualitÃ©s (Latest News Sidebar)' : 'Latest News Section'}
+              {language === 'fr' ? 'Section Dernières Actualités (Latest News Sidebar)' : 'Latest News Section'}
             </h4>
             <span className="text-xs font-mono text-zinc-400">
-              {curatedLatestIds.length} {language === 'fr' ? 'article(s) sÃ©lectionnÃ©(s)' : 'article(s) selected'}
+              {curatedLatestIds.length} {language === 'fr' ? 'article(s) sélectionné(s)' : 'article(s) selected'}
             </span>
           </div>
 
@@ -1143,7 +1143,7 @@ export function FlashesAndCurationTab() {
               onChange={e => setSelectedLatestToAdd(e.target.value)}
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
-              <option value="">{language === 'fr' ? '-- Choisir un article Ã  ajouter aux DerniÃ¨res ActualitÃ©s --' : '-- Choose article to add to Latest News --'}</option>
+              <option value="">{language === 'fr' ? '-- Choisir un article à ajouter aux Dernières Actualités --' : '-- Choose article to add to Latest News --'}</option>
               {(articles ?? []).map(art => (
                 <option key={art.id} value={art.id}>
                   {art.title?.[language] || art.title?.fr || art.id}
@@ -1220,15 +1220,15 @@ export function FlashesAndCurationTab() {
           </div>
         </div>
 
-        {/* 6C. Dossiers & EnquÃªtes (Max 4 dossiers) */}
+        {/* 6C. Dossiers & Enquêtes (Max 4 dossiers) */}
         <div className="space-y-4 bg-zinc-950/60 p-5 rounded-lg border border-zinc-800">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-bold uppercase tracking-wider text-[#E85D42] flex items-center gap-2">
               <FolderKanban size={16} />
-              {language === 'fr' ? 'Section Dossiers & EnquÃªtes (Max 4 dossiers)' : 'Dossiers & Investigations Section (Max 4 dossiers)'}
+              {language === 'fr' ? 'Section Dossiers & Enquêtes (Max 4 dossiers)' : 'Dossiers & Investigations Section (Max 4 dossiers)'}
             </h4>
             <span className="text-xs font-mono font-bold text-[#E85D42] bg-zinc-900 px-2 py-1 rounded border border-zinc-800">
-              {curatedDossierIds.length} / 4 {language === 'fr' ? 'sÃ©lectionnÃ©(s)' : 'selected'}
+              {curatedDossierIds.length} / 4 {language === 'fr' ? 'sélectionné(s)' : 'selected'}
             </span>
           </div>
 
@@ -1238,16 +1238,16 @@ export function FlashesAndCurationTab() {
               onChange={e => setSelectedDossierToAdd(e.target.value)}
               className="flex-1 bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
             >
-              <option value="">{language === 'fr' ? '-- Choisir un dossier / article Ã  ajouter (max 4) --' : '-- Choose dossier / article to add (max 4) --'}</option>
+              <option value="">{language === 'fr' ? '-- Choisir un dossier / article à ajouter (max 4) --' : '-- Choose dossier / article to add (max 4) --'}</option>
               {/* Combine custom dossiers and articles for selection */}
               {dossiersList.map((dos: any) => (
                 <option key={dos.id} value={dos.id}>
-                  ðŸ“ [Dossier] {dos.titleFr || dos.titleEn || dos.id}
+                  📁 [Dossier] {dos.titleFr || dos.titleEn || dos.id}
                 </option>
               ))}
               {(articles ?? []).map(art => (
                 <option key={art.id} value={art.id}>
-                  ðŸ“° [Article] {art.title?.[language] || art.title?.fr || art.id}
+                  📰 [Article] {art.title?.[language] || art.title?.fr || art.id}
                 </option>
               ))}
             </select>
@@ -1277,7 +1277,7 @@ export function FlashesAndCurationTab() {
                         {title}
                       </p>
                       <p className="text-[10px] text-zinc-500 font-mono">
-                        {customDos ? 'Dossier SpÃ©cial' : (foundArt?.category || 'Investigation')}
+                        {customDos ? 'Dossier Spécial' : (foundArt?.category || 'Investigation')}
                       </p>
                     </div>
                   </div>
@@ -1292,12 +1292,12 @@ export function FlashesAndCurationTab() {
                       <option value="">{language === 'fr' ? 'Remplacer...' : 'Replace...'}</option>
                       {dossiersList.map((d: any) => (
                         <option key={d.id} value={d.id}>
-                          ðŸ“ {d.titleFr}
+                          📁 {d.titleFr}
                         </option>
                       ))}
                       {(articles ?? []).map(a => (
                         <option key={a.id} value={a.id}>
-                          ðŸ“° {a.title?.[language] || a.title?.fr}
+                          📰 {a.title?.[language] || a.title?.fr}
                         </option>
                       ))}
                     </select>
@@ -1338,7 +1338,7 @@ export function FlashesAndCurationTab() {
             <div className="flex items-center gap-2">
               <AlertCircle size={16} className="text-amber-400 shrink-0" />
               <span className="text-xs font-bold text-amber-200 uppercase tracking-wider">
-                {language === 'fr' ? 'Modifications non sauvegardÃ©es â€” Confirmer la Curation' : 'Unsaved changes â€” Confirm Curation'}
+                {language === 'fr' ? 'Modifications non sauvegardées — Confirmer la Curation' : 'Unsaved changes — Confirm Curation'}
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
