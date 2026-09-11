@@ -2172,7 +2172,9 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'perspective-group-storage',
-      version: 3,
+      // v4: purge persisted fake "Visiteur" readerProfile created by older
+      // logout/delete-account code (made the login/register UI unreachable).
+      version: 4,
       storage: createJSONStorage(() => localStorage),
       // v3: every browser drops ALL stale persisted data on next load.
       // Shared-domain data (articles/users/comments/messages/...) is never
@@ -2192,6 +2194,14 @@ export const useStore = create<AppState>()(
             if (persistedState[k] !== undefined && persistedState[k] !== null) {
               safe[k] = persistedState[k];
             }
+          }
+          // FIX (login buttons missing after logout): older builds persisted a
+          // fake "Visiteur" profile object on logout/delete-account, which is
+          // truthy and keeps the header showing the Account button forever.
+          // Discard it — a real profile always has a non-empty email.
+          const rp = safe.readerProfile;
+          if (rp && (typeof rp !== 'object' || !(rp.email || '').trim() || rp.id === 'visiteur' || rp.name === 'Visiteur')) {
+            delete safe.readerProfile;
           }
         }
         return safe;

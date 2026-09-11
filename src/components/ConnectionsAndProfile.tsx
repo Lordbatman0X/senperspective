@@ -1098,13 +1098,9 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                               console.error(e);
                             }
                             deleteUser(clean);
-                            setReaderProfile({
-                              name: "Visiteur",
-                              email: "",
-                              role: "Member",
-                              avatarUrl: "preset-male",
-                              isMongoDB: false
-                            });
+                            // FIX: never fabricate a "Visiteur" profile here —
+                            // it is truthy and blocks the login/register UI.
+                            setReaderProfile(null);
                             if (setShowProfileModal) setShowProfileModal(false);
                           }
                         }}

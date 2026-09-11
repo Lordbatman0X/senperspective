@@ -170,14 +170,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       sessionStorage.removeItem('perspective_admin_email');
     } catch {}
     try {
+      // FIX (login buttons missing after logout): setting a "Visiteur" object
+      // here made `readerProfile` truthy, so the header kept showing the
+      // Account button and never showed Connection / Register again.
+      // The logged-out state is simply `null`.
       useStore.setState({
-        readerProfile: {
-          id: 'visiteur',
-          name: 'Visiteur',
-          email: '',
-          avatarUrl: 'preset-neutral',
-          role: 'Visiteur',
-        },
+        readerProfile: null,
       });
     } catch (e) {
       console.warn('[AuthContext] Store reset notice:', e);
