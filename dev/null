@@ -1,0 +1,686 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// src/lib/supabaseClient.ts
+var supabaseClient_exports = {};
+__export(supabaseClient_exports, {
+  bootstrapAnonymousAuth: () => bootstrapAnonymousAuth,
+  formatUserForBackend: () => formatUserForBackend,
+  formatUserForSupabase: () => formatUserForSupabase,
+  formatUserFromBackend: () => formatUserFromBackend,
+  formatUserFromSupabase: () => formatUserFromSupabase,
+  getCurrentUser: () => getCurrentUser,
+  getSupabaseClientOrNull: () => getSupabaseClientOrNull,
+  onAuthStateChanged: () => onAuthStateChanged,
+  saveUserToBackend: () => saveUserToBackend,
+  saveUserToSupabase: () => saveUserToSupabase,
+  subscribeToTable: () => subscribeToTable,
+  supabase: () => supabase,
+  usersQuery: () => usersQuery
+});
+module.exports = __toCommonJS(supabaseClient_exports);
+
+// src/lib/apiUtils.ts
+var import_meta = {};
+var BACKEND_URL_STORAGE_KEY = "perspective_backend_api_url";
+var DEFAULT_STATIC_BACKEND = "https://senperspective-api-56o8.onrender.com";
+function isStaticHost() {
+  if (typeof window === "undefined" || !window.location) return false;
+  const host = window.location.hostname || "";
+  return /\.(web\.app|firebaseapp|vercel\.app|netlify\.app|pages\.dev)$/i.test(host) || host === "localhost" || host === "127.0.0.1";
+}
+function getApiBaseUrl() {
+  if (typeof window === "undefined") return "";
+  const stored = localStorage.getItem(BACKEND_URL_STORAGE_KEY) || localStorage.getItem("backend_api_url");
+  if (stored && stored.trim()) {
+    return stored.trim().replace(/\/+$/, "");
+  }
+  const envUrl = import_meta.env?.VITE_BACKEND_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, "");
+  }
+  if (isStaticHost()) {
+    const fallback = (DEFAULT_STATIC_BACKEND || "").trim().replace(/\/+$/, "");
+    if (fallback) return fallback;
+  }
+  return "";
+}
+function resolveApiUrl(path) {
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+  const base = getApiBaseUrl();
+  if (base) {
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${base}${cleanPath}`;
+  }
+  return path;
+}
+function getAuthHeaders() {
+  const headers = {};
+  if (typeof window !== "undefined" && window.localStorage) {
+    const gemini = localStorage.getItem("api_key_gemini") || localStorage.getItem("GEMINI_API_KEY");
+    const openai = localStorage.getItem("api_key_openai") || localStorage.getItem("OPENAI_API_KEY");
+    const groq = localStorage.getItem("api_key_groq") || localStorage.getItem("GROQ_API_KEY");
+    const openrouter = localStorage.getItem("api_key_openrouter") || localStorage.getItem("OPENROUTER_API_KEY");
+    const anthropic = localStorage.getItem("api_key_anthropic") || localStorage.getItem("ANTHROPIC_API_KEY");
+    const deepseek = localStorage.getItem("api_key_deepseek") || localStorage.getItem("DEEPSEEK_API_KEY");
+    if (gemini && gemini.trim()) headers["x-gemini-key"] = gemini.trim();
+    if (openai && openai.trim()) headers["x-openai-key"] = openai.trim();
+    if (groq && groq.trim()) headers["x-groq-key"] = groq.trim();
+    if (openrouter && openrouter.trim()) headers["x-openrouter-key"] = openrouter.trim();
+    if (anthropic && anthropic.trim()) headers["x-anthropic-key"] = anthropic.trim();
+    if (deepseek && deepseek.trim()) headers["x-deepseek-key"] = deepseek.trim();
+  }
+  return headers;
+}
+async function safeFetchJson(url, options) {
+  try {
+    const resolvedUrl = resolveApiUrl(url);
+    const mergedOptions = { ...options };
+    const authHeaders = getAuthHeaders();
+    const headers = { ...authHeaders, ...mergedOptions.headers || {} };
+    mergedOptions.headers = headers;
+    const res = await fetch(resolvedUrl, mergedOptions);
+    const contentType = res.headers.get("content-type") || "";
+    const text = await res.text();
+    const isHtml = contentType.toLowerCase().includes("text/html") || text.trim().startsWith("<!doctype") || text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html") || text.includes("<html lang=") || text.includes("<title>Perspective Group");
+    if (isHtml) {
+      const hostname = typeof window !== "undefined" ? window.location.hostname : "ce domaine";
+      return {
+        ok: false,
+        status: res.status,
+        isStaticFallback: true,
+        error: `Mode h\xE9bergement statique actif sur ${hostname} (r\xE9ponse HTML du site au lieu de l'API JSON). Basculement automatique sur le moteur direct et Firestore.`
+      };
+    }
+    let data = null;
+    let isJson = false;
+    if (text && text.trim()) {
+      try {
+        data = JSON.parse(text);
+        isJson = true;
+      } catch (_) {
+        isJson = false;
+      }
+    }
+    if (isJson) {
+      if (!res.ok) {
+        return {
+          ok: false,
+          status: res.status,
+          data,
+          error: data?.error || data?.message || `Erreur serveur (${res.status})`
+        };
+      }
+      return { ok: true, status: res.status, data };
+    }
+    const cleanMsg = (text || "").replace(/<[^>]*>?/gm, " ").replace(/\s+/g, " ").trim();
+    const preview = cleanMsg.slice(0, 160) || `Erreur HTTP ${res.status}`;
+    return {
+      ok: false,
+      status: res.status,
+      error: `R\xE9ponse inattendue (${res.status}): ${preview}`
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error: err?.message || "Erreur de connexion au serveur"
+    };
+  }
+}
+
+// src/lib/imageUtils.ts
+var DEFAULT_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1504711434969-e33886168f5c?q=80&w=800&fit=crop";
+async function compressDataUrl(dataUrl, maxWidth = 1e3, maxHeight = 700, quality = 0.72) {
+  if (!dataUrl || typeof dataUrl !== "string") {
+    return DEFAULT_FALLBACK_IMAGE;
+  }
+  if (!dataUrl.startsWith("data:image/") || dataUrl.length < 6e4) {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    if (dataUrl.startsWith("http://") || dataUrl.startsWith("https://")) {
+      img.crossOrigin = "anonymous";
+    }
+    const timer = setTimeout(() => {
+      resolve(dataUrl);
+    }, 3e3);
+    img.onload = () => {
+      clearTimeout(timer);
+      let width = img.width;
+      let height = img.height;
+      if (width > maxWidth || height > maxHeight) {
+        if (width / maxWidth > height / maxHeight) {
+          height = Math.round(height * maxWidth / width);
+          width = maxWidth;
+        } else {
+          width = Math.round(width * maxHeight / height);
+          height = maxHeight;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return resolve(dataUrl);
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressed = canvas.toDataURL("image/jpeg", quality);
+      resolve(compressed);
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      resolve(dataUrl);
+    };
+    img.src = dataUrl;
+  });
+}
+async function sanitizeFirestorePayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  if (Array.isArray(payload)) {
+    const cleanArray = await Promise.all(
+      payload.map(async (item) => {
+        if (item === void 0) return null;
+        if (item && typeof item === "object") {
+          return await sanitizeFirestorePayload(item);
+        }
+        if (typeof item === "string" && item.startsWith("data:image/")) {
+          return await compressDataUrl(item, 1e3, 700, 0.72);
+        }
+        return item;
+      })
+    );
+    return cleanArray;
+  }
+  const sanitized = {};
+  for (const [key, val] of Object.entries(payload)) {
+    if (val === void 0) {
+      continue;
+    }
+    if (typeof val === "string" && val.startsWith("data:image/")) {
+      sanitized[key] = await compressDataUrl(val, 1e3, 700, 0.72);
+    } else if (val && typeof val === "object") {
+      sanitized[key] = await sanitizeFirestorePayload(val);
+    } else {
+      sanitized[key] = val;
+    }
+  }
+  return sanitized;
+}
+
+// src/lib/supabaseClient.ts
+var _sessionUser = null;
+try {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("perspective_auth_session");
+    if (stored) _sessionUser = safeJsonParse(stored, {});
+  }
+} catch {
+}
+function formatUserForSupabase(user) {
+  return formatUserForBackend(user);
+}
+function formatUserFromSupabase(row) {
+  return formatUserFromBackend(row);
+}
+function formatUserForBackend(user) {
+  const email = String(user.email || user.id || "").toLowerCase().trim();
+  const id = user.id || email;
+  const isSuperAdmin = email === "kadersdiaz3@gmail.com";
+  return {
+    id,
+    email,
+    name: user.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
+    avatarUrl: user.avatarUrl || user.avatar_url || "preset-male",
+    role: isSuperAdmin ? "Admin" : user.role || "Member",
+    isOnline: Boolean(user.isOnline || user.is_online),
+    streak: typeof user.streak === "number" ? user.streak : 1,
+    readingTime: typeof user.readingTime === "number" ? user.readingTime : 0,
+    hidePersonalInfo: Boolean(user.hidePersonalInfo || user.hide_personal_info),
+    hideEmail: Boolean(user.hideEmail || user.hide_email),
+    bio: user.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : ""),
+    accolades: Array.isArray(user.accolades) ? user.accolades : isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : ["verified_identity"],
+    coverPhotoUrl: user.coverPhotoUrl || user.cover_photo_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+    registeredAt: user.registeredAt || user.registered_at || (/* @__PURE__ */ new Date()).toISOString(),
+    lastActiveAt: user.lastActiveAt || user.last_active_at || (/* @__PURE__ */ new Date()).toISOString(),
+    lastLoginAt: user.lastLoginAt || (/* @__PURE__ */ new Date()).toISOString(),
+    authType: user.authType || "password",
+    emailVerified: user.emailVerified !== void 0 ? user.emailVerified : true,
+    mfaEnabled: Boolean(user.mfaEnabled || user.twoFactorEnabled),
+    twoFactorEnabled: Boolean(user.mfaEnabled || user.twoFactorEnabled),
+    deletedAt: user.deletedAt || user.deleted_at || null,
+    ...user
+  };
+}
+function formatUserFromBackend(row) {
+  if (!row) return row;
+  const email = String(row.email || row.id || "").toLowerCase().trim();
+  const isSuperAdmin = email === "kadersdiaz3@gmail.com";
+  return {
+    id: row.id || email,
+    email,
+    name: row.name || (isSuperAdmin ? "Kader S. Diaz" : email.split("@")[0]),
+    avatarUrl: row.avatarUrl || row.avatar_url || "preset-male",
+    role: isSuperAdmin ? "Admin" : row.role || "Member",
+    isOnline: Boolean(row.isOnline || row.is_online),
+    streak: typeof row.streak === "number" ? row.streak : 1,
+    readingTime: typeof row.readingTime === "number" ? row.readingTime : 0,
+    hidePersonalInfo: Boolean(row.hidePersonalInfo || row.hide_personal_info),
+    hideEmail: Boolean(row.hideEmail || row.hide_email),
+    bio: row.bio || (isSuperAdmin ? "Super Administrateur & Fondateur Perspective Group" : ""),
+    accolades: Array.isArray(row.accolades) ? row.accolades : isSuperAdmin ? ["verified_identity", "editorial_board", "elite_clearance", "sahel_insider"] : ["verified_identity"],
+    coverPhotoUrl: row.coverPhotoUrl || row.cover_photo_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop",
+    registeredAt: row.registeredAt || row.registered_at || (/* @__PURE__ */ new Date()).toISOString(),
+    lastActiveAt: row.lastActiveAt || row.last_active_at || (/* @__PURE__ */ new Date()).toISOString(),
+    lastLoginAt: row.lastLoginAt || (/* @__PURE__ */ new Date()).toISOString(),
+    authType: row.authType || (row.pin ? "pin" : "password"),
+    emailVerified: row.emailVerified !== void 0 ? row.emailVerified : true,
+    mfaEnabled: Boolean(row.mfaEnabled || row.twoFactorEnabled),
+    twoFactorEnabled: Boolean(row.mfaEnabled || row.twoFactorEnabled),
+    password: row.password,
+    passwordHash: row.passwordHash || row.password_hash,
+    pin: row.pin,
+    deletedAt: row.deletedAt || row.deleted_at || null,
+    notificationPreferences: row.notificationPreferences || row.notification_preferences,
+    hidePersonalInfo_raw: row
+  };
+}
+function createQueryBuilder(table) {
+  const qb = {
+    _table: table,
+    _operation: "select",
+    _data: null,
+    _selectFields: "*",
+    _eqFilters: [],
+    _isFilter: null,
+    _includeDeleted: false,
+    select(fields) {
+      qb._selectFields = fields || "*";
+      return qb;
+    },
+    eq(col, val) {
+      qb._eqFilters.push({ col, val });
+      return qb;
+    },
+    neq(col, val) {
+      qb._eqFilters.push({ col, val: { neq: val } });
+      return qb;
+    },
+    is(col, val) {
+      qb._isFilter = { col, val };
+      return qb;
+    },
+    order(_col, _opts) {
+      return qb;
+    },
+    limit(_n) {
+      return qb;
+    },
+    includeDeleted() {
+      qb._includeDeleted = true;
+      return qb;
+    },
+    upsert(data, _opts) {
+      qb._operation = "upsert";
+      qb._data = data;
+      return qb;
+    },
+    insert(data) {
+      qb._operation = "insert";
+      qb._data = data;
+      return qb;
+    },
+    update(data) {
+      qb._operation = "update";
+      qb._data = data;
+      return qb;
+    },
+    delete() {
+      qb._operation = "delete";
+      return qb;
+    },
+    async _exec() {
+      return await executeQuery(qb);
+    },
+    // thenable — so `await qb` and `Promise.all([qb, ...])` work
+    then(onResolve, onReject) {
+      return executeQuery(qb).then(onResolve, onReject);
+    },
+    // catch — so `.catch()` chains work on thenables (many call-sites use .catch())
+    catch(onReject) {
+      return executeQuery(qb).catch(onReject);
+    },
+    async single() {
+      const result = await executeQuery(qb);
+      const data = Array.isArray(result.data) ? result.data[0] : result.data;
+      return { data: qb._table === "users" ? formatUserFromBackend(data) : data, error: result.error };
+    },
+    async maybeSingle() {
+      const result = await executeQuery(qb);
+      const data = Array.isArray(result.data) ? result.data[0] : result.data;
+      return { data: qb._table === "users" ? formatUserFromBackend(data) : data, error: result.error };
+    }
+  };
+  return qb;
+}
+async function executeQuery(qb) {
+  const table = qb._table;
+  const op = qb._operation;
+  if (op === "upsert" || op === "insert" || op === "update") {
+    return execMutation(qb);
+  }
+  if (op === "delete") {
+    return execDelete(qb);
+  }
+  const docs = await fetchCollection(table);
+  if (!docs) return { data: [], error: { message: "Collection not found" } };
+  let filtered = docs;
+  for (const f of qb._eqFilters) {
+    const fcol = f.col.toLowerCase();
+    const fval = typeof f.val === "object" && f.val !== null ? f.val.neq : f.val;
+    if (typeof f.val === "object" && f.val !== null && !Array.isArray(f.val)) {
+      filtered = filtered.filter((d) => d[fcol] !== fval);
+    } else {
+      filtered = filtered.filter((d) => {
+        const dval = d[fcol] !== void 0 ? d[fcol] : d[f.col] !== void 0 ? d[f.col] : void 0;
+        return String(dval || "").toLowerCase() === String(fval || "").toLowerCase();
+      });
+    }
+  }
+  if (qb._isFilter && qb._isFilter.val === null) {
+    filtered = filtered.filter((d) => !d[qb._isFilter.col] && !d[qb._isFilter.col?.replace(/_/g, "")]);
+  }
+  if (table === "users" && !qb._includeDeleted) {
+    filtered = filtered.filter((d) => !d.deletedAt && !d.deleted_at);
+  }
+  if (table === "users") {
+    filtered = filtered.map(formatUserFromBackend);
+  }
+  return { data: filtered, error: null };
+}
+async function fetchCollection(table) {
+  if (table === "users") {
+    const res2 = await safeFetchJson(resolveApiUrl("/api/users"));
+    if (!res2.ok) {
+    } else if (res2.data && Array.isArray(res2.data.users)) {
+      return res2.data.users;
+    }
+  }
+  const res = await safeFetchJson(resolveApiUrl(`/api/mongodb/collection/${encodeURIComponent(table)}`));
+  if (!res.ok) return null;
+  if (res.isStaticFallback) return null;
+  const arr = res.data?.documents || res.data?.data || (Array.isArray(res.data) ? res.data : []);
+  if (!Array.isArray(arr)) return null;
+  return arr.map((d) => {
+    if (d && typeof d === "object" && "data" in d && typeof d.data === "object" && Object.keys(d).length === 2) {
+      return { id: d.id, ...d.data };
+    }
+    return d;
+  });
+}
+async function execMutation(qb) {
+  const table = qb._table;
+  let docs = qb._data;
+  if (!Array.isArray(docs)) docs = [docs];
+  docs = docs.filter((d) => d !== null && d !== void 0);
+  const results = [];
+  for (let doc of docs) {
+    qb._eqFilters.forEach((f) => {
+      const fval = typeof f.val === "object" && f.val !== null && !Array.isArray(f.val) ? f.val.neq : f.val;
+      if (!(f.col in doc) && fval !== void 0) {
+        doc[f.col] = fval;
+      }
+    });
+    if (table === "users") {
+      doc = formatUserForBackend(doc);
+    }
+    const docId = doc.id || doc.email || doc._id;
+    if (!docId) continue;
+    const clean = await sanitizeFirestorePayload(doc);
+    const res = await safeFetchJson(
+      resolveApiUrl(`/api/mongodb/doc/${encodeURIComponent(table)}/${encodeURIComponent(String(docId))}`),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: clean, merge: qb._operation === "upsert" || qb._operation === "update" })
+      }
+    );
+    if (res.ok && res.data) {
+      results.push(res.data);
+    } else if (!res.ok && res.status === 0) {
+    }
+  }
+  return { data: results, error: null };
+}
+async function execDelete(qb) {
+  const table = qb._table;
+  const docs = await fetchCollection(table) || [];
+  let toDelete = docs;
+  for (const f of qb._eqFilters) {
+    const fval = typeof f.val === "object" && f.val !== null && !Array.isArray(f.val) ? f.val.neq : f.val;
+    if (!(typeof f.val === "object" && f.val !== null && !Array.isArray(f.val))) {
+      toDelete = toDelete.filter((d) => {
+        const dval = d[f.col] !== void 0 ? d[f.col] : d[f.col.replace(/_/g, "")];
+        return String(dval || "").toLowerCase() === String(fval || "").toLowerCase();
+      });
+    }
+  }
+  const results = [];
+  for (const doc of toDelete) {
+    const docId = doc.id || doc.email || doc._id;
+    if (!docId) continue;
+    const email = String(doc.email || "").toLowerCase().trim();
+    if (email === "kadersdiaz3@gmail.com" || email === "admin@perspective.sn") {
+      console.warn(`[Backend] Blocked attempt to delete protected account ${email}`);
+      continue;
+    }
+    const res = await safeFetchJson(
+      resolveApiUrl(`/api/mongodb/doc/${encodeURIComponent(table)}/${encodeURIComponent(String(docId))}`),
+      { method: "DELETE" }
+    );
+    if (res.ok) results.push(docId);
+  }
+  return { data: results, error: null };
+}
+var supabase = {
+  from(table) {
+    return createQueryBuilder(table);
+  },
+  auth: {
+    async getSession() {
+      try {
+        const stored = localStorage.getItem("perspective_auth_session");
+        if (stored) {
+          const parsed = safeJsonParse(stored, {});
+          _sessionUser = parsed;
+          const sessUser = {
+            id: parsed.id || parsed.email,
+            email: parsed.email,
+            user_metadata: { full_name: parsed.name, avatar_url: parsed.avatarUrl },
+            email_confirmed_at: parsed.emailVerified ? (/* @__PURE__ */ new Date()).toISOString() : void 0
+          };
+          return { data: { session: { user: sessUser, access_token: "session_" + parsed.email } }, error: null };
+        }
+      } catch (e) {
+        return { data: { session: null }, error: e };
+      }
+      return { data: { session: null }, error: null };
+    },
+    async signUp(payload) {
+      try {
+        const res = await safeFetchJson(resolveApiUrl("/api/mongodb/auth/register"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, email: (payload.email || "").toLowerCase().trim() })
+        });
+        if (res.ok && res.data?.user) {
+          const user = res.data.user;
+          const sessUser = {
+            id: user.id,
+            email: user.email,
+            user_metadata: { full_name: user.name, avatar_url: user.avatarUrl },
+            email_confirmed_at: user.emailVerified ? (/* @__PURE__ */ new Date()).toISOString() : void 0
+          };
+          _sessionUser = user;
+          localStorage.setItem("perspective_auth_session", JSON.stringify(user));
+          return { data: { user: sessUser, session: { user: sessUser, access_token: "token_" + user.email } }, error: null };
+        }
+        if (res.data?.error?.includes("existe d\xE9j\xE0") || res.data?.error?.includes("already")) {
+          return { data: { user: null, session: null }, error: { message: "already registered" } };
+        }
+        return { data: { user: null, session: null }, error: { message: res.error || "Registration failed" } };
+      } catch (e) {
+        return { data: { user: null, session: null }, error: e };
+      }
+    },
+    async signInWithPassword(payload) {
+      try {
+        const res = await safeFetchJson(resolveApiUrl("/api/mongodb/auth/login"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: (payload.email || "").toLowerCase().trim(),
+            password: payload.password
+          })
+        });
+        if (res.ok && res.data?.user) {
+          const user = res.data.user;
+          const sessUser = {
+            id: user.id,
+            email: user.email,
+            user_metadata: { full_name: user.name, avatar_url: user.avatarUrl },
+            email_confirmed_at: user.emailVerified ? (/* @__PURE__ */ new Date()).toISOString() : void 0
+          };
+          _sessionUser = user;
+          localStorage.setItem("perspective_auth_session", JSON.stringify(user));
+          return { data: { user: sessUser, session: { user: sessUser, access_token: "token_" + user.email } }, error: null };
+        }
+        return { data: { user: null, session: null }, error: { message: res.error || "Invalid credentials" } };
+      } catch (e) {
+        return { data: { user: null, session: null }, error: e };
+      }
+    },
+    async signOut() {
+      try {
+        localStorage.removeItem("perspective_auth_session");
+      } catch {
+      }
+      _sessionUser = null;
+      return { error: null };
+    }
+  },
+  channel() {
+    return {
+      on() {
+        return this;
+      },
+      subscribe() {
+        return { unsubscribe() {
+        } };
+      },
+      unsubscribe() {
+      }
+    };
+  }
+};
+var getSupabaseClientOrNull = () => supabase;
+async function bootstrapAnonymousAuth() {
+  try {
+    const r = await supabase.auth.getSession();
+    return r.data?.session?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+async function getCurrentUser() {
+  try {
+    const r = await supabase.auth.getSession();
+    return r.data?.session?.user ?? null;
+  } catch {
+    return null;
+  }
+}
+function onAuthStateChanged(callback) {
+  let lastSig = "";
+  let lastUser = null;
+  const check = async () => {
+    try {
+      const r = await supabase.auth.getSession();
+      const u = r.data?.session?.user ?? null;
+      const sig = u?.email || "";
+      if (sig !== lastSig) {
+        lastSig = sig;
+        lastUser = u;
+        callback(u);
+      }
+    } catch (err) {
+      console.warn("[Auth] onAuthStateChanged check notice (keeping current session):", err);
+    }
+  };
+  check();
+  const iv = setInterval(check, 1e3);
+  return { data: { subscription: { unsubscribe() {
+    clearInterval(iv);
+  } } } };
+}
+function subscribeToTable(_table, _callback, _filter) {
+  return { unsubscribe() {
+  } };
+}
+function usersQuery() {
+  return createQueryBuilder("users").select("*").is("deletedAt", null);
+}
+async function saveUserToSupabase(userData) {
+  const email = String(userData.email || userData.id || "").toLowerCase().trim();
+  if (!email) return { success: false, error: "Email missing" };
+  try {
+    const clean = await sanitizeFirestorePayload({ ...userData, email, lastActiveAt: (/* @__PURE__ */ new Date()).toISOString() });
+    const res = await safeFetchJson(resolveApiUrl(`/api/mongodb/doc/users/${encodeURIComponent(email)}`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: clean, merge: true })
+    });
+    if (res.ok && res.data) {
+      return { success: true, data: res.data };
+    }
+    return { success: false, error: res.error || "Save failed" };
+  } catch (err) {
+    return { success: false, error: err };
+  }
+}
+var saveUserToBackend = saveUserToSupabase;
+// Annotate the CommonJS export names for ESM import in node:
+0 && (module.exports = {
+  bootstrapAnonymousAuth,
+  formatUserForBackend,
+  formatUserForSupabase,
+  formatUserFromBackend,
+  formatUserFromSupabase,
+  getCurrentUser,
+  getSupabaseClientOrNull,
+  onAuthStateChanged,
+  saveUserToBackend,
+  saveUserToSupabase,
+  subscribeToTable,
+  supabase,
+  usersQuery
+});
