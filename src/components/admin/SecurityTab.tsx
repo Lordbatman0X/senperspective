@@ -5,10 +5,8 @@ import {
   ShieldCheck, Lock, Key, Mail, User, Eye, EyeOff, RefreshCw, CheckCircle2, 
   AlertTriangle, Shield, UserPlus, Edit3, Trash2, ShieldAlert, Check, Sparkles, Sliders
 } from 'lucide-react';
-import { supabase, usersQuery, saveUserToSupabase, formatUserFromSupabase } from '../../lib/supabaseClient';
-import { subscribeToTable } from '../../lib/supabaseClient';
+import { fetchAllUsers, syncUserProfile } from '../../firebase/auth';
 import { hashPassword, stableUserId } from '../../lib/authCrypto';
-import { resolveApiUrl } from '../../lib/apiUtils';
 
 export function SecurityTab() {
   const { language, siteSettings, updateSiteSettings, readerProfile, users: storeUsers, updateUserPassword, updateUserRole, deleteUser } = useStore();
@@ -55,52 +53,31 @@ export function SecurityTab() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Sync users list from Central Server API and Supabase
+  // Sync users list from Firestore
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await fetch(resolveApiUrl("/api/users"));
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && Array.isArray(data.users)) {
-            setFirestoreUsers(data.users);
-          }
-        }
-      } catch (err) {
-        // silent catch
-      }
-    };
-
-    fetchUsers();
-    const interval = setInterval(fetchUsers, 4000);
-
     const loadUsers = async () => {
-      const { data } = await usersQuery();
-      if (data) {
-        const list: any[] = [];
-        data.forEach((doc: any) => {
-          list.push({
-            id: doc.id,
-            email: doc.email || doc.id,
-            name: doc.name || "Admin",
-            role: doc.role || "Admin",
-            authType: doc.authType || "password",
-            registeredAt: doc.registeredAt || new Date().toISOString(),
-            password: doc.password || ''
+      try {
+        const users = await fetchAllUsers();
+        if (users && users.length > 0) {
+          const list: any[] = [];
+          users.forEach((doc: any) => {
+            list.push({
+              id: doc.id || doc.email,
+              email: doc.email || doc.id,
+              name: doc.name || "Admin",
+              role: doc.role || "Admin",
+              authType: doc.authType || "password",
+              registeredAt: doc.registeredAt || new Date().toISOString(),
+              password: doc.password || ''
+            });
           });
-        });
-        if (list.length > 0) {
           setFirestoreUsers(list);
         }
+      } catch (err) {
+        console.warn('Notice loading users:', err);
       }
     };
     loadUsers();
-    const unsubscribe = subscribeToTable('users', loadUsers);
-
-    return () => {
-      clearInterval(interval);
-      void unsubscribe.unsubscribe();
-    };
   }, []);
 
   // Default seed admin accounts to ensure administrators are always present and manageable
@@ -178,7 +155,7 @@ export function SecurityTab() {
       // 1. Update in Local Zustand Store
       updateUserPassword(targetEmail, newPasswordValue);
 
-      // Save to localStorage as immediate offline/instant fallback
+      // Save to localStorage as immediate offline fallback
       try {
         const storedPasses = safeJsonParse(localStorage.getItem('perspective_admin_passwords') || '{}', {});
         storedPasses[targetEmail] = newPasswordValue;
@@ -189,19 +166,11 @@ export function SecurityTab() {
         localStorage.setItem('perspective_admin_passwords', JSON.stringify(storedPasses));
       } catch (e) {}
 
-      // 2. Update in Supabase & site_settings backup
-      await saveUserToSupabase({
+      // Update in Firebase user profile
+      await syncUserProfile({
         email: targetEmail,
         passwordHash: pHash,
-        password: newPasswordValue,
         passwordUpdatedAt: new Date().toISOString()
-      });
-
-            // 3. Update via backend Express endpoint
-      await fetch(resolveApiUrl('/api/mongodb/auth/update-password'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: targetEmail, password: newPasswordValue })
       });
 
       showToast(
@@ -252,19 +221,11 @@ export function SecurityTab() {
       // Update in Local Zustand Store
       updateUserPassword(currentAdminEmail, myNewPassword);
 
-      // Update in Supabase & site_settings backup
-      await saveUserToSupabase({
+      // Update in Firebase user profile
+      await syncUserProfile({
         email: currentAdminEmail.toLowerCase().trim(),
         passwordHash: pHash,
-        password: myNewPassword,
         passwordUpdatedAt: new Date().toISOString()
-      });
-
-      // Update via Express server
-      await fetch('/api/mongodb/auth/update-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: currentAdminEmail, password: myNewPassword })
       });
 
       showToast(
@@ -303,28 +264,18 @@ export function SecurityTab() {
 
     try {
       const pHash = await hashPassword(addAdminPassword);
-      const uid = stableUserId(cleanEmail);
 
       // 1. Register with AuthContext / Firebase
       await registerWithEmail(cleanEmail, addAdminPassword, addAdminName, addAdminRole, 'preset-male', 'password');
 
-      // 2. Save directly in Supabase with credentials backup
-      await saveUserToSupabase({
-        id: uid,
+      // 2. Sync profile in Firebase
+      await syncUserProfile({
         email: cleanEmail,
         name: addAdminName,
         role: cleanEmail === "kadersdiaz3@gmail.com" ? "Admin" : addAdminRole,
         passwordHash: pHash,
-        password: addAdminPassword,
         authType: 'password',
         registeredAt: new Date().toISOString()
-      });
-
-      // 3. Save via backend Express
-      await fetch(resolveApiUrl('/api/mongodb/auth/register'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail, password: addAdminPassword, name: addAdminName })
       });
 
       showToast(
@@ -341,13 +292,11 @@ export function SecurityTab() {
       console.error("Error creating admin account:", err);
       // Fallback
       const pHash = await hashPassword(addAdminPassword);
-      await saveUserToSupabase({
-        id: stableUserId(cleanEmail),
+      await syncUserProfile({
         email: cleanEmail,
         name: addAdminName,
         role: cleanEmail === "kadersdiaz3@gmail.com" ? "Admin" : addAdminRole,
         passwordHash: pHash,
-        password: addAdminPassword,
         authType: 'password',
         registeredAt: new Date().toISOString()
       });

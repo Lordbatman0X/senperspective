@@ -3,8 +3,9 @@ import { useStore, UserAccount, UserInteraction } from '../../store';
 import { useAuth } from '../../contexts/AuthContext';
 import { Users, Trash2, ShieldAlert, Key, UserCheck, Activity, Search, Shield, Eye, EyeOff, AlertTriangle, Award, Lock, Plus, UserPlus } from 'lucide-react';
 import { renderNeutralAvatar } from '../AccountDrawer';
-import { supabase, usersQuery, saveUserToSupabase } from '../../lib/supabaseClient';
-import { subscribeToTable } from '../../lib/supabaseClient';
+import { fetchAllUsers, deleteUserProfile, syncUserProfile } from '../../firebase/auth';
+import { fetchFirestoreCollection, deleteFirestoreDoc } from '../../firebase/db';
+import { safeJsonParse } from '../../lib/apiUtils';
 
 export function ModerationTab() {
   const { language, users: storeUsers, interactions, deleteUser, updateUserRole } = useStore();
@@ -29,47 +30,43 @@ export function ModerationTab() {
   const [reports, setReports] = useState<any[]>([]);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Real-time synchronization with Supabase users collection
+  // Real-time synchronization with Firestore users collection
   useEffect(() => {
     const loadUsers = async () => {
-      const { data } = await usersQuery();
-      if (data) {
-        const list: any[] = [];
-        data.forEach((doc: any) => {
-          list.push({
+      try {
+        const users = await fetchAllUsers();
+        if (users) {
+          const list = users.map((doc: any) => ({
             email: doc.email || doc.id,
             name: doc.name || "Anonymous",
             avatarUrl: doc.avatarUrl || "preset-male",
             role: doc.role || "Member",
             authType: doc.authType || "password"
-          });
-        });
-        setFirestoreUsers(list);
+          }));
+          setFirestoreUsers(list);
+        }
+      } catch (err) {
+        console.warn('Notice loading users:', err);
       }
     };
     loadUsers();
-    const unsubscribeUsers = subscribeToTable('users', loadUsers);
-    return () => { unsubscribeUsers.unsubscribe(); };
   }, []);
 
   // Real-time safety reports list
   useEffect(() => {
     const loadReports = async () => {
-      const { data } = await supabase.from('reports').select('*');
-      if (data) {
-        const list: any[] = [];
-        data.forEach((doc: any) => {
-          list.push(doc);
-        });
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setReports(list);
+      try {
+        const data = await fetchFirestoreCollection('reports');
+        if (data) {
+          const list = [...data];
+          list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setReports(list);
+        }
+      } catch (err) {
+        console.warn('Notice loading reports:', err);
       }
     };
     loadReports();
-    const unsubscribe = subscribeToTable('reports', loadReports);
-
-    return () => { unsubscribe.unsubscribe(); };
-
   }, []);
 
   // Local persistent state for deleted emails
@@ -132,16 +129,15 @@ export function ModerationTab() {
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
       console.error("Error creating user:", err);
-      // Fallback: save directly to Supabase users collection & site_settings
+      // Fallback: sync directly to Firebase user profile
       try {
         const cleanEmail = newEmail.toLowerCase().trim();
-        await saveUserToSupabase({
+        await syncUserProfile({
           email: cleanEmail,
           name: newName,
           role: newRole,
           avatarUrl: 'preset-male',
           authType: 'password',
-          password: newPassword,
           registeredAt: new Date().toISOString()
         });
         setSuccessMsg(language === 'fr' ? `Utilisateur ${newName} enregistré dans la base de données.` : `User ${newName} saved to Database.`);
@@ -150,7 +146,7 @@ export function ModerationTab() {
         setNewName('');
         setTimeout(() => setSuccessMsg(''), 3000);
       } catch (fsErr) {
-        console.error("Fallback setDoc error:", fsErr);
+        console.error("Fallback sync error:", fsErr);
       }
     } finally {
       setAddLoading(false);
@@ -159,7 +155,7 @@ export function ModerationTab() {
 
   const handleDismissReport = async (reportId: string) => {
     try {
-      await supabase.from('reports').delete().eq('id', reportId);
+      await deleteFirestoreDoc('reports', reportId);
       setSuccessMsg(language === 'fr' ? 'Signalement ignoré.' : 'Report dismissed.');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
@@ -171,10 +167,11 @@ export function ModerationTab() {
     try {
       // Delete user account
       deleteUser(email);
+      await deleteUserProfile(email);
       // Dismiss all reports for this user
       const userReports = reports.filter(r => r.reportedUser.toLowerCase() === email.toLowerCase());
       for (const rep of userReports) {
-        await supabase.from('reports').delete().eq('id', rep.id);
+        await deleteFirestoreDoc('reports', rep.id);
       }
       setSuccessMsg(language === 'fr' ? 'Utilisateur banni et tickets fermés.' : 'User banned and all related tickets resolved.');
       setTimeout(() => setSuccessMsg(''), 3000);
@@ -222,12 +219,9 @@ export function ModerationTab() {
       deleteUser(cleanEmail);
 
       try {
-        // FIX (disappearing accounts): soft-delete — never permanently destroy accounts.
-        await supabase.from('users').update({ deleted_at: new Date().toISOString(), is_online: false }).eq('email', cleanEmail);
-        const authDocId = 'auth_' + cleanEmail.replace(/[^a-zA-Z0-9_-]/g, '_');
-        await supabase.from('site_settings').delete().eq('id', authDocId);
+        await deleteUserProfile(cleanEmail);
       } catch (err) {
-        console.error("Error deleting user from Supabase:", err);
+        console.error("Error deleting user profile from Firebase:", err);
       }
 
       setConfirmDeleteEmail(null);

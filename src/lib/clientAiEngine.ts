@@ -1,10 +1,10 @@
-import { resolveApiUrl, safeFetchJson } from './apiUtils';
+import { resolveApiUrl, safeFetchJson, safeJsonParse } from './apiUtils';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 /**
  * Client-Side AI and RSS Engine
- * Allows the Perspective Group frontend (when hosted statically on Firebase/Vercel/Cloudflare)
- * to perform AI rewriting, timeline generation, RSS feed reading, and provider diagnostics
- * directly from the browser using user API keys stored in localStorage and Firestore.
+ * Backed exclusively by Firebase Firestore and client-side intelligence.
  */
 
 export interface ClientRewriteOptions {
@@ -44,7 +44,7 @@ let hasLoadedFromFirestore = false;
 let loadPromise: Promise<Record<string, string>> | null = null;
 
 /**
- * Loads API keys from Supabase site_settings into memory and localStorage
+ * Loads API keys from Firestore site_settings into memory and localStorage
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
   if (typeof window === 'undefined') return {};
@@ -52,14 +52,12 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 
   loadPromise = (async () => {
     try {
-       // AUDIT fix: read API keys from the central backend via Express API
-      const res = await safeFetchJson(resolveApiUrl('/api/mongodb/doc/site_settings/api_keys'));
-      if (res.ok && res.data) {
-        const wrapped = (res.data.data as Record<string, any>) || res.data;
-        const apiKeys = (wrapped.api_keys || wrapped) as Record<string, string>;
+      const snap = await getDoc(doc(db, 'site_settings', 'api_keys'));
+      if (snap.exists()) {
+        const data = snap.data();
+        const apiKeys = (data?.api_keys || data || {}) as Record<string, string>;
         cachedFirestoreKeys = { ...apiKeys };
         hasLoadedFromFirestore = true;
-        // Sync into localStorage if not already set locally
         if (window.localStorage) {
           for (const [k, v] of Object.entries(apiKeys)) {
             if (typeof v === 'string' && v.trim()) {
@@ -77,7 +75,7 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
         return cachedFirestoreKeys;
       }
     } catch (e) {
-      console.warn('[Client AI] Note: Could not fetch keys from backend:', e);
+      console.warn('[Firebase] Notice loading API keys from Firestore:', e);
     } finally {
       loadPromise = null;
     }
@@ -153,21 +151,14 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
     delete cachedFirestoreKeys[P];
   }
 
-  // 3. Persist to backend site_settings (row 'api_keys')
+  // 3. Persist to Firestore site_settings/api_keys
   try {
-    const existingRes = await safeFetchJson(resolveApiUrl('/api/mongodb/doc/site_settings/api_keys'));
-    let existingData: Record<string, any> = {};
-    if (existingRes.ok && existingRes.data) {
-      existingData = ((existingRes.data.data as Record<string, any>)?.api_keys ? existingRes.data.data : { api_keys: (existingRes.data.data as Record<string, any>) || {} }) as Record<string, any>;
-    }
-    await fetch(resolveApiUrl('/api/mongodb/doc/site_settings/api_keys'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: { ...existingData, api_keys: { ...(existingData.api_keys || {}), [P]: cleanKey } }, merge: true })
-    });
-    console.log(`[Client AI] Successfully saved ${P} API key to backend database.`);
+    await setDoc(doc(db, 'site_settings', 'api_keys'), {
+      api_keys: { ...cachedFirestoreKeys, [P]: cleanKey }
+    }, { merge: true });
+    console.log(`[Firebase] Successfully saved ${P} API key to Firestore.`);
   } catch (err) {
-    console.warn(`[Client AI] Could not sync ${P} key to backend:`, err);
+    console.warn(`[Firebase] Could not sync ${P} key to Firestore:`, err);
   }
 }
 

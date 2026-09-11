@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Cookie, Settings2, X, Check, Lock, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 import { sendConsentTelemetry } from '../lib/telemetry';
+import { safeJsonParse } from '../lib/apiUtils';
 
 export interface CookiePreferences {
   essential: boolean; // Always true
@@ -37,7 +38,13 @@ export function CookieConsentBanner() {
       return () => clearTimeout(timer);
     } else {
       try {
-        setPreferences(safeJsonParse(stored, {}));
+        setPreferences(safeJsonParse<CookiePreferences>(stored, {
+          essential: true,
+          analytics: true,
+          personalization: true,
+          marketing: false,
+          updatedAt: new Date().toISOString()
+        }));
       } catch (e) {
         setIsVisible(true);
       }

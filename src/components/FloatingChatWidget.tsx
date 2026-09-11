@@ -1,10 +1,10 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/SimpleAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { getSafeText } from '../lib/utils';
 import { getMessengerContacts, MessengerContact } from '../lib/messengerContacts';
-import { resolveApiUrl, safeFetchJson } from '../lib/apiUtils';
+import { fetchAllUsers } from '../firebase/auth';
 import { 
   MessengerA11yToolbar, 
   A11ySpeechButton, 
@@ -37,7 +37,7 @@ export const FloatingChatWidget: React.FC = () => {
     messengerTextScale
   } = useStore();
 
-  const auth = useSimpleAuth();
+  const auth = useAuth();
   // Merge auth-context users (live fetch, includes online status) with store users
   // (persisted across browsers/devices so contacts always appear even before the
   // auth context finishes loading).
@@ -49,24 +49,21 @@ export const FloatingChatWidget: React.FC = () => {
     ...authUsers
   ];
 
-  // Fetch users from server if not available locally (fixes "no contact to message" issue)
+  // Fetch users from Firebase if not available locally
   useEffect(() => {
     const fetchUsersFromServer = async () => {
-      // Only fetch if we have no users at all
       if (authUsers.length === 0 && storeUsers.length === 0) {
         try {
-          const res = await safeFetchJson(resolveApiUrl('/api/mongodb/collection/users'));
-          if (res.ok && res.data && Array.isArray((res.data as any).documents) && (res.data as any).documents.length > 0) {
-            const serverUsers = (res.data as any).documents.map((d: any) => d.data || d);
-            // Merge with existing users, avoiding duplicates
+          const serverUsers = await fetchAllUsers();
+          if (serverUsers && serverUsers.length > 0) {
             const existingEmails = new Set(storeUsers.map((u: any) => (u.email || '').toLowerCase().trim()));
             const newUsers = serverUsers.filter((u: any) => !existingEmails.has((u.email || '').toLowerCase().trim()));
             if (newUsers.length > 0) {
-              useStore.setState({ users: [...storeUsers, ...newUsers] });
+              useStore.setState({ users: [...storeUsers, ...(newUsers as any)] });
             }
           }
         } catch (err) {
-          console.warn('[FloatingChat] Could not fetch users from server:', err);
+          console.warn('[FloatingChat] Could not fetch users from Firebase:', err);
         }
       }
     };

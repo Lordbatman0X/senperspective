@@ -1,9 +1,9 @@
 /**
  * Real User Telemetry & Audience Analytics Client
- * Sends consented reader metrics, pageviews, and commercial conversion events to server & Firestore
+ * Sends consented reader metrics, pageviews, and commercial conversion events to Firebase Firestore
  */
 
-import { resolveApiUrl } from './apiUtils';
+import { saveFirestoreDoc } from '../firebase/db';
 
 const STORAGE_SESSION_KEY = 'perspective_analytics_session_id';
 const STORAGE_CONSENT_KEY = 'perspective_cookie_consent';
@@ -31,13 +31,11 @@ export function getUserConsent(): { essential: boolean; analytics: boolean; pers
   const stored = localStorage.getItem(STORAGE_CONSENT_KEY);
   if (!stored) return { essential: true, analytics: true, personalization: true, marketing: false };
   try {
-    return safeJsonParse(stored, {});
+    return JSON.parse(stored);
   } catch (e) {
     return { essential: true, analytics: true, personalization: true, marketing: false };
   }
 }
-
-// Daily analytics aggregate removed — no daily_analytics table in Supabase schema
 
 export function detectRealLocation(): { country: string; city: string; region: string } {
   if (typeof window === 'undefined') {
@@ -75,7 +73,6 @@ export function detectRealLocation(): { country: string; city: string; region: s
 
 export async function sendConsentTelemetry(preferences: { essential: boolean; analytics: boolean; personalization: boolean; marketing: boolean }, userEmail?: string) {
   const sessionId = getSessionId();
-  const todayStr = new Date().toISOString().split('T')[0];
   const consentDocId = `consent_${sessionId}`;
 
   // Only detect and record real location if explicit analytics permission is granted by user
@@ -97,27 +94,11 @@ export async function sendConsentTelemetry(preferences: { essential: boolean; an
     userEmail: userEmail || ''
   };
 
-  // 1. Write directly to backend API
   try {
-    await fetch(resolveApiUrl('/api/analytics/consent'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, preferences, ...payload })
-    });
-    console.log('[TELEMETRY] Cookie consent stored in backend:', consentDocId);
-  } catch (supabaseErr) {
-    console.warn('[TELEMETRY BACKEND CONSENT ERROR]', supabaseErr);
-  }
-
-  // 2. Secondary raw fetch attempt to API route if backend server exists
-  try {
-    await fetch(resolveApiUrl('/api/analytics/consent'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, preferences, ...payload })
-    });
+    await saveFirestoreDoc('user_consents', consentDocId, payload);
+    console.log('[TELEMETRY] Cookie consent stored in Firebase:', consentDocId);
   } catch (err) {
-    // Expected on static hosting
+    console.warn('[TELEMETRY FIREBASE CONSENT ERROR]', err);
   }
 }
 
@@ -140,11 +121,12 @@ export async function trackEvent(
   }
 
   const sessionId = getSessionId();
-  const todayStr = new Date().toISOString().split('T')[0];
   // Only use real location if user granted explicit analytics/location permission
   const locInfo = consent.analytics ? detectRealLocation() : { country: '', city: '', region: '' };
 
+  const eventDocId = `evt_${sessionId}_${Date.now()}`;
   const payload = {
+    id: eventDocId,
     eventName: eventName || 'pageview',
     sessionId,
     path: details.path || (typeof window !== 'undefined' ? window.location.pathname : '/'),
@@ -161,28 +143,11 @@ export async function trackEvent(
     metadata: details.metadata || {}
   };
 
-  // 1. Write directly to backend API
   try {
-    const eventDocId = `evt_${sessionId}_${Date.now()}`;
-    await fetch(resolveApiUrl('/api/analytics/event'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, id: eventDocId })
-    });
-    console.log('[TELEMETRY] Event tracked in backend:', eventName);
-  } catch (supabaseErr) {
-    console.warn('[TELEMETRY BACKEND EVENT ERROR]', supabaseErr);
-  }
-
-  // 2. Secondary fetch attempt to API route if backend server exists
-  try {
-    await fetch(resolveApiUrl('/api/analytics/event'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    await saveFirestoreDoc('analytics_events', eventDocId, payload);
+    console.log('[TELEMETRY] Event tracked in Firebase:', eventName);
   } catch (err) {
-    // Expected on static hosting
+    console.warn('[TELEMETRY FIREBASE EVENT ERROR]', err);
   }
 }
 

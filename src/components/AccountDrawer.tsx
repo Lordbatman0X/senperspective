@@ -5,10 +5,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { supabase, subscribeToTable, formatUserForSupabase } from '../lib/supabaseClient';
-import { cloudLoadCollection } from '../lib/cloudStore';
+import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
-import { resolveApiUrl } from "../lib/apiUtils";
 import {
   X,
   Sun,
@@ -263,90 +261,19 @@ export function AccountDrawer({
     if (!readerProfile?.email) return;
     const email = ((readerProfile.email ?? '').toLowerCase()).trim();
 
-    const loadFriendRequests = async () => {
-      const { data } = await supabase.from('friend_requests').select('*').eq('user_id', email);
-      if (data) {
-        const list: string[] = data.map((row: any) => (row.id || '').toLowerCase().trim()).filter(Boolean);
-        setFriendRequests(list);
-      }
-    };
-    loadFriendRequests();
-
-    const unsubReq = subscribeToTable('friend_requests', (payload) => {
-      if (payload.new && (payload.new as any).user_id === email) {
-        setFriendRequests(prev => [...prev, (payload.new as any).id.toLowerCase().trim()]);
-      } else if (payload.old && (payload.old as any).user_id === email) {
-        setFriendRequests(prev => prev.filter(id => id !== (payload.old as any).id.toLowerCase().trim()));
-      }
-    }, `user_id=eq.${email}`);
-
-    const loadSentRequests = async () => {
-      const { data } = await supabase.from('sent_requests').select('*').eq('user_id', email);
-      if (data) {
-        const list: string[] = data.map((row: any) => (row.id || '').toLowerCase().trim()).filter(Boolean);
-        setSentRequests(list);
-      }
-    };
-    loadSentRequests();
-
-    const unsubSent = subscribeToTable('sent_requests', (payload) => {
-      if (payload.new && (payload.new as any).user_id === email) {
-        setSentRequests(prev => [...prev, (payload.new as any).id.toLowerCase().trim()]);
-      } else if (payload.old && (payload.old as any).user_id === email) {
-        setSentRequests(prev => prev.filter(id => id !== (payload.old as any).id.toLowerCase().trim()));
-      }
-    }, `user_id=eq.${email}`);
-
-    return () => {
-      if (unsubReq && typeof (unsubReq as any).unsubscribe === 'function') {
-        (unsubReq as any).unsubscribe();
-      }
-      if (unsubSent && typeof (unsubSent as any).unsubscribe === 'function') {
-        (unsubSent as any).unsubscribe();
-      }
-    };
-  }, [readerProfile?.email]);
-
-  useEffect(() => {
-    if (!readerProfile?.email) return;
-    const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-
     const loadFriends = async () => {
       try {
-        // Load friends from MongoDB via cloudStore
-        const rows = await cloudLoadCollection('friends');
-
-        const userFriends = rows.filter((row: any) => {
-          const userId = String(row?.user_id || '').toLowerCase().trim();
-          return userId === email;
-        });
-
-        const list: string[] = userFriends
-          .map((row: any) => (row.friend_email || row.email || '').toLowerCase().trim())
-          .filter(Boolean);
-
-        setFriendsList(list);
-        // CRITICAL: Sync to store so FloatingChatWidget and DiscussionPage see the same friends
-        useStore.getState().setFriends(list);
+        const u = await fetchUserProfile(email);
+        if (u && Array.isArray((u as any).friend_ids)) {
+          const list = (u as any).friend_ids.map((id: string) => id.toLowerCase().trim());
+          setFriendsList(list);
+          useStore.getState().setFriends(list);
+        }
       } catch (err) {
-        console.warn("[AccountDrawer] Error fetching friends:", err);
+        console.warn("[AccountDrawer] Notice loading friends:", err);
       }
     };
     loadFriends();
-
-    const unsubscribe = subscribeToTable('friends', (payload) => {
-      if (payload.new && (payload.new as any).user_id === email) {
-        setFriendsList(prev => [...prev, (payload.new as any).friend_email.toLowerCase().trim()]);
-      } else if (payload.old && (payload.old as any).user_id === email) {
-        setFriendsList(prev => prev.filter(id => id !== (payload.old as any).friend_email.toLowerCase().trim()));
-      }
-    }, `user_id=eq.${email}`);
-
-    return () => {
-      if (unsubscribe && typeof (unsubscribe as any).unsubscribe === 'function') {
-        (unsubscribe as any).unsubscribe();
-      }
-    };
   }, [readerProfile?.email]);
 
   const toggleFriend = async (friendEmail: string) => {
@@ -356,38 +283,22 @@ export function AccountDrawer({
     if (myEmail === targetEmail) return;
 
     const isFriend = friendsList.includes(targetEmail);
-    const hasSentRequest = sentRequests.includes(targetEmail);
-    const hasReceivedRequest = friendRequests.includes(targetEmail);
-
-    const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
-    const isPrivate = targetUser?.hidePersonalInfo;
 
     try {
+      let nextFriends: string[];
       if (isFriend) {
-        await supabase.from('friends').delete().eq('user_id', myEmail).eq('friend_email', targetEmail);
-        await supabase.from('friends').delete().eq('user_id', targetEmail).eq('friend_email', myEmail);
+        nextFriends = friendsList.filter(e => e !== targetEmail);
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
-      } else if (hasSentRequest) {
-        await supabase.from('sent_requests').delete().eq('user_id', myEmail).eq('id', targetEmail);
-        await supabase.from('friend_requests').delete().eq('user_id', targetEmail).eq('id', myEmail);
-        setSettingsSuccessMsg(language === "fr" ? "✓ Demande annulée" : "✓ Request cancelled");
-      } else if (hasReceivedRequest) {
-        await supabase.from('friend_requests').delete().eq('user_id', myEmail).eq('id', targetEmail);
-        await supabase.from('sent_requests').delete().eq('user_id', targetEmail).eq('id', myEmail);
-        await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() });
-        await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() });
-        setSettingsSuccessMsg(language === "fr" ? "✓ Demande acceptée !" : "✓ Request accepted!");
       } else {
-        if (isPrivate) {
-          await supabase.from('sent_requests').upsert({ id: targetEmail, user_id: myEmail, email: targetEmail, sent_at: Date.now() });
-          await supabase.from('friend_requests').upsert({ id: myEmail, user_id: targetEmail, email: myEmail, sent_at: Date.now() });
-          setSettingsSuccessMsg(language === "fr" ? "✓ Demande envoyée" : "✓ Request sent");
-        } else {
-          await supabase.from('friends').upsert({ user_id: myEmail, friend_email: targetEmail, connected_at: Date.now() });
-          await supabase.from('friends').upsert({ user_id: targetEmail, friend_email: myEmail, connected_at: Date.now() });
-          setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
-        }
+        nextFriends = [...friendsList, targetEmail];
+        setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
       }
+      setFriendsList(nextFriends);
+      useStore.getState().setFriends(nextFriends);
+      await syncUserProfile({
+        ...readerProfile,
+        friend_ids: nextFriends
+      });
       setTimeout(() => setSettingsSuccessMsg(""), 3000);
     } catch (err) {
       console.error("Failed to toggle friend status:", err);
@@ -396,24 +307,14 @@ export function AccountDrawer({
 
   const syncProfileToFirestore = async (updatedFields: Record<string, any>) => {
     if (readerProfile && readerProfile.email) {
-      const cleanEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
       try {
         const safeFields = await sanitizeFirestorePayload(updatedFields);
-        if (supabase) {
-          await supabase.from('users').update(safeFields).or(`email.eq.${cleanEmail},id.eq.${cleanEmail}`);
-        }
-      } catch (err) {
-        console.error("Error syncing profile updates to Supabase:", err);
-      }
-      try {
-        // /api/users merges profile fields into the MongoDB users collection
-        await fetch(resolveApiUrl('/api/users'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...updatedFields, email: cleanEmail, id: cleanEmail })
+        await syncUserProfile({
+          ...readerProfile,
+          ...safeFields
         });
       } catch (err) {
-        console.error("Error syncing profile updates to Central DB:", err);
+        console.error("Error syncing profile updates to Firebase:", err);
       }
     }
   };

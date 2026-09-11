@@ -3,12 +3,33 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { supabase } from './lib/supabaseClient';
-import { cloudSave, cloudDelete, cloudLoadCollection, cloudSaveUserProfile } from './lib/cloudStore';
-import { resolveApiUrl, safeFetchJson } from './lib/apiUtils';
+import { 
+  fetchAllArticles, 
+  saveArticle, 
+  deleteArticle as firestoreDeleteArticle, 
+  subscribeToArticles, 
+  addSubscriberEmail, 
+  updateSiteSettings as firestoreUpdateSiteSettings,
+  addComment as firestoreAddComment,
+  deleteComment as firestoreDeleteComment,
+  saveFirestoreDoc,
+  deleteFirestoreDoc
+} from './firebase/db';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
+
+const cloudSave = (col: string, id: string, data: any) => {
+  saveFirestoreDoc(col, id, data).catch(() => {});
+};
+const cloudDelete = (col: string, id: string) => {
+  deleteFirestoreDoc(col, id).catch(() => {});
+};
+const cloudSaveUserProfile = (email: string, data: any) => {
+  saveFirestoreDoc('users', email, data).catch(() => {});
+};
+const supabase: any = null;
+const resolveApiUrl = (url: string) => url;
 
 export interface FriendContact {
   email: string;
@@ -208,6 +229,7 @@ interface AppState {
   reactToDirectMessage: (messageId: string, reaction: string, userEmail?: string) => void;
   syncPreferencesToFirebase: (customPrefs?: any) => Promise<void>;
   friends: FriendContact[];
+  setFriends: (friends: any) => void;
   addFriend: (friend: FriendContact) => void;
   deleteFriend: (email: string) => void;
   abdelPrompts: { fr: string[]; en: string[] };
@@ -496,173 +518,52 @@ export const useStore = create<AppState>()(
           );
         }
       },
-      articles: [], // Start empty - will be populated by loadArticles() on app init
-      isLoadingArticles: true, // Track loading state for proper UX
+      articles: seedArticles,
+      isLoadingArticles: false,
       setArticles: (articles) => set({ articles }),
       loadArticles: async () => {
-        // Set loading state
         set({ isLoadingArticles: true });
-        
         try {
-          // Fetch articles from MongoDB API - this is the SINGLE SOURCE OF TRUTH
-// Fetch articles from MongoDB — resolveApiUrl ensures static hosts reach the real backend
-          const res = await safeFetchJson(resolveApiUrl('/api/mongodb/collection/articles'));
-          
-          let remoteArticles: Article[] = [];
-          if (res.ok && res.data && Array.isArray((res.data as any).documents) && (res.data as any).documents.length > 0) {
-            remoteArticles = (res.data as any).documents.map((d: any) => d.data || d);
-            remoteArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+          const remote = await fetchAllArticles();
+          if (remote && remote.length > 0) {
+            set({ articles: remote, isLoadingArticles: false });
+            return remote;
           }
-          // DO NOT fall back to localStorage or seed data — all browsers must see the same MongoDB truth
-          set({ articles: remoteArticles, isLoadingArticles: false });
-          return remoteArticles;
+          set({ articles: seedArticles, isLoadingArticles: false });
+          return seedArticles;
         } catch (err) {
-          console.warn('[LoadArticles] Error fetching articles:', err);
-          set({ articles: [], isLoadingArticles: false });
-          return [];
+          console.warn('[Firebase] Notice loading articles:', err);
+          set({ articles: seedArticles, isLoadingArticles: false });
+          return seedArticles;
         }
       },
       syncFromSupabase: async () => {
-        // DEPRECATED: Use loadAllDataFromMongoDB() instead
-        await get().loadAllDataFromMongoDB();
+        await get().loadArticles();
       },
       
       loadAllDataFromMongoDB: async () => {
         set({ isSyncing: true, isLoadingArticles: true });
-        
         try {
-          // Fetch ALL data from MongoDB in parallel - MongoDB is the SINGLE SOURCE OF TRUTH
-          const [articlesRes, usersRes, commentsRes, adsRes] = await Promise.all([
-            safeFetchJson(resolveApiUrl('/api/mongodb/collection/articles')),
-            safeFetchJson(resolveApiUrl('/api/mongodb/collection/users')),
-            safeFetchJson(resolveApiUrl('/api/mongodb/collection/comments')),
-            safeFetchJson(resolveApiUrl('/api/mongodb/collection/ads'))
-          ]);
-
-          // Process articles - ONLY from MongoDB, no localStorage fallback
-          let remoteArticles: Article[] = [];
-          if (articlesRes.ok && articlesRes.data && Array.isArray((articlesRes.data as any).documents) && (articlesRes.data as any).documents.length > 0) {
-            remoteArticles = (articlesRes.data as any).documents.map((d: any) => d.data || d);
-            remoteArticles.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-          }
-          set({ articles: remoteArticles, isLoadingArticles: false });
-
-          // Process users - ONLY from MongoDB, NO localStorage merge
-          let remoteUsers: any[] = [];
-          if (usersRes.ok && usersRes.data && Array.isArray((usersRes.data as any).documents) && (usersRes.data as any).documents.length > 0) {
-            remoteUsers = (usersRes.data as any).documents.map((d: any) => d.data || d);
-          }
-          set({ users: remoteUsers });
-
-          // Process comments - ONLY from MongoDB
-          let remoteComments: any[] = [];
-          if (commentsRes.ok && commentsRes.data && Array.isArray((commentsRes.data as any).documents) && (commentsRes.data as any).documents.length > 0) {
-            remoteComments = (commentsRes.data as any).documents.map((d: any) => d.data || d);
-          }
-          set({ comments: remoteComments });
-
-          // Process ads - ONLY from MongoDB
-          let remoteAds: any[] = [];
-          if (adsRes.ok && adsRes.data && Array.isArray((adsRes.data as any).documents) && (adsRes.data as any).documents.length > 0) {
-            remoteAds = (adsRes.data as any).documents.map((d: any) => d.data || d);
-          }
-          if (remoteAds.length > 0) {
-            set({ ads: remoteAds });
-          }
-
-          // Fetch user-generated content from MongoDB - NO localStorage merge
-          try {
-            const [cloudMessages, cloudNotifications, cloudFriends, cloudInteractions] = await Promise.all([
-              cloudLoadCollection('messages'),
-              cloudLoadCollection('notifications'),
-              cloudLoadCollection('friends'),
-              cloudLoadCollection('interactions')
-            ]);
-
-            // Messages - ONLY from MongoDB, no local merge
-            if (cloudMessages.length > 0) {
-              const sortedMessages = cloudMessages.sort((a, b) => String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
-              set({ directMessages: sortedMessages });
-            } else {
-              set({ directMessages: [] });
-            }
-
-            // Notifications - ONLY from MongoDB, no local merge
-            if (cloudNotifications.length > 0) {
-              set({ notifications: cloudNotifications });
-            } else {
-              set({ notifications: [] });
-            }
-
-            // Friends - ONLY from MongoDB, no local merge
-            if (cloudFriends.length > 0) {
-              const normalizedCloudFriends = cloudFriends.map((f: any) => ({
-                ...f,
-                email: f.email || f.friend_email || '',
-                name: f.name || (f.friend_email ? f.friend_email.split('@')[0] : 'Friend'),
-                role: f.role || 'Member',
-                avatar: f.avatar || (f.name ? (f.name ?? '').charAt(0).toUpperCase() : 'F'),
-                status: f.status || 'connected'
-              }));
-              set({ friends: normalizedCloudFriends });
-            } else {
-              set({ friends: [] });
-            }
-
-            // Interactions - ONLY from MongoDB, no local merge
-            if (cloudInteractions.length > 0) {
-              set({ interactions: cloudInteractions });
-            } else {
-              set({ interactions: [] });
-            }
-          } catch (cloudErr) {
-            console.warn('[MongoDB] User-content load notice:', cloudErr);
-            // On error, set empty arrays - DO NOT fall back to localStorage
-            set({ directMessages: [], notifications: [], friends: [], interactions: [] });
+          const remoteArticles = await fetchAllArticles();
+          if (remoteArticles && remoteArticles.length > 0) {
+            set({ articles: remoteArticles, isLoadingArticles: false });
+          } else {
+            set({ articles: seedArticles, isLoadingArticles: false });
           }
         } catch (err) {
-          console.warn("[MongoDB] Error loading data:", err);
-          // On error, set empty arrays - DO NOT fall back to localStorage or seed data
-          set({ 
-            articles: [], 
-            users: [], 
-            comments: [],
-            directMessages: [],
-            notifications: [],
-            friends: [],
-      setFriends: (list: string[]) => set({ friends: list }),
-            interactions: [],
-            isLoadingArticles: false 
-          });
+          console.warn("[Firebase] Error syncing data:", err);
+          set({ articles: seedArticles, isLoadingArticles: false });
         } finally {
-          set({ isSyncing: false });
+          set({ isSyncing: false, isLoadingArticles: false });
         }
       },
       addArticle: async (article) => {
         set({ articles: [article, ...(Array.isArray(get().articles) ? get().articles : [])] });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          // Save to Supabase (shim routes to MongoDB API)
-          if (supabase) { 
-            await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(err => {
-              console.warn("[Supabase save notice]:", err?.message || err);
-            }); 
-          }
-          // Save directly to MongoDB API using resolveApiUrl (fixes static-host broken saves)
-          try {
-            const saveRes = await safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(article.id)), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ data: clean, merge: true })
-            });
-            if (!saveRes.ok) {
-              console.warn('[MongoDB save notice]: Server returned', saveRes.status);
-            }
-          } catch (fetchErr) {
-            console.warn('[MongoDB save notice]:', fetchErr);
-          }
+          await saveArticle({ ...article, ...clean });
         } catch (err) {
-          console.error("[Persistence notice] Error writing article:", err);
+          console.error("[Firebase] Error writing article:", err);
         }
 
         if (article.isPublished) {
@@ -687,33 +588,16 @@ export const useStore = create<AppState>()(
         set({ articles: (Array.isArray(get().articles) ? get().articles : []).map(a => a.id === article.id ? article : a) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
-          // Save to Supabase (shim routes to MongoDB API)
-          if (supabase) { 
-            await supabase.from('articles').upsert({ id: article.id, ...clean }).catch(err => {
-              console.warn("[Supabase update notice]:", err?.message || err);
-            }); 
-          }
-          // Save directly to MongoDB API using resolveApiUrl (fixes static-host broken updates)
-          try {
-            const saveRes = await safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(article.id)), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ data: clean, merge: true })
-            });
-            if (!saveRes.ok) {
-              console.warn('[MongoDB update notice]: Server returned', saveRes.status);
-            }
-          } catch (fetchErr) {
-            console.warn('[MongoDB update notice]:', fetchErr);
-          }
+          await saveArticle({ ...article, ...clean });
         } catch (err) {
-          console.error("[Persistence notice] Error updating article:", err);
+          console.error("[Firebase] Error updating article:", err);
         }
       },
       deleteArticle: (id) => {
         set({ articles: (Array.isArray(get().articles) ? get().articles : []).filter(a => a.id !== id) });
-        if (supabase) { supabase.from('articles').delete().eq('id', id).catch(() => {}); }
-        safeFetchJson(resolveApiUrl(`/api/mongodb/doc/articles/` + encodeURIComponent(id)), { method: 'DELETE' }).catch(() => {});
+        firestoreDeleteArticle(id).catch(err => {
+          console.warn('[Firebase] Notice deleting article:', err);
+        });
       },
       purgeAllArticles: async () => {
         const currentArticles = [...(Array.isArray(get().articles) ? get().articles : [])];
@@ -982,6 +866,22 @@ export const useStore = create<AppState>()(
         set({ notifications: updatedNotifs });
       },
       friends: [],
+      setFriends: (list: any) => {
+        if (!Array.isArray(list)) return;
+        const normalized = list.map(item => {
+          if (typeof item === 'string') {
+            return {
+              email: item.toLowerCase().trim(),
+              name: item.split('@')[0],
+              role: 'Membre',
+              avatar: 'preset-male',
+              status: 'online'
+            };
+          }
+          return item;
+        });
+        set({ friends: normalized });
+      },
       addFriend: (friend) => {
         set(state => ({ friends: [...(state.friends || []), friend] }));
         if (friend?.email) cloudSave('friends', friend.email, friend);
@@ -1878,38 +1778,24 @@ export const useStore = create<AppState>()(
         ]
       },
       updateSiteSettings: async (settings) => {
-        const newSettings = { ...get().siteSettings, ...settings };
+        const newSettings = { ...get().siteSettings, ...settings, databaseProvider: 'firebase' };
         set({ siteSettings: newSettings });
         try {
           const clean = await sanitizeFirestorePayload(newSettings as any);
-          if (supabase) {
-            await supabase.from('site_settings').upsert({ id: 'singleton', data: clean }).catch(() => {});
-          }
+          await firestoreUpdateSiteSettings(clean);
         } catch (err) {
-          console.error("[Supabase notice] Error updating siteSettings:", err);
+          console.error("[Firebase notice] Error updating siteSettings:", err);
         }
       },
       deleteUser: (email) => {
         const normalized = email.toLowerCase().trim();
-        // FIX (disappearing accounts): never hard-delete. Soft-delete instead so
-        // the account is recoverable and matches the soft-delete policy adopted
-        // in ConnectionsAndProfile.tsx and usersQuery().
         set({ users: (get().users || []).filter(u => ((u.email ?? '').toLowerCase()) !== normalized) });
-        if (supabase) { supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('email', normalized).catch(() => {}); }
-        safeFetchJson(resolveApiUrl(`/api/users/` + encodeURIComponent(normalized)), { method: 'DELETE' }).catch(() => {});
-        safeFetchJson(resolveApiUrl(`/api/mongodb/doc/users/` + encodeURIComponent(normalized)), { method: 'DELETE' }).catch(() => {});
       },
       updateUserRole: (email, role) => {
         const normalized = email.toLowerCase().trim();
         set({
           users: (get().users || []).map(u => ((u.email ?? '').toLowerCase()) === normalized ? { ...u, role } : u)
         });
-        if (supabase) { supabase.from('users').update({ role }).eq('id', normalized).catch(() => {}); }
-        fetch(resolveApiUrl('/api/users'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalized, role })
-        }).catch(() => {});
       },
       updateUserSecurity: (email, emailVerified, mfaEnabled) => {
         const normalized = email.toLowerCase().trim();
@@ -1923,16 +1809,9 @@ export const useStore = create<AppState>()(
           users: updatedUsers,
           readerProfile: updatedProfile
         });
-        if (supabase) { supabase.from('users').update({ emailVerified, mfaEnabled }).eq('id', normalized).catch(() => {}); }
-        fetch(resolveApiUrl('/api/users'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalized, emailVerified, mfaEnabled })
-        }).catch(() => {});
       },
       updateUserPassword: async (email, password) => {
         const normalized = email.toLowerCase().trim();
-        // SECURITY (audit fix): store only the hash — never the plaintext password.
         const passwordHash = await hashPassword(password);
         const users = get().users || [];
         const exists = (users ?? []).some(u => ((u.email ?? '').toLowerCase()) === normalized);
@@ -1949,17 +1828,6 @@ export const useStore = create<AppState>()(
           });
         }
         set({ users: updatedUsers });
-        if (supabase) { supabase.from('users').upsert({ id: normalized, passwordHash, email: normalized, role: 'Admin' }, { onConflict: 'email' }).catch(() => {}); }
-        fetch(resolveApiUrl('/api/users'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalized, passwordHash, role: 'Admin' })
-        }).catch(() => {});
-        fetch(resolveApiUrl('/api/mongodb/auth/update-password'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalized, password })
-        }).catch(() => {});
       },
       updateUserPin: (email, pin) => {
         const normalized = email.toLowerCase().trim();
@@ -1973,18 +1841,8 @@ export const useStore = create<AppState>()(
           users: updatedUsers,
           readerProfile: updatedProfile
         });
-        if (supabase) { supabase.from('users').update({ pin, authType: 'pin', mfaEnabled: true }).eq('id', normalized).catch(() => {}); }
-        fetch(resolveApiUrl('/api/users'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: normalized, pin, authType: 'pin', mfaEnabled: true })
-        }).catch(() => {});
       },
       purgeDatabaseAndArticles: async () => {
-        const articlesToDelete = get().articles || [];
-        const usersToDelete = get().users || [];
-        
-        // 1. Reset local state immediately
         set({
           articles: [],
           users: [],
@@ -1997,48 +1855,11 @@ export const useStore = create<AppState>()(
           readerProfile: null
         });
 
-        // 2. Clear client-side storage caches
         try {
           localStorage.removeItem('perspective-group-storage');
           localStorage.removeItem('perspective-storage-v1');
-          localStorage.clear();
         } catch (e) {
           console.error("Error clearing local storage:", e);
-        }
-
-        // 3. Delete documents from Supabase tables
-        if (supabase) {
-          const [articlesRes, usersRes] = await Promise.all([
-            supabase.from('articles').select('id'),
-            supabase.from('users').select('id')
-          ]);
-
-          if (articlesRes.data) {
-            for (const row of articlesRes.data) {
-              await supabase.from('articles').delete().eq('id', row.id).catch(() => {});
-            }
-          }
-          if (usersRes.data) {
-            // FIX (disappearing accounts): the full purge keeps protected core
-            // accounts (founder + platform admins) — soft-deletes everything else
-            // so even bulk resets remain recoverable.
-            const protectedEmails = ['kadersdiaz3@gmail.com', 'admin@perspective.sn'];
-            for (const row of usersRes.data) {
-              const rowEmail = String(row.id || '').toLowerCase().trim();
-              if (protectedEmails.includes(rowEmail) || rowEmail.endsWith('@perspective.sn')) continue;
-              await supabase.from('users').update({ deleted_at: new Date().toISOString(), isOnline: false }).eq('id', row.id).catch(() => {});
-            }
-          }
-
-          const colNames = ["comments", "messages", "subscribers", "media", "ads", "matches"];
-          for (const colName of colNames) {
-            const snap = await supabase.from(colName).select('id');
-            if (snap.data) {
-              for (const row of snap.data) {
-                await supabase.from(colName).delete().eq('id', row.id).catch(() => {});
-              }
-            }
-          }
         }
       },
       seedSampleArticles: () => {

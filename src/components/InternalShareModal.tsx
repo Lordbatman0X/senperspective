@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -19,8 +19,8 @@ import {
   Globe
 } from 'lucide-react';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/SimpleAuth';
-import { supabase, subscribeToTable } from '../lib/supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchUserProfile } from '../firebase/auth';
 import { SharedAttachment } from './SharedItemCard';
 
 interface InternalShareModalProps {
@@ -48,7 +48,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
   } = useStore();
 
   const navigate = useNavigate();
-  const { allUsers } = useSimpleAuth();
+  const { allUsers } = useAuth();
   const accentColor = siteSettings?.accentColor || '#E85D42';
 
   // Search query
@@ -99,33 +99,21 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
 
     const loadFriends = async () => {
-      const { data } = await supabase
-        .from('users')
-        .select('friend_ids')
-        .eq('email', myEmail)
-        .single();
-      if (data?.friend_ids) {
-        const loadedFriends = data.friend_ids.map((id: string) => id.toLowerCase().trim());
-        setFriendsList(loadedFriends);
-        if (loadedFriends.length > 0 && selectedRecipientEmail === 'admin@perspective.sn') {
-          setSelectedRecipientEmail(loadedFriends[0]);
+      try {
+        const u = await fetchUserProfile(myEmail);
+        if (u && Array.isArray((u as any).friend_ids)) {
+          const loadedFriends = (u as any).friend_ids.map((id: string) => id.toLowerCase().trim());
+          setFriendsList(loadedFriends);
+          if (loadedFriends.length > 0 && selectedRecipientEmail === 'admin@perspective.sn') {
+            setSelectedRecipientEmail(loadedFriends[0]);
+          }
         }
+      } catch (e) {
+        console.warn('Error loading friends:', e);
       }
     };
 
-    const unsubscribe = subscribeToTable(
-      'users',
-      (payload) => {
-        if (((payload.new as any)?.email ?? '') && (((payload.new as any)?.email ?? '').toLowerCase()).trim() === myEmail) {
-          loadFriends();
-        }
-      },
-      `email=eq.${myEmail}`
-    );
-
     loadFriends();
-
-    return () => { unsubscribe.unsubscribe(); };
   }, [isOpen, readerProfile?.email]);
 
   // 2. Compute Active Attachment

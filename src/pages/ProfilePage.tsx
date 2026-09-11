@@ -4,9 +4,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { supabase, subscribeToTable, usersQuery } from '../lib/supabaseClient';
-import { cloudSave, cloudDelete, cloudLoadCollection } from '../lib/cloudStore';
-import { resolveApiUrl } from '../lib/apiUtils';
+import { fetchUserProfile } from '../firebase/auth';
+import { saveFirestoreDoc, deleteFirestoreDoc, fetchFirestoreCollection } from '../firebase/db';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
@@ -141,9 +140,9 @@ export function ProfilePage() {
   const currentSettings = siteSettings || { accentColor: "#E85D42" };
   const accentColor = currentSettings.accentColor;
 
-  // Relationship state — loaded from MongoDB Atlas via cloudStore (Supabase retired)
+  // Relationship state — loaded from Firestore
   const loadRelations = async (collection: string, byField: string, key: string, valueField: string, type?: string): Promise<string[]> => {
-    const rows: any[] = await cloudLoadCollection(collection);
+    const rows: any[] = await fetchFirestoreCollection(collection);
     const k = key.toLowerCase().trim();
     return rows
       .filter((r: any) => String(r?.[byField] || "").toLowerCase().trim() === k && (!type || String(r?.type || "").toLowerCase() === type))
@@ -197,7 +196,7 @@ export function ProfilePage() {
     if (!dec || !readerProfile?.email) return;
     const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const check = async () => {
-      const rows: any[] = await cloudLoadCollection('blocks');
+      const rows: any[] = await fetchFirestoreCollection('blocks');
       setHasBlockedMe(rows.some(r => String(r?.user_id || "").toLowerCase().trim() === dec && String(r?.blocked_email || "").toLowerCase().trim() === myEmail && String(r?.type || "block").toLowerCase() === 'block'));
     };
     check();
@@ -211,28 +210,26 @@ export function ProfilePage() {
     load();
   }, [readerProfile?.email]);
 
-  // Handle finding target user with live Supabase listener
+  // Handle finding target user
   const decodedEmail = decodeURIComponent(email || "").toLowerCase().trim();
   const [targetUserData, setTargetUserData] = useState<any | null>(null);
 
   useEffect(() => {
     if (!decodedEmail) return;
     const loadUser = async () => {
-      const { data } = await usersQuery().eq('email', decodedEmail).maybeSingle();
-      if (data) {
-        setTargetUserData({ id: data.id, ...data });
-      } else {
+      try {
+        const u = await fetchUserProfile(decodedEmail);
+        if (u) {
+          setTargetUserData({ id: u.email, ...u });
+        } else {
+          setTargetUserData(null);
+        }
+      } catch (err) {
+        console.warn('Error loading user profile:', err);
         setTargetUserData(null);
       }
     };
     loadUser();
-    const unsub = subscribeToTable('users', (payload) => {
-      const row = payload.new || payload.old;
-      if (row && (row.email === decodedEmail || row.id === decodedEmail)) {
-        setTargetUserData({ id: row.id, ...row });
-      }
-    });
-    return () => { unsub.unsubscribe?.(); };
   }, [decodedEmail]);
 
   const fallbackUser = allUsers.find(u => {
@@ -305,18 +302,16 @@ export function ProfilePage() {
     const a = myEmail, b = targetEmail;
     try {
       if (isFriend) {
-        await cloudDelete('friends', `${a}:${b}`);
-        await cloudDelete('friends', `${b}:${a}`);
+        await deleteFirestoreDoc('friends', `${a}_${b}`);
+        await deleteFirestoreDoc('friends', `${b}_${a}`);
         setFriends((friends ?? []).filter(f => f !== b));
         useStore().deleteFriend(b);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
         const ts = Date.now();
         const contact = { id: b, email: b, name: targetUser.name || b.split('@')[0], role: targetUser.role || 'Member', avatar: targetUser.avatarUrl || '', avatarUrl: targetUser.avatarUrl || '', status: 'friend' };
-        // Unified friend record (keyed per direction). The bubble/drawer read `.email`,
-        // the profile reads `.user_id` → `.email`. Persisted to MongoDB Atlas via cloudStore.
-        await cloudSave('friends', `${a}:${b}`, { id: `${a}:${b}`, user_id: a, friend_email: b, email: b, name: contact.name, role: contact.role, avatarUrl: contact.avatarUrl, connected_at: ts, type: 'friend' });
-        await cloudSave('friends', `${b}:${a}`, { id: `${b}:${a}`, user_id: b, friend_email: a, email: a, name: readerProfile?.name || a.split('@')[0], role: readerProfile?.role || 'Member', avatarUrl: readerProfile?.avatarUrl || '', connected_at: ts, type: 'friend' });
+        await saveFirestoreDoc('friends', `${a}_${b}`, { id: `${a}_${b}`, user_id: a, friend_email: b, email: b, name: contact.name, role: contact.role, avatarUrl: contact.avatarUrl, connected_at: ts, type: 'friend' });
+        await saveFirestoreDoc('friends', `${b}_${a}`, { id: `${b}_${a}`, user_id: b, friend_email: a, email: a, name: readerProfile?.name || a.split('@')[0], role: readerProfile?.role || 'Member', avatarUrl: readerProfile?.avatarUrl || '', connected_at: ts, type: 'friend' });
         setFriends([...new Set([...friends, b])]);
         useStore().addFriend(contact);
         setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
@@ -343,11 +338,11 @@ export function ProfilePage() {
     const isFollowing = following.includes(targetEmail);
     try {
       if (isFollowing) {
-        await cloudDelete('followers', `${myEmail}:${targetEmail}`);
+        await deleteFirestoreDoc('followers', `${myEmail}_${targetEmail}`);
         setFollowing(following.filter(f => f !== targetEmail));
         setSuccessMsg(language === "fr" ? "Vous ne suivez plus ce membre." : "Unfollowed member.");
       } else {
-        await cloudSave('followers', `${myEmail}:${targetEmail}`, { id: `${myEmail}:${targetEmail}`, user_id: myEmail, follower_email: targetEmail, followed_at: Date.now(), type: 'follow' });
+        await saveFirestoreDoc('followers', `${myEmail}_${targetEmail}`, { id: `${myEmail}_${targetEmail}`, user_id: myEmail, follower_email: targetEmail, followed_at: Date.now(), type: 'follow' });
         setFollowing([...new Set([...following, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Vous suivez désormais ce membre !" : "Following member!");
       }
@@ -373,17 +368,17 @@ export function ProfilePage() {
     const isCurrentlyBlocked = blocks.includes(targetEmail);
     try {
       if (isCurrentlyBlocked) {
-        await cloudDelete('blocks', `${myEmail}:${targetEmail}`);
+        await deleteFirestoreDoc('blocks', `${myEmail}_${targetEmail}`);
         setBlocks(blocks.filter(x => x !== targetEmail));
         setSuccessMsg(language === "fr" ? "Membre débloqué." : "Unblocked member.");
       } else {
-        await cloudSave('blocks', `${myEmail}:${targetEmail}`, { id: `${myEmail}:${targetEmail}`, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'block' });
+        await saveFirestoreDoc('blocks', `${myEmail}_${targetEmail}`, { id: `${myEmail}_${targetEmail}`, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'block' });
         setBlocks([...new Set([...blocks, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Membre bloqué avec succès." : "Blocked member successfully.");
         // Auto-remove friend and follow connections on block
-        await cloudDelete('friends', `${myEmail}:${targetEmail}`);
-        await cloudDelete('friends', `${targetEmail}:${myEmail}`);
-        await cloudDelete('followers', `${myEmail}:${targetEmail}`);
+        await deleteFirestoreDoc('friends', `${myEmail}_${targetEmail}`);
+        await deleteFirestoreDoc('friends', `${targetEmail}_${myEmail}`);
+        await deleteFirestoreDoc('followers', `${myEmail}_${targetEmail}`);
         setFriends((friends ?? []).filter(f => f !== targetEmail));
         setFollowing(following.filter(f => f !== targetEmail));
       }
@@ -407,11 +402,11 @@ export function ProfilePage() {
     const isCurrentlyMuted = mutes.includes(targetEmail);
     try {
       if (isCurrentlyMuted) {
-        await cloudDelete('blocks', `${myEmail}:${targetEmail}`);
+        await deleteFirestoreDoc('blocks', `${myEmail}_${targetEmail}`);
         setMutes(mutes.filter(x => x !== targetEmail));
         setSuccessMsg(language === "fr" ? "Notifications réactivées." : "Unmuted member.");
       } else {
-        await cloudSave('blocks', `${myEmail}:${targetEmail}`, { id: `${myEmail}:${targetEmail}`, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'mute' });
+        await saveFirestoreDoc('blocks', `${myEmail}_${targetEmail}`, { id: `${myEmail}_${targetEmail}`, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'mute' });
         setMutes([...new Set([...mutes, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications.");
       }
@@ -433,7 +428,7 @@ export function ProfilePage() {
 
     const reportId = "report-" + Date.now();
     try {
-      await cloudSave('reports', reportId, {
+      await saveFirestoreDoc('reports', reportId, {
         id: reportId,
         reportedBy: readerProfile.email,
         reportedUser: targetUser.email,
@@ -454,16 +449,12 @@ export function ProfilePage() {
     }
   };
 
-  // Helper to durably save user fields to Central Database (MongoDB)
+  // Helper to durably save user fields to Central Database (Firebase Firestore)
   const persistUserUpdate = async (userEmail: string, payload: Record<string, any>) => {
     const cleanEmail = userEmail.toLowerCase().trim();
     try {
       const clean = await sanitizeFirestorePayload(payload);
-      await fetch(resolveApiUrl('/api/users'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...clean, email: cleanEmail, id: cleanEmail })
-      });
+      await syncUserProfile({ email: cleanEmail, ...clean });
     } catch (err) {
       console.warn("[Profile update notice - Central]:", err);
     }

@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   BarChart2, Users, Download, ShieldCheck, CheckCircle2, TrendingUp, 
   Globe, Smartphone, Mail, Sparkles, RefreshCw, Zap, DollarSign, Filter, Target, ArrowUpRight, PlusCircle, Activity
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { trackPageView } from '../../lib/telemetry';
-import { safeFetchJson } from '../../lib/apiUtils';
-import { supabase } from '../../lib/supabaseClient';
-import { subscribeToTable } from '../../lib/supabaseClient';
+import { fetchFirestoreCollection, saveFirestoreDoc } from '../../firebase/db';
 
 export function AudienceAnalyticsTab() {
   const { language, articles, subscribers, friends, interactions, comments, ads } = useStore();
@@ -44,7 +42,7 @@ export function AudienceAnalyticsTab() {
   const [filterOptIn, setFilterOptIn] = useState<boolean>(false);
 
   // Set up direct real-time listeners on Firestore collections combined with live store
-  useEffect(() => {
+  const fetchDashboardData = useCallback(() => {
     setLoading(true);
     let eventsList: any[] = [];
     let consentsList: any[] = [];
@@ -251,57 +249,69 @@ export function AudienceAnalyticsTab() {
     };
 
     const loadArchive = async () => {
-      const { data } = await supabase.from('analytics_archive').select('*');
-      if (data) {
-        archiveList = data.map((doc: any) => ({ id: doc.id, ...doc }));
-        processCombinedData();
+      try {
+        const data = await fetchFirestoreCollection('analytics_archive');
+        if (data) {
+          archiveList = data.map((doc: any) => ({ id: doc.id, ...doc }));
+          processCombinedData();
+        }
+      } catch (err) {
+        console.warn('Analytics archive load notice:', err);
       }
     };
     loadArchive();
-    const unsubArchive = subscribeToTable('analytics_archive', loadArchive);
 
     const loadEvents = async () => {
-      const { data } = await supabase.from('analytics_events').select('*');
-      if (data) {
-        eventsList = data.map((doc: any) => ({ id: doc.id, ...doc }));
-        processCombinedData();
+      try {
+        const data = await fetchFirestoreCollection('analytics_events');
+        if (data) {
+          eventsList = data.map((doc: any) => ({ id: doc.id, ...doc }));
+          processCombinedData();
+        }
+      } catch (err) {
+        console.warn('Analytics events load notice:', err);
       }
     };
     loadEvents();
-    const unsubEvents = subscribeToTable('analytics_events', loadEvents);
 
     const loadConsents = async () => {
-      const { data } = await supabase.from('user_consents').select('*');
-      if (data) {
-        consentsList = data.map((doc: any) => ({ id: doc.id, ...doc }));
-        processCombinedData();
+      try {
+        const data = await fetchFirestoreCollection('user_consents');
+        if (data) {
+          consentsList = data.map((doc: any) => ({ id: doc.id, ...doc }));
+          processCombinedData();
+        }
+      } catch (err) {
+        console.warn('User consents load notice:', err);
       }
     };
     loadConsents();
-    const unsubConsents = subscribeToTable('user_consents', loadConsents);
 
-    return () => {
-      void unsubArchive.unsubscribe();
-      void unsubEvents.unsubscribe();
-      void unsubConsents.unsubscribe();
-    };
+    return () => {};
   }, [subscribers, friends, interactions, articles]);
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
-    try {
-      const { ok, data: json } = await safeFetchJson('/api/analytics/dashboard');
-      if (ok && json?.success) {
-        setData(json);
-      }
-    } catch (_) {
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleExportCSV = () => {
-    window.open('/api/analytics/export-leads', '_blank');
+    // Generate CSV on client side from subscribers and leads
+    const headers = ["Email", "Device", "Status", "Country", "Date"];
+    const rows = (subscribers || []).map(s => [
+      s.email,
+      (s.email ?? '').includes('gmail') ? 'Mobile' : 'Desktop',
+      'Confirmed Lead',
+      (s.email ?? '').endsWith('.sn') ? 'Sénégal' : 'International',
+      s.date || new Date().toISOString().split('T')[0]
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `perspective_leads_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleSimulatePageview = async () => {
@@ -311,7 +321,7 @@ export function AudienceAnalyticsTab() {
     try {
       for (const sub of (subscribers || [])) {
         const subDocId = (sub.email ?? '').replace(/[^a-zA-Z0-9]/g, '_');
-        await supabase.from('user_consents').upsert({
+        await saveFirestoreDoc('user_consents', subDocId, {
           id: subDocId,
           sessionId: `sess_${subDocId}`,
           userEmail: sub.email,

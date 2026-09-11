@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
-import { supabase } from '../lib/supabaseClient';
+import { safeJsonParse } from "../lib/apiUtils";
 import { 
   Search, 
   X, 
@@ -1097,13 +1097,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             } catch (e) {
                               console.error(e);
                             }
-                             deleteUser(clean);
-                             try {
-                               // FIX (disappearing accounts): soft-delete instead of hard DELETE.
-                               try { await supabase.from('users').update({ deleted_at: new Date().toISOString(), is_online: false }).eq('email', clean); } catch {}
-                             } catch (e) {
-                               console.error(e);
-                             }
+                            deleteUser(clean);
                             setReaderProfile({
                               name: "Visiteur",
                               email: "",

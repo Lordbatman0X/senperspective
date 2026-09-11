@@ -5,10 +5,12 @@ import {
   Image as ImageIcon, Megaphone, Trophy, Zap, ShieldCheck, Eye, X, ArrowUpRight, Upload
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { supabase, usersQuery } from '../../lib/supabaseClient';
-import { subscribeToTable } from '../../lib/supabaseClient';
 import { sampleArticles } from '../../data';
-import { resolveApiUrl } from '../../lib/apiUtils';
+import { 
+  fetchFirestoreCollection, 
+  deleteFirestoreDoc, 
+  saveArticleToFirestore 
+} from '../../firebase/db';
 
 interface CollectionStats {
   name: string;
@@ -71,7 +73,7 @@ export function AdminDashboard() {
 
       for (const colName of collectionsToCheck) {
         try {
-          const { data } = await supabase.from(colName).select('*');
+          const data = await fetchFirestoreCollection(colName);
           newCounts[colName] = data?.length || 0;
         } catch (err) {
           console.warn(`Failed fetching ${colName} collection:`, err);
@@ -101,7 +103,7 @@ export function AdminDashboard() {
     setInspectCollection(colName);
     setInspectLoading(true);
     try {
-      const { data } = await supabase.from(colName).select('*');
+      const data = await fetchFirestoreCollection(colName);
       const docsList = data ? data.slice(0, 15).map((docItem: any) => ({
         id: docItem.id,
         data: docItem
@@ -129,10 +131,10 @@ export function AdminDashboard() {
 
       for (const colName of targets) {
         setWipeLogs(prev => [...prev, isFr ? `Analyse de la collection "${colName}"...` : `Scanning collection "${colName}"...`]);
-        const { data } = await supabase.from(colName).select('id');
+        const data = await fetchFirestoreCollection(colName);
         setWipeLogs(prev => [...prev, isFr ? `Suppression de ${data?.length || 0} document(s) dans "${colName}"...` : `Deleting ${data?.length || 0} document(s) in "${colName}"...`]);
         
-        const deletePromises = data ? data.map((item: any) => supabase.from(colName).delete().eq('id', item.id)) : [];
+        const deletePromises = data ? data.map((item: any) => deleteFirestoreDoc(colName, item.id)) : [];
         await Promise.all(deletePromises);
 
         // Clear Zustand local memory state corresponding to collection
@@ -143,12 +145,6 @@ export function AdminDashboard() {
         if (colName === 'ads') useStore.setState({ ads: [] });
         if (colName === 'matches') useStore.setState({ matches: [] });
         if (colName === 'interactions') useStore.setState({ interactions: [] });
-      }
-
-      // If clearing articles or all, also purge server RSS drafts
-      if (wipeTarget === 'ALL' || wipeTarget === 'articles') {
-        setWipeLogs(prev => [...prev, isFr ? 'Vidage du cache serveur RSS (/api/webhooks/make-rss)...' : 'Purging server RSS webhook cache...']);
-                await fetch(resolveApiUrl('/api/webhooks/make-rss'), { method: 'DELETE' });
       }
 
       setWipeLogs(prev => [...prev, isFr ? '✅ Nettoyage terminé avec succès.' : '✅ Wipe operation completed successfully.']);
@@ -167,7 +163,7 @@ export function AdminDashboard() {
     setWipeTarget('articles');
     try {
       for (const article of sampleArticles) {
-        await supabase.from('articles').upsert({ id: article.id, ...article });
+        await saveArticleToFirestore(article);
         setWipeLogs(prev => [...prev, isFr ? `Synchronisé: ${article.id}` : `Synced: ${article.id}`]);
       }
       setWipeLogs(prev => [...prev, isFr ? '✅ Synchronisation terminée.' : '✅ Sync completed.']);

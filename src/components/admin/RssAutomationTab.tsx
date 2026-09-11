@@ -9,14 +9,14 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { Article } from '../../types';
-import { safeFetchJson } from '../../lib/apiUtils';
+import { safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
 import { 
   clientProcessFeedAndGenerate, 
   clientRewriteArticle, 
   clientFetchRssFeed, 
   loadClientApiKeysFromFirestore 
 } from '../../lib/clientAiEngine';
-import { supabase } from '../../lib/supabaseClient';
+import { deleteArticleFromFirestore, saveFirestoreDoc } from '../../firebase/db';
 
 interface RssAutomationTabProps {
   onEditArticle?: (article: Article) => void;
@@ -226,7 +226,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   // RSS Feed Sources State
   const [rssFeeds, setRssFeeds] = useState(() => {
     const saved = localStorage.getItem('perspective_rss_feeds');
-    const parsed = saved ? safeJsonParse(saved, {}) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
+    const parsed = saved ? safeJsonParse<any[]>(saved, []) : ALL_RELIABLE_RSS_FEEDS.slice(0, 14);
     const uniqueIds = new Set<string>();
     return parsed.filter((f: any) => {
       if (!f || !f.id) return false;
@@ -1059,10 +1059,8 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       setArticles(articles.filter(a => a.isPublished));
 
       for (const d of draftsToPurge) {
-        supabase.from('articles').delete().eq('id', d.id).then(() => {});
+        deleteArticleFromFirestore(d.id).catch(() => {});
       }
-
-      safeFetchJson('/api/articles/purge', { method: 'POST' });
 
       showStatus(isFr ? 'File des brouillons purgée avec succès.' : 'Draft queue purged successfully.');
     } catch (err: any) {
@@ -1085,7 +1083,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
       // Always persist to localStorage and Firestore
       localStorage.setItem('perspective_rss_schedule_cfg', JSON.stringify(payload));
-      supabase.from('system_config').upsert({ id: 'rss_schedule', ...payload });
+      saveFirestoreDoc('system_config', 'rss_schedule', payload);
       setAutoSchedule((prev: any) => ({ ...prev, ...payload }));
 
       const { ok, data } = await safeFetchJson('/api/rss-automation/config', {

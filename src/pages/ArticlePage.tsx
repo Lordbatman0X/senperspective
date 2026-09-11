@@ -39,7 +39,7 @@ export function ArticlePage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const { 
-    articles, 
+    articles = [], 
     language, 
     savedArticles, 
     toggleSavedArticle, 

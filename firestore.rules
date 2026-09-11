@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnerEmail(email) {
+      return isSignedIn() && (request.auth.token.email == email || request.auth.uid == email);
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'admin@perspective.sn' ||
+        request.auth.token.email == 'kadersdiaz3@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /users/{userEmail} {
+      allow read: if true;
+      allow create: if isSignedIn() && (isOwnerEmail(userEmail) || isAdmin());
+      allow update: if isSignedIn() && (isOwnerEmail(userEmail) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isSignedIn() && (
+        resource.data.sender == request.auth.token.email ||
+        resource.data.receiver == request.auth.token.email ||
+        resource.data.sender == request.auth.uid ||
+        resource.data.receiver == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.sender == request.auth.token.email ||
+        request.resource.data.sender == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.sender == request.auth.token.email ||
+        resource.data.receiver == request.auth.token.email ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /analytics_events/{eventId} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /user_consents/{consentId} {
+      allow create, update: if true;
+      allow read: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /daily_analytics/{date} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /articles/{articleId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /media/{mediaId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (resource.data.authorEmail == request.auth.token.email || isAdmin());
+    }
+
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -288,8 +288,9 @@ function HeroCarousel({ articles }: { articles: Article[] }) {
 export function HomePage() {
   const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc'>('date-desc');
   
-  const articles = useStore((s) => s.articles)
-    .filter(a => a.isPublished !== false && (a as any).status !== 'draft')
+  const rawArticles = useStore((s) => s.articles);
+  const articles = (Array.isArray(rawArticles) ? rawArticles : [])
+    .filter(a => a && a.isPublished !== false && (a as any).status !== 'draft')
     .sort((a, b) => {
       if (sortBy === 'date-asc') {
         return new Date(a.date).getTime() - new Date(b.date).getTime();

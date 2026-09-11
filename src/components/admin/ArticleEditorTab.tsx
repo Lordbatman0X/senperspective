@@ -7,7 +7,7 @@ import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
 import { ImageCropModal } from './ImageCropModal';
-import { getAuthHeaders, safeFetchJson } from '../../lib/apiUtils';
+import { getAuthHeaders, safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
 import { clientRewriteArticle, clientGenerateTimeline } from '../../lib/clientAiEngine';
 
 interface ArticleEditorTabProps {

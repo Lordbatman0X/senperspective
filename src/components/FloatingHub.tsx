@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
-import { cloudLoadCollection } from '../lib/cloudStore';
+import { fetchUserProfile } from '../firebase/auth';
 import { useAuth } from "../contexts/AuthContext";
 import { Bot, MessageSquare, X, Send, Trash2, Paperclip, Check, ChevronDown, Sparkles, RefreshCw, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -61,20 +61,10 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
 
     const loadRealFriends = async () => {
       try {
-        const rows: any[] = await cloudLoadCollection('friends');
-        console.log('[FloatingHub] All friends from MongoDB:', rows);
-        console.log('[FloatingHub] Current user email:', email);
-
-        // Load friends from cloud - filter by user_id matching current user
-        const cloudFriends = rows
-          .filter((row: any) => {
-            const userId = String(row?.user_id || '').toLowerCase().trim();
-            const match = userId === email;
-            if (match) console.log('[FloatingHub] Matching friend row:', row);
-            return match;
-          })
-          .map((row: any) => String(row?.friend_email || row?.email || '').toLowerCase().trim())
-          .filter(Boolean);
+        const u = await fetchUserProfile(email);
+        const cloudFriends = Array.isArray((u as any)?.friend_ids)
+          ? (u as any).friend_ids.map((id: string) => String(id || '').toLowerCase().trim()).filter(Boolean)
+          : [];
 
         console.log('[FloatingHub] Cloud friends after filter:', cloudFriends);
 

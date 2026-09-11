@@ -1,7 +1,7 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
-import { useAuth } from '../contexts/SimpleAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText } from '../lib/utils';
 import { getMessengerContacts, MessengerContact } from '../lib/messengerContacts';
@@ -30,14 +30,14 @@ export const DiscussionPage: React.FC = () => {
     readerProfile, 
     language, 
     siteSettings, 
-    articles,
-    friends,
+    articles = [],
+    friends = [],
     activeMessengerContact,
     setActiveMessengerContact,
     messengerTextScale
   } = useStore();
 
-  const auth = useSimpleAuth();
+  const auth = useAuth();
   const allUsers = auth?.allUsers || [];
 
   useSEO({

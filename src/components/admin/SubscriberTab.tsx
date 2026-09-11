@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { SubscriberItem, useStore } from '../../store';
 import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
+import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db';
+import { safeJsonParse } from '../../lib/apiUtils';
 import { 
   connectGoogleGmail, 
   getCachedGoogleToken, 
@@ -52,8 +53,8 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
   useEffect(() => {
     async function loadDispatches() {
       try {
-        const { data } = await supabase.from('dispatches').select('*').order('sentAt', { ascending: false });
-        if (data) {
+        const data = await fetchFirestoreCollection('dispatches');
+        if (data && data.length > 0) {
           const loaded: { subject: string; date: string; count: number; method?: string }[] = [];
           data.forEach((row: any) => {
             loaded.push({
@@ -161,7 +162,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
 
     // Save campaign to database
     try {
-      await supabase.from('dispatches').insert({
+      await saveFirestoreDoc('dispatches', 'disp-' + Date.now(), {
         subject: subject.trim(),
         body: body.trim(),
         date: newLog.date,

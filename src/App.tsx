@@ -12,33 +12,23 @@ import { LArenePage } from './pages/LArenePage';
 import { DiscussionPage } from './pages/DiscussionPage';
 import { AuthPage } from './pages/AuthPage';
 import { Layout } from './components/Layout';
-import { SimpleAuthProvider } from './contexts/SimpleAuth';
+import { AuthProvider } from './contexts/AuthContext';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 
 function App() {
-  const loadAllDataFromMongoDB = useStore(state => state.loadAllDataFromMongoDB);
+  const loadArticles = useStore(state => state.loadArticles);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
-  // Defensive: state.articles can be undefined if stale persisted data ever
-  // bypasses rehydration guards — always default to [] so .length/.map never crash.
-  const rawArticles = useStore(state => state.articles ?? []);
+  const rawArticles = useStore(state => state.articles) || [];
 
   useEffect(() => {
-    // CRITICAL (cross-browser sync): Clear stale localStorage data from older app versions
-    // so that no browser retains old article/article caches that would diverge from MongoDB.
-    try {
-      localStorage.removeItem('perspective-group-storage');
-      localStorage.removeItem('perspective-storage-v1');
-    } catch (e) { /* ignore */ }
-
-    // Load ALL data from MongoDB on app startup
-    // This ensures all browsers/devices see the SAME data
-    loadAllDataFromMongoDB();
-  }, [loadAllDataFromMongoDB]);
+    // Load fresh articles from Firestore on app startup
+    loadArticles();
+  }, [loadArticles]);
 
   return (
     <Router>
-      <SimpleAuthProvider>
+      <AuthProvider>
         {/* Glassy sync indicator — shows while fresh content loads from the cloud */}
         {isLoadingArticles && (
           <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 overflow-hidden">
@@ -81,7 +71,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
-      </SimpleAuthProvider>
+      </AuthProvider>
     </Router>
   );
 }

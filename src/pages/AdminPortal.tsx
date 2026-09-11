@@ -1,17 +1,17 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Article } from '../types';
-import { supabase, usersQuery } from '../lib/supabaseClient';
+import { fetchUserProfile } from '../firebase/auth';
 import { 
   LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
   Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud, Server
 } from 'lucide-react';
-import { useAuth } from '../contexts/SimpleAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText, formatCategory } from '../lib/utils';
 import { verifyPassword, stableUserId, verifyBootstrapAdminPassword, BOOTSTRAP_ADMIN_EMAILS } from '../lib/authCrypto';
-import { resolveApiUrl } from '../lib/apiUtils';
+import { resolveApiUrl, safeJsonParse } from '../lib/apiUtils';
 
 // Modular Tab components
 import { DashboardOverview } from '../components/admin/DashboardOverview';
@@ -37,7 +37,7 @@ import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab
 const ADMIN_SESSION_KEY = "perspective-temp-admin-session";
 
 export function AdminPortal() {
-  const { user } = useSimpleAuth();
+  const { user } = useAuth();
   const { readerProfile, language } = useStore();
 
   useSEO({
@@ -133,11 +133,10 @@ export function AdminPortal() {
           checkKeys.push(`${cleanUser}@perspective.sn`);
         }
         for (const docKey of checkKeys) {
-          const userSnap = await usersQuery().eq('id', docKey).single();
-          if (userSnap.data) {
-            const uData = userSnap.data;
+          const uData = await fetchUserProfile(docKey);
+          if (uData) {
             const uRole = uData.role || 'Admin';
-            const isVerified = await verifyPassword(cleanPass, uData.passwordHash, uData.password, uData.pin);
+            const isVerified = await verifyPassword(cleanPass, (uData as any).passwordHash, (uData as any).password, (uData as any).pin);
 
             if (isVerified) {
               isAuthenticated = true;
@@ -148,23 +147,20 @@ export function AdminPortal() {
           }
         }
       } catch (err) {
-        console.warn("Firestore admin login check notice:", err);
+        console.warn("Firebase admin login check notice:", err);
       }
     }
 
-    // SECURITY (audit fix): removed the master-password fallback block. Legacy
-    // admin/editor short usernames now authenticate only via stored password
-    // hashes, localStorage-updated passwords, or VITE_MASTER_KEYS (env).
+    // Legacy fallback check
     if (!isAuthenticated && legacyUserEmailMap[cleanUser]) {
       try {
         const emailToCheck = legacyUserEmailMap[cleanUser];
-        const legacySnap = await usersQuery().eq('email', emailToCheck).maybeSingle();
-        if (legacySnap?.data) {
-          const uData: any = legacySnap.data;
+        const uData: any = await fetchUserProfile(emailToCheck);
+        if (uData) {
           const hasStoredCredential = Boolean(uData.passwordHash || uData.password_hash || uData.password || uData.pin);
           const isVerified = hasStoredCredential
             ? await verifyPassword(cleanPass, uData.passwordHash, uData.password, uData.pin)
-            : await verifyBootstrapAdminPassword(cleanPass); // lockout recovery pre-migration
+            : await verifyBootstrapAdminPassword(cleanPass);
           if (isVerified) {
             isAuthenticated = true;
             matchedRole = uData.role || 'Admin';
@@ -307,11 +303,11 @@ export function AdminPortal() {
 
 function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const { 
-    articles, addArticle, updateArticle, deleteArticle, purgeAllArticles,
-    media, addMedia, deleteMedia, updateMediaName,
-    ads, saveAd, deleteAd,
-    comments, approveComment, deleteComment,
-    subscribers, deleteSubscriber, language, setLanguage, theme, toggleTheme,
+    articles = [], addArticle, updateArticle, deleteArticle, purgeAllArticles,
+    media = [], addMedia, deleteMedia, updateMediaName,
+    ads = [], saveAd, deleteAd,
+    comments = [], approveComment, deleteComment,
+    subscribers = [], deleteSubscriber, language, setLanguage, theme, toggleTheme,
     siteSettings, updateSiteSettings,
     matches = [], addMatch, updateMatch, deleteMatch,
     interactions = [],
