@@ -1354,7 +1354,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       registeredAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
       isOnline: true,
-      isSupabaseAuthSession: supabaseAuthSuccess
+      isSupabaseAuthSession: supabaseAuthSuccess,
+      deletedAt: null
     };
 
     let supabaseDurable = false;
