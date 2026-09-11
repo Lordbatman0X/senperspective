@@ -56,6 +56,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  // FIX (Account button missing after re-login): the header reads
+  // `readerProfile` from the zustand store, not this context's `profile`
+  // state. Every successful login must also publish the profile to the store.
+  const publishProfileToStore = (userProf: AppUserProfile | null) => {
+    if (!userProf) return;
+    try {
+      useStore.setState({
+        readerProfile: {
+          id: userProf.uid || userProf.email,
+          name: userProf.name || userProf.email?.split('@')[0] || 'Utilisateur',
+          email: userProf.email || '',
+          avatarUrl: userProf.avatarUrl || 'preset-male',
+          role: userProf.role || 'Membre',
+          streak: userProf.streak,
+          readingTime: userProf.readingTime,
+          bio: userProf.bio,
+          accolades: userProf.accolades,
+        },
+      });
+    } catch (e) {
+      console.warn('[AuthContext] Store profile publish notice:', e);
+    }
+  };
+
+  /** Suspended accounts (flagged by the super admin) must never stay logged in. */
+  const enforceNotSuspended = async (userProf: AppUserProfile): Promise<AppUserProfile> => {
+    if (userProf && userProf.suspended === true) {
+      try { await signOutUser(); } catch {}
+      useStore.setState({ readerProfile: null });
+      throw new Error('ACCOUNT_SUSPENDED');
+    }
+    return userProf;
+  };
+
   useEffect(() => {
     loadDirectory();
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -63,12 +97,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (firebaseUser) {
         try {
           const userProf = await syncUserProfile(firebaseUser);
+          await enforceNotSuspended(userProf);
           setProfile(userProf);
+          publishProfileToStore(userProf);
           loadDirectory();
-        } catch (err) {
+        } catch (err: any) {
+          if (err?.message === 'ACCOUNT_SUSPENDED') {
+            setProfile(null);
+            setLoading(false);
+            return;
+          }
           console.error('[AuthContext] Failed to load user profile from Firestore:', err);
           // Fallback minimal profile
-          setProfile({
+          const fallback: AppUserProfile = {
             uid: firebaseUser.uid,
             email: firebaseUser.email || '',
             name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Utilisateur',
@@ -79,7 +120,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             accolades: isBootstrapAdmin(firebaseUser.email)
               ? ['verified_identity', 'editorial_board', 'elite_clearance']
               : ['verified_identity'],
-          });
+          };
+          setProfile(fallback);
+          publishProfileToStore(fallback);
         }
       } else {
         setProfile(null);
@@ -93,8 +136,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, pass: string): Promise<AppUserProfile> => {
     setLoading(true);
     try {
-      const userProf = await signInEmail(email, pass);
+      const userProf = await enforceNotSuspended(await signInEmail(email, pass));
       setProfile(userProf);
+      publishProfileToStore(userProf);
       loadDirectory();
       return userProf;
     } finally {
@@ -107,6 +151,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const userProf = await registerEmail(email, pass, name);
       setProfile(userProf);
+      publishProfileToStore(userProf);
       loadDirectory();
       return userProf;
     } finally {
@@ -132,6 +177,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         authType: authType || 'password'
       });
       setProfile(updated);
+      publishProfileToStore(updated);
       loadDirectory();
       return updated;
     } finally {
@@ -142,8 +188,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loginWithGoogle = async (): Promise<AppUserProfile> => {
     setLoading(true);
     try {
-      const userProf = await signInGoogle();
+      const userProf = await enforceNotSuspended(await signInGoogle());
       setProfile(userProf);
+      publishProfileToStore(userProf);
       loadDirectory();
       return userProf;
     } finally {

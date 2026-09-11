@@ -26,6 +26,7 @@ export interface AppUserProfile {
   avatarUrl: string;
   bio?: string;
   isOnline?: boolean;
+  suspended?: boolean;
   streak?: number;
   readingTime?: number;
   accolades?: string[];
@@ -84,6 +85,7 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
           : (data.accolades || ['verified_identity']),
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        suspended: data.suspended === true,
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
       await withFirestoreTimeout(update(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, lastActive: Date.now() })), 5000).catch(() => {});
@@ -202,6 +204,56 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
     }
   } catch (err) {
     console.warn('[Firebase] Notice deleting user profile:', err);
+  }
+}
+
+/**
+ * Admin account management (super admin only, enforced by the caller).
+ * Attribute a role to an account.
+ */
+export async function setUserRole(emailOrUid: string, role: string): Promise<void> {
+  if (!emailOrUid || !role) return;
+  const clean = emailOrUid.trim();
+  const targets = new Set<string>([clean]);
+  if (clean.includes('@')) {
+    targets.add(clean.toLowerCase());
+    targets.add(emailKey(clean));
+    targets.add(clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_'));
+  }
+  for (const key of targets) {
+    if (!key) continue;
+    await withFirestoreTimeout(
+      update(ref(rtdb, `users/${key}`), stripUndefined({ role, updatedAt: new Date().toISOString() })),
+      5000
+    ).catch(() => {});
+  }
+}
+
+/**
+ * Suspend or restore an account (suspended users are blocked at login).
+ */
+export async function setUserSuspended(emailOrUid: string, suspended: boolean): Promise<void> {
+  if (!emailOrUid) return;
+  const clean = emailOrUid.trim();
+  const targets = new Set<string>([clean]);
+  if (clean.includes('@')) {
+    targets.add(clean.toLowerCase());
+    targets.add(emailKey(clean));
+    targets.add(clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_'));
+  }
+  for (const key of targets) {
+    if (!key) continue;
+    if (suspended) {
+      await withFirestoreTimeout(
+        update(ref(rtdb, `users/${key}`), { suspended: true, suspendedAt: new Date().toISOString() }),
+        5000
+      ).catch(() => {});
+    } else {
+      await withFirestoreTimeout(
+        update(ref(rtdb, `users/${key}`), { suspended: false, suspendedAt: null }),
+        5000
+      ).catch(() => {});
+    }
   }
 }
 

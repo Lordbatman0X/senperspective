@@ -32,6 +32,8 @@ import { DraftGenerationTab } from '../components/admin/DraftGenerationTab';
 import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
+import AccountsTab from '../components/admin/AccountsTab';
+import { UserCog } from 'lucide-react';
 import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab';
 
 const ADMIN_SESSION_KEY = "perspective-temp-admin-session";
@@ -361,7 +363,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'accounts' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
 
   const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics') => {
@@ -684,6 +686,11 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     return matchesFilter && matchesSearch;
   });
 
+  // Super Admin gate: ONLY kadersdiaz3@gmail.com may manage accounts.
+  const isSuperAdmin =
+    (sessionStorage.getItem("perspective_admin_email") || '').toLowerCase().trim() === 'kadersdiaz3@gmail.com' ||
+    (useStore.getState().readerProfile?.email || '').toLowerCase().trim() === 'kadersdiaz3@gmail.com';
+
   const menuItems = [
     { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
     { id: 'list', label: language === 'fr' ? 'Gestion des Contenus' : 'Content & RSS Suite', icon: FileText, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
@@ -702,6 +709,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     { id: 'seo_distribution', label: language === 'fr' ? 'SEO & Distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
     { id: 'abdel_chat_config', label: language === 'fr' ? 'Assistant Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
     { id: 'security', label: language === 'fr' ? 'SÃ©curitÃ© & AccÃ¨s' : 'Security & Access', icon: ShieldCheck, badge: 0 },
+    { id: 'accounts', label: language === 'fr' ? 'Gestion des Comptes' : 'Account Management', icon: UserCog, badge: 0 },
     { id: 'admin_dashboard', label: language === 'fr' ? 'Base de DonnÃ©es (MongoDB)' : 'Database Manager', icon: Database, badge: 0 },
     { id: 'settings', label: language === 'fr' ? 'ParamÃ¨tres Globaux' : 'Global Settings', icon: Settings, badge: 0 },
     { id: 'activity_log', label: language === 'fr' ? 'Journal dâ€™activitÃ©' : 'Activity Logs', icon: History, badge: 0 },
@@ -762,7 +770,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
         {/* Sidebar Nav anchors */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {menuItems.map(item => {
+          {menuItems.filter(item => item.id !== 'accounts' || isSuperAdmin).map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -944,6 +952,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         {activeTab === 'security' && (
           <SecurityTab />
         )}
+
+        {activeTab === 'accounts' && isSuperAdmin && (
+          <AccountsTab
+            language={language}
+            showToast={showToast}
+          />
+        )}
+
 
         {activeTab === 'api_diagnostic' && (
           <ApiDiagnosticTab />
