@@ -2235,7 +2235,8 @@ export const useStore = create<AppState>()(
           const keys = [
             'theme', 'language', 'savedArticles', 'activeMessengerContact',
             'messengerTextScale', 'notificationPreferences',
-            'notificationResponses', 'readerProfile'
+            'notificationResponses', 'readerProfile',
+            'siteSettings'
           ];
           for (const k of keys) {
             if (persistedState[k] !== undefined && persistedState[k] !== null) {
@@ -2283,6 +2284,9 @@ export const useStore = create<AppState>()(
         // On subsequent loads, loadArticles() still fetches fresh data
         // from RTDB first and merges local articles that are missing
         // remotely — ensuring both persistence and cross-device sync.
+        //
+        // siteSettings is persisted so that the BC logo (boukariCorpLogo)
+        // and other customizer settings survive page reloads.
         return {
           theme: state.theme,
           language: state.language,
@@ -2293,6 +2297,7 @@ export const useStore = create<AppState>()(
           notificationResponses: state.notificationResponses,
           readerProfile: state.readerProfile,
           articles: Array.isArray(state.articles) ? state.articles : [],
+          siteSettings: state.siteSettings,
           // REMOVED: users - must be fetched from MongoDB on every page load
         };
       },

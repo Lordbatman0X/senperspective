@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
 import { Palette, Phone, Mail, MapPin, ShieldCheck, HelpCircle, Save, Megaphone, TrendingUp, Sparkles, AlertCircle, Ship, Quote, Layers, Globe, Wrench, Menu, ArrowUp, ArrowDown, Trash2, Plus, Eye, EyeOff, Navigation } from 'lucide-react';
+import { compressImageFile } from '../../lib/imageUtils';
 
 export function CustomizerTab() {
   const { language, siteSettings, updateSiteSettings } = useStore();
@@ -401,16 +402,16 @@ export function CustomizerTab() {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => {
-                          if (evt.target?.result) {
-                            setBoukariCorpLogo(evt.target.result as string);
-                          }
-                        };
-                        reader.readAsDataURL(file);
+                        try {
+                          // Compress the image before storing to ensure it fits in localStorage
+                          const compressedLogo = await compressImageFile(file, 200, 200, 0.7);
+                          setBoukariCorpLogo(compressedLogo);
+                        } catch (err) {
+                          console.error('Failed to compress BC logo:', err);
+                        }
                       }
                     }}
                   />
