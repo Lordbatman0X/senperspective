@@ -454,7 +454,8 @@ export function ProfilePage() {
     const cleanEmail = userEmail.toLowerCase().trim();
     try {
       const clean = await sanitizeFirestorePayload(payload);
-      await syncUserProfile({ email: cleanEmail, ...clean });
+      const uid = readerProfile.uid || readerProfile.id;
+      await syncUserProfile({ email: cleanEmail, uid, ...clean });
     } catch (err) {
       console.warn("[Profile update notice - Central]:", err);
     }
