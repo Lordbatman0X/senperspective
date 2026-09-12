@@ -27,6 +27,29 @@ function App() {
     // FIX: hydrate shared site settings (BC logo, colors, etc.) from Firebase
     // so all devices (desktop AND mobile) see the same configuration.
     loadSiteSettings();
+
+    // Background auto-refresh: pull fresh articles every 3 minutes so devices
+    // that keep the site open see newly published content without a manual
+    // reload (the store merge is silent — no full page reload, no flicker).
+    const REFRESH_MS = 3 * 60 * 1000;
+    let lastFetch = Date.now();
+    const refresh = () => {
+      // Never auto-refresh inside the admin portal (an admin may be editing).
+      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) return;
+      lastFetch = Date.now();
+      loadArticles();
+    };
+    const interval = window.setInterval(refresh, REFRESH_MS);
+    // Also refresh when a hidden tab becomes visible again (device unlock,
+    // tab switch) — covers the "left the site open overnight" case.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetch > 60 * 1000) refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [loadArticles, loadSiteSettings]);
 
   return (

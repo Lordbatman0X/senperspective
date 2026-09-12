@@ -612,17 +612,26 @@ export const useStore = create<AppState>()(
         try {
           const remote = await fetchAllArticles();
           if (remote && remote.length > 0) {
-            let merged = remote;
+            let remoteList = remote;
             if (recovered.length > 0) {
               const remoteIds = new Set(remote.map(a => String(a.id)));
               const missing = recovered.filter(a => !remoteIds.has(String(a.id)));
               if (missing.length > 0) {
-                merged = [...missing, ...remote];
+                // Remote first (it is fresh + date-sorted), rescued legacy
+                // articles appended after so they don't pollute the top.
+                remoteList = [...remote, ...missing];
                 backfillToFirestore(missing);
               }
             }
-            set({ articles: dedupeArticles([...preExisting, ...localBackup, ...merged]), isLoadingArticles: false });
-            return merged;
+            // Remote-first merge: the cloud is the source of truth, so its
+            // articles (versions AND order) win over stale locally-persisted
+            // copies. Local-only articles (created offline / drafts not yet
+            // synced) are preserved after the remote ones. This guarantees
+            // newly published articles appear at the TOP on every device,
+            // instead of being appended at the end behind stale cache.
+            const merged = dedupeArticles([...remoteList, ...preExisting, ...localBackup]);
+            set({ articles: merged, isLoadingArticles: false });
+            return remoteList;
           }
           // Firestore empty → show rescued + seed content immediately
           if (recovered.length > 0) backfillToFirestore(recovered);
