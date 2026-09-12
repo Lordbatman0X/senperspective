@@ -407,8 +407,11 @@ export async function addSubscriberEmail(email: string): Promise<void> {
 export async function saveFirestoreDoc(coll: string, id: string, data: any): Promise<void> {
   try {
     const pathId = safeKey(id);
+    // Use set() instead of update() — update() silently no-ops on non-existent
+    // records, which caused Friend/Follow/Block/Mute writes to be lost entirely
+    // when the record was created for the first time.
     await withFirestoreTimeout(
-      update(ref(rtdb, `${coll}/${pathId}`), {
+      set(ref(rtdb, `${coll}/${pathId}`), {
         ...cleanForRtdb(data),
         updatedAtServer: Date.now(),
       })
