@@ -19,6 +19,16 @@ import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 
+function dedupeArticles(list) {
+  const seen = new Set();
+  const out = [];
+  for (const a of list) {
+    const id = String(a && a.id || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id); out.push(a);
+  }
+  return out;
+}
 const cloudSave = (col: string, id: string, data: any) => {
   saveFirestoreDoc(col, id, data).catch(() => {});
 };
@@ -28,6 +38,33 @@ const cloudDelete = (col: string, id: string) => {
 const cloudSaveUserProfile = (email: string, data: any) => {
   saveFirestoreDoc('users', email, data).catch(() => {});
 };
+const LOCAL_ARTICLES_KEY = "senperspective-local-articles-v1";
+function persistArticleLocally(a) {
+  try {
+    const raw = localStorage.getItem(LOCAL_ARTICLES_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    const list = Array.isArray(arr) ? arr : [];
+    const idx = list.findIndex(function(x){ return String(x && x.id) === String(a && a.id); });
+    if (idx >= 0) list[idx] = a; else list.unshift(a);
+    localStorage.setItem(LOCAL_ARTICLES_KEY, JSON.stringify(list.slice(0, 200)));
+  } catch (e) {}
+}
+function removeLocalArticleBackup(id) {
+  try {
+    const raw = localStorage.getItem(LOCAL_ARTICLES_KEY);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    localStorage.setItem(LOCAL_ARTICLES_KEY, JSON.stringify(arr.filter(function(x){ return String(x && x.id) !== String(id); })));
+  } catch (e) {}
+}
+function loadArticlesFromLocalBackup() {
+  try {
+    const raw = localStorage.getItem(LOCAL_ARTICLES_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
 const supabase: any = null;
 const resolveApiUrl = (url: string) => url;
 
@@ -200,8 +237,8 @@ interface AppState {
   setArticles: (articles: Article[]) => void;
   loadArticles: () => Promise<Article[]>;
   syncFromSupabase: () => Promise<void>;
-  addArticle: (article: Article) => void;
-  updateArticle: (article: Article) => void;
+  addArticle: (article: Article) => Promise<{ success: boolean; error?: string }>;
+  updateArticle: (article: Article) => Promise<{ success: boolean; error?: string }>;
   deleteArticle: (id: string) => void;
   purgeAllArticles: () => Promise<void>;
   media: MediaItem[];
@@ -522,6 +559,9 @@ export const useStore = create<AppState>()(
       isLoadingArticles: false,
       setArticles: (articles) => set({ articles }),
       loadArticles: async () => {
+        const preExisting = Array.isArray(get().articles) ? [...get().articles] : [];
+        const localBackup = loadArticlesFromLocalBackup();
+        if (preExisting.length === 0 && localBackup.length > 0) { set({ articles: localBackup }); }
         set({ isLoadingArticles: true });
         // --- Legacy localStorage article recovery --------------------------
         // Earlier builds persisted articles in localStorage. The current build
@@ -579,18 +619,18 @@ export const useStore = create<AppState>()(
                 backfillToFirestore(missing);
               }
             }
-            set({ articles: merged, isLoadingArticles: false });
+            set({ articles: dedupeArticles([...preExisting, ...localBackup, ...merged]), isLoadingArticles: false });
             return merged;
           }
           // Firestore empty → show rescued + seed content immediately
           if (recovered.length > 0) backfillToFirestore(recovered);
-          const fallback = recovered.length > 0 ? [...recovered, ...seedArticles] : seedArticles;
+          const fallback = dedupeArticles([...preExisting, ...localBackup, ...recovered, ...seedArticles]);
           set({ articles: fallback, isLoadingArticles: false });
           return fallback;
         } catch (err) {
           console.warn('[Firebase] Notice loading articles:', err);
           if (recovered.length > 0) backfillToFirestore(recovered);
-          const fallback = recovered.length > 0 ? [...recovered, ...seedArticles] : seedArticles;
+          const fallback = dedupeArticles([...preExisting, ...localBackup, ...recovered, ...seedArticles]);
           set({ articles: fallback, isLoadingArticles: false });
           return fallback;
         }
@@ -616,12 +656,14 @@ export const useStore = create<AppState>()(
         }
       },
       addArticle: async (article) => {
-        set({ articles: [article, ...(Array.isArray(get().articles) ? get().articles : [])] });
+        persistArticleLocally(article);
+        set({ articles: dedupeArticles([article, ...(Array.isArray(get().articles) ? get().articles : [])]) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
           await saveArticle({ ...article, ...clean });
         } catch (err) {
           console.error("[Firebase] Error writing article:", err);
+          return { success: false };
         }
 
         if (article.isPublished) {
@@ -632,8 +674,8 @@ export const useStore = create<AppState>()(
             id: 'pub-' + Date.now(),
             email: currentProfile?.email || 'kadersdiaz3@gmail.com',
             text: {
-              fr: `📰 Nouvel Article Publié : "${artTitleFr}"`,
-              en: `📰 New Article Released: "${artTitleEn}"`
+              fr: `Nouvel Article Publie : "${artTitleFr}"`,
+              en: `New Article Released: "${artTitleEn}"`
             },
             date: new Date().toISOString().split('T')[0],
             isRead: false,
@@ -641,18 +683,23 @@ export const useStore = create<AppState>()(
             link: `/article/${article.slug}`
           });
         }
+        return { success: true };
       },
       updateArticle: async (article) => {
+        persistArticleLocally(article);
         set({ articles: (Array.isArray(get().articles) ? get().articles : []).map(a => a.id === article.id ? article : a) });
         try {
           const clean = await sanitizeFirestorePayload(article as any);
           await saveArticle({ ...article, ...clean });
+          return { success: true };
         } catch (err) {
           console.error("[Firebase] Error updating article:", err);
+          return { success: false };
         }
       },
       deleteArticle: (id) => {
         set({ articles: (Array.isArray(get().articles) ? get().articles : []).filter(a => a.id !== id) });
+        removeLocalArticleBackup(id);
         firestoreDeleteArticle(id).catch(err => {
           console.warn('[Firebase] Notice deleting article:', err);
         });
@@ -2228,21 +2275,27 @@ export const useStore = create<AppState>()(
         }
         return out;
       },
-      partialize: (state) => ({
-        // ONLY persist pure UI preferences
-        // DO NOT persist ANY data that comes from MongoDB:
-        // - articles, messages, notifications, friends, users, comments, media, ads
-        // These must always be fetched fresh from MongoDB to ensure cross-device sync
-        theme: state.theme,
-        language: state.language,
-        savedArticles: state.savedArticles,
-        activeMessengerContact: state.activeMessengerContact,
-        messengerTextScale: state.messengerTextScale,
-        notificationPreferences: state.notificationPreferences,
-        notificationResponses: state.notificationResponses,
-        readerProfile: state.readerProfile
-        // REMOVED: users - must be fetched from MongoDB on every page load
-      }),
+            partialize: (state) => {
+        // Persist UI preferences AND articles.
+        // Articles are persisted locally as a safety net so that if the
+        // Firestore Realtime Database write fails, is delayed, or the
+        // user is offline, the article still survives a page reload.
+        // On subsequent loads, loadArticles() still fetches fresh data
+        // from RTDB first and merges local articles that are missing
+        // remotely — ensuring both persistence and cross-device sync.
+        return {
+          theme: state.theme,
+          language: state.language,
+          savedArticles: state.savedArticles,
+          activeMessengerContact: state.activeMessengerContact,
+          messengerTextScale: state.messengerTextScale,
+          notificationPreferences: state.notificationPreferences,
+          notificationResponses: state.notificationResponses,
+          readerProfile: state.readerProfile,
+          articles: Array.isArray(state.articles) ? state.articles : [],
+          // REMOVED: users - must be fetched from MongoDB on every page load
+        };
+      },
       onRehydrateStorage: () => (state: any) => {
         // NOTE: previously this callback used `delete state.X` to clear stale
         // persisted data — but zustand v5 passes the ALREADY-MERGED state here,

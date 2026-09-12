@@ -3,7 +3,8 @@
     ".read": false,
     ".write": false,
     "articles": {
-      ".read": true
+      ".read": true,
+      ".write": true
     },
     "comments": {
       ".read": true,

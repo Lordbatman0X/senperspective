@@ -663,12 +663,21 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     showToast(language === 'fr' ? 'Tous les articles (brouillons et publiés) ont été purgés avec succès !' : 'All articles (drafts and live) purged successfully!');
   };
 
-  const handleSaveArticle = async (saved: Article) => {
+    const handleSaveArticle = async (saved: Article) => {
     const isNew = !articles.find(a => a.id === saved.id);
+    let result;
     if (isNew) {
-      await addArticle(saved);
+      result = await addArticle(saved);
     } else {
-      await updateArticle(saved);
+      result = await updateArticle(saved);
+    }
+
+    if (result?.success === false) {
+      showToast(language === 'fr'
+        ? `Article enregistré localement, mais échec de la synchronisation cloud : ${result.error || 'Erreur inconnue'}`
+        : `Saved locally, but cloud sync failed: ${result.error || 'Unknown error'}`);
+    } else {
+      showToast(language === 'fr' ? '✓ Article publié avec succès !' : '✓ Article published successfully!');
     }
     setEditingArticle(null);
     setActiveTab('list');

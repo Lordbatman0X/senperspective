@@ -13,6 +13,8 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith('/admin');
   const isArticle = location.pathname.startsWith('/article/');
+  const loadArticles = useStore(state => state.loadArticles);
+  const isFirstRun = React.useRef(true);
   
   const [showDraftPoliciesModal, setShowDraftPoliciesModal] = useState(false);
 
@@ -23,6 +25,19 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
     window.addEventListener('open-draft-policies', handleOpenDraftPolicies);
     return () => window.removeEventListener('open-draft-policies', handleOpenDraftPolicies);
   }, []);
+  
+  // Background reload: when navigating to home page, refresh articles silently
+  React.useEffect(() => {
+    if (location.pathname === '/') {
+      // Skip on first load (App.tsx already calls loadArticles on mount)
+      if (isFirstRun.current) {
+        isFirstRun.current = false;
+        return;
+      }
+      // Navigate back to home — reload articles in background (no overlay)
+      loadArticles();
+    }
+  }, [location.pathname, loadArticles]);
   
   const { articles, theme, ads, siteSettings } = useStore();
   let contextArticle = undefined;
@@ -40,7 +55,6 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
       root.style.setProperty('--color-brand-primary', siteSettings.accentColor);
       root.style.setProperty('--color-brand-primary-hover', siteSettings.accentColor);
     }
-
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -52,7 +66,7 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   React.useEffect(() => {
     if (!isAdmin) {
       const artTitle = typeof contextArticle?.title === 'string' 
-        ? contextArticle?.title 
+        ? contextArticle?.title
         : (contextArticle?.title?.fr || contextArticle?.title?.en || '');
       trackPageView(location.pathname, contextArticle?.id, artTitle, contextArticle?.category);
     }
@@ -62,9 +76,9 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   if (siteSettings?.isMaintenanceMode === true && !isAdmin) {
     return <MaintenancePage />;
   }
-
+  
   const headerAds = ads?.filter(a => a.active && a.position === 'header' && a.imageUrl && a.imageUrl.trim() !== '') || [];
-
+  
   return (
     <div className="min-h-screen flex flex-col bg-transparent font-sans text-brand-dark">
       {!isAdmin && <Header />}
@@ -81,11 +95,11 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
       <main className="flex-grow">
         {children}
       </main>
-
+      
       {!isAdmin && <FloatingHub contextArticle={contextArticle} />}
       {!isAdmin && <Footer />}
       {!isAdmin && <CookieConsentBanner />}
       <DraftPoliciesModal isOpen={showDraftPoliciesModal} onClose={() => setShowDraftPoliciesModal(false)} />
     </div>
   );
-}
+};

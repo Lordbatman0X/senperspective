@@ -142,18 +142,24 @@ export async function fetchAllArticles(): Promise<Article[]> {
   }
 }
 
-export async function saveArticle(article: Article): Promise<void> {
+export async function saveArticle(article: Article): Promise<{ success: boolean; error?: string }> {
   const articleId = article.id || `art-${Date.now()}`;
   try {
+    // set() creates OR completely overwrites the node. update() does
+    // merge semantics which can silently fail on new paths or cause
+    // partial writes. Using set() ensures the full article is written.
     await withFirestoreTimeout(
-      update(ref(rtdb, `articles/${safeKey(articleId)}`), {
+      set(ref(rtdb, `articles/${safeKey(articleId)}`), {
         ...cleanForRtdb(article),
         id: articleId,
         updatedAtServer: Date.now(),
       })
     );
+    return { success: true };
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `articles/${articleId}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[Firebase] saveArticle error:', msg);
+    return { success: false, error: msg };
   }
 }
 export const saveArticleToFirestore = saveArticle;
