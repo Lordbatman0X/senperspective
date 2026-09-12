@@ -18,12 +18,16 @@ import { useStore } from './store';
 
 function App() {
   const loadArticles = useStore(state => state.loadArticles);
+  const loadSiteSettings = useStore(state => state.loadSiteSettings);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
 
   useEffect(() => {
     // Load fresh articles from Firestore in background on app startup
     loadArticles();
-  }, [loadArticles]);
+    // FIX: hydrate shared site settings (BC logo, colors, etc.) from Firebase
+    // so all devices (desktop AND mobile) see the same configuration.
+    loadSiteSettings();
+  }, [loadArticles, loadSiteSettings]);
 
   return (
     <Router>

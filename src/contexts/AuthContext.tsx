@@ -50,6 +50,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const list = await fetchAllUsers();
       if (list && list.length > 0) {
         setAllUsers(list);
+        // FIX (role attributions not appearing in profiles): publish the
+        // fetched directory into the zustand store's `users` so attributed
+        // roles, suspension flags and avatars are visible app-wide, and merge
+        // (never wipe) existing local user entries.
+        try {
+          const storeUsers = useStore.getState().users || [];
+          const byEmail = new Map<string, any>();
+          storeUsers.forEach((u: any) => {
+            const k = (u.email || '').toLowerCase().trim();
+            if (k) byEmail.set(k, u);
+          });
+          list.forEach((u: any) => {
+            const k = (u.email || '').toLowerCase().trim();
+            if (k) byEmail.set(k, { ...(byEmail.get(k) || {}), ...u });
+          });
+          useStore.setState({ users: Array.from(byEmail.values()) });
+        } catch (e) {
+          console.warn('[AuthContext] Store users sync notice:', e);
+        }
       }
     } catch (e) {
       // Non-blocking

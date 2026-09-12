@@ -3,13 +3,14 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
-import { 
+import {
   fetchAllArticles, 
   saveArticle, 
   deleteArticle as firestoreDeleteArticle, 
   subscribeToArticles, 
   addSubscriberEmail, 
   updateSiteSettings as firestoreUpdateSiteSettings,
+  fetchSiteSettings,
   addComment as firestoreAddComment,
   deleteComment as firestoreDeleteComment,
   saveFirestoreDoc,
@@ -428,6 +429,7 @@ interface AppState {
     curatedDossierArticleIds?: string[];
   };
   updateSiteSettings: (settings: Partial<AppState['siteSettings']>) => void;
+  loadSiteSettings: () => Promise<void>;
   deleteUser: (email: string) => void;
   updateUserRole: (email: string, role: string) => void;
   updateUserSecurity: (email: string, emailVerified: boolean, mfaEnabled: boolean) => void;
@@ -1890,6 +1892,27 @@ export const useStore = create<AppState>()(
           await firestoreUpdateSiteSettings(clean);
         } catch (err) {
           console.error("[Firebase notice] Error updating siteSettings:", err);
+        }
+      },
+      // FIX (BC logo & settings not appearing on other devices): settings were
+      // saved to Firebase but NEVER fetched back on app startup — each device
+      // only saw its own localStorage. This hydrates the shared settings from
+      // the Realtime Database, merging only non-empty remote values so local
+      // defaults are never clobbered by empty remote fields.
+      loadSiteSettings: async () => {
+        try {
+          const remote = await fetchSiteSettings();
+          if (!remote || typeof remote !== 'object') return;
+          const current = get().siteSettings || {};
+          const merged: Record<string, any> = { ...current };
+          Object.entries(remote).forEach(([key, val]) => {
+            if (val === undefined || val === null || val === '') return;
+            if (key === 'updatedAtServer') return;
+            merged[key] = val;
+          });
+          set({ siteSettings: merged as any });
+        } catch (err) {
+          console.warn('[Firebase] loadSiteSettings failed:', err);
         }
       },
       deleteUser: (email) => {

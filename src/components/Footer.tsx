@@ -9,12 +9,6 @@ export function Footer() {
 
   const [logoError, setLogoError] = React.useState(false);
 
-  // Debug: Log siteSettings to check if logo is loaded
-  React.useEffect(() => {
-    console.log('[Footer] siteSettings:', siteSettings);
-    console.log('[Footer] boukariCorpLogo:', siteSettings?.boukariCorpLogo ? 'HAS VALUE' : 'EMPTY');
-  }, [siteSettings]);
-
   // Reset logo error if siteSettings changes
   React.useEffect(() => {
     setLogoError(false);

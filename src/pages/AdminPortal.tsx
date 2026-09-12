@@ -204,7 +204,10 @@ export function AdminPortal() {
       const isSuperAdmin = resolvedEmail === 'kadersdiaz3@gmail.com';
       const deterministicId = stableUserId(resolvedEmail);
 
-      const adminProfileObj: any = {
+      // FIX (profile resetting on every login): start from defaults, then
+      // overlay any previously saved profile for this email — first from the
+      // local store, then from Firebase (source of truth for cross-device).
+      const defaults: any = {
         id: deterministicId,
         name: isSuperAdmin ? 'Kader Diaz (Super Admin)' : matchedName,
         email: resolvedEmail,
@@ -218,6 +221,16 @@ export function AdminPortal() {
         bio: isSuperAdmin ? 'Super Administrateur & Fondateur Perspective Group' : '',
         accolades: isSuperAdmin ? ['verified_identity', 'editorial_board', 'elite_clearance', 'sahel_insider'] : ['verified_identity']
       };
+
+      const existing = (useStore.getState().readerProfile || {}).email === resolvedEmail
+        ? useStore.getState().readerProfile
+        : null;
+      const pick = (saved: any, keys: string[]) => {
+        keys.forEach(k => { if (saved && saved[k] !== undefined && saved[k] !== null && saved[k] !== '') defaults[k] = saved[k]; });
+      };
+      pick(existing, ['name', 'avatarUrl', 'coverPhotoUrl', 'bio']);
+
+      const adminProfileObj: any = { ...defaults };
 
       // Sign in to Firebase Auth to enable database operations (required for account management)
       try {
@@ -236,6 +249,22 @@ export function AdminPortal() {
         readerProfile: adminProfileObj
       });
       setSessionAuth(true);
+
+      // Restore the cloud-saved profile (name, avatar, cover photo) so custom
+      // edits survive re-logins and sync across devices.
+      fetchUserProfile(resolvedEmail).then(saved => {
+        if (!saved) return;
+        const cloudPatch: any = {};
+        ['name', 'avatarUrl', 'coverPhotoUrl', 'bio'].forEach(k => {
+          if (saved[k] !== undefined && saved[k] !== null && saved[k] !== '') cloudPatch[k] = saved[k];
+        });
+        if (Object.keys(cloudPatch).length === 0) return;
+        const current = useStore.getState().readerProfile;
+        if (!current || (current.email || '').toLowerCase() !== resolvedEmail.toLowerCase()) return;
+        const merged = { ...current, ...cloudPatch };
+        useStore.setState({ readerProfile: merged });
+        try { localStorage.setItem('perspective_auth_session', JSON.stringify(merged)); } catch {}
+      }).catch(() => {});
     } else {
       setError(
         language === 'fr' 
