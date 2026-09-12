@@ -167,10 +167,12 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
  */
 export async function fetchAllUsers(): Promise<AppUserProfile[]> {
   try {
+    console.log('[Firebase] Fetching all users...');
     const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')));
     const seen = new Set<string>();
     const users: AppUserProfile[] = [];
     if (snap.exists() && typeof snap.val() === 'object') {
+      console.log('[Firebase] Users data found:', Object.keys(snap.val()).length, 'entries');
       Object.entries(snap.val() as Record<string, any>).forEach(([key, data]) => {
         const profile = (data || {}) as AppUserProfile;
         const k = (profile.email || key).toLowerCase();
@@ -179,10 +181,13 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
           users.push({ ...profile, uid: profile.uid || key });
         }
       });
+    } else {
+      console.log('[Firebase] No users data found');
     }
+    console.log('[Firebase] Returning', users.length, 'users');
     return users;
   } catch (err) {
-    console.warn('[Firebase] Notice fetching all users:', err);
+    console.error('[Firebase] Error fetching all users:', err);
     return [];
   }
 }
@@ -216,6 +221,7 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
 export async function setUserRole(emailOrUid: string, role: string): Promise<void> {
   if (!emailOrUid || !role) return;
   const clean = emailOrUid.trim();
+  console.log('[Firebase] Setting role for:', clean, 'to:', role);
   const targets = new Set<string>([clean]);
   if (clean.includes('@')) {
     targets.add(clean.toLowerCase());
@@ -224,17 +230,24 @@ export async function setUserRole(emailOrUid: string, role: string): Promise<voi
   }
   for (const key of targets) {
     if (!key) continue;
-    // Use set() to create-or-update, instead of update() which silently no-ops on missing records
-    const existingRef = ref(rtdb, `users/${key}`);
-    let existing: any = {};
     try {
-      const snap = await get(existingRef);
-      if (snap.exists()) existing = snap.val() || {};
-    } catch (_) {}
-    await withFirestoreTimeout(
-      set(existingRef, { ...existing, ...stripUndefined({ role, updatedAt: new Date().toISOString() }) }),
-      5000
-    ).catch(() => {});
+      const existingRef = ref(rtdb, `users/${key}`);
+      let existing: any = {};
+      try {
+        const snap = await get(existingRef);
+        if (snap.exists()) existing = snap.val() || {};
+      } catch (getErr) {
+        console.warn('[Firebase] Get existing user failed:', getErr);
+      }
+      await withFirestoreTimeout(
+        set(existingRef, { ...existing, ...stripUndefined({ role, updatedAt: new Date().toISOString() }) }),
+        5000
+      ).catch((setErr) => {
+        console.error('[Firebase] Set role failed:', setErr);
+      });
+    } catch (err) {
+      console.error('[Firebase] Error in setUserRole:', err);
+    }
   }
 }
 
