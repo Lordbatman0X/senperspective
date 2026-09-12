@@ -65,7 +65,24 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
   try {
     // Timeout-guarded: a slow backend must never delay login (reads AND writes)
     const existingSnap = await withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000).catch(() => null);
-    const data = existingSnap && existingSnap.exists() ? (existingSnap.val() as Partial<AppUserProfile>) : null;
+    let data = existingSnap && existingSnap.exists() ? (existingSnap.val() as Partial<AppUserProfile>) : null;
+
+    // FIX (attributed roles lost on login): profiles are stored under BOTH the
+    // Firebase Auth uid key and a sanitized email key. If the uid-keyed record
+    // is missing (or has no role yet), adopt the email-keyed record so roles
+    // attributed by the super admin survive the login sync instead of being
+    // replaced by a fresh 'Membre' profile.
+    if ((!data || !data.role) && email) {
+      const mirrorSnap = await withFirestoreTimeout(get(ref(rtdb, `users/${emailKey(email)}`)), 5000).catch(() => null);
+      const mirror = mirrorSnap && mirrorSnap.exists() ? (mirrorSnap.val() as Partial<AppUserProfile>) : null;
+      if (mirror) {
+        if (!data) {
+          data = { ...mirror, uid };
+        } else {
+          data = { ...mirror, ...data, role: data.role || mirror.role };
+        }
+      }
+    }
     let profileData: AppUserProfile;
 
     if (data) {
@@ -169,21 +186,33 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
   try {
     console.log('[Firebase] Fetching all users...');
     const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')));
-    const seen = new Set<string>();
-    const users: AppUserProfile[] = [];
+    // FIX (stale roles shown): each user may have TWO records (uid key + email
+    // mirror key). Merge duplicates by email instead of keeping the first
+    // record encountered, preferring an attributed 'Admin' role.
+    const byEmail = new Map<string, AppUserProfile>();
     if (snap.exists() && typeof snap.val() === 'object') {
       console.log('[Firebase] Users data found:', Object.keys(snap.val()).length, 'entries');
-      Object.entries(snap.val() as Record<string, any>).forEach(([key, data]) => {
-        const profile = (data || {}) as AppUserProfile;
-        const k = (profile.email || key).toLowerCase();
-        if (!seen.has(k)) {
-          seen.add(k);
-          users.push({ ...profile, uid: profile.uid || key });
+      Object.entries(snap.val() as Record<string, any>).forEach(([key, d]) => {
+        const profile = (d || {}) as AppUserProfile;
+        const k = (profile.email || key).toLowerCase().trim();
+        if (!k) return;
+        const existing = byEmail.get(k);
+        if (existing) {
+          const role = (existing.role === 'Admin' || profile.role === 'Admin')
+            ? 'Admin'
+            : (profile.role || existing.role);
+          byEmail.set(k, {
+            ...existing, ...profile, role,
+            uid: profile.uid || existing.uid || key,
+          } as AppUserProfile);
+        } else {
+          byEmail.set(k, { ...profile, uid: profile.uid || key });
         }
       });
     } else {
       console.log('[Firebase] No users data found');
     }
+    const users: AppUserProfile[] = Array.from(byEmail.values());
     console.log('[Firebase] Returning', users.length, 'users');
     return users;
   } catch (err) {
