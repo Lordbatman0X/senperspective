@@ -3,7 +3,7 @@ import { useStore, UserAccount, UserInteraction } from '../../store';
 import { useAuth } from '../../contexts/AuthContext';
 import { Users, Trash2, ShieldAlert, Key, UserCheck, Activity, Search, Shield, Eye, EyeOff, AlertTriangle, Award, Lock, Plus, UserPlus } from 'lucide-react';
 import { renderNeutralAvatar } from '../AccountDrawer';
-import { fetchAllUsers, deleteUserProfile, syncUserProfile } from '../../firebase/auth';
+import { fetchAllUsers, deleteUserProfile, syncUserProfile, setUserRole } from '../../firebase/auth';
 import { fetchFirestoreCollection, deleteFirestoreDoc } from '../../firebase/db';
 import { safeJsonParse } from '../../lib/apiUtils';
 
@@ -198,9 +198,11 @@ export function ModerationTab() {
     emptyLogs: language === 'fr' ? 'Aucune activité enregistrée.' : 'No recorded interactions.'
   };
 
-  const handleRoleChange = (email: string, newRole: string) => {
-    updateUserRole(email, newRole);
-    setSuccessMsg(language === 'fr' ? `Rôle de ${email} changé en ${newRole}` : `Role for ${email} updated to ${newRole}`);
+  const handleRoleChange = async (user: any, newRole: string) => {
+    // Persist to database using UID (not email) since accounts are stored under users/${uid}
+    await setUserRole(user.uid || user.email, newRole);
+    updateUserRole(user.email, newRole);
+    setSuccessMsg(language === 'fr' ? `Rôle de ${user.email} changé en ${newRole}` : `Role for ${user.email} updated to ${newRole}`);
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
@@ -463,7 +465,7 @@ export function ModerationTab() {
                         <span className="text-[10px] uppercase tracking-wider text-zinc-200 font-bold">{language === 'fr' ? 'Rôle' : 'Role'}</span>
                         <select
                           value={user.role}
-                          onChange={e => handleRoleChange(user.email, e.target.value)}
+                          onChange={e => handleRoleChange(user, e.target.value)}
                           className="bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-1.5 text-xs font-bold focus:outline-none focus:border-[#E85D42] rounded-md"
                         >
                           <option value="Admin">Admin</option>

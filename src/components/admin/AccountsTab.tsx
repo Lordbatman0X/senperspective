@@ -46,7 +46,7 @@ export default function AccountsTab({ language, showToast }: Props) {
 
   const handleRoleChange = async (u: AppUserProfile, role: string) => {
     if (isProtected(u)) { showToast(isFr ? 'Le compte Super Admin est protégé.' : 'The Super Admin account is protected.'); return; }
-    await setUserRole(u.email || u.uid, role);
+    await setUserRole(u.uid || u.email, role);
     setUsers(prev => prev.map(x => (x.uid === u.uid ? { ...x, role } : x)));
     showToast((isFr ? 'Rôle mis à jour : ' : 'Role updated: ') + `${u.email} → ${role}`);
   };
@@ -54,14 +54,14 @@ export default function AccountsTab({ language, showToast }: Props) {
   const handleSuspendToggle = async (u: AppUserProfile) => {
     if (isProtected(u)) { showToast(isFr ? 'Le compte Super Admin est protégé.' : 'The Super Admin account is protected.'); return; }
     const next = !(u.suspended === true);
-    await setUserSuspended(u.email || u.uid, next);
+    await setUserSuspended(u.uid || u.email, next);
     setUsers(prev => prev.map(x => (x.uid === u.uid ? { ...x, suspended: next } : x)));
     showToast((isFr ? (next ? 'Compte suspendu : ' : 'Compte rétabli : ') : (next ? 'Account suspended: ' : 'Account restored: ')) + u.email);
   };
 
   const handleDelete = async (u: AppUserProfile) => {
     if (isProtected(u)) { showToast(isFr ? 'Le compte Super Admin est protégé.' : 'The Super Admin account is protected.'); return; }
-    await deleteUserProfile(u.email || u.uid);
+    await deleteUserProfile(u.uid || u.email);
     setUsers(prev => prev.filter(x => x.uid !== u.uid));
     setConfirmDelete(null);
     showToast((isFr ? 'Compte supprimé : ' : 'Account deleted: ') + u.email);
