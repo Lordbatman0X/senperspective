@@ -8,7 +8,7 @@ import {
   updateProfile,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { ref, get, set as dbSet, update, remove } from 'firebase/database';
+import { ref, get, set as dbSet, remove } from 'firebase/database';
 import { auth, rtdb } from './config';
 import { handleFirestoreError, OperationType } from './errors';
 import { withFirestoreTimeout } from './db';
@@ -88,7 +88,7 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         suspended: data.suspended === true,
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
-      await withFirestoreTimeout(update(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, lastActive: Date.now() })), 5000).catch(() => {});
+      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, lastActive: Date.now() })), 5000).catch(() => {});
     } else {
       profileData = {
         uid,
@@ -113,13 +113,13 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
 
     // Mirror under sanitized email key so direct email lookups work
     if (email && email !== uid) {
-      await withFirestoreTimeout(update(ref(rtdb, `users/${emailKey(email)}`), stripUndefined(profileData)), 5000).catch(() => {});
+      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${emailKey(email)}`), stripUndefined(profileData)), 5000).catch(() => {});
     }
 
     // If Admin, register in /admins/{uid} for security rules
     if (isAdmin) {
       await withFirestoreTimeout(
-        update(ref(rtdb, `admins/${uid}`), stripUndefined({
+        dbSet(ref(rtdb, `admins/${uid}`), stripUndefined({
           email,
           uid,
           name: profileData.name,
