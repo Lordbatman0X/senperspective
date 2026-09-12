@@ -222,8 +222,15 @@ export async function setUserRole(emailOrUid: string, role: string): Promise<voi
   }
   for (const key of targets) {
     if (!key) continue;
+    // Use set() to create-or-update, instead of update() which silently no-ops on missing records
+    const existingRef = ref(rtdb, `users/${key}`);
+    let existing: any = {};
+    try {
+      const snap = await get(existingRef);
+      if (snap.exists()) existing = snap.val() || {};
+    } catch (_) {}
     await withFirestoreTimeout(
-      update(ref(rtdb, `users/${key}`), stripUndefined({ role, updatedAt: new Date().toISOString() })),
+      set(existingRef, { ...existing, ...stripUndefined({ role, updatedAt: new Date().toISOString() }) }),
       5000
     ).catch(() => {});
   }
@@ -243,17 +250,20 @@ export async function setUserSuspended(emailOrUid: string, suspended: boolean): 
   }
   for (const key of targets) {
     if (!key) continue;
-    if (suspended) {
-      await withFirestoreTimeout(
-        update(ref(rtdb, `users/${key}`), { suspended: true, suspendedAt: new Date().toISOString() }),
-        5000
-      ).catch(() => {});
-    } else {
-      await withFirestoreTimeout(
-        update(ref(rtdb, `users/${key}`), { suspended: false, suspendedAt: null }),
-        5000
-      ).catch(() => {});
-    }
+    // Use set() to create-or-update, instead of update() which silently no-ops on missing records
+    const existingRef = ref(rtdb, `users/${key}`);
+    let existing: any = {};
+    try {
+      const snap = await get(existingRef);
+      if (snap.exists()) existing = snap.val() || {};
+    } catch (_) {}
+    const patch = suspended
+      ? { suspended: true, suspendedAt: new Date().toISOString() }
+      : { suspended: false, suspendedAt: null };
+    await withFirestoreTimeout(
+      set(existingRef, { ...existing, ...patch }),
+      5000
+    ).catch(() => {});
   }
 }
 
