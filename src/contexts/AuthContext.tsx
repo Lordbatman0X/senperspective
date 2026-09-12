@@ -65,6 +65,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       useStore.setState({
         readerProfile: {
           id: userProf.uid || userProf.email,
+          uid: userProf.uid || userProf.email,
           name: userProf.name || userProf.email?.split('@')[0] || 'Utilisateur',
           email: userProf.email || '',
           avatarUrl: userProf.avatarUrl || 'preset-male',
