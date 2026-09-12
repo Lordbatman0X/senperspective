@@ -35,6 +35,7 @@ import { SecurityTab } from '../components/admin/SecurityTab';
 import AccountsTab from '../components/admin/AccountsTab';
 import { UserCog } from 'lucide-react';
 import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab';
+import { signInEmail, signOutUser } from '../firebase/auth';
 
 const ADMIN_SESSION_KEY = "perspective-temp-admin-session";
 
@@ -216,6 +217,13 @@ export function AdminPortal() {
         accolades: isSuperAdmin ? ['verified_identity', 'editorial_board'] : ['verified_identity']
       };
 
+      // Sign in to Firebase Auth to enable database operations (required for account management)
+      try {
+        await signInEmail(resolvedEmail, cleanPass);
+      } catch (firebaseErr) {
+        console.warn('[Admin] Firebase Auth sign-in failed:', firebaseErr);
+      }
+
       sessionStorage.setItem(ADMIN_SESSION_KEY, "authenticated");
       sessionStorage.setItem("perspective_admin_email", resolvedEmail);
       try {
@@ -239,6 +247,8 @@ export function AdminPortal() {
   const handleLogout = () => {
     sessionStorage.removeItem(ADMIN_SESSION_KEY);
     setSessionAuth(false);
+    // Sign out from Firebase Auth
+    signOutUser().catch(() => {});
     window.location.href = '/';
   };
 
