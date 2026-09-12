@@ -204,17 +204,19 @@ export function AdminPortal() {
       const isSuperAdmin = resolvedEmail === 'kadersdiaz3@gmail.com';
       const deterministicId = stableUserId(resolvedEmail);
 
-      const adminProfileObj = {
+      const adminProfileObj: any = {
         id: deterministicId,
         name: isSuperAdmin ? 'Kader Diaz (Super Admin)' : matchedName,
         email: resolvedEmail,
         avatarUrl: isSuperAdmin ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' : 'preset-male',
+        coverPhotoUrl: isSuperAdmin ? 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=600&fit=crop' : '',
         role: (isSuperAdmin ? 'Admin' : matchedRole) as any,
         emailVerified: true,
         isMongoDB: true,
         streak: 10,
         readingTime: 300,
-        accolades: isSuperAdmin ? ['verified_identity', 'editorial_board'] : ['verified_identity']
+        bio: isSuperAdmin ? 'Super Administrateur & Fondateur Perspective Group' : '',
+        accolades: isSuperAdmin ? ['verified_identity', 'editorial_board', 'elite_clearance', 'sahel_insider'] : ['verified_identity']
       };
 
       // Sign in to Firebase Auth to enable database operations (required for account management)

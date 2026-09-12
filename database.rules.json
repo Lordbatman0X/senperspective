@@ -20,11 +20,11 @@
     },
     "users": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "site_settings": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "relations": {
       ".read": true,
