@@ -417,7 +417,10 @@ export async function saveFirestoreDoc(coll: string, id: string, data: any): Pro
       })
     );
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${coll}/${id}`);
+    // Do NOT call handleFirestoreError here — it throws (return type never),
+    // which would propagate up and break button handlers that expect a
+    // fire-and-forget void return. Log instead.
+    console.warn(`[Firebase] saveFirestoreDoc ${coll}/${id} failed:`, error);
   }
 }
 
@@ -425,7 +428,7 @@ export async function deleteFirestoreDoc(coll: string, id: string): Promise<void
   try {
     await withFirestoreTimeout(remove(ref(rtdb, `${coll}/${safeKey(id)}`)));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${coll}/${id}`);
+    console.warn(`[Firebase] deleteFirestoreDoc ${coll}/${id} failed:`, error);
   }
 }
 
