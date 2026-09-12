@@ -222,18 +222,42 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
 }
 
 /**
+ * Resolve ALL database keys that may hold a given account.
+ * If given an email, derives every key variant directly.
+ * If given a uid/mangled key (no '@'), reads the record to find its email,
+ * then adds every email-derived variant too — so admin actions always
+ * update the record(s) that login sync actually reads from.
+ */
+async function resolveAccountKeys(emailOrUid: string): Promise<string[]> {
+  const clean = emailOrUid.trim();
+  const keys = new Set<string>([clean]);
+  if (clean.includes('@')) {
+    const lower = clean.toLowerCase();
+    keys.add(lower);
+    keys.add(emailKey(clean));
+    keys.add(lower.replace(/[^a-zA-Z0-9_-]/g, '_'));
+  } else {
+    try {
+      const snap = await get(ref(rtdb, `users/${clean}`));
+      const email = snap.exists() ? String(snap.val()?.email || '') : '';
+      if (email.includes('@')) {
+        const lower = email.toLowerCase();
+        keys.add(lower);
+        keys.add(emailKey(email));
+        keys.add(lower.replace(/[^a-zA-Z0-9_-]/g, '_'));
+      }
+    } catch (_) { /* non-fatal: fall back to single key */ }
+  }
+  return Array.from(keys).filter(Boolean);
+}
+
+/**
  * Delete a user profile from Firestore
  */
 export async function deleteUserProfile(emailOrUid: string): Promise<void> {
   if (!emailOrUid) return;
-  const clean = emailOrUid.trim();
   try {
-    const targets = new Set<string>([clean]);
-    if (clean.includes('@')) {
-      targets.add(clean.toLowerCase());
-      targets.add(emailKey(clean));
-      targets.add(clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_'));
-    }
+    const targets = await resolveAccountKeys(emailOrUid);
     for (const key of targets) {
       if (!key) continue;
       await withFirestoreTimeout(remove(ref(rtdb, `users/${key}`)), 5000).catch(() => {});
@@ -249,14 +273,8 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
  */
 export async function setUserRole(emailOrUid: string, role: string): Promise<void> {
   if (!emailOrUid || !role) return;
-  const clean = emailOrUid.trim();
-  console.log('[Firebase] Setting role for:', clean, 'to:', role);
-  const targets = new Set<string>([clean]);
-  if (clean.includes('@')) {
-    targets.add(clean.toLowerCase());
-    targets.add(emailKey(clean));
-    targets.add(clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_'));
-  }
+  console.log('[Firebase] Setting role for:', emailOrUid, 'to:', role);
+  const targets = await resolveAccountKeys(emailOrUid);
   for (const key of targets) {
     if (!key) continue;
     try {
@@ -285,13 +303,7 @@ export async function setUserRole(emailOrUid: string, role: string): Promise<voi
  */
 export async function setUserSuspended(emailOrUid: string, suspended: boolean): Promise<void> {
   if (!emailOrUid) return;
-  const clean = emailOrUid.trim();
-  const targets = new Set<string>([clean]);
-  if (clean.includes('@')) {
-    targets.add(clean.toLowerCase());
-    targets.add(emailKey(clean));
-    targets.add(clean.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_'));
-  }
+  const targets = await resolveAccountKeys(emailOrUid);
   for (const key of targets) {
     if (!key) continue;
     // Use set() to create-or-update, instead of update() which silently no-ops on missing records

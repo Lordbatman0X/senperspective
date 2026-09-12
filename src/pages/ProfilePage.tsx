@@ -158,11 +158,12 @@ export function ProfilePage() {
     load();
   }, [readerProfile?.email]);
 
-  // Followers of TARGET user
+  // Followers of TARGET user (people whose user_id follows the target:
+  // in the 'followers' collection, user_id = follower, follower_email = followed)
   useEffect(() => {
     const dec = decodeURIComponent(email || "").toLowerCase().trim();
     if (!dec) return;
-    const load = async () => setFollowers(await loadRelations('followers', 'user_id', dec, 'follower_email'));
+    const load = async () => setFollowers(await loadRelations('followers', 'follower_email', dec, 'user_id'));
     load();
   }, [email]);
 
@@ -173,6 +174,15 @@ export function ProfilePage() {
     const load = async () => setTargetFollowing(await loadRelations('followers', 'user_id', dec, 'follower_email'));
     load();
   }, [email]);
+
+  // Friends of TARGET user
+  const [targetFriends, setTargetFriends] = useState<string[]>([]);
+  useEffect(() => {
+    const dec = decodeURIComponent(email || "").toLowerCase().trim();
+    if (!dec) return;
+    const load = async () => setTargetFriends(await loadRelations('friends', 'user_id', dec, 'friend_email'));
+    load();
+  }, [email, readerProfile?.email]);
 
   // Blocks of CURRENT user
   useEffect(() => {
@@ -305,6 +315,7 @@ export function ProfilePage() {
         await deleteFirestoreDoc('friends', `${a}_${b}`);
         await deleteFirestoreDoc('friends', `${b}_${a}`);
         setFriends((friends ?? []).filter(f => f !== b));
+        setTargetFriends((prev) => prev.filter(f => f !== a));
         useStore().deleteFriend(b);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
       } else {
@@ -313,6 +324,7 @@ export function ProfilePage() {
         await saveFirestoreDoc('friends', `${a}_${b}`, { id: `${a}_${b}`, user_id: a, friend_email: b, email: b, name: contact.name, role: contact.role, avatarUrl: contact.avatarUrl, connected_at: ts, type: 'friend' });
         await saveFirestoreDoc('friends', `${b}_${a}`, { id: `${b}_${a}`, user_id: b, friend_email: a, email: a, name: readerProfile?.name || a.split('@')[0], role: readerProfile?.role || 'Member', avatarUrl: readerProfile?.avatarUrl || '', connected_at: ts, type: 'friend' });
         setFriends([...new Set([...friends, b])]);
+        setTargetFriends((prev) => (prev.includes(a) ? prev : [...prev, a]));
         useStore().addFriend(contact);
         setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
       }
@@ -340,10 +352,12 @@ export function ProfilePage() {
       if (isFollowing) {
         await deleteFirestoreDoc('followers', `${myEmail}_${targetEmail}`);
         setFollowing(following.filter(f => f !== targetEmail));
+        setFollowers((followers ?? []).filter(f => f !== myEmail));
         setSuccessMsg(language === "fr" ? "Vous ne suivez plus ce membre." : "Unfollowed member.");
       } else {
         await saveFirestoreDoc('followers', `${myEmail}_${targetEmail}`, { id: `${myEmail}_${targetEmail}`, user_id: myEmail, follower_email: targetEmail, followed_at: Date.now(), type: 'follow' });
         setFollowing([...new Set([...following, targetEmail])]);
+        setFollowers((prev) => (prev.includes(myEmail) ? prev : [...prev, myEmail]));
         setSuccessMsg(language === "fr" ? "Vous suivez désormais ce membre !" : "Following member!");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -771,13 +785,16 @@ export function ProfilePage() {
               )}
             </div>
 
-            {/* Followers and Following stats */}
+            {/* Followers, Following and Friends stats */}
             <div className="flex gap-3 pt-1 font-mono text-xs text-zinc-500 dark:text-zinc-400 items-center mb-1">
               <div className="bg-zinc-100 dark:bg-zinc-900/80 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">{followers.length}</span> {language === "fr" ? "abonnés" : "followers"}
               </div>
               <div className="bg-zinc-100 dark:bg-zinc-900/80 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">{targetFollowing.length}</span> {language === "fr" ? "abonnements" : "following"}
+              </div>
+              <div className="bg-zinc-100 dark:bg-zinc-900/80 px-3 py-1.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800/60">
+                <span className="font-bold text-zinc-900 dark:text-zinc-100">{targetFriends.length}</span> {language === "fr" ? "amis" : "friends"}
               </div>
             </div>
 
