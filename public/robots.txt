@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ai-studio-applet-webapp-29e84.web.app/sitemap.xml

@@ -28,7 +28,7 @@ export function useSEO({ title, description, keywords, canonical, ogImage }: SEO
     // Fallbacks from siteSettings
     const effectiveDesc = description ?? siteSettings?.seoDefaultDesc ?? "Perspective Group — Grand journal d'information et d'analyse basé à Dakar. Politique, Économie, Société, Tech, Culture, Sports, Santé et International.";
     const effectiveKeywords = keywords ?? siteSettings?.seoDefaultKeywords ?? "Sénégal, Dakar, Perspective Group, politique, économie, tech, culture, sports, santé, société, international, afrique";
-    const effectiveCanonical = canonical ?? (siteSettings?.seoCanonicalBase ? `${siteSettings.seoCanonicalBase}${window.location.pathname}` : window.location.href);
+    const effectiveCanonical = canonical ?? (siteSettings?.seoCanonicalBase ? `${siteSettings.seoCanonicalBase}${window.location.pathname}` : `https://ai-studio-applet-webapp-29e84.web.app${window.location.pathname}`);
     const effectiveOgImage = ogImage ?? siteSettings?.seoOgImage ?? "https://perspective.sn/og-preview.jpg";
     const robotsContent = siteSettings?.seoRobotsIndex ?? "index, follow, max-image-preview:large, max-snippet:-1";
 
