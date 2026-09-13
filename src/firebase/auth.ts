@@ -98,6 +98,8 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         bio: (userOrData as Partial<AppUserProfile>).bio || data.bio || '',
         streak: data.streak || 1,
         readingTime: data.readingTime || 0,
+        hideEmail: data.hideEmail === true || data.hide_email === true,
+        hidePersonalInfo: data.hidePersonalInfo === true || data.hide_personal_info === true,
         accolades: isAdmin
           ? ['verified_identity', 'editorial_board', 'elite_clearance']
           : (data.accolades || ['verified_identity']),

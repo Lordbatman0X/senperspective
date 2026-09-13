@@ -95,6 +95,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           readingTime: userProf.readingTime,
           bio: userProf.bio,
           accolades: userProf.accolades,
+          hideEmail: userProf.hideEmail === true,
+          hidePersonalInfo: userProf.hidePersonalInfo === true,
+          suspended: userProf.suspended === true,
         },
       });
     } catch (e) {
