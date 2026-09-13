@@ -30,6 +30,14 @@
       ".read": true,
       ".write": "auth != null"
     },
+    "friends": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "followers": {
+      ".read": true,
+      ".write": "auth != null"
+    },
     "blocks": {
       ".read": true,
       ".write": "auth != null"
