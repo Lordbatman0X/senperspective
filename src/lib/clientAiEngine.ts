@@ -38,11 +38,14 @@ export interface ClientRssItem {
 }
 
 /**
- * In-memory cache for API keys synced from Firestore
+ * In-memory cache for AI provider API keys.
+ * SECURITY: keys are held ONLY in memory for the current browser session — they
+ * are never written to localStorage or to the (potentially public) database.
+ * This prevents key exfiltration from any user's browser and removes keys from
+ * the shared Realtime Database that client reads allow. Re-enter keys once per
+ * session; they do not need to persist across devices.
  */
 let cachedFirestoreKeys: Record<string, string> = {};
-let hasLoadedFromFirestore = false;
-let loadPromise: Promise<Record<string, string>> | null = null;
 
 /**
  * Real, currently-supported Gemini generation models (GA / stable names).
@@ -127,80 +130,29 @@ async function callGeminiGenerative(
 }
 
 /**
- * Loads API keys from Firestore site_settings into memory and localStorage
+ * Kept for API compatibility only. Keys are intentionally session-scoped in
+ * memory and are no longer synced from or to the database/localStorage.
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
-  if (typeof window === 'undefined') return {};
-  if (loadPromise) return loadPromise;
-
-  loadPromise = (async () => {
-    try {
-      const snap = await withFirestoreTimeout(get(ref(rtdb, 'site_settings/api_keys')), 6000).catch(() => null);
-      if (snap && snap.exists()) {
-        const data = snap.val();
-        const apiKeys = (data?.api_keys || data || {}) as Record<string, string>;
-        cachedFirestoreKeys = { ...apiKeys };
-        hasLoadedFromFirestore = true;
-        if (window.localStorage) {
-          for (const [k, v] of Object.entries(apiKeys)) {
-            if (typeof v === 'string' && v.trim()) {
-              const lower = k.toLowerCase();
-              const upper = k.toUpperCase();
-              if (!localStorage.getItem(`api_key_${lower}`)) {
-                localStorage.setItem(`api_key_${lower}`, v.trim());
-              }
-              if (!localStorage.getItem(`${upper}_API_KEY`)) {
-                localStorage.setItem(`${upper}_API_KEY`, v.trim());
-              }
-            }
-          }
-        }
-        return cachedFirestoreKeys;
-      }
-    } catch (e) {
-      console.warn('[Firebase] Notice loading API keys from Firestore:', e);
-    } finally {
-      loadPromise = null;
-    }
-    return cachedFirestoreKeys;
-  })();
-
-  return loadPromise;
-}
-
-// Auto-trigger load on client initialization
-if (typeof window !== 'undefined') {
-  loadClientApiKeysFromFirestore();
+  return cachedFirestoreKeys;
 }
 
 /**
- * Gets the cleanest available API key from localStorage or Firestore cache
+ * Gets the cleanest available API key from the in-memory cache only.
  */
 export function getClientApiKey(provider: string): string | null {
   if (typeof window === 'undefined') return null;
   const p = provider.toLowerCase();
   const P = provider.toUpperCase();
-
-  // 1. Check browser localStorage
-  if (window.localStorage) {
-    const val = localStorage.getItem(`api_key_${p}`) || localStorage.getItem(`${P}_API_KEY`);
-    if (val) {
-      const trimmed = val.replace(/^["']|["']$/g, '').trim();
-      if (trimmed && trimmed !== 'undefined' && trimmed !== 'null') return trimmed;
-    }
-  }
-
-  // 2. Check cached Firestore keys
   if (cachedFirestoreKeys[P]) return cachedFirestoreKeys[P];
   if (cachedFirestoreKeys[p]) return cachedFirestoreKeys[p];
   if (cachedFirestoreKeys[`${p}_api_key`]) return cachedFirestoreKeys[`${p}_api_key`];
   if (cachedFirestoreKeys[`api_key_${p}`]) return cachedFirestoreKeys[`api_key_${p}`];
-
   return null;
 }
 
 /**
- * Checks if ANY AI provider API key is currently available
+ * Checks if ANY AI provider API key is currently available (in memory)
  */
 export function hasAnyClientApiKey(): boolean {
   const providers = ['gemini', 'groq', 'openai', 'openrouter', 'anthropic', 'deepseek'];
@@ -208,7 +160,9 @@ export function hasAnyClientApiKey(): boolean {
 }
 
 /**
- * Saves an API key to localStorage AND Firestore so it persists across all devices
+ * Stores an API key in memory for this browser session. It is NOT persisted to
+ * localStorage or the database — this keeps keys out of reach of client-side
+ * readers and out of the shared Realtime Database.
  */
 export async function saveClientApiKey(provider: string, key: string): Promise<void> {
   if (typeof window === 'undefined') return;
@@ -216,32 +170,10 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
   const P = provider.toUpperCase();
   const cleanKey = (key || '').replace(/^["']|["']$/g, '').trim();
 
-  // 1. Save in localStorage
-  if (window.localStorage) {
-    if (cleanKey) {
-      localStorage.setItem(`api_key_${p}`, cleanKey);
-      localStorage.setItem(`${P}_API_KEY`, cleanKey);
-    } else {
-      localStorage.removeItem(`api_key_${p}`);
-      localStorage.removeItem(`${P}_API_KEY`);
-    }
-  }
-
-  // 2. Cache in memory
   if (cleanKey) {
     cachedFirestoreKeys[P] = cleanKey;
   } else {
     delete cachedFirestoreKeys[P];
-  }
-
-  // 3. Persist to Realtime Database site_settings/api_keys
-  try {
-    await withFirestoreTimeout(update(ref(rtdb, 'site_settings/api_keys'), {
-      api_keys: { ...cachedFirestoreKeys, [P]: cleanKey }
-    }));
-    console.log(`[Firebase] Successfully saved ${P} API key to the database.`);
-  } catch (err) {
-    console.warn(`[Firebase] Could not sync ${P} key to Firestore:`, err);
   }
 }
 

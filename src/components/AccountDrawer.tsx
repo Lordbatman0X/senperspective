@@ -425,7 +425,7 @@ export function AccountDrawer({
             {/* Drawer Header Area */}
             <div className="flex justify-between items-center px-6 py-4.5 border-b border-zinc-300/30 dark:border-zinc-800/30 bg-white/10 dark:bg-black/20 backdrop-blur-md select-none shrink-0">
               <div className="flex flex-col text-left">
-                <span className="text-[9px] font-mono font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                <span className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-none" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }} />
                   <span>{language === "fr" ? "Espace Membre" : "Member Account"}</span>
                 </span>
@@ -454,7 +454,7 @@ export function AccountDrawer({
                 {/* Language Switcher */}
                 <button
                   onClick={() => setLanguage(language === "fr" ? "en" : "fr")}
-                  className="text-[9px] font-mono font-black text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-2 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 transition-colors rounded-none cursor-pointer"
+                  className="text-[11px] font-mono font-black text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-2 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 transition-colors rounded-none cursor-pointer"
                 >
                   {language === "fr" ? "EN" : "FR"}
                 </button>
@@ -504,7 +504,7 @@ export function AccountDrawer({
                       style={isSelected ? {} : { color: currentSettings?.accentColor || "#E85D42" }}
                     />
                     <span
-                      className={`text-[9px] font-mono uppercase tracking-wider mt-1 leading-none ${
+                      className={`text-[11px] font-mono uppercase tracking-wider mt-1 leading-none ${
                         isSelected
                           ? "font-black text-white dark:text-zinc-950"
                           : "font-black text-zinc-900 dark:text-zinc-100"
@@ -513,7 +513,7 @@ export function AccountDrawer({
                       {language === "fr" ? item.labelFr : item.labelEn}
                     </span>
                     {item.id === "messages" && unreadMessagesCount > 0 && !isSelected && (
-                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md">
+                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md">
                         {unreadMessagesCount}
                       </span>
                     )}
@@ -533,7 +533,7 @@ export function AccountDrawer({
               
               {/* Feedback Alert Toast */}
               {settingsSuccessMsg && (
-                <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 p-3 font-mono text-[9px] font-bold tracking-wide uppercase mb-4 rounded-none animate-fadeIn">
+                <div className="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 p-3 font-mono text-[11px] font-bold tracking-wide uppercase mb-4 rounded-none animate-fadeIn">
                   {settingsSuccessMsg}
                 </div>
               )}
@@ -564,26 +564,26 @@ export function AccountDrawer({
                                 {readerProfile.name}
                               </h4>
                               <span
-                                className="text-[8px] font-mono font-bold tracking-wider text-white px-1.5 py-0.5 rounded-none leading-none shrink-0"
+                                className="text-[10px] font-mono font-bold tracking-wider text-white px-1.5 py-0.5 rounded-none leading-none shrink-0"
                                 style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
                               >
                                 {isAdmin ? "ADMIN" : (language === "fr" ? "MEMBRE" : "MEMBER")}
                               </span>
                             </div>
-                            <p className="text-[9.5px] text-zinc-500 dark:text-zinc-400 font-mono truncate max-w-[200px] mt-1 leading-none">
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono truncate max-w-[200px] mt-1 leading-none">
                               {((readerProfile.email ?? '').toLowerCase())}
                             </p>
                           </div>
                         </div>
 
                         {/* Fast Stats Badges */}
-                        <div className="flex items-center gap-2 w-full md:w-auto justify-start md:justify-end text-[9.5px] font-mono">
+                        <div className="flex items-center gap-2 w-full md:w-auto justify-start md:justify-end text-xs font-mono">
                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800" title={language === "fr" ? "Série de lecture" : "Daily Streak"}>
                             <Flame size={12} className="text-orange-500 shrink-0" />
                             <span className="font-bold text-zinc-900 dark:text-zinc-100">{statsReadingStreak}d</span>
                           </div>
                           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-                            <span className="text-[8px] text-zinc-500 dark:text-zinc-400 font-bold">READ:</span>
+                            <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">READ:</span>
                             <span className="font-bold text-zinc-900 dark:text-zinc-100">{statsArticlesRead}</span>
                           </div>
                         </div>
@@ -592,10 +592,10 @@ export function AccountDrawer({
                       {/* Topic Breakdown & Strategic Reports */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-3 bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800 p-4 text-left">
-                          <span className="text-[9px] font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 block tracking-wider">
+                          <span className="text-[11px] font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 block tracking-wider">
                             {language === "fr" ? "Centres d'Intérêt" : "Analytical Focus"}
                           </span>
-                          <div className="space-y-3 pt-1 font-mono text-[9.5px]">
+                          <div className="space-y-3 pt-1 font-mono text-xs">
                             <div>
                               <div className="flex justify-between text-zinc-800 dark:text-zinc-200 mb-1">
                                 <span>{language === "fr" ? "Géopolitique" : "Geopolitics"}</span>
@@ -628,22 +628,22 @@ export function AccountDrawer({
 
                         {/* Dépêches List */}
                         <div className="space-y-3 bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800 p-4 text-left">
-                          <span className="text-[9px] font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 block tracking-wider">
+                          <span className="text-[11px] font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 block tracking-wider">
                             {language === "fr" ? "Dépêches Récents" : "Recent Dispatches"}
                           </span>
                           <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                             {notifications && (notifications ?? []).length > 0 ? (
                               (notifications ?? []).slice(0, 3).map((n) => (
-                                <div key={n.id} className="p-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[9px] font-mono flex flex-col gap-1 text-left">
+                                <div key={n.id} className="p-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono flex flex-col gap-1 text-left">
                                   <div className="flex justify-between font-bold text-zinc-900 dark:text-zinc-100 text-[8.5px]">
                                     <span>{n.date || "TODAY"}</span>
                                     <span className="text-amber-600 font-bold">INFO</span>
                                   </div>
-                                  <p className="text-zinc-600 dark:text-zinc-300 truncate text-[9px] leading-snug">{typeof n.text === 'string' ? n.text : (n.text?.[language] || n.text?.fr || n.text?.en || '')}</p>
+                                  <p className="text-zinc-600 dark:text-zinc-300 truncate text-[11px] leading-snug">{typeof n.text === 'string' ? n.text : (n.text?.[language] || n.text?.fr || n.text?.en || '')}</p>
                                 </div>
                               ))
                             ) : (
-                              <p className="text-[9.5px] text-zinc-500 dark:text-zinc-400 italic py-3 font-mono">
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400 italic py-3 font-mono">
                                 {language === "fr" ? "Aucune alerte en attente." : "All dispatches read."}
                               </p>
                             )}
@@ -654,7 +654,7 @@ export function AccountDrawer({
                       {/* Security Audit Log */}
                       <div className="space-y-3 text-left">
                         <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-800 pb-2">
-                          <span className="text-[9.5px] font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 tracking-wider">
+                          <span className="text-xs font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 tracking-wider">
                             {language === "fr" ? "Journal d'Activité de Session" : "Session Activity Audit Log"}
                           </span>
                           <button
@@ -664,7 +664,7 @@ export function AccountDrawer({
                                 setTimeout(() => setSettingsSuccessMsg(""), 3000);
                               }
                             }}
-                            className="text-[8px] font-mono font-bold uppercase text-rose-600 hover:underline cursor-pointer border-none bg-transparent"
+                            className="text-[10px] font-mono font-bold uppercase text-rose-600 hover:underline cursor-pointer border-none bg-transparent"
                           >
                             {language === "fr" ? "EFFACER" : "PURGE LOGS"}
                           </button>
@@ -707,7 +707,7 @@ export function AccountDrawer({
                       
                       {/* Saved Geopolitical Reports */}
                       <div className="space-y-3">
-                        <span className="text-[9.5px] font-mono font-bold uppercase text-white dark:text-white tracking-widest flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                        <span className="text-xs font-mono font-bold uppercase text-white dark:text-white tracking-widest flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2">
                           <Bookmark size={12} style={{ color: currentSettings?.accentColor }} />
                           <span className="text-white dark:text-white">{language === "fr" ? "Rapports & Articles Sauvegardés" : "Saved Articles & Reports"}</span>
                         </span>
@@ -753,7 +753,7 @@ export function AccountDrawer({
 
                       {/* Public Comments Tracker */}
                       <div className="space-y-3 pt-2">
-                        <span className="text-[9.5px] font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 tracking-widest flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                        <span className="text-xs font-mono font-bold uppercase text-zinc-900 dark:text-zinc-100 tracking-widest flex items-center gap-1.5 border-b border-zinc-200 dark:border-zinc-800 pb-2">
                           <MessageSquare size={12} style={{ color: currentSettings?.accentColor }} />
                           <span>{language === "fr" ? "Historique de vos Déclarations" : "Your Public Comments"}</span>
                         </span>
@@ -810,7 +810,7 @@ export function AccountDrawer({
                                 window.dispatchEvent(new CustomEvent('open-floating-chat', { detail: { email: selectedChatUser } }));
                                 setShowProfileModal(false);
                               }}
-                              className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-[#E85D42] text-[9.5px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1"
+                              className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-[#E85D42] text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1"
                               title={language === "fr" ? "Ouvrir la bulle flottante Messenger" : "Open floating Messenger tab"}
                             >
                               💬 {language === "fr" ? "Bulle" : "Floating"}
@@ -820,7 +820,7 @@ export function AccountDrawer({
                                 navigate('/discussion');
                                 setShowProfileModal(false);
                               }}
-                              className="px-2 py-1 bg-[#E85D42] hover:bg-[#d04a30] text-white text-[9.5px] font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                              className="px-2 py-1 bg-[#E85D42] hover:bg-[#d04a30] text-white text-xs font-mono font-bold uppercase tracking-wider rounded transition-all cursor-pointer flex items-center gap-1 shadow-xs"
                               title={language === "fr" ? "Ouvrir la page de discussion complète" : "Open full discussion page"}
                             >
                               ↗ {language === "fr" ? "Plein Écran" : "Full Page"}
@@ -1167,7 +1167,7 @@ export function AccountDrawer({
                         <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-none flex items-center justify-between text-zinc-900 dark:text-zinc-100">
                           <div className="text-left pr-3">
                             <span className="text-[10px] font-bold uppercase block tracking-wider">{language === "fr" ? "Synchronisation Locale" : "Local Database Sync"}</span>
-                            <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-serif">{language === "fr" ? "Mémorise automatiquement les articles pour une lecture hors-ligne." : "Mirror dispatches into local indexed DB for offline reading."}</p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-serif">{language === "fr" ? "Mémorise automatiquement les articles pour une lecture hors-ligne." : "Mirror dispatches into local indexed DB for offline reading."}</p>
                           </div>
                           <button
                             onClick={() => {
@@ -1189,7 +1189,7 @@ export function AccountDrawer({
                         <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-none flex items-center justify-between text-zinc-900 dark:text-zinc-100">
                           <div className="text-left pr-3">
                             <span className="text-[10px] font-bold uppercase block tracking-wider">{language === "fr" ? "Économiseur de Données" : "Data Saver Mode"}</span>
-                            <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-serif">{language === "fr" ? "N'affiche que le texte et désactive le chargement lourd des visuels." : "Omit heavy illustrations and high-res images on low network speeds."}</p>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 font-serif">{language === "fr" ? "N'affiche que le texte et désactive le chargement lourd des visuels." : "Omit heavy illustrations and high-res images on low network speeds."}</p>
                           </div>
                           <button
                             onClick={() => {
@@ -1209,7 +1209,7 @@ export function AccountDrawer({
                       </div>
 
                       {/* Client Cache Purge Box */}
-                      <div className="p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 space-y-2 text-[9px]">
+                      <div className="p-4 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 space-y-2 text-[11px]">
                         <span className="text-zinc-900 dark:text-zinc-100 font-bold uppercase block tracking-wider mb-2">{language === "fr" ? "Empreinte Disque Navigateur" : "Indexed Cache Footprint"}</span>
                         <div className="flex justify-between border-b border-zinc-200 dark:border-zinc-800 pb-1">
                           <span className="text-zinc-500">CACHE SIZE:</span>
@@ -1296,11 +1296,11 @@ export function AccountDrawer({
                     <div className="space-y-6 text-left font-serif px-1">
                       {/* Pending friend requests */}
                       <div>
-                        <h4 className="text-[9px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                        <h4 className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
                           <UserPlus size={11} />
                           {language === "fr" ? "Demandes d'amitié" : "Friend Requests"}
                           {friendRequests.length > 0 && (
-                            <span className="ml-auto px-1.5 py-0.5 text-white text-[8px] font-bold" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}>
+                            <span className="ml-auto px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}>
                               {friendRequests.length}
                             </span>
                           )}
@@ -1320,11 +1320,11 @@ export function AccountDrawer({
                                   </div>
                                   <div className="min-w-0 flex-1">
                                     <p className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 truncate">{reqUser?.name || reqEmail.split('@')[0]}</p>
-                                    <p className="text-[9px] text-zinc-500 font-mono truncate">{reqEmail}</p>
+                                    <p className="text-[11px] text-zinc-500 font-mono truncate">{reqEmail}</p>
                                   </div>
                                   <button
                                     onClick={() => confirmFriendRequest(reqEmail)}
-                                    className="px-2 py-1.5 text-[9px] font-mono font-bold uppercase text-white cursor-pointer shrink-0 border-none"
+                                    className="px-2 py-1.5 text-[11px] font-mono font-bold uppercase text-white cursor-pointer shrink-0 border-none"
                                     style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
                                     title={language === "fr" ? "Confirmer" : "Confirm"}
                                   >
@@ -1332,7 +1332,7 @@ export function AccountDrawer({
                                   </button>
                                   <button
                                     onClick={() => rejectFriendRequest(reqEmail)}
-                                    className="px-2 py-1.5 text-[9px] font-mono font-bold uppercase text-rose-600 border border-rose-300 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40 cursor-pointer shrink-0 bg-transparent"
+                                    className="px-2 py-1.5 text-[11px] font-mono font-bold uppercase text-rose-600 border border-rose-300 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40 cursor-pointer shrink-0 bg-transparent"
                                     title={language === "fr" ? "Refuser" : "Decline"}
                                   >
                                     <X size={12} />
@@ -1346,7 +1346,7 @@ export function AccountDrawer({
 
                       {/* Social feed: publications & comments of followed accounts */}
                       <div>
-                        <h4 className="text-[9px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                        <h4 className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
                           <Activity size={11} />
                           {language === "fr" ? "Publications & Commentaires" : "Publications & Comments"}
                         </h4>
@@ -1418,7 +1418,7 @@ export function AccountDrawer({
                   <span>{language === "fr" ? "Administration" : "Admin Panel"}</span>
                 </Link>
               ) : (
-                <span className="text-[9px] font-mono text-zinc-400">
+                <span className="text-[11px] font-mono text-zinc-400">
                   {language === "fr" ? "Perspective Group" : "Perspective Group"}
                 </span>
               )}

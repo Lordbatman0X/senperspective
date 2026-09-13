@@ -26,6 +26,13 @@ export default defineConfig(() => {
             react: ['react', 'react-dom', 'react-router-dom'],
             firebase: ['firebase/app', 'firebase/auth', 'firebase/database', 'firebase/storage'],
             icons: ['lucide-react'],
+            // Split heavy third-party libs so the main app chunk stays lean and
+            // only loads what a page actually needs.
+            markdown: ['react-markdown', 'remark-gfm'],
+            crop: ['react-easy-crop', 'react-image-crop'],
+            motion: ['motion'],
+            opentype: ['opentype.js'],
+            'ai-engine': ['@google/genai'],
           },
         },
       },

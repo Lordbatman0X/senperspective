@@ -238,7 +238,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
             <div className="px-3 py-2 bg-brand-soft/20 border-b border-brand-border/10 flex items-center justify-between shrink-0">
               <button
                 onClick={() => setSelectedUserForDetail(null)}
-                className="flex items-center gap-1.5 text-[9.5px] font-mono font-black uppercase tracking-wider text-brand-dark hover:opacity-85 cursor-pointer bg-transparent border-none"
+                className="flex items-center gap-1.5 text-xs font-mono font-black uppercase tracking-wider text-brand-dark hover:opacity-85 cursor-pointer bg-transparent border-none"
               >
                 <ArrowLeft size={12} style={{ color: currentSettings.accentColor }} />
                 <span>{language === "fr" ? "Retour au Réseau" : "Back to Network"}</span>
@@ -248,7 +248,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                 {/* Toggle Friend Action inside Detailed profile */}
                 <button
                   onClick={() => toggleFriend(selectedUserForDetail.email)}
-                  className="px-2.5 py-1 text-[8px] font-mono font-bold uppercase tracking-wider border rounded-none cursor-pointer transition-all bg-transparent"
+                  className="px-2.5 py-1 text-[10px] font-mono font-bold uppercase tracking-wider border rounded-none cursor-pointer transition-all bg-transparent"
                   style={{
                     color: friendsList.includes((selectedUserForDetail.email ?? '').toLowerCase().trim()) ? "#e11d48" : currentSettings.accentColor,
                     borderColor: friendsList.includes((selectedUserForDetail.email ?? '').toLowerCase().trim()) ? "rgba(225, 29, 72, 0.3)" : `${currentSettings.accentColor}30`
@@ -367,7 +367,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
 
                   {/* Accolades of selected user */}
                   <div className="space-y-2">
-                    <span className="text-[9px] font-mono text-brand-muted uppercase block tracking-wider font-black border-b border-brand-border/15 pb-1">
+                    <span className="text-[11px] font-mono text-brand-muted uppercase block tracking-wider font-black border-b border-brand-border/15 pb-1">
                       {language === "fr" ? "BADGES ET DISTINCTIONS" : "BADGES & CERTIFICATES"}
                     </span>
                     
@@ -414,10 +414,10 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
 
                   {/* Bookmarks shared */}
                   <div className="space-y-2">
-                    <span className="text-[9px] font-mono text-brand-muted uppercase block tracking-wider font-black border-b border-brand-border/15 pb-1">
+                    <span className="text-[11px] font-mono text-brand-muted uppercase block tracking-wider font-black border-b border-brand-border/15 pb-1">
                       {language === "fr" ? "RAPPORT ET LECTURES FAVORITES" : "PUBLIC BOOKMARKS"}
                     </span>
-                    <p className="text-[9.5px] italic text-brand-muted font-serif py-1">
+                    <p className="text-xs italic text-brand-muted font-serif py-1">
                       {language === "fr" 
                         ? `${selectedUserForDetail.name} partage les mêmes dossiers confidentiels du Sahel.` 
                         : `${selectedUserForDetail.name} shares access to standard Sahel reports.`}
@@ -511,7 +511,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                               >
                                 {member.name}
                               </Link>
-                              <p className="text-[9px] font-mono text-brand-muted truncate mt-0.5">
+                              <p className="text-[11px] font-mono text-brand-muted truncate mt-0.5">
                                 {(member.hideEmail || member.hidePersonalInfo) && (member.email ?? '').toLowerCase() !== readerProfile?.email.toLowerCase()
                                   ? (language === "fr" ? "••••••••@••••.com (E-mail masqué)" : "••••••••@••••.com (Hidden email)")
                                   : member.email}
@@ -520,7 +520,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                               {/* Badge and Friend action button */}
                               <div className="flex items-center gap-1.5 mt-2">
                                 <span 
-                                  className="text-[8px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 text-white animate-fade-in"
+                                  className="text-[10px] font-mono font-bold tracking-wider uppercase px-1.5 py-0.5 text-white animate-fade-in"
                                   style={{ backgroundColor: currentSettings.accentColor }}
                                 >
                                   {member.role || "Member"}
@@ -612,7 +612,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
               {/* Change Cover floating button */}
               <label className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-black/75 text-white cursor-pointer transition-colors border border-white/20 rounded-none flex items-center gap-1 z-10">
                 <Camera size={12} />
-                <span className="text-[8px] font-mono tracking-wider uppercase font-black">{language === "fr" ? "Bannière" : "Cover"}</span>
+                <span className="text-[10px] font-mono tracking-wider uppercase font-black">{language === "fr" ? "Bannière" : "Cover"}</span>
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -677,7 +677,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
             
             {/* Display Name Input */}
             <div className="space-y-1.5">
-              <label className="block text-[9px] font-mono font-bold uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+              <label className="block text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
                 {language === 'fr' ? "Nom d'usage" : "Display Name"}
               </label>
               <div className="flex gap-2">
@@ -707,7 +707,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
 
             {/* Biography Editor */}
             <div className="space-y-1.5">
-              <label className="block text-[9px] font-mono font-bold uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
+              <label className="block text-[11px] font-mono font-bold uppercase tracking-widest text-zinc-800 dark:text-zinc-200">
                 {language === 'fr' ? "Biographie / Description" : "Custom Biography / Bio"}
               </label>
               <div className="flex flex-col gap-2">
@@ -725,7 +725,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                     setSettingsSuccessMsg(language === "fr" ? "✓ Biographie mise à jour !" : "✓ Biography updated!");
                     setTimeout(() => setSettingsSuccessMsg(""), 3000);
                   }}
-                  className="px-4 py-2 self-end text-white font-mono font-bold text-[9px] uppercase tracking-wider rounded-none cursor-pointer hover:opacity-90 transition-opacity border-none shadow-xs"
+                  className="px-4 py-2 self-end text-white font-mono font-bold text-[11px] uppercase tracking-wider rounded-none cursor-pointer hover:opacity-90 transition-opacity border-none shadow-xs"
                   style={{ backgroundColor: currentSettings.accentColor }}
                 >
                   {language === "fr" ? "METTRE À JOUR LA BIO" : "UPDATE BIO"}
@@ -735,7 +735,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
 
             {/* Custom File Upload & Preset Avatars selection */}
             <div className="space-y-2 pt-2 border-t border-zinc-200 dark:border-zinc-800">
-              <label className="block text-[9.5px] font-mono font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100 mb-2">
+              <label className="block text-xs font-mono font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100 mb-2">
                 {language === 'fr' ? "Sélectionner ou téléverser une photo" : "Select or Upload Avatar"}
               </label>
               
@@ -865,7 +865,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
               {/* Streak Bento Card */}
               <div className="p-4 border border-zinc-800 bg-zinc-950 dark:bg-zinc-900 text-white text-left relative overflow-hidden flex flex-col justify-between h-28 shadow-md rounded-none">
                 <div>
-                  <span className="text-[9.5px] font-mono font-black text-amber-400 uppercase block tracking-wider">{language === "fr" ? "SÉRIE DE LECTURE" : "DAILY STREAK"}</span>
+                  <span className="text-xs font-mono font-black text-amber-400 uppercase block tracking-wider">{language === "fr" ? "SÉRIE DE LECTURE" : "DAILY STREAK"}</span>
                   <p className="text-2xl font-serif font-black text-white flex items-center gap-2 mt-1">
                     <span>{readerProfile.streak || 1}</span>
                     <Flame size={20} className="text-orange-500 animate-pulse shrink-0" />
@@ -888,7 +888,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
               {/* Reading Time Bento Card */}
               <div className="p-4 border border-zinc-800 bg-zinc-950 dark:bg-zinc-900 text-white text-left relative overflow-hidden flex flex-col justify-between h-28 shadow-md rounded-none">
                 <div>
-                  <span className="text-[9.5px] font-mono font-black text-amber-400 uppercase block tracking-wider">{language === "fr" ? "TEMPS DE LECTURE" : "TIME READ"}</span>
+                  <span className="text-xs font-mono font-black text-amber-400 uppercase block tracking-wider">{language === "fr" ? "TEMPS DE LECTURE" : "TIME READ"}</span>
                   <p className="text-2xl font-serif font-black text-white flex items-center gap-2 mt-1">
                     <span>{readerProfile.readingTime || 120} m</span>
                     <Clock size={18} className="text-amber-400 shrink-0" />
@@ -942,7 +942,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                       </div>
                       <button
                         onClick={() => toggleSavedArticle(art.id)}
-                        className="text-rose-400 hover:text-rose-300 font-mono text-[9px] font-bold uppercase tracking-wider shrink-0 cursor-pointer border-none bg-transparent"
+                        className="text-rose-400 hover:text-rose-300 font-mono text-[11px] font-bold uppercase tracking-wider shrink-0 cursor-pointer border-none bg-transparent"
                       >
                         {language === "fr" ? "Retirer" : "Remove"}
                       </button>
@@ -998,7 +998,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
               </summary>
               <div className="p-4 space-y-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950/40">
                 {emailVerified ? (
-                  <div className="space-y-3 font-mono text-[9px]">
+                  <div className="space-y-3 font-mono text-[11px]">
                     <div className="flex items-center gap-1.5 font-bold uppercase text-zinc-900 dark:text-zinc-100">
                       <Lock size={12} style={{ color: currentSettings.accentColor }} />
                       <span>{language === "fr" ? "Code PIN d'Authentification Rapide" : "Quick Access PIN Code"}</span>
@@ -1078,7 +1078,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteSelf(false)}
-                        className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 py-2 font-bold uppercase text-[9px] cursor-pointer"
+                        className="flex-1 bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 py-2 font-bold uppercase text-[11px] cursor-pointer"
                       >
                         {language === "fr" ? "Annuler" : "Cancel"}
                       </button>
@@ -1104,7 +1104,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             if (setShowProfileModal) setShowProfileModal(false);
                           }
                         }}
-                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-2 font-black uppercase text-[9px] cursor-pointer border-none"
+                        className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-2 font-black uppercase text-[11px] cursor-pointer border-none"
                       >
                         {language === "fr" ? "OUI, SUPPRIMER DÉFINITIVEMENT" : "YES, DELETE PERMANENTLY"}
                       </button>
@@ -1114,7 +1114,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                   <button
                     type="button"
                     onClick={() => setConfirmDeleteSelf(true)}
-                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 uppercase tracking-wider text-[9px] cursor-pointer border-none shadow-xs"
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 uppercase tracking-wider text-[11px] cursor-pointer border-none shadow-xs"
                   >
                     {language === "fr" ? "SUPPRIMER MON COMPTE" : "DELETE MY ACCOUNT"}
                   </button>
@@ -1124,7 +1124,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
           </div>
 
           {/* Metadata Footer Card */}
-          <div className="bg-white dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-800 p-4 font-mono space-y-1 text-[9px] text-zinc-700 dark:text-zinc-300 uppercase tracking-wider rounded-none shadow-xs">
+          <div className="bg-white dark:bg-zinc-900/80 border border-zinc-300 dark:border-zinc-800 p-4 font-mono space-y-1 text-[11px] text-zinc-700 dark:text-zinc-300 uppercase tracking-wider rounded-none shadow-xs">
             <p className="font-bold text-zinc-900 dark:text-zinc-100">MEMBER ID: {readerProfile.email?.split("@")[0].toUpperCase()}</p>
             <p>CLEARANCE TIER: {isAdmin ? "LEVEL 4 EXECUTIVE" : "LEVEL 1 READER"}</p>
             <p>Dossier Server Node: Sahel-SNDKR</p>
