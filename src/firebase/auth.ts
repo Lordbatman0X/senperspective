@@ -130,9 +130,20 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
       await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, createdAtServer: Date.now() })), 5000).catch(() => {});
     }
 
-    // Mirror under sanitized email key so direct email lookups work
+    // Email-keyed mirror is now just a tiny POINTER to the canonical uid
+    // record. Previously a full copy was written on every login, which
+    // created multiple accounts per email (e.g. kadersdiaz3@gmail.com had 3
+    // records) that could drift out of sync.
     if (email && email !== uid) {
-      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${emailKey(email)}`), stripUndefined(profileData)), 5000).catch(() => {});
+      await withFirestoreTimeout(
+        dbSet(ref(rtdb, `users/${emailKey(email)}`), stripUndefined({
+          email,
+          uid,
+          pointerTo: uid,
+          updatedAt: new Date().toISOString(),
+        })),
+        5000
+      ).catch(() => {});
     }
 
     // If Admin, register in /admins/{uid} for security rules
@@ -168,7 +179,16 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
       if (!key) continue;
       const snap = await withFirestoreTimeout(get(ref(rtdb, `users/${key}`)), 5000).catch(() => null);
       if (snap && snap.exists()) {
-        const val = snap.val() as AppUserProfile;
+        let val = snap.val() as AppUserProfile & { pointerTo?: string };
+        // Follow pointer records (email-keyed mirrors now store only a
+        // pointer to the canonical uid-keyed record).
+        let hops = 0;
+        while (val?.pointerTo && hops < 3) {
+          const target = await withFirestoreTimeout(get(ref(rtdb, `users/${val.pointerTo}`)), 5000).catch(() => null);
+          if (!target || !target.exists()) break;
+          val = target.val() as AppUserProfile;
+          hops++;
+        }
         return { ...val, uid: val.uid || key };
       }
     }
@@ -194,6 +214,9 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
       console.log('[Firebase] Users data found:', Object.keys(snap.val()).length, 'entries');
       Object.entries(snap.val() as Record<string, any>).forEach(([key, d]) => {
         const profile = (d || {}) as AppUserProfile;
+        // Skip pointer records — they are not real accounts, just email-key
+        // shortcuts pointing at the canonical uid-keyed record.
+        if ((profile as any).pointerTo) return;
         const k = (profile.email || key).toLowerCase().trim();
         if (!k) return;
         const existing = byEmail.get(k);

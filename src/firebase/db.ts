@@ -335,7 +335,17 @@ export function subscribeToMessages(
     messagesRef,
     (snap) => {
       const all = toList(snap.val()) as FirestoreDirectMessage[];
-      const list = all.filter(m => m?.sender === userEmail || m?.receiver === userEmail);
+      // Case-insensitive matching: the store normalizes sender/receiver to
+      // lowercase at send time, but the logged-in email may keep its original
+      // casing (e.g. "Kader@Gmail.com"), which previously hid every message.
+      const target = String(userEmail || '').toLowerCase().trim();
+      const list = all.filter(m => {
+        const s = String(m?.sender || '').toLowerCase().trim();
+        const r = String(m?.receiver || '').toLowerCase().trim();
+        return s === target || r === target;
+      });
+      // Chronological order so conversations render oldest → newest
+      list.sort((a, b) => (a?.timestamp || 0) - (b?.timestamp || 0));
       callback(list);
     },
     (error) => {
