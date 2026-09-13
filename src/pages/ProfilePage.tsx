@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
+import { fetchUserProfile, syncUserProfile, isAdminProfile } from '../firebase/auth';
 import { saveFirestoreDoc, deleteFirestoreDoc, fetchFirestoreCollection } from '../firebase/db';
 import { 
   renderNeutralAvatar 
@@ -312,9 +312,7 @@ export function ProfilePage() {
   const targetEmailLow = (targetUser.email || decodedEmail).toLowerCase().trim();
   const isSelf = userEmailLow.length > 0 && userEmailLow === targetEmailLow;
   const isFriend = friends.includes(targetEmailLow) || friends.includes(decodedEmail);
-  const isAdmin = userEmailLow === "kadersdiaz3@gmail.com" || 
-                  userEmailLow === "admin@perspective.sn" || 
-                  userEmailLow.includes("admin");
+  const isAdmin = isAdminProfile(readerProfile);
 
   // Privacy gate rule: show public info always; hide detailed stats/accolades/badges
   // when target user has set their profile to private, unless viewer is the owner or admin.

@@ -66,8 +66,6 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
           ? (u as any).friend_ids.map((id: string) => String(id || '').toLowerCase().trim()).filter(Boolean)
           : [];
 
-        console.log('[FloatingHub] Cloud friends after filter:', cloudFriends);
-
         // Also include friends from the store (local state)
         const storeFriends = (friends || [])
           .map((f: any) => {
@@ -76,11 +74,8 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
           })
           .filter(Boolean);
 
-        console.log('[FloatingHub] Store friends:', storeFriends);
-
         // Combine and deduplicate
         const combinedFriends = [...new Set([...cloudFriends, ...storeFriends])];
-        console.log('[FloatingHub] Combined friends:', combinedFriends);
         setRealFriendsList(combinedFriends);
       } catch (err) {
         console.warn('[FloatingHub] Error loading friends:', err);

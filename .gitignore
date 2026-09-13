@@ -20,3 +20,13 @@ analytics-events.json
 user-consents.json
 build_out.txt
 tsc_out.txt
+# Secrets / service accounts — never commit even in a private repo
+firebase-applet-config.json
+*-service-account*.json
+*serviceAccount*.json
+firebase-private-key*.json
+*firebase-admin*.json
+kaders-dump.txt
+kaders-verify.txt
+deploy-log.txt
+build-log.txt

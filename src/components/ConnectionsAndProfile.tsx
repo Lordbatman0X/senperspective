@@ -844,14 +844,14 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                 );
                 setTimeout(() => setSettingsSuccessMsg(""), 3000);
               }}
-              className="px-3 py-1.5 border font-mono text-[9.5px] font-bold uppercase tracking-wider transition-colors rounded-none shrink-0 cursor-pointer flex items-center justify-center gap-1.5 bg-transparent"
+              className="px-3.5 py-2 font-mono text-xs font-bold uppercase tracking-wider transition-colors rounded-none shrink-0 cursor-pointer flex items-center justify-center gap-1.5 bg-transparent"
               style={{
                 color: readerProfile.hideEmail ? "#f43f5e" : "#10b981",
                 borderColor: readerProfile.hideEmail ? "rgba(244, 63, 94, 0.4)" : "rgba(16, 185, 129, 0.4)"
               }}
             >
               {readerProfile.hideEmail ? <EyeOff size={14} /> : <Eye size={14} />}
-              <span>{readerProfile.hideEmail ? (language === "fr" ? "MASQUÉ" : "HIDDEN") : (language === "fr" ? "VISIBLE" : "VISIBLE")}</span>
+              <span>{readerProfile.hideEmail ? (language === "fr" ? "MASQUÉ" : "HIDDEN") : "VISIBLE"}</span>
             </button>
           </div>
 

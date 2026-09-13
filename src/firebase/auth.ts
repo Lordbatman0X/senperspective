@@ -53,6 +53,18 @@ export function isBootstrapAdmin(email?: string | null): boolean {
   return BOOTSTRAP_ADMIN_EMAILS.includes(email.toLowerCase().trim());
 }
 
+/** Central authorization helpers — the ONLY place role/privilege logic lives. */
+export function isSuperAdminProfile(profile?: any): boolean {
+  if (!profile) return false;
+  return isBootstrapAdmin(profile.email || profile.uid || '');
+}
+
+export function isAdminProfile(profile?: any): boolean {
+  if (!profile) return false;
+  if (isSuperAdminProfile(profile)) return true;
+  return String(profile.role || '').toLowerCase() === 'admin';
+}
+
 /**
  * Ensures user document exists in Firestore and syncs profile
  */
@@ -206,14 +218,12 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
  */
 export async function fetchAllUsers(): Promise<AppUserProfile[]> {
   try {
-    console.log('[Firebase] Fetching all users...');
     const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')));
     // FIX (stale roles shown): each user may have TWO records (uid key + email
     // mirror key). Merge duplicates by email instead of keeping the first
     // record encountered, preferring an attributed 'Admin' role.
     const byEmail = new Map<string, AppUserProfile>();
     if (snap.exists() && typeof snap.val() === 'object') {
-      console.log('[Firebase] Users data found:', Object.keys(snap.val()).length, 'entries');
       Object.entries(snap.val() as Record<string, any>).forEach(([key, d]) => {
         const profile = (d || {}) as AppUserProfile;
         // Skip pointer records — they are not real accounts, just email-key
@@ -235,10 +245,9 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
         }
       });
     } else {
-      console.log('[Firebase] No users data found');
+      console.warn('[Firebase] No users data found');
     }
     const users: AppUserProfile[] = Array.from(byEmail.values());
-    console.log('[Firebase] Returning', users.length, 'users');
     return users;
   } catch (err) {
     console.error('[Firebase] Error fetching all users:', err);
@@ -298,7 +307,6 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
  */
 export async function setUserRole(emailOrUid: string, role: string): Promise<void> {
   if (!emailOrUid || !role) return;
-  console.log('[Firebase] Setting role for:', emailOrUid, 'to:', role);
   const targets = await resolveAccountKeys(emailOrUid);
   for (const key of targets) {
     if (!key) continue;

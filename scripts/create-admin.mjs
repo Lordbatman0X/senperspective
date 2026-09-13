@@ -19,9 +19,16 @@ const app = initializeApp({
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const adminEmail = 'kadersdiaz3@gmail.com';
-const adminPassword = 'Perspective2026!';
-const adminName = 'Kader S. Diaz';
+const adminEmail = process.env.ADMIN_EMAIL || 'kadersdiaz3@gmail.com';
+// NEVER hardcode a password in source. Must be provided at runtime, e.g.:
+//   ADMIN_PASSWORD='...' ADMIN_EMAIL='...' node scripts/create-admin.mjs
+const adminPassword = process.env.ADMIN_PASSWORD;
+if (!adminPassword) {
+  console.error('\n❌ ADMIN_PASSWORD environment variable is required (never committed to source).');
+  console.error('   Usage:  ADMIN_PASSWORD="YourStrongPassword" node scripts/create-admin.mjs\n');
+  process.exit(1);
+}
+const adminName = process.env.ADMIN_NAME || 'Kader S. Diaz';
 
 async function createAdmin() {
   try {
