@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
 import { CategoryPage } from './pages/CategoryPage';
@@ -15,6 +15,7 @@ import { Layout } from './components/Layout';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
+import { subscribeToArticles } from './firebase/db';
 
 function App() {
   const loadArticles = useStore(state => state.loadArticles);
@@ -22,32 +23,75 @@ function App() {
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
 
   useEffect(() => {
-    // Load fresh articles from Firestore in background on app startup
+    // Load fresh articles in background on app startup (also recovers legacy
+    // localStorage articles and hydrates the cache before the cloud answers).
     loadArticles();
     // FIX: hydrate shared site settings (BC logo, colors, etc.) from Firebase
     // so all devices (desktop AND mobile) see the same configuration.
     loadSiteSettings();
 
-    // Background auto-refresh: pull fresh articles every 3 minutes so devices
-    // that keep the site open see newly published content without a manual
-    // reload (the store merge is silent — no full page reload, no flicker).
-    const REFRESH_MS = 3 * 60 * 1000;
+    // FIX (articles not syncing across devices and browsers): replaced the
+    // 3-minute polling with a PERSISTENT real-time listener. A one-shot get()
+    // races a 7s timeout and on slower devices/connections it loses the race
+    // right after page load (while the RTDB connection is still being
+    // established) — the app then silently falls back to a stale local cache
+    // and the device never sees newly published articles. onValue keeps a
+    // long-lived connection that the SDK automatically re-establishes after
+    // network drops, and pushes cloud changes within ~1 second, so every
+    // device converges on the same content — instantly, on every page.
+    let hasPrevSnapshot = false;
+    const prevIdsRef = { current: new Set<string>() };
+    const unsubArticles = subscribeToArticles(
+      (remoteList) => {
+        try {
+          const local = Array.isArray(useStore.getState().articles)
+            ? [...useStore.getState().articles]
+            : [];
+          const remoteIds = new Set(remoteList.map(a => String((a as any)?.id || '')));
+
+          // Deletion sync: ids that were in the previous cloud snapshot but
+          // are gone now were deleted remotely — drop stale local copies so
+          // removed articles don't resurrect from the device cache.
+          const deletedIds = hasPrevSnapshot
+            ? [...prevIdsRef.current].filter(id => id && !remoteIds.has(id))
+            : [];
+          const deletedSet = new Set(deletedIds);
+          const extras = local.filter(a => {
+            const id = String((a as any)?.id || '');
+            return id && !remoteIds.has(id) && !deletedSet.has(id);
+          });
+
+          // Remote-first merge: cloud is the source of truth (fresh content
+          // and order win); local-only articles (offline drafts) are kept
+          // after the remote ones.
+          const merged = [...remoteList, ...extras];
+          const sig = merged.map(a => `${(a as any)?.id}:${(a as any)?.updatedAtServer || ''}`).join('|');
+          const prevSig = local.map(a => `${(a as any)?.id}:${(a as any)?.updatedAtServer || ''}`).join('|');
+          if (sig !== prevSig) {
+            useStore.setState({ articles: merged as any });
+          }
+          prevIdsRef.current = remoteIds;
+          hasPrevSnapshot = true;
+        } catch (e) {
+          console.warn('[App] Article realtime merge notice:', e);
+        }
+      },
+      (err) => console.warn('[App] Article realtime subscription notice:', err?.message)
+    );
+
+    // Safety net: when a hidden tab becomes visible again after a long time
+    // (device unlock, browser resume), force one fresh fetch in case the
+    // listener connection was interrupted while the tab was frozen.
     let lastFetch = Date.now();
-    const refresh = () => {
-      // Never auto-refresh inside the admin portal (an admin may be editing).
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) return;
-      lastFetch = Date.now();
-      loadArticles();
-    };
-    const interval = window.setInterval(refresh, REFRESH_MS);
-    // Also refresh when a hidden tab becomes visible again (device unlock,
-    // tab switch) — covers the "left the site open overnight" case.
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && Date.now() - lastFetch > 60 * 1000) refresh();
+      if (document.visibilityState === 'visible' && Date.now() - lastFetch > 60 * 1000) {
+        lastFetch = Date.now();
+        loadArticles();
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      window.clearInterval(interval);
+      unsubArticles();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [loadArticles, loadSiteSettings]);

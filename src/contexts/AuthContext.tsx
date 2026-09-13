@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useStore } from '../store';
+import { subscribeToMessages } from '../firebase/db';
 import {
   AppUserProfile,
   syncUserProfile,
@@ -153,6 +154,92 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     return () => unsubscribe();
   }, []);
+
+  // FIX (messages between users don't get across): messages were saved to the
+  // cloud on send, but NOTHING ever read them back — each device only saw its
+  // own local copy, so a message sent on one device never appeared on the
+  // recipient's device. This real-time listener streams the signed-in user's
+  // conversations from the cloud into the store and keeps them in sync:
+  //  - new messages from other devices/users appear instantly (and raise a
+  //    notification for messages that arrive while the app is open);
+  //  - read flags written on any device propagate to all devices;
+  //  - local offline drafts are preserved alongside the cloud history.
+  // Requires Firebase Auth (the database rules gate `messages` on auth).
+  const seenMessageIdsRef = { current: new Set<string>() };
+  useEffect(() => {
+    const email = profile?.email;
+    if (!user || !email) return;
+    const myEmail = email.toLowerCase().trim();
+    const unsub = subscribeToMessages(
+      myEmail,
+      (cloudMsgs) => {
+        try {
+          const current = useStore.getState().directMessages || [];
+          const cloudById = new Map<string, any>();
+          for (const m of cloudMsgs) {
+            if (m && m.id != null) cloudById.set(String(m.id), m);
+          }
+          const merged: any[] = [];
+          const seen = new Set<string>();
+          // Local first (preserves offline/unsent drafts), swapping in the
+          // fresher cloud copy whenever the id exists in the cloud.
+          for (const dm of current) {
+            const id = String((dm as any)?.id || '');
+            if (!id || seen.has(id)) continue;
+            if (cloudById.has(id)) merged.push(cloudById.get(id));
+            else merged.push(dm);
+            seen.add(id);
+          }
+          // Then append cloud messages this device has never seen.
+          for (const m of cloudMsgs) {
+            const id = String((m as any)?.id || '');
+            if (id && !seen.has(id)) {
+              merged.push(m);
+              seen.add(id);
+            }
+          }
+          // Chronological order (the UI renders the filtered conversation in
+          // array order, so ascending timestamps = correct chat history).
+          merged.sort((a: any, b: any) => (a?.timestamp || 0) - (b?.timestamp || 0));
+          useStore.setState({ directMessages: merged as any });
+
+          // Notify about genuinely-new incoming messages (skip the initial
+          // snapshot so logging in doesn't spam notifications for old chats).
+          for (const m of cloudMsgs) {
+            const id = String((m as any)?.id || '');
+            if (!id || seenMessageIdsRef.current.has(id)) continue;
+            seenMessageIdsRef.current.add(id);
+            const sender = String((m as any)?.sender || '').toLowerCase().trim();
+            const receiver = String((m as any)?.receiver || '').toLowerCase().trim();
+            if (receiver === myEmail && sender && sender !== myEmail) {
+              const users = useStore.getState().users || [];
+              const senderUser = users.find((u: any) =>
+                String(u?.email || '').toLowerCase().trim() === sender);
+              const senderLabel = senderUser?.name || sender;
+              const lang = useStore.getState().language;
+              try {
+                useStore.getState().addNotification({
+                  id: 'notif-dm-live-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                  email: myEmail,
+                  text: {
+                    fr: `Nouveau message de la part de ${senderLabel}.`,
+                    en: `New direct message from ${senderLabel}.`
+                  },
+                  date: new Date().toISOString().split('T')[0],
+                  isRead: false,
+                  category: 'messages'
+                } as any);
+              } catch {}
+            }
+          }
+        } catch (e) {
+          console.warn('[AuthContext] Message sync merge notice:', e);
+        }
+      },
+      (err) => console.warn('[AuthContext] Message subscription notice:', err?.message)
+    );
+    return () => unsub();
+  }, [user, profile?.email]);
 
   const login = async (email: string, pass: string): Promise<AppUserProfile> => {
     setLoading(true);

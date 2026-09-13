@@ -135,7 +135,13 @@ export function subscribeToArticles(
 
 export async function fetchAllArticles(): Promise<Article[]> {
   try {
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')));
+    // 15s (up from 7s): the articles node holds the full catalog — on slower
+    // mobile connections the default timeout can fire while the RTDB
+    // connection is still being established, silently falling back to a
+    // stale local cache. A generous timeout avoids the "other device never
+    // sees new articles" failure mode; the real-time listener in App.tsx is
+    // the primary sync channel anyway.
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 15000);
     return sortByDateDesc(toList(snap.val()) as Article[]).slice(0, 100);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'articles');
@@ -333,7 +339,13 @@ export function subscribeToMessages(
       callback(list);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, 'messages');
+      // handleFirestoreError throws — wrap so the SDK's error callback never
+      // surfaces an uncaught exception; surface via the optional onError.
+      try {
+        handleFirestoreError(error, OperationType.GET, 'messages');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
     }
   );
 }
