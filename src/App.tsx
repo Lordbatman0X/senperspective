@@ -17,7 +17,27 @@ import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 import { subscribeToArticles } from './firebase/db';
 
+// Injected by Vite at build time — changes on every deploy. A device that
+// kept an OLD cached bundle (webviews / add-to-homescreen tabs can ignore
+// cache headers) would otherwise sync nothing forever: it never receives
+// the real-time listener. On load, if the running bundle is older than the
+// freshly served one, force exactly ONE reload to pick up the new build.
+declare const __BUILD_ID__: string;
+
+function ensureFreshBundle() {
+  try {
+    const stored = localStorage.getItem('__APP_BUILD_ID__');
+    if (stored && stored !== __BUILD_ID__) {
+      localStorage.setItem('__APP_BUILD_ID__', __BUILD_ID__);
+      window.location.reload();
+      return;
+    }
+    localStorage.setItem('__APP_BUILD_ID__', __BUILD_ID__);
+  } catch { /* private mode — ignore */ }
+}
+
 function App() {
+  ensureFreshBundle();
   const loadArticles = useStore(state => state.loadArticles);
   const loadSiteSettings = useStore(state => state.loadSiteSettings);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
@@ -90,8 +110,16 @@ function App() {
       }
     };
     document.addEventListener('visibilitychange', onVisible);
+    // Fallback channel: some mobile networks / firewalls block or silently
+    // drop the RTDB websocket the real-time listener depends on. A light
+    // 3-minute polling loop guarantees every device converges on the cloud
+    // content even if the push channel dies.
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadArticles();
+    }, 3 * 60 * 1000);
     return () => {
       unsubArticles();
+      window.clearInterval(pollTimer);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [loadArticles, loadSiteSettings]);

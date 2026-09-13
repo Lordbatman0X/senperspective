@@ -6,6 +6,11 @@ import { defineConfig } from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      // Changes every build — used by App.tsx to force exactly one reload on
+      // devices still running a stale cached bundle after a new deploy.
+      __BUILD_ID__: JSON.stringify(String(Date.now())),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
