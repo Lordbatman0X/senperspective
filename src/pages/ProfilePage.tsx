@@ -130,6 +130,7 @@ export function ProfilePage() {
   const [targetFollowing, setTargetFollowing] = useState<string[]>([]);
   const [blocks, setBlocks] = useState<string[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
   const [mutes, setMutes] = useState<string[]>([]);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
 
@@ -177,15 +178,32 @@ export function ProfilePage() {
     load();
   }, [email]);
 
-  // Friends of TARGET user
+  // Friends of TARGET user + my pending friend requests
+  // (self-contained: must not reference consts declared after the component's
+  // early-return, which would throw a temporal-dead-zone ReferenceError)
   const [targetFriends, setTargetFriends] = useState<string[]>([]);
+  const decodedEmailMemo = decodeURIComponent(email || "").toLowerCase().trim();
   useEffect(() => {
-    const dec = decodeURIComponent(email || "").toLowerCase().trim();
-    if (!dec) return;
-    const load = async () => setTargetFriends(await loadRelations('friends', 'user_id', dec, 'friend_email'));
+    if (!decodedEmailMemo) return;
+    const me = ((readerProfile?.email || '') as string).toLowerCase().trim();
+    const load = async () => {
+      setTargetFriends(await loadRelations('friends', 'user_id', decodedEmailMemo, 'friend_email'));
+      try {
+        if (!me) { setIncomingRequests([]); setOutgoingRequests([]); return; }
+        const rows: any[] = await fetchFirestoreCollection('friend_requests');
+        const mine = rows.filter((r: any) => {
+          const from = String(r?.from || '').toLowerCase().trim();
+          const to = String(r?.to || '').toLowerCase().trim();
+          return from === me || to === me;
+        });
+        setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending'));
+        setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending'));
+      } catch (err) {
+        console.warn('[Profile] Friend requests load notice:', err);
+      }
+    };
     load();
-    loadPendingRequests();
-  }, [email, readerProfile?.email]);
+  }, [decodedEmailMemo, readerProfile?.email]);
 
   // Blocks of CURRENT user
   useEffect(() => {
