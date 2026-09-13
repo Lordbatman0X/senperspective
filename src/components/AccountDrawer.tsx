@@ -6,6 +6,7 @@ import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
 import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
+import { fetchFirestoreCollection, saveFirestoreDoc, deleteFirestoreDoc } from '../firebase/db';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -14,6 +15,8 @@ import {
   Bookmark,
   User,
   LogOut,
+  UserPlus,
+  UserMinus,
   MessageSquare,
   Flame,
   Crown,
@@ -273,35 +276,98 @@ export function AccountDrawer({
         console.warn("[AccountDrawer] Notice loading friends:", err);
       }
     };
+
+    // Load pending incoming + outgoing friend requests (request/confirm flow)
+    const loadRequests = async () => {
+      try {
+        const rows: any[] = await fetchFirestoreCollection('friend_requests');
+        const incoming = Array.from(new Set(rows
+          .filter(r => String(r?.to || '').toLowerCase().trim() === email && r?.status === 'pending')
+          .map(r => String(r?.from || '').toLowerCase().trim())
+          .filter(Boolean))) as string[];
+        const outgoing = Array.from(new Set(rows
+          .filter(r => String(r?.from || '').toLowerCase().trim() === email && r?.status === 'pending')
+          .map(r => String(r?.to || '').toLowerCase().trim())
+          .filter(Boolean))) as string[];
+        setFriendRequests(incoming);
+        setSentRequests(outgoing);
+      } catch (err) {
+        console.warn("[AccountDrawer] Notice loading friend requests:", err);
+      }
+    };
+
     loadFriends();
+    loadRequests();
   }, [readerProfile?.email]);
 
+  // Request-aware friend action:
+  //  - already friends          → remove (both directions)
+  //  - incoming pending request → confirm friendship
+  //  - outgoing pending request → cancel request
+  //  - otherwise                → send a friend request
   const toggleFriend = async (friendEmail: string) => {
     if (!readerProfile?.email) return;
     const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const targetEmail = friendEmail.toLowerCase().trim();
     if (myEmail === targetEmail) return;
 
-    const isFriend = friendsList.includes(targetEmail);
-
     try {
-      let nextFriends: string[];
-      if (isFriend) {
-        nextFriends = friendsList.filter(e => e !== targetEmail);
+      const rid = `${myEmail}_${targetEmail}`;
+      if (friendsList.includes(targetEmail)) {
+        // Remove friendship both directions + friend_ids
+        await deleteFirestoreDoc('friends', `${myEmail}_${targetEmail}`);
+        await deleteFirestoreDoc('friends', `${targetEmail}_${myEmail}`);
+        const nextFriends = friendsList.filter(e => e !== targetEmail);
+        setFriendsList(nextFriends);
+        useStore.getState().setFriends(nextFriends);
+        await syncUserProfile({ ...readerProfile, friend_ids: nextFriends });
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
+      } else if (friendRequests.includes(targetEmail)) {
+        // Confirm the incoming request → mutual friendship
+        const ts = Date.now();
+        const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
+        await saveFirestoreDoc('friends', `${myEmail}_${targetEmail}`, { id: `${myEmail}_${targetEmail}`, user_id: myEmail, friend_email: targetEmail, email: targetEmail, name: targetUser?.name || targetEmail.split('@')[0], avatarUrl: targetUser?.avatarUrl || '', connected_at: ts, type: 'friend' });
+        await saveFirestoreDoc('friends', `${targetEmail}_${myEmail}`, { id: `${targetEmail}_${myEmail}`, user_id: targetEmail, friend_email: myEmail, email: myEmail, name: readerProfile.name || myEmail.split('@')[0], avatarUrl: readerProfile.avatarUrl || '', connected_at: ts, type: 'friend' });
+        await saveFirestoreDoc('friend_requests', `${targetEmail}_${myEmail}`, { id: `${targetEmail}_${myEmail}`, from: targetEmail, to: myEmail, status: 'accepted', updatedAt: new Date().toISOString() });
+        setFriendRequests(prev => prev.filter(e => e !== targetEmail));
+        const nextFriends = Array.from(new Set([...friendsList, targetEmail]));
+        setFriendsList(nextFriends);
+        useStore.getState().setFriends(nextFriends);
+        await syncUserProfile({ ...readerProfile, friend_ids: nextFriends });
+        setSettingsSuccessMsg(language === "fr" ? "✓ Demande confirmée — vous êtes amis !" : "✓ Request confirmed — you are now friends!");
+      } else if (sentRequests.includes(targetEmail)) {
+        // Cancel the outgoing request
+        await deleteFirestoreDoc('friend_requests', rid);
+        setSentRequests(prev => prev.filter(e => e !== targetEmail));
+        setSettingsSuccessMsg(language === "fr" ? "Demande annulée." : "Request cancelled.");
       } else {
-        nextFriends = [...friendsList, targetEmail];
-        setSettingsSuccessMsg(language === "fr" ? "✓ Contact ajouté au réseau !" : "✓ Contact added to network!");
+        // Send a new friend request (friendship only after confirmation)
+        await saveFirestoreDoc('friend_requests', rid, { id: rid, from: myEmail, to: targetEmail, status: 'pending', createdAt: new Date().toISOString() });
+        setSentRequests(prev => Array.from(new Set([...prev, targetEmail])));
+        setSettingsSuccessMsg(language === "fr" ? "Demande envoyée — en attente de confirmation." : "Request sent — awaiting confirmation.");
       }
-      setFriendsList(nextFriends);
-      useStore.getState().setFriends(nextFriends);
-      await syncUserProfile({
-        ...readerProfile,
-        friend_ids: nextFriends
-      });
-      setTimeout(() => setSettingsSuccessMsg(""), 3000);
+      setTimeout(() => setSettingsSuccessMsg(""), 3500);
     } catch (err) {
       console.error("Failed to toggle friend status:", err);
+    }
+  };
+
+  // Confirm / reject incoming request from the Social view
+  const confirmFriendRequest = async (fromEmail: string) => {
+    await toggleFriend(fromEmail);
+  };
+
+  const rejectFriendRequest = async (fromEmail: string) => {
+    if (!readerProfile?.email) return;
+    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
+    const targetEmail = fromEmail.toLowerCase().trim();
+    try {
+      await saveFirestoreDoc('friend_requests', `${targetEmail}_${myEmail}`, { id: `${targetEmail}_${myEmail}`, from: targetEmail, to: myEmail, status: 'rejected', updatedAt: new Date().toISOString() });
+      setFriendRequests(prev => prev.filter(e => e !== targetEmail));
+      setSettingsSuccessMsg(language === "fr" ? "Demande refusée." : "Request declined.");
+      setTimeout(() => setSettingsSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("[AccountDrawer] Notice rejecting request:", err);
     }
   };
 
@@ -325,6 +391,7 @@ export function AccountDrawer({
     { id: "history", icon: Bookmark, labelFr: "Favoris", labelEn: "Saved" },
     { id: "messages", icon: MessageSquare, labelFr: "Messages", labelEn: "Messages" },
     { id: "connections", icon: Users, labelFr: "Réseau", labelEn: "Network" },
+    { id: "social", icon: UserPlus, labelFr: "Activité", labelEn: "Social" },
     { id: "offline", icon: WifiOff, labelFr: "Miroir", labelEn: "Mirror" },
     { id: "settings", icon: User, labelFr: "Profil", labelEn: "Profile" },
   ];
@@ -368,6 +435,7 @@ export function AccountDrawer({
                   {activeSubMenu === "history" && (language === "fr" ? "Dossiers Favoris" : "Saved Dossiers")}
                   {activeSubMenu === "messages" && (language === "fr" ? "Messagerie Sécurisée" : "Secure Dispatch Chat")}
                   {activeSubMenu === "connections" && (language === "fr" ? "Réseau d'Analystes" : "Analyst Network")}
+                  {activeSubMenu === "social" && (language === "fr" ? "Activité Sociale" : "Social Activity")}
                   {activeSubMenu === "offline" && (language === "fr" ? "Base de Données Locale" : "Local Database Mirror")}
                   {activeSubMenu === "settings" && (language === "fr" ? "Profil & Sécurité" : "Profile & Security")}
                 </h3>
@@ -1221,6 +1289,115 @@ export function AccountDrawer({
                       setSelectedChatUser={setSelectedChatUser}
                       setShowProfileModal={setShowProfileModal}
                     />
+                  )}
+
+                  {/* VIEW: SOCIAL ACTIVITY (friend requests + followed-accounts feed) */}
+                  {activeSubMenu === "social" && (
+                    <div className="space-y-6 text-left font-serif px-1">
+                      {/* Pending friend requests */}
+                      <div>
+                        <h4 className="text-[9px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                          <UserPlus size={11} />
+                          {language === "fr" ? "Demandes d'amitié" : "Friend Requests"}
+                          {friendRequests.length > 0 && (
+                            <span className="ml-auto px-1.5 py-0.5 text-white text-[8px] font-bold" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}>
+                              {friendRequests.length}
+                            </span>
+                          )}
+                        </h4>
+                        {friendRequests.length === 0 ? (
+                          <p className="text-[10px] italic text-zinc-400 py-2">
+                            {language === "fr" ? "Aucune demande en attente." : "No pending requests."}
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {friendRequests.map(reqEmail => {
+                              const reqUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === reqEmail);
+                              return (
+                                <div key={reqEmail} className="flex items-center gap-2.5 p-2.5 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
+                                  <div className="w-8 h-8 shrink-0 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 overflow-hidden flex items-center justify-center">
+                                    {renderNeutralAvatar(reqUser?.avatarUrl, reqUser?.name || reqEmail, 32)}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 truncate">{reqUser?.name || reqEmail.split('@')[0]}</p>
+                                    <p className="text-[9px] text-zinc-500 font-mono truncate">{reqEmail}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => confirmFriendRequest(reqEmail)}
+                                    className="px-2 py-1.5 text-[9px] font-mono font-bold uppercase text-white cursor-pointer shrink-0 border-none"
+                                    style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
+                                    title={language === "fr" ? "Confirmer" : "Confirm"}
+                                  >
+                                    <Check size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => rejectFriendRequest(reqEmail)}
+                                    className="px-2 py-1.5 text-[9px] font-mono font-bold uppercase text-rose-600 border border-rose-300 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40 cursor-pointer shrink-0 bg-transparent"
+                                    title={language === "fr" ? "Refuser" : "Decline"}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Social feed: publications & comments of followed accounts */}
+                      <div>
+                        <h4 className="text-[9px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                          <Activity size={11} />
+                          {language === "fr" ? "Publications & Commentaires" : "Publications & Comments"}
+                        </h4>
+                        {(() => {
+                          const myEmail = ((readerProfile?.email ?? '')).toLowerCase().trim();
+                          const socialNotifs = (notifications || []).filter((n: any) =>
+                            ((n.email ?? '').toLowerCase().trim() === myEmail) &&
+                            (n.category === 'social' ||
+                             String(n.id || '').startsWith('notif-follower-') ||
+                             String(n.id || '').startsWith('notif-friend-'))
+                          );
+                          if (socialNotifs.length === 0) {
+                            return (
+                              <p className="text-[10px] italic text-zinc-400 py-2">
+                                {language === "fr"
+                                  ? "Aucune activité des comptes que vous suivez pour le moment."
+                                  : "No activity from accounts you follow yet."}
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="space-y-2 max-h-[320px] overflow-y-auto scrollbar-thin pr-1">
+                              {socialNotifs.map((n: any) => {
+                                const textMsg = typeof n.text === 'string' ? n.text : (n.text?.[language] || n.text?.fr || '');
+                                return (
+                                  <div key={n.id} className={`flex items-start gap-2.5 p-2.5 border ${n.isRead ? 'border-zinc-200 dark:border-zinc-800 bg-transparent' : 'border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/60'}`}>
+                                    <div className="w-6 h-6 shrink-0 flex items-center justify-center text-white" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}>
+                                      {String(n.id).includes('publish') ? <FileText size={12} /> : <MessageCircle size={12} />}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[10px] leading-snug text-zinc-800 dark:text-zinc-200">{textMsg}</p>
+                                      <p className="text-[8.5px] text-zinc-400 font-mono mt-0.5">{n.date}</p>
+                                    </div>
+                                    {n.link && (
+                                      <Link
+                                        to={n.link}
+                                        onClick={() => setShowProfileModal(false)}
+                                        className="p-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer shrink-0 bg-transparent"
+                                        title={language === "fr" ? "Ouvrir" : "Open"}
+                                      >
+                                        <ExternalLink size={11} />
+                                      </Link>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   )}
 
                 </motion.div>

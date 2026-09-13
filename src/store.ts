@@ -694,6 +694,37 @@ export const useStore = create<AppState>()(
             category: 'newPublishes',
             link: `/article/${article.slug}`
           });
+
+          // FIX (social notifications): notify the author's followers about the
+          // new publication so their Account Drawer "Social" feed shows it.
+          (async () => {
+            try {
+              const authorClean = (article.authorEmail || currentProfile?.email || '').toLowerCase().trim();
+              if (!authorClean) return;
+              const followerRows: any[] = await fetchFirestoreCollection('followers');
+              const followerEmails = Array.from(new Set(followerRows
+                .filter((r: any) => String(r?.follower_email || '').toLowerCase().trim() === authorClean)
+                .map((r: any) => String(r?.user_id || '').toLowerCase().trim())
+                .filter(Boolean)));
+              followerEmails.forEach(followerEmail => {
+                if (followerEmail === authorClean) return;
+                get().addNotification({
+                  id: 'notif-follower-publish-' + Date.now() + '-' + Math.random().toString(36).substring(4),
+                  email: followerEmail,
+                  text: {
+                    fr: `${article.author || authorClean} que vous suivez a publié : \"${artTitleFr}\"`,
+                    en: `${article.author || authorClean}, whom you follow, published: \"${artTitleEn}\"`
+                  },
+                  date: new Date().toISOString().split('T')[0],
+                  isRead: false,
+                  category: 'social',
+                  link: `/article/${article.slug}`
+                });
+              });
+            } catch (err) {
+              console.warn('[Store] Follower publish notification notice:', err);
+            }
+          })();
         }
         return { success: true };
       },
