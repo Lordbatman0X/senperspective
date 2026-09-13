@@ -38,6 +38,10 @@
       ".read": true,
       ".write": "auth != null"
     },
+    "friend_requests": {
+      ".read": true,
+      ".write": "auth != null"
+    },
     "blocks": {
       ".read": true,
       ".write": "auth != null"

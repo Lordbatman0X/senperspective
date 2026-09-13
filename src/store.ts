@@ -14,7 +14,8 @@ import {
   addComment as firestoreAddComment,
   deleteComment as firestoreDeleteComment,
   saveFirestoreDoc,
-  deleteFirestoreDoc
+  deleteFirestoreDoc,
+  fetchFirestoreCollection
 } from './firebase/db';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
@@ -1135,7 +1136,7 @@ export const useStore = create<AppState>()(
           }
         );
       },
-      addComment: (comment) => {
+      addComment: async (comment) => {
         const comments = get().comments || [];
         const filtered = (comments ?? []).filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
@@ -1199,6 +1200,36 @@ export const useStore = create<AppState>()(
             });
           }
         });
+
+        // Notify FOLLOWERS of the comment author (real verified relations
+        // from the `followers` collection: rows where follower_email = author)
+        try {
+          const authorClean = (comment.email || '').toLowerCase().trim();
+          if (authorClean) {
+            const followerRows = await fetchFirestoreCollection('followers');
+            const followerEmails = Array.from(new Set(followerRows
+              .filter((r: any) => String(r?.follower_email || '').toLowerCase().trim() === authorClean)
+              .map((r: any) => String(r?.user_id || '').toLowerCase().trim())
+              .filter(Boolean)));
+            followerEmails.forEach(followerEmail => {
+              if (followerEmail === authorClean) return;
+              get().addNotification({
+                id: 'notif-follower-comment-' + Date.now() + '-' + Math.random().toString(36).substring(4),
+                email: followerEmail,
+                text: {
+                  fr: `${comment.author} que vous suivez a commenté \"${comment.articleTitle || 'un article'}\" : \"${comment.text.substring(0, 35)}...\"`,
+                  en: `${comment.author}, whom you follow, commented on \"${comment.articleTitle || 'an article'}\": \"${comment.text.substring(0, 35)}...\"`
+                },
+                date: new Date().toISOString().split('T')[0],
+                isRead: false,
+                category: 'messages',
+                link: `/article/${comment.articleId}`
+              });
+            });
+          }
+        } catch (err) {
+          console.warn('[Store] Follower comment notification notice:', err);
+        }
       },
       approveComment: (id) => {
         set({ comments: (get().comments || []).map(c => c.id === id ? { ...c, isApproved: true } : c) });

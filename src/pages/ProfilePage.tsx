@@ -129,6 +129,7 @@ export function ProfilePage() {
   const [followers, setFollowers] = useState<string[]>([]);
   const [targetFollowing, setTargetFollowing] = useState<string[]>([]);
   const [blocks, setBlocks] = useState<string[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [mutes, setMutes] = useState<string[]>([]);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
 
@@ -144,10 +145,11 @@ export function ProfilePage() {
   const loadRelations = async (collection: string, byField: string, key: string, valueField: string, type?: string): Promise<string[]> => {
     const rows: any[] = await fetchFirestoreCollection(collection);
     const k = key.toLowerCase().trim();
-    return rows
+    // Deduplicate — counts must be strictly real (one row per unique relation)
+    return Array.from(new Set(rows
       .filter((r: any) => String(r?.[byField] || "").toLowerCase().trim() === k && (!type || String(r?.type || "").toLowerCase() === type))
       .map((r: any) => String(r?.[valueField] || "").toLowerCase().trim())
-      .filter(Boolean);
+      .filter(Boolean)));
   };
 
   // Following of CURRENT user (accounts they follow)
@@ -182,6 +184,7 @@ export function ProfilePage() {
     if (!dec) return;
     const load = async () => setTargetFriends(await loadRelations('friends', 'user_id', dec, 'friend_email'));
     load();
+    loadPendingRequests();
   }, [email, readerProfile?.email]);
 
   // Blocks of CURRENT user
@@ -299,7 +302,59 @@ export function ProfilePage() {
   // when target user has set their profile to private, unless viewer is the owner or admin.
   const canViewDetails = isSelf || isAdmin || !targetUser.hidePersonalInfo;
 
-  // Toggle friendship action
+  // Friend-request flow: adding a friend sends a REQUEST; friendship is only
+  // established once the other account CONFIRMS. Data lives in the
+  // `friend_requests` collection: {id, from, to, status: 'pending'|'accepted', created_at}
+  const friendRequestId = (a: string, b: string) => `freq_${a}_${b}`;
+
+  const loadPendingRequests = async () => {
+    if (!userEmailLow) { setIncomingRequests([]); setOutgoingRequests([]); return; }
+    try {
+      const rows: any[] = await fetchFirestoreCollection('friend_requests');
+      const mine = rows.filter((r: any) => {
+        const from = String(r?.from || '').toLowerCase().trim();
+        const to = String(r?.to || '').toLowerCase().trim();
+        return from === userEmailLow || to === userEmailLow;
+      });
+      setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+      setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+    } catch (err) {
+      console.warn('[Profile] Friend requests load notice:', err);
+    }
+  };
+
+  const confirmFriendRequest = async (fromEmail: string) => {
+    const me = userEmailLow;
+    const id = friendRequestId(fromEmail, me);
+    try {
+      const ts = Date.now();
+      // Establish the mutual friendship (both directions)
+      await saveFirestoreDoc('friends', `${me}_${fromEmail}`, { id: `${me}_${fromEmail}`, user_id: me, friend_email: fromEmail, email: fromEmail, connected_at: ts, type: 'friend' });
+      await saveFirestoreDoc('friends', `${fromEmail}_${me}`, { id: `${fromEmail}_${me}`, user_id: fromEmail, friend_email: me, email: me, connected_at: ts, type: 'friend' });
+      // Mark request accepted
+      await saveFirestoreDoc('friend_requests', id, { id, from: fromEmail, to: me, status: 'accepted', created_at: ts, accepted_at: ts });
+      // Refresh relationship state
+      setTargetFriends(await loadRelations('friends', 'user_id', targetEmailLow, 'friend_email'));
+      await loadPendingRequests();
+      useStore().addFriend({ id: fromEmail, email: fromEmail, name: fromEmail.split('@')[0], status: 'friend' } as any);
+      useStore().addNotification({
+        id: 'notif-friend-accepted-' + Date.now(),
+        email: fromEmail,
+        text: {
+          fr: `${targetUser.name || me} a confirmé votre demande d'amitié. Vous êtes maintenant amis !`,
+          en: `${targetUser.name || me} confirmed your friend request. You are now friends!`
+        },
+        date: new Date().toISOString().split('T')[0],
+        isRead: false,
+        category: 'system'
+      });
+      setSuccessMsg(language === "fr" ? "Demande confirmée — vous êtes désormais amis !" : "Request confirmed — you are now friends!");
+      setTimeout(() => setSuccessMsg(""), 4000);
+    } catch (err) {
+      console.error('[Profile] Confirm friend request failed:', err);
+    }
+  };
+
   const handleFriendship = async () => {
     if (!readerProfile?.email) {
       setAuthTab("login");
@@ -310,23 +365,41 @@ export function ProfilePage() {
     const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
     if (myEmail === targetEmail) return;
     const a = myEmail, b = targetEmail;
+    const requestId = friendRequestId(a, b);
     try {
       if (isFriend) {
+        // Remove friendship both directions
         await deleteFirestoreDoc('friends', `${a}_${b}`);
         await deleteFirestoreDoc('friends', `${b}_${a}`);
         setFriends((friends ?? []).filter(f => f !== b));
         setTargetFriends((prev) => prev.filter(f => f !== a));
         useStore().deleteFriend(b);
         setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
+      } else if (incomingRequests.some((r: any) => String(r?.from || '').toLowerCase().trim() === b)) {
+        // The other account already requested me → confirm it
+        await confirmFriendRequest(b);
+        return;
+      } else if (outgoingRequests.some((r: any) => String(r?.to || '').toLowerCase().trim() === b)) {
+        // Cancel my pending outgoing request
+        await deleteFirestoreDoc('friend_requests', requestId);
+        setOutgoingRequests(prev => prev.filter((r: any) => String(r?.to || '').toLowerCase().trim() !== b));
+        setSuccessMsg(language === "fr" ? "Demande d'amitié annulée." : "Friend request cancelled.");
       } else {
-        const ts = Date.now();
-        const contact = { id: b, email: b, name: targetUser.name || b.split('@')[0], role: targetUser.role || 'Member', avatar: targetUser.avatarUrl || '', avatarUrl: targetUser.avatarUrl || '', status: 'friend' };
-        await saveFirestoreDoc('friends', `${a}_${b}`, { id: `${a}_${b}`, user_id: a, friend_email: b, email: b, name: contact.name, role: contact.role, avatarUrl: contact.avatarUrl, connected_at: ts, type: 'friend' });
-        await saveFirestoreDoc('friends', `${b}_${a}`, { id: `${b}_${a}`, user_id: b, friend_email: a, email: a, name: readerProfile?.name || a.split('@')[0], role: readerProfile?.role || 'Member', avatarUrl: readerProfile?.avatarUrl || '', connected_at: ts, type: 'friend' });
-        setFriends([...new Set([...friends, b])]);
-        setTargetFriends((prev) => (prev.includes(a) ? prev : [...prev, a]));
-        useStore().addFriend(contact);
-        setSuccessMsg(language === "fr" ? "Contact ajouté à votre réseau !" : "Contact established successfully!");
+        // Send a new friend request (friendship NOT established yet)
+        await saveFirestoreDoc('friend_requests', requestId, { id: requestId, from: a, to: b, status: 'pending', created_at: Date.now() });
+        setOutgoingRequests(prev => [...prev, { id: requestId, from: a, to: b, status: 'pending' }]);
+        useStore().addNotification({
+          id: 'notif-friend-request-' + Date.now(),
+          email: b,
+          text: {
+            fr: `${readerProfile?.name || a} vous a envoyé une demande d'amitié. Confirmez-la depuis son profil.`,
+            en: `${readerProfile?.name || a} sent you a friend request. Confirm it from their profile.`
+          },
+          date: new Date().toISOString().split('T')[0],
+          isRead: false,
+          category: 'system'
+        });
+        setSuccessMsg(language === "fr" ? "Demande d'amitié envoyée. En attente de confirmation." : "Friend request sent. Awaiting confirmation.");
       }
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
@@ -852,19 +925,33 @@ export function ProfilePage() {
                       <span>{language === "fr" ? "PARTAGER LE PROFIL" : "SHARE PROFILE"}</span>
                     </button>
 
-                    {/* Add/Remove Friend Contact button */}
+                    {/* Friend request button — friendship requires the other account's confirmation */}
                     <button
                       onClick={handleFriendship}
                       className={`px-3.5 py-2 font-sans text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all rounded-lg border shadow-xs ${
-                        isFriend 
-                          ? "bg-zinc-100 text-zinc-800 border-zinc-300 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800 dark:hover:bg-zinc-800" 
-                          : "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 hover:opacity-90"
+                        isFriend
+                          ? "bg-zinc-100 text-zinc-800 border-zinc-300 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                          : incomingRequests.some((r: any) => String(r?.from || '').toLowerCase().trim() === ((targetUser.email ?? '').toLowerCase()).trim())
+                            ? "bg-amber-500 text-white border-amber-500 hover:opacity-90"
+                            : outgoingRequests.some((r: any) => String(r?.to || '').toLowerCase().trim() === ((targetUser.email ?? '').toLowerCase()).trim())
+                              ? "bg-zinc-200 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700"
+                              : "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100 hover:opacity-90"
                       }`}
                     >
                       {isFriend ? (
                         <>
                           <UserMinus size={13} />
                           <span>{language === "fr" ? "RETIRER DES AMIS" : "REMOVE FRIEND"}</span>
+                        </>
+                      ) : incomingRequests.some((r: any) => String(r?.from || '').toLowerCase().trim() === ((targetUser.email ?? '').toLowerCase()).trim()) ? (
+                        <>
+                          <UserPlus size={13} />
+                          <span>{language === "fr" ? "CONFIRMER LA DEMANDE" : "CONFIRM REQUEST"}</span>
+                        </>
+                      ) : outgoingRequests.some((r: any) => String(r?.to || '').toLowerCase().trim() === ((targetUser.email ?? '').toLowerCase()).trim()) ? (
+                        <>
+                          <UserPlus size={13} />
+                          <span>{language === "fr" ? "DEMANDE ENVOYÉE — ANNULER" : "REQUEST SENT — CANCEL"}</span>
                         </>
                       ) : (
                         <>
