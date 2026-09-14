@@ -16,6 +16,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 import { subscribeToArticles } from './firebase/db';
+import { subscribeToAllComments } from './firebase/db';
 
 // Injected by Vite at build time — changes on every deploy. A device that
 // kept an OLD cached bundle (webviews / add-to-homescreen tabs can ignore
@@ -40,6 +41,7 @@ function App() {
   ensureFreshBundle();
   const loadArticles = useStore(state => state.loadArticles);
   const loadSiteSettings = useStore(state => state.loadSiteSettings);
+  const loadComments = useStore(state => state.loadComments);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
 
   useEffect(() => {
@@ -49,6 +51,9 @@ function App() {
     // FIX: hydrate shared site settings (BC logo, colors, etc.) from Firebase
     // so all devices (desktop AND mobile) see the same configuration.
     loadSiteSettings();
+    // FIX (disappearing comments): load persisted comments from the Realtime
+    // Database on startup so they survive reloads and are shared across devices.
+    loadComments();
 
     // FIX (articles not syncing across devices and browsers): replaced the
     // 3-minute polling with a PERSISTENT real-time listener. A one-shot get()
@@ -99,6 +104,19 @@ function App() {
       (err) => console.warn('[App] Article realtime subscription notice:', err?.message)
     );
 
+    // Realtime listener for comments so edits/approvals/deletes are
+    // reflected instantly and survive reloads.
+    const unsubComments = subscribeToAllComments(
+      (remoteComments) => {
+        try {
+          useStore.setState({ comments: remoteComments });
+        } catch (e) {
+          console.warn('[App] Comment realtime merge notice:', e);
+        }
+      },
+      (err) => console.warn('[App] Comment realtime subscription notice:', err?.message)
+    );
+
     // Safety net: when a hidden tab becomes visible again after a long time
     // (device unlock, browser resume), force one fresh fetch in case the
     // listener connection was interrupted while the tab was frozen.
@@ -119,10 +137,11 @@ function App() {
     }, 3 * 60 * 1000);
     return () => {
       unsubArticles();
+      unsubComments();
       window.clearInterval(pollTimer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [loadArticles, loadSiteSettings]);
+  }, [loadArticles, loadSiteSettings, loadComments]);
 
   return (
     <Router>

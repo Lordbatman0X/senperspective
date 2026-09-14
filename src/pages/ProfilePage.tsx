@@ -837,7 +837,7 @@ export function ProfilePage() {
                 style={{ backgroundColor: accentColor }}
               >
                 {targetUser.email === "kadersdiaz3@gmail.com" || 
-                 targetUser.email === "admin@perspective.sn" || 
+                 targetUser.email === "admin@senperspective.com" || 
                  targetUser.role?.toLowerCase() === "admin"
                   ? "ADMIN"
                   : targetUser.role?.toUpperCase() || "MEMBER"}

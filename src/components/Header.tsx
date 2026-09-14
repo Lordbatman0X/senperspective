@@ -108,7 +108,7 @@ export function Header() {
   const [editAvatar, setEditAvatar] = useState("");
 
   // Messaging and sharing states
-  const [selectedChatUser, setSelectedChatUser] = useState("contact@perspective.sn");
+  const [selectedChatUser, setSelectedChatUser] = useState("contact@senperspective.com");
   React.useEffect(() => {
     (window as any).setSelectedChatUser = setSelectedChatUser;
     return () => {
@@ -160,14 +160,14 @@ export function Header() {
     siteName: "Perspective",
     accentColor: "#E85D42",
     editorialPhone: "+221 33 824 55 55",
-    supportEmail: "contact@perspective.sn",
+    supportEmail: "contact@senperspective.com",
     officeAddress: "Immeuble Tamaro, Rue Mohamed V, Dakar",
     paywallThreshold: 9999,
     paywallEnabled: false,
     headerStyle: 'glass',
     aiModelMode: 'flash',
     seoTitleSuffix: '| Perspective Group Dakar',
-    seoCanonicalBase: 'https://perspective.sn',
+    seoCanonicalBase: 'https://senperspective.com',
     seoDefaultDesc: "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.",
     databaseProvider: 'firestore'
   };
@@ -890,7 +890,7 @@ export function Header() {
                     <span className="text-[#E85D42]">{t.saved}</span>
                   </Link>
 
-                  {(readerProfile?.role === "Admin" || readerProfile?.role === "Éditeur" || user?.email === "kadersdiaz3@gmail.com" || user?.email === "admin@perspective.sn" || sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
+                  {(readerProfile?.role === "Admin" || readerProfile?.role === "Éditeur" || user?.email === "kadersdiaz3@gmail.com" || user?.email === "admin@senperspective.com" || sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
                     <Link
                       to="/admin"
                       onClick={() => setIsMobileMenuOpen(false)}
@@ -1315,7 +1315,7 @@ export function Header() {
                           required
                           value={loginEmail}
                           onChange={(e) => setLoginEmail(e.target.value)}
-                          placeholder="contact@perspective.sn"
+                          placeholder="contact@senperspective.com"
                           className="w-full bg-zinc-900 border border-zinc-800 focus:outline-none focus:border-[#E85D42] text-sm text-white p-3 font-semibold shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] placeholder-zinc-600 rounded-none"
                         />
                       </div>
@@ -1609,8 +1609,8 @@ export function Header() {
                   {(readerProfile?.role === "Admin" ||
                     readerProfile?.role === "Éditeur" ||
                     readerProfile?.email === "kadersdiaz3@gmail.com" ||
-                    readerProfile?.email === "contact@perspective.sn" ||
-                    user?.email === "admin@perspective.sn" ||
+                    readerProfile?.email === "contact@senperspective.com" ||
+                    user?.email === "admin@senperspective.com" ||
                     sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
                     <button
                       onClick={() => setActiveSubMenu("studio")}
@@ -1644,8 +1644,8 @@ export function Header() {
                     {(readerProfile?.role === "Admin" ||
                       readerProfile?.role === "Éditeur" ||
                       readerProfile?.email === "kadersdiaz3@gmail.com" ||
-                      readerProfile?.email === "contact@perspective.sn" ||
-                      user?.email === "admin@perspective.sn" ||
+                      readerProfile?.email === "contact@senperspective.com" ||
+                      user?.email === "admin@senperspective.com" ||
                       sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
                       <div className="pt-1">
                         <button
@@ -2370,7 +2370,7 @@ export function Header() {
                     {/* Contacts list selector */}
                     <div className="p-2.5 border-b border-zinc-900 bg-zinc-950/80 flex gap-1.5 overflow-x-auto shrink-0">
                       {[
-                        { email: "contact@perspective.sn", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin" },
+                        { email: "contact@senperspective.com", name: language === "fr" ? "Admin Rédaction" : "Editorial Admin" },
                       ].map((contact) => (
                         <button
                           key={contact.email}
@@ -2824,3 +2824,4 @@ export function Header() {
     </>
   );
 }
+

@@ -53,8 +53,8 @@ export function Footer() {
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
               {text.desc}
             </p>
-            <a href={`mailto:${siteSettings.supportEmail || 'contact@perspective.sn'}`} className="font-bold hover:text-white transition-colors text-sm" style={{ color: siteSettings.accentColor }}>
-              {siteSettings.supportEmail || 'contact@perspective.sn'}
+            <a href={`mailto:${siteSettings.supportEmail || 'contact@senperspective.com'}`} className="font-bold hover:text-white transition-colors text-sm" style={{ color: siteSettings.accentColor }}>
+              {siteSettings.supportEmail || 'contact@senperspective.com'}
             </a>
 
             {/* Subtle Operational Unit Badge */}
@@ -162,4 +162,5 @@ export function Footer() {
     </footer>
   );
 }
+
 

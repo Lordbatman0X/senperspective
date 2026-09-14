@@ -47,14 +47,14 @@ export const DiscussionPage: React.FC = () => {
       : 'Direct messaging and synchronized exchanges with the Perspective network.'
   });
 
-  const userEmail = readerProfile?.email || "visitor@perspective.sn";
+  const userEmail = readerProfile?.email || "visitor@senperspective.com";
   const myEmailLower = userEmail.toLowerCase().trim();
 
   // Get contacts synchronized across all 3 messenger interfaces
   const contacts = getMessengerContacts(allUsers, friends, userEmail, language);
 
   // Synchronized active contact state
-  const activeContactEmail = activeMessengerContact || contacts[0]?.email || "contact@perspective.sn";
+  const activeContactEmail = activeMessengerContact || contacts[0]?.email || "contact@senperspective.com";
   const activeContactEmailLow = activeContactEmail.toLowerCase().trim();
 
   const [mobileTab, setMobileTab] = useState<'list' | 'chat'>('list');
@@ -64,7 +64,7 @@ export const DiscussionPage: React.FC = () => {
   const [showArticlePicker, setShowArticlePicker] = useState(false);
 
   const activeContact: MessengerContact = contacts.find(c => ((c.email ?? '').toLowerCase()).trim() === activeContactEmailLow) || contacts[0] || {
-    email: "contact@perspective.sn", 
+    email: "contact@senperspective.com", 
     name: language === "fr" ? "Admin Rédaction" : "Editorial Admin", 
     role: "Perspective Group", 
     avatar: "P", 

@@ -18,7 +18,7 @@ export function getMessengerContacts(
   const map = new Map<string, MessengerContact>();
 
   // 1. Official AI Companion: Abdel
-  const abdelEmail = 'abdel@perspective.sn';
+  const abdelEmail = 'abdel@senperspective.com';
   if (myEmailLower !== abdelEmail) {
     map.set(abdelEmail, {
       email: abdelEmail,
@@ -32,7 +32,7 @@ export function getMessengerContacts(
   }
 
   // 2. Official Editorial Desk: Perspective Group
-  const editorialEmail = 'contact@perspective.sn';
+  const editorialEmail = 'contact@senperspective.com';
   if (myEmailLower !== editorialEmail) {
     map.set(editorialEmail, {
       email: editorialEmail,

@@ -88,7 +88,7 @@ export function CustomizerTab() {
   const [accentColor, setAccentColor] = useState(siteSettings?.accentColor || "#E85D42");
   const [fontPairing, setFontPairing] = useState(siteSettings?.fontPairing || "Playfair / Lora");
   const [editorialPhone, setEditorialPhone] = useState(siteSettings?.editorialPhone || '+221 33 824 55 55');
-  const [supportEmail, setSupportEmail] = useState(siteSettings?.supportEmail || 'contact@perspective.sn');
+  const [supportEmail, setSupportEmail] = useState(siteSettings?.supportEmail || 'contact@senperspective.com');
   const [officeAddress, setOfficeAddress] = useState(siteSettings?.officeAddress || 'Immeuble Tamaro, Rue Mohamed V, Dakar');
   const [paywallThreshold, setPaywallThreshold] = useState(siteSettings?.paywallThreshold || 9999);
   const [paywallEnabled, setPaywallEnabled] = useState(siteSettings?.paywallEnabled === true);
@@ -1109,3 +1109,4 @@ export function CustomizerTab() {
     </div>
   );
 }
+

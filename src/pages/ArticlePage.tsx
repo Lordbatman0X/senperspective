@@ -1348,7 +1348,7 @@ export function ArticlePage() {
                       <span className="text-[8px] font-black text-white bg-[#E85D42] px-1.5 py-0.5 rounded-none uppercase tracking-widest font-sans">★ MEMBRE</span>
                     </h5>
                     <p className="text-[10px] font-mono font-bold uppercase text-zinc-700 dark:text-zinc-400">
-                      {((readerProfile.email === 'kadersdiaz3@gmail.com' || readerProfile.email === 'admin@perspective.sn' || readerProfile.email?.toLowerCase().includes('admin'))) 
+                      {((readerProfile.email === 'kadersdiaz3@gmail.com' || readerProfile.email === 'admin@senperspective.com' || readerProfile.email?.toLowerCase().includes('admin'))) 
                         ? (language === 'fr' ? 'Administrateur - Groupe Perspective' : 'Perspective Group Admin') 
                         : (language === 'fr' ? 'Membre Perspective' : 'Perspective Member')} • {readerProfile.email}
                     </p>

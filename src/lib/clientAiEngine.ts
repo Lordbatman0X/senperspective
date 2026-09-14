@@ -46,6 +46,7 @@ export interface ClientRssItem {
  * session; they do not need to persist across devices.
  */
 let cachedFirestoreKeys: Record<string, string> = {};
+let hasLoadedFromFirestore = false;
 
 /**
  * Real, currently-supported Gemini generation models (GA / stable names).
@@ -134,6 +135,30 @@ async function callGeminiGenerative(
  * memory and are no longer synced from or to the database/localStorage.
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
+  if (hasLoadedFromFirestore) return cachedFirestoreKeys;
+  if (typeof window === 'undefined') return cachedFirestoreKeys;
+
+  const providers = ['gemini', 'groq', 'openai', 'openrouter', 'anthropic', 'deepseek'];
+  for (const p of providers) {
+    const P = p.toUpperCase();
+    const candidates = [
+      `api_key_${p}`,
+      `${P}_API_KEY`,
+      `${p}_API_KEY`,
+      `api_key_${P}`,
+      `${p}_api_key`,
+      `${P}_api_key`
+    ];
+    for (const k of candidates) {
+      const v = localStorage.getItem(k);
+      if (v && v.trim()) {
+        cachedFirestoreKeys[P] = v.trim();
+        break;
+      }
+    }
+  }
+
+  hasLoadedFromFirestore = true;
   return cachedFirestoreKeys;
 }
 

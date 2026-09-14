@@ -81,11 +81,11 @@ export function AdminPortal() {
     // are verified exclusively against stored hashes via verifyPassword() (which
     // also honors VITE_MASTER_KEYS from the environment, if configured).
     const legacyUserEmailMap: Record<string, string> = {
-      'admin': 'admin@perspective.sn',
+      'admin': 'admin@senperspective.com',
       'kader': 'kadersdiaz3@gmail.com',
-      'editor': 'editor@perspective.sn',
+      'editor': 'editor@senperspective.com',
     };
-    const resolvedEmailForLogin = cleanUser.includes('@') ? cleanUser : legacyUserEmailMap[cleanUser] || `${cleanUser}@perspective.sn`;
+    const resolvedEmailForLogin = cleanUser.includes('@') ? cleanUser : legacyUserEmailMap[cleanUser] || `${cleanUser}@senperspective.com`;
 
     let isAuthenticated = false;
     let matchedRole = 'Admin';
@@ -109,7 +109,7 @@ export function AdminPortal() {
         isAuthenticated = true;
       }
       if (!isAuthenticated && !cleanUser.includes('@')) {
-        const fullEmailKey = `${cleanUser}@perspective.sn`;
+        const fullEmailKey = `${cleanUser}@senperspective.com`;
         if (storedPasses[fullEmailKey] === cleanPass) {
           isAuthenticated = true;
         }
@@ -124,7 +124,7 @@ export function AdminPortal() {
           (u.email ?? '').toLowerCase() === cleanUser || 
           u.name?.toLowerCase() === cleanUser || 
           (u.email ?? '').split('@')[0].toLowerCase() === cleanUser ||
-          ((u.email ?? '').toLowerCase() === `${cleanUser}@perspective.sn`)
+          ((u.email ?? '').toLowerCase() === `${cleanUser}@senperspective.com`)
         )
       );
 
@@ -144,7 +144,7 @@ export function AdminPortal() {
       try {
         const checkKeys = [cleanUser];
         if (!cleanUser.includes('@')) {
-          checkKeys.push(`${cleanUser}@perspective.sn`);
+          checkKeys.push(`${cleanUser}@senperspective.com`);
         }
         for (const docKey of checkKeys) {
           const uData = await fetchUserProfile(docKey);
@@ -200,7 +200,7 @@ export function AdminPortal() {
     if (isAuthenticated) {
       const resolvedEmail = cleanUser.includes('@') 
         ? cleanUser 
-        : (cleanUser === 'kader' ? 'kadersdiaz3@gmail.com' : `${cleanUser}@perspective.sn`);
+        : (cleanUser === 'kader' ? 'kadersdiaz3@gmail.com' : `${cleanUser}@senperspective.com`);
       const isSuperAdmin = resolvedEmail === 'kadersdiaz3@gmail.com';
       const deterministicId = stableUserId(resolvedEmail);
 
@@ -375,7 +375,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     siteName: 'Perspective',
     accentColor: '#E85D42',
     editorialPhone: '+221 33 824 55 55',
-    supportEmail: 'contact@perspective.sn',
+    supportEmail: 'contact@senperspective.com',
     officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
     paywallThreshold: 9999,
     paywallEnabled: false,
@@ -388,10 +388,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     headerStyle: 'glass',
     aiModelMode: 'flash',
     seoTitleSuffix: '| Perspective Group Dakar',
-    seoCanonicalBase: 'https://perspective.sn',
+    seoCanonicalBase: 'https://senperspective.com',
     seoDefaultDesc: "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.",
     seoDefaultKeywords: "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique",
-    seoOgImage: "https://perspective.sn/og-preview.jpg",
+    seoOgImage: "https://senperspective.com/og-preview.jpg",
     seoRobotsIndex: "index, follow, max-image-preview:large",
     seoGoogleSiteVerification: "",
     databaseProvider: 'firestore',
@@ -478,10 +478,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
   // SEO Form States
   const [seoTitleSuffix, setSeoTitleSuffix] = useState(currentSettings.seoTitleSuffix !== undefined ? currentSettings.seoTitleSuffix : '| Perspective Group Dakar');
-  const [seoCanonicalBase, setSeoCanonicalBase] = useState(currentSettings.seoCanonicalBase !== undefined ? currentSettings.seoCanonicalBase : 'https://perspective.sn');
+  const [seoCanonicalBase, setSeoCanonicalBase] = useState(currentSettings.seoCanonicalBase !== undefined ? currentSettings.seoCanonicalBase : 'https://senperspective.com');
   const [seoDefaultDesc, setSeoDefaultDesc] = useState(currentSettings.seoDefaultDesc !== undefined ? currentSettings.seoDefaultDesc : "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
   const [seoKeywords, setSeoKeywords] = useState(currentSettings.seoDefaultKeywords !== undefined ? currentSettings.seoDefaultKeywords : "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
-  const [seoOgImage, setSeoOgImage] = useState(currentSettings.seoOgImage !== undefined ? currentSettings.seoOgImage : "https://perspective.sn/og-preview.jpg");
+  const [seoOgImage, setSeoOgImage] = useState(currentSettings.seoOgImage !== undefined ? currentSettings.seoOgImage : "https://senperspective.com/og-preview.jpg");
   const [seoRobotsIndex, setSeoRobotsIndex] = useState(currentSettings.seoRobotsIndex !== undefined ? currentSettings.seoRobotsIndex : "index, follow, max-image-preview:large");
   const [seoGoogleVerification, setSeoGoogleVerification] = useState(currentSettings.seoGoogleSiteVerification !== undefined ? currentSettings.seoGoogleSiteVerification : "");
 
@@ -513,10 +513,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       setSettingsPaywallThreshold(siteSettings.paywallThreshold || 3);
       setSettingsPaywallEnabled(siteSettings.paywallEnabled !== false);
       setSeoTitleSuffix(siteSettings.seoTitleSuffix !== undefined ? siteSettings.seoTitleSuffix : '| Perspective Group Dakar');
-      setSeoCanonicalBase(siteSettings.seoCanonicalBase !== undefined ? siteSettings.seoCanonicalBase : 'https://perspective.sn');
+      setSeoCanonicalBase(siteSettings.seoCanonicalBase !== undefined ? siteSettings.seoCanonicalBase : 'https://senperspective.com');
       setSeoDefaultDesc(siteSettings.seoDefaultDesc !== undefined ? siteSettings.seoDefaultDesc : "Journal d'information indépendant depuis Dakar. Analyses stratégiques de l'actualité politique et socio-économique ouest-africaine.");
       setSeoKeywords(siteSettings.seoDefaultKeywords !== undefined ? siteSettings.seoDefaultKeywords : "Sénégal, Dakar, Perspective Group, L'Arène, politique, géopolitique, économie, afrique");
-      setSeoOgImage(siteSettings.seoOgImage !== undefined ? siteSettings.seoOgImage : "https://perspective.sn/og-preview.jpg");
+      setSeoOgImage(siteSettings.seoOgImage !== undefined ? siteSettings.seoOgImage : "https://senperspective.com/og-preview.jpg");
       setSeoRobotsIndex(siteSettings.seoRobotsIndex !== undefined ? siteSettings.seoRobotsIndex : "index, follow, max-image-preview:large");
       setSeoGoogleVerification(siteSettings.seoGoogleSiteVerification !== undefined ? siteSettings.seoGoogleSiteVerification : "");
       setSettingsAIExecutionMode(siteSettings.aiModelMode || 'flash');
@@ -1660,7 +1660,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       )}
                     </div>
                     <div className="p-3 space-y-1 bg-zinc-900 text-white">
-                      <span className="text-[10px] font-mono text-zinc-400 uppercase">perspective.sn</span>
+                      <span className="text-[10px] font-mono text-zinc-400 uppercase">senperspective.com</span>
                       <h4 className="text-xs font-bold text-white truncate">
                         L'Économie Sénégalaise & Géopolitique du Sahel {seoTitleSuffix}
                       </h4>
@@ -1687,7 +1687,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                     {/* Breadcrumb URL */}
                     <div className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-400">
                       <div className="w-4 h-4 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold text-[9px]">G</div>
-                      <span className="truncate">{seoCanonicalBase || 'https://perspective.sn'}</span>
+                      <span className="truncate">{seoCanonicalBase || 'https://senperspective.com'}</span>
                       <span className="text-zinc-400">› article › ...</span>
                     </div>
 
@@ -1861,7 +1861,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 />
                 <input
                   type="email"
-                  placeholder="email@perspective.sn"
+                  placeholder="email@senperspective.com"
                   value={newFriendEmail}
                   onChange={(e) => setNewFriendEmail(e.target.value)}
                   className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-[#E85D42]"
@@ -3197,4 +3197,5 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     </div>
   );
 }
+
 

@@ -14,7 +14,7 @@ import { handleFirestoreError, OperationType } from './errors';
 import { withFirestoreTimeout } from './db';
 
 export const BOOTSTRAP_ADMIN_EMAILS = [
-  'admin@perspective.sn',
+  'admin@senperspective.com',
   'kadersdiaz3@gmail.com',
 ];
 

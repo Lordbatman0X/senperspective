@@ -1055,7 +1055,7 @@ export function ArticleEditorTab({
                  </div>
                  <div>
                    <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
-                   <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug-personnalisé" />
+                   <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://senperspective.com/article/slug-personnalisé" />
                  </div>
                </div>
                <div>
@@ -1098,7 +1098,7 @@ export function ArticleEditorTab({
                </div>
                <div>
                  <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
-                 <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug" />
+                 <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://senperspective.com/article/slug" />
                </div>
              </div>
            </div>
@@ -1160,7 +1160,7 @@ export function ArticleEditorTab({
                    value={seoCanonicalUrl}
                    onChange={e => setSeoCanonicalUrl(e.target.value)}
                    className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" 
-                   placeholder="https://perspective.sn/article/slug-personnalisé" 
+                   placeholder="https://senperspective.com/article/slug-personnalisé" 
                  />
                </div>
              </div>
@@ -1195,7 +1195,7 @@ export function ArticleEditorTab({
                </div>
                <div>
                  <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
-                 <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug-personnalise" />
+                 <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://senperspective.com/article/slug-personnalise" />
                </div>
              </div>
            </div>
@@ -1228,7 +1228,7 @@ export function ArticleEditorTab({
               </div>
               <div>
                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Canonical URL</label>
-                <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://perspective.sn/article/slug-personnalise" />
+                <input type="text" value={seoCanonicalUrl} onChange={e => setSeoCanonicalUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-medium focus:outline-none focus:border-[#E85D42] placeholder-zinc-500 rounded-md" placeholder="https://senperspective.com/article/slug-personnalise" />
               </div>
             </div>
           </div>
@@ -2649,3 +2649,4 @@ export function ArticleEditorTab({
     </div>
   );
 }
+

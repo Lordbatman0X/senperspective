@@ -228,6 +228,36 @@ export async function deleteComment(commentId: string): Promise<void> {
   }
 }
 
+export async function fetchAllComments(): Promise<any[]> {
+  try {
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'comments')));
+    return toList(snap.val()) as any[];
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, 'comments');
+    return [];
+  }
+}
+
+export function subscribeToAllComments(
+  callback: (comments: any[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const commentsRef = ref(rtdb, 'comments');
+  return onValue(
+    commentsRef,
+    (snap) => {
+      callback(toList(snap.val()) as any[]);
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.GET, 'comments');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
+    }
+  );
+}
+
 // -------------------------------------------------------------
 // DISCUSSIONS
 // -------------------------------------------------------------

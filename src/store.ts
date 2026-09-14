@@ -15,7 +15,9 @@ import {
   deleteComment as firestoreDeleteComment,
   saveFirestoreDoc,
   deleteFirestoreDoc,
-  fetchFirestoreCollection
+  fetchFirestoreCollection,
+  fetchAllComments,
+  subscribeToAllComments
 } from './firebase/db';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
@@ -439,6 +441,7 @@ interface AppState {
   purgeDatabaseAndArticles: () => Promise<void>;
   seedSampleArticles: () => void;
   loadAllDataFromMongoDB: () => Promise<void>;
+  loadComments: () => Promise<void>;
   matches: Match[];
   updateMatch: (matchId: string, updated: Partial<Match>) => void;
   addMatch: (match: Match) => void;
@@ -458,7 +461,7 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
       ...customPrefs
     };
 
-        if (email && email !== 'visitor@perspective.sn' && email !== 'anonymous') {
+        if (email && email !== 'visitor@senperspective.com' && email !== 'anonymous') {
           const cleanEmail = email.toLowerCase().trim();
           // Persist preferences in the user's profile document (MongoDB Atlas via /api/users)
           await cloudSaveUserProfile(cleanEmail, { preferences: currentPrefs });
@@ -493,7 +496,7 @@ export const useStore = create<AppState>()(
         set({ language: lang });
         syncPreferencesToFirestore({ language: lang });
       },
-      activeMessengerContact: 'contact@perspective.sn',
+      activeMessengerContact: 'contact@senperspective.com',
       setActiveMessengerContact: (email: string) => set({ activeMessengerContact: (email || '').toLowerCase().trim() }),
       messengerTextScale: 'normal',
       setMessengerTextScale: (scale: 'normal' | 'large' | 'xlarge') => {
@@ -502,7 +505,7 @@ export const useStore = create<AppState>()(
       },
       reactToDirectMessage: (messageId: string, reaction: string, userEmail?: string) => {
         const dms = get().directMessages || [];
-        const cleanEmail = (userEmail || get().readerProfile?.email || 'visitor@perspective.sn').toLowerCase().trim();
+        const cleanEmail = (userEmail || get().readerProfile?.email || 'visitor@senperspective.com').toLowerCase().trim();
         let updatedReactions: Record<string, string[]> = {};
         const updatedDms = dms.map(dm => {
           if (dm.id === messageId) {
@@ -660,11 +663,22 @@ export const useStore = create<AppState>()(
           } else {
             set({ articles: seedArticles, isLoadingArticles: false });
           }
+          const remoteComments = await fetchAllComments();
+          set({ comments: remoteComments.length > 0 ? remoteComments : seedComments });
         } catch (err) {
           console.warn("[Firebase] Error syncing data:", err);
           set({ articles: seedArticles, isLoadingArticles: false });
         } finally {
           set({ isSyncing: false, isLoadingArticles: false });
+        }
+      },
+      loadComments: async () => {
+        try {
+          const remoteComments = await fetchAllComments();
+          set({ comments: remoteComments.length > 0 ? remoteComments : seedComments });
+        } catch (err) {
+          console.warn("[Firebase] loadComments failed:", err);
+          set({ comments: seedComments });
         }
       },
       addArticle: async (article) => {
@@ -921,8 +935,8 @@ export const useStore = create<AppState>()(
           id: 'notif-dm-' + Date.now(),
           email: cleanReceiver,
           text: {
-            fr: `Nouveau message de la part de ${cleanSender === 'admin@perspective.sn' ? 'l\'Administrateur' : cleanSender}.`,
-            en: `New direct message from ${cleanSender === 'admin@perspective.sn' ? 'Admin' : cleanSender}.`
+            fr: `Nouveau message de la part de ${cleanSender === 'admin@senperspective.com' ? 'l\'Administrateur' : cleanSender}.`,
+            en: `New direct message from ${cleanSender === 'admin@senperspective.com' ? 'Admin' : cleanSender}.`
           },
           date: new Date().toISOString().split('T')[0],
           isRead: false,
@@ -930,7 +944,7 @@ export const useStore = create<AppState>()(
         });
 
         // If message is directed to Abdel (Official AI Assistant in Messenger), generate response
-        if (cleanReceiver === 'abdel@perspective.sn') {
+        if (cleanReceiver === 'abdel@senperspective.com') {
           setTimeout(async () => {
             try {
               let replyText = "";
@@ -941,10 +955,10 @@ export const useStore = create<AppState>()(
                   message: newMsg.text,
                   language: get().language,
                   history: (get().directMessages || [])
-                    .filter(m => (m.sender === cleanSender && m.receiver === 'abdel@perspective.sn') || (m.sender === 'abdel@perspective.sn' && m.receiver === cleanSender))
+                    .filter(m => (m.sender === cleanSender && m.receiver === 'abdel@senperspective.com') || (m.sender === 'abdel@senperspective.com' && m.receiver === cleanSender))
                     .slice(-6)
                     .map(m => ({
-                      role: m.sender === 'abdel@perspective.sn' ? 'assistant' : 'user',
+                      role: m.sender === 'abdel@senperspective.com' ? 'assistant' : 'user',
                       content: m.text
                     }))
                 })
@@ -964,7 +978,7 @@ export const useStore = create<AppState>()(
               const abdelMsgId = 'dm-' + Date.now().toString() + '-abdel';
               const abdelMsg = {
                 id: abdelMsgId,
-                sender: 'abdel@perspective.sn',
+                sender: 'abdel@senperspective.com',
                 receiver: cleanSender,
                 text: replyText,
                 date: new Date().toISOString().split('T')[0],
@@ -1099,13 +1113,13 @@ export const useStore = create<AppState>()(
       removeFakeAccounts: async () => {
         const allUsers = get().users || [];
         // Protected core emails that MUST never be purged
-        const protectedEmails = ['kadersdiaz3@gmail.com', 'admin@perspective.sn'];
+        const protectedEmails = ['kadersdiaz3@gmail.com', 'admin@senperspective.com'];
         const realUsers: any[] = [];
         const removedUsers: any[] = [];
         
         for (const user of allUsers) {
           const email = (user.email || '').toLowerCase().trim();
-          if (protectedEmails.includes(email) || email.endsWith('@perspective.sn') || user.role === 'Admin') {
+          if (protectedEmails.includes(email) || email.endsWith('@senperspective.com') || user.role === 'Admin') {
             realUsers.push(user);
             continue;
           }
@@ -1173,13 +1187,9 @@ export const useStore = create<AppState>()(
         set({ comments: [comment, ...filtered] });
         
         try {
-          if (supabase) {
-            supabase.from('comments').insert({ id: comment.id, ...comment } as any).then(({ error }) => {
-              if (error) console.error("[Supabase notice] Failed to write comment:", error);
-            }).catch(() => {});
-          }
+          cloudSave('comments', comment.id, comment);
         } catch (err) {
-          console.warn("[Supabase notice] Comment write error:", err);
+          console.warn("[Firebase] Comment write error:", err);
         }
 
         // Log interaction if author email exists
@@ -1263,8 +1273,9 @@ export const useStore = create<AppState>()(
         }
       },
       approveComment: (id) => {
+        const comment = (get().comments || []).find(c => c.id === id);
         set({ comments: (get().comments || []).map(c => c.id === id ? { ...c, isApproved: true } : c) });
-        if (supabase) { supabase.from('comments').update({ isApproved: true } as any).eq('id', id).catch(() => {}); }
+        if (comment) { cloudSave('comments', id, { ...comment, isApproved: true }); }
       },
       deleteComment: (id, requesterEmail) => {
         const comments = get().comments || [];
@@ -1280,7 +1291,7 @@ export const useStore = create<AppState>()(
         }
 
         set({ comments: (comments ?? []).filter(c => c.id !== id) });
-        if (supabase) { supabase.from('comments').delete().eq('id', id).catch(() => {}); }
+        cloudDelete('comments', id);
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1309,7 +1320,7 @@ export const useStore = create<AppState>()(
         set({
           comments: (comments ?? []).map(c => c.id === id ? { ...c, text, isApproved: true } : c)
         });
-        if (supabase) { supabase.from('comments').update({ text, isApproved: true } as any).eq('id', id).catch(() => {}); }
+        if (comment) { cloudSave('comments', id, { ...comment, text, isApproved: true }); }
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1365,10 +1376,7 @@ export const useStore = create<AppState>()(
         set({
           comments: (comments ?? []).map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
-
-        if (supabase) {
-          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id).catch(() => {});
-        }
+        if (comment) { cloudSave('comments', id, { ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy }); }
 
         get().addInteraction(
           userEmail,
@@ -1422,6 +1430,7 @@ export const useStore = create<AppState>()(
         set({
           comments: (comments ?? []).map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
+        if (comment) { cloudSave('comments', id, { ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy }); }
 
         get().addInteraction(
           userEmail,
@@ -1431,9 +1440,6 @@ export const useStore = create<AppState>()(
             en: `Disliked ${comment.author}'s comment on "${comment.articleTitle}"`
           }
         );
-        if (supabase) {
-          supabase.from('comments').update({ likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } as any).eq('id', id).catch(() => {});
-        }
       },
       notifications: [
         {
@@ -1603,7 +1609,7 @@ export const useStore = create<AppState>()(
       interactions: [
         {
           id: 'int-1',
-          email: 'admin@perspective.sn',
+          email: 'admin@senperspective.com',
           type: 'read',
           date: '2026-06-25',
           detail: { fr: 'A ouvert le tableau de bord administrateur.', en: 'Opened the administrator control panel.' }
@@ -1797,7 +1803,7 @@ export const useStore = create<AppState>()(
         isMaintenanceMode: false,
         maintenanceMessageFr: "Notre site est actuellement en cours de maintenance et de mise à jour technique. Nous serons de retour très rapidement.",
         maintenanceMessageEn: "Our platform is currently undergoing scheduled maintenance and updates. We will be back online shortly.",
-        siteName: 'Perspective',
+        siteName: 'Perspective Group',
         abdelIntroMessageFr: "Bonjour ! Je suis Abdel, votre guide d'actualité sur Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?",
         abdelIntroMessageEn: "Hello! I am Abdel, your news guide on Perspective Group. What would you like to unpack today?",
         dossiers: [
@@ -1846,11 +1852,11 @@ export const useStore = create<AppState>()(
         aiModelMode: 'flash',
         abdelAiProvider: 'auto',
         seoTitleSuffix: '| Perspective Group Dakar',
-        seoCanonicalBase: 'https://perspective.sn',
+        seoCanonicalBase: 'https://senperspective.com',
         seoDefaultDesc: "Grand journal d'information et de décryptage indépendant depuis Dakar. Couverture complète : Politique, Économie, Société, Tech, Culture, Sports, Santé et International.",
         databaseProvider: 'mongodb',
         editorialPhone: '+221 33 824 55 55',
-        supportEmail: 'contact@perspective.sn',
+        supportEmail: 'contact@senperspective.com',
         officeAddress: 'Immeuble Tamaro, Rue Mohamed V, Dakar',
         footerDescFr: "Perspective Group. Grand journal d'information et de réflexion indépendant. Notre promesse : L'actualité. Sans Filtre. Sans Compromis. Politique, Économie, Société, Tech, Culture, Sports, Santé ou International : toutes les rubriques sont traitées avec la même exigence journalistique.",
         footerDescEn: "Perspective Group. Major independent news and reflection journal. Our promise: News. Unfiltered. Uncompromised. Politics, Economy, Society, Tech, Culture, Sports, Health, or World news: every section is covered with equal journalistic depth.",

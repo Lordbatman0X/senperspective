@@ -89,14 +89,14 @@ export function ModerationTab() {
       avatarUrl: 'preset-male'
     },
     {
-      email: 'admin@perspective.sn',
+      email: 'admin@senperspective.com',
       name: 'Admin Direction',
       role: 'Admin',
       authType: 'password',
       avatarUrl: 'preset-male'
     },
     {
-      email: 'contact@perspective.sn',
+      email: 'contact@senperspective.com',
       name: 'Rédaction Perspective',
       role: 'Admin',
       authType: 'password',
@@ -591,4 +591,5 @@ export function ModerationTab() {
     </div>
   );
 }
+
 

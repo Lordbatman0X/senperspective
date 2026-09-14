@@ -241,7 +241,7 @@ export function AccountDrawer({
     readerProfile?.role === "Admin" ||
     readerProfile?.role === "Éditeur" ||
     user?.email === "kadersdiaz3@gmail.com" ||
-    user?.email === "admin@perspective.sn" ||
+    user?.email === "admin@senperspective.com" ||
     sessionStorage.getItem("perspective-temp-admin-session") === "authenticated"
   );
 
@@ -870,7 +870,7 @@ export function AccountDrawer({
                           });
 
                           // Always include support contact if not present
-                          const supportEmail = "contact@perspective.sn";
+                          const supportEmail = "contact@senperspective.com";
                           if (!contactMap.has(supportEmail) && myEmail !== supportEmail) {
                             contactMap.set(supportEmail, {
                               email: supportEmail,
@@ -881,7 +881,7 @@ export function AccountDrawer({
                           }
 
                           // Official AI Companion: Abdel
-                          const abdelEmail = "abdel@perspective.sn";
+                          const abdelEmail = "abdel@senperspective.com";
                           if (!contactMap.has(abdelEmail) && myEmail !== abdelEmail) {
                             contactMap.set(abdelEmail, {
                               email: abdelEmail,
@@ -1442,4 +1442,5 @@ export function AccountDrawer({
     </AnimatePresence>
   );
 }
+
 

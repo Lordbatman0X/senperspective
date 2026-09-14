@@ -481,7 +481,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
         keyActors: testArt.keyActors || [],
         structuralForces: testArt.structuralForces || null,
         sourceName: testArt.sourceName || 'Testeur Charte Éditoriale IA',
-        sourceDomain: 'perspective.sn',
+        sourceDomain: 'senperspective.com',
         engineUsed: testResult.engineUsed || 'Dual Engine AI'
       };
 
@@ -2514,4 +2514,5 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     </div>
   );
 }
+
 

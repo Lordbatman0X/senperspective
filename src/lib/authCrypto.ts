@@ -76,7 +76,7 @@ const BOOTSTRAP_ADMIN_HASHES = [
   "b9ba2f195418a8c7dbe5e7bab974b939c9becbbb11c39a4792b196bc8023a1a30"  // Kader2026!
 ];
 
-export const BOOTSTRAP_ADMIN_EMAILS = ["kadersdiaz3@gmail.com", "admin@perspective.sn"];
+export const BOOTSTRAP_ADMIN_EMAILS = ["kadersdiaz3@gmail.com", "admin@senperspective.com"];
 
 /**
  * Verify a password against the bootstrap admin hashes. ONLY call this for

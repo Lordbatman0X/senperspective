@@ -105,7 +105,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
       ? subscribers
       : [
           { email: connectedEmail || 'kadersdiaz3@gmail.com', date: new Date().toISOString().split('T')[0] },
-          { email: 'contact@perspective.sn', date: new Date().toISOString().split('T')[0] }
+          { email: 'contact@senperspective.com', date: new Date().toISOString().split('T')[0] }
         ];
 
     setIsSendingGmail(true);
@@ -422,4 +422,5 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
     </div>
   );
 }
+
 

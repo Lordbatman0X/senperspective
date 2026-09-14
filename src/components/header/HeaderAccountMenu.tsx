@@ -36,7 +36,7 @@ export function HeaderAccountMenu() {
         </span>
         <span className="text-[7px] text-[#E85D42] bg-[#E85D42]/10 px-1.5 py-0.2 border border-[#E85D42]/20 font-black tracking-widest hidden sm:inline">
           {readerProfile.email === "kadersdiaz3@gmail.com" ||
-          readerProfile.email === "admin@perspective.sn" ||
+          readerProfile.email === "admin@senperspective.com" ||
           readerProfile.email?.toLowerCase().includes("admin")
             ? "ADMIN"
             : language === "fr"

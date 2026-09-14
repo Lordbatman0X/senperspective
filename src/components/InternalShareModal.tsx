@@ -75,12 +75,12 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
 
   const [selectedProfileEmail, setSelectedProfileEmail] = useState<string>(
     initialItem?.type === 'profile'
-      ? (initialItem.subtitle || readerProfile?.email || 'admin@perspective.sn')
-      : (readerProfile?.email || 'admin@perspective.sn')
+      ? (initialItem.subtitle || readerProfile?.email || 'admin@senperspective.com')
+      : (readerProfile?.email || 'admin@senperspective.com')
   );
 
   // Selected recipient for DM
-  const [selectedRecipientEmail, setSelectedRecipientEmail] = useState<string>('admin@perspective.sn');
+  const [selectedRecipientEmail, setSelectedRecipientEmail] = useState<string>('admin@senperspective.com');
 
   // Target article for Discussion
   const [commentArticleId, setCommentArticleId] = useState<string>(
@@ -104,7 +104,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
         if (u && Array.isArray((u as any).friend_ids)) {
           const loadedFriends = (u as any).friend_ids.map((id: string) => id.toLowerCase().trim());
           setFriendsList(loadedFriends);
-          if (loadedFriends.length > 0 && selectedRecipientEmail === 'admin@perspective.sn') {
+          if (loadedFriends.length > 0 && selectedRecipientEmail === 'admin@senperspective.com') {
             setSelectedRecipientEmail(loadedFriends[0]);
           }
         }
@@ -149,8 +149,8 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
         type: 'profile',
         id: 'prof-' + (targetUser.email || 'user'),
         title: targetUser.name || 'Analyste Perspective',
-        link: `/profile/${encodeURIComponent(targetUser.email || 'admin@perspective.sn')}`,
-        subtitle: targetUser.email || 'contact@perspective.sn',
+        link: `/profile/${encodeURIComponent(targetUser.email || 'admin@senperspective.com')}`,
+        subtitle: targetUser.email || 'contact@senperspective.com',
         image: targetUser.avatarUrl
       };
     }
@@ -186,7 +186,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
 
     // Add editorial team defaults
     const editorialTeam = [
-      { email: 'admin@perspective.sn', name: 'Rédaction Perspective (Admin)', role: 'Rédaction' },
+      { email: 'admin@senperspective.com', name: 'Rédaction Perspective (Admin)', role: 'Rédaction' },
     ];
 
     editorialTeam.forEach(e => {
@@ -269,7 +269,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       : `[PARTAGE_INTERNE] ${attachmentTitle}`;
 
     sendDirectMessage({
-      sender: readerProfile?.email || 'member@perspective.sn',
+      sender: readerProfile?.email || 'member@senperspective.com',
       receiver: selectedRecipientEmail,
       text: msgText,
       attachment: currentAttachment
@@ -313,7 +313,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       articleId: targetArticleId,
       articleTitle: typeof targetArt.title === 'string' ? targetArt.title : (targetArt.title?.[language] || 'Article'),
       author: readerProfile?.name || 'Membre Perspective',
-      email: readerProfile?.email || 'member@perspective.sn',
+      email: readerProfile?.email || 'member@senperspective.com',
       text: commentText,
       date: new Date().toISOString().split('T')[0],
       isApproved: true,
@@ -887,4 +887,5 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     </AnimatePresence>
   );
 };
+
 

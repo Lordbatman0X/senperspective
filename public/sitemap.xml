@@ -3,67 +3,67 @@
         xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/</loc>
+    <loc>https://senperspective.com/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/politique</loc>
+    <loc>https://senperspective.com/category/politique</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/economie</loc>
+    <loc>https://senperspective.com/category/economie</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/societe</loc>
+    <loc>https://senperspective.com/category/societe</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/tech-innovation</loc>
+    <loc>https://senperspective.com/category/tech-innovation</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/culture</loc>
+    <loc>https://senperspective.com/category/culture</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/sports</loc>
+    <loc>https://senperspective.com/category/sports</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/sante</loc>
+    <loc>https://senperspective.com/category/sante</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/international</loc>
+    <loc>https://senperspective.com/category/international</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/category/decryptages</loc>
+    <loc>https://senperspective.com/category/decryptages</loc>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/about</loc>
+    <loc>https://senperspective.com/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/contact</loc>
+    <loc>https://senperspective.com/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://ai-studio-applet-webapp-29e84.web.app/search</loc>
+    <loc>https://senperspective.com/search</loc>
     <changefreq>weekly</changefreq>
     <priority>0.3</priority>
   </url>

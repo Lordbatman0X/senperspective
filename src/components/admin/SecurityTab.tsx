@@ -83,10 +83,10 @@ export function SecurityTab() {
 
   // Default seed admin accounts to ensure administrators are always present and manageable
   const seedAdmins = [
-    { email: 'admin@perspective.sn', name: 'Admin Direction', role: 'Admin', authType: 'password' },
+    { email: 'admin@senperspective.com', name: 'Admin Direction', role: 'Admin', authType: 'password' },
     { email: 'kadersdiaz3@gmail.com', name: 'Kader Diaz (Super Admin)', role: 'Admin', authType: 'password' },
-    { email: 'contact@perspective.sn', name: 'Rédaction Perspective', role: 'Admin', authType: 'password' },
-    { email: 'editor@perspective.sn', name: 'Éditeur en Chef', role: 'Éditeur', authType: 'password' }
+    { email: 'contact@senperspective.com', name: 'Rédaction Perspective', role: 'Admin', authType: 'password' },
+    { email: 'editor@senperspective.com', name: 'Éditeur en Chef', role: 'Éditeur', authType: 'password' }
   ];
 
   // Merge admin users
@@ -114,7 +114,7 @@ export function SecurityTab() {
   });
 
   const allAdminsList = Array.from(adminMap.values());
-  const currentAdminEmail = readerProfile?.email || firebaseUser?.email || 'admin@perspective.sn';
+  const currentAdminEmail = readerProfile?.email || firebaseUser?.email || 'admin@senperspective.com';
 
   // Helper to generate a random secure password
   const generateRandomPassword = () => {
@@ -777,7 +777,7 @@ export function SecurityTab() {
                   required
                   value={addAdminEmail}
                   onChange={(e) => setAddAdminEmail(e.target.value)}
-                  placeholder="direction@perspective.sn"
+                  placeholder="direction@senperspective.com"
                   className="w-full bg-zinc-950 border border-zinc-800 px-3.5 py-2.5 rounded text-zinc-100 focus:outline-none focus:border-orange-500"
                 />
               </div>
@@ -858,4 +858,5 @@ export function SecurityTab() {
     </div>
   );
 }
+
 

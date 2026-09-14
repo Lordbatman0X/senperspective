@@ -130,8 +130,8 @@ export function AboutPage() {
               <Mail size={18} className="text-[#E85D42] shrink-0" style={{ color: accentColor }} />
               <div>
                 <span className="text-[10px] text-zinc-500 uppercase block font-sans font-bold">Email</span>
-                <a href="mailto:contact@perspective.sn" className="font-bold text-zinc-900 dark:text-zinc-100 hover:underline">
-                  contact@perspective.sn
+                <a href="mailto:contact@senperspective.com" className="font-bold text-zinc-900 dark:text-zinc-100 hover:underline">
+                  contact@senperspective.com
                 </a>
               </div>
             </div>
@@ -182,7 +182,7 @@ export function ContactPage() {
         <div className="space-y-4 font-mono text-sm">
           <div className="flex items-center gap-3">
             <Mail size={16} style={{ color: accentColor }} />
-            <span>Email: contact@perspective.sn</span>
+            <span>Email: contact@senperspective.com</span>
           </div>
           <div className="flex items-center gap-3">
             <Phone size={16} style={{ color: accentColor }} />
@@ -197,4 +197,5 @@ export function ContactPage() {
     </div>
   );
 }
+
 

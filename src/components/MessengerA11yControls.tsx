@@ -288,7 +288,7 @@ export const A11yMessageReactions: React.FC<{
   const { reactToDirectMessage, language } = useStore();
   const [showPicker, setShowPicker] = useState(false);
 
-  const cleanEmail = (userEmail || 'visitor@perspective.sn').toLowerCase().trim();
+  const cleanEmail = (userEmail || 'visitor@senperspective.com').toLowerCase().trim();
   const availableEmojis = ['👍', '❤️', '💡', '👏', '🎯'];
 
   const entries = Object.entries(reactions || {}).filter(([_, users]) => Array.isArray(users) && (users ?? []).length > 0);

@@ -129,15 +129,15 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Contacts: combine real users from Firestore database with friends list
-  const userEmail = readerProfile?.email || "visitor@perspective.sn";
+  const userEmail = readerProfile?.email || "visitor@senperspective.com";
   const myEmailLower = userEmail.toLowerCase().trim();
 
   const contactMap = new Map<string, { name: string; email: string; avatar?: string; role?: string; isOnline?: boolean }>();
 
   // Always add default contacts first (Abdel AI and Editorial Admin)
   // This ensures users always have someone to message even with no friends
-  const abdelEmail = 'abdel@perspective.sn';
-  const editorialEmail = 'contact@perspective.sn';
+  const abdelEmail = 'abdel@senperspective.com';
+  const editorialEmail = 'contact@senperspective.com';
   
   if (myEmailLower !== abdelEmail) {
     contactMap.set(abdelEmail, {
@@ -214,7 +214,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   );
 
   // Chat state
-  const [selectedContact, setSelectedContact] = useState<string>(contactsList[0]?.email || "admin@perspective.sn");
+  const [selectedContact, setSelectedContact] = useState<string>(contactsList[0]?.email || "contact@senperspective.com");
   const [chatInput, setChatInput] = useState("");
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [showArticlePicker, setShowArticlePicker] = useState(false);
