@@ -155,6 +155,10 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
           email,
           uid,
           pointerTo: uid,
+          avatarUrl: profileData.avatarUrl,
+          coverPhotoUrl: profileData.coverPhotoUrl || '',
+          name: profileData.name,
+          role: profileData.role,
           updatedAt: new Date().toISOString(),
         })),
         5000

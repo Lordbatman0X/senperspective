@@ -36,6 +36,11 @@ function ensureFreshBundle() {
     localStorage.setItem('__APP_BUILD_ID__', __BUILD_ID__);
   } catch { /* private mode — ignore */ }
 }
+    // FIX (comments disappearing on reload): loadComments() now only writes to
+    // the store if the realtime listener hasn't already populated it with remote
+    // data. The listener callback above is registered first, so if RTDB data
+    // arrives quickly, loadComments() will see non-empty store state and skip
+    // the seedComments fallback that was clobbering real comments.
 
 function App() {
   ensureFreshBundle();

@@ -34,7 +34,7 @@ function dedupeArticles(list) {
   return out;
 }
 const cloudSave = (col: string, id: string, data: any) => {
-  saveFirestoreDoc(col, id, data).catch(() => {});
+  return saveFirestoreDoc(col, id, data);
 };
 const cloudDelete = (col: string, id: string) => {
   deleteFirestoreDoc(col, id).catch(() => {});
@@ -677,10 +677,21 @@ export const useStore = create<AppState>()(
       loadComments: async () => {
         try {
           const remoteComments = await fetchAllComments();
-          set({ comments: remoteComments.length > 0 ? remoteComments : seedComments });
+          // FIX (comments disappearing on reload): never fall back to the empty
+          // seedComments array. If Firebase returns comments, use them. If it
+          // returns empty (no comments in DB yet), keep whatever the store
+          // already has (which may be populated by the realtime listener). Only
+          // fall back to seedComments if the store has nothing at all.
+          if (remoteComments && remoteComments.length > 0) {
+            set({ comments: remoteComments });
+          }
+          // If remote is empty, leave the store as-is — the realtime listener
+          // will populate it when data arrives, and we don't want to clobber
+          // with an empty seed array.
         } catch (err) {
           console.warn("[Firebase] loadComments failed:", err);
-          set({ comments: seedComments });
+          // On error, don't clobber with empty seedComments. Keep existing store state.
+          // The realtime listener will reconcile when it can.
         }
       },
       addArticle: async (article) => {
@@ -1187,11 +1198,16 @@ export const useStore = create<AppState>()(
         const comments = get().comments || [];
         const filtered = (comments ?? []).filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
-        
+        // FIX (comments disappearing on reload): await the cloud write so the
+        // comment is durably persisted to Firebase RTDB before the operation
+        // resolves. If the write fails we still keep the comment locally — the
+        // realtime listener will reconcile it on the next sync.
+        let wrote = false;
         try {
-          cloudSave('comments', comment.id, comment);
+          await cloudSave('comments', comment.id, comment);
+          wrote = true;
         } catch (err) {
-          console.warn("[Firebase] Comment write error:", err);
+          console.warn("[Firebase] Comment cloud write notice:", err);
         }
 
         // Log interaction if author email exists

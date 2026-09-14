@@ -230,7 +230,11 @@ export async function deleteComment(commentId: string): Promise<void> {
 
 export async function fetchAllComments(): Promise<any[]> {
   try {
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'comments')));
+    // FIX (comments disappearing on reload): increase timeout from default 7s
+    // to 12s for comment fetches. Comments are high-value engagement data that
+    // must survive page reloads; a premature timeout causes the store to fall
+    // back to the empty seed array and the realtime listener hasn't fired yet.
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'comments')), 12000);
     return toList(snap.val()) as any[];
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'comments');
@@ -243,10 +247,28 @@ export function subscribeToAllComments(
   onError?: (err: Error) => void
 ): Unsubscribe {
   const commentsRef = ref(rtdb, 'comments');
+  // FIX (comments disappearing on reload): The realtime listener must not
+  // overwrite the store with an empty array on first fire. On initial connect
+  // Firebase may return null before the full dataset is streamed, which would
+  // clobber comments that were already loaded by fetchAllComments(). Only
+  // push to the store when we have actual comment data.
+  let firstFire = true;
   return onValue(
     commentsRef,
     (snap) => {
-      callback(toList(snap.val()) as any[]);
+      const list = toList(snap.val()) as any[];
+      if (firstFire) {
+        firstFire = false;
+        // On first fire, only update if we have real comments (not empty).
+        // This prevents the listener from clobbering the fetchAllComments()
+        // result with a premature empty snapshot.
+        if (list.length > 0) {
+          callback(list);
+        }
+      } else {
+        // Subsequent fires always reflect the truth.
+        callback(list);
+      }
     },
     (error) => {
       try {
@@ -456,7 +478,13 @@ export async function addSubscriberEmail(email: string): Promise<void> {
 // -------------------------------------------------------------
 // GENERIC HELPERS (Relations, Reports, Blocks, Analytics, etc.)
 // -------------------------------------------------------------
-export async function saveFirestoreDoc(coll: string, id: string, data: any): Promise<void> {
+/**
+ * Save a document to Firebase Realtime Database.
+ * Returns true if the write succeeded, false if it failed.
+ * TODO: Remove the `never` throw from handleFirestoreError or make this
+ * function actually surface errors to callers instead of swallowing them.
+ */
+export async function saveFirestoreDoc(coll: string, id: string, data: any): Promise<boolean> {
   try {
     const pathId = safeKey(id);
     // Use set() instead of update() — update() silently no-ops on non-existent
@@ -468,19 +496,21 @@ export async function saveFirestoreDoc(coll: string, id: string, data: any): Pro
         updatedAtServer: Date.now(),
       })
     );
+    return true;
   } catch (error) {
-    // Do NOT call handleFirestoreError here — it throws (return type never),
-    // which would propagate up and break button handlers that expect a
-    // fire-and-forget void return. Log instead.
-    console.warn(`[Firebase] saveFirestoreDoc ${coll}/${id} failed:`, error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`[Firebase] saveFirestoreDoc ${coll}/${id} failed:`, msg);
+    return false;
   }
 }
 
-export async function deleteFirestoreDoc(coll: string, id: string): Promise<void> {
+export async function deleteFirestoreDoc(coll: string, id: string): Promise<boolean> {
   try {
     await withFirestoreTimeout(remove(ref(rtdb, `${coll}/${safeKey(id)}`)));
+    return true;
   } catch (error) {
     console.warn(`[Firebase] deleteFirestoreDoc ${coll}/${id} failed:`, error);
+    return false;
   }
 }
 
@@ -492,4 +522,4 @@ export async function fetchFirestoreCollection(coll: string): Promise<any[]> {
     console.warn(`[Firebase] fetchFirestoreCollection ${coll} error:`, error);
     return [];
   }
-}
+  }

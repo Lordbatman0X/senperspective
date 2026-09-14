@@ -458,6 +458,39 @@ export function ArticleEditorTab({
       };
 
       await onSave(compiled);
+      // FIX (SEO not auto-filling): auto-generate SEO meta tags from article
+      // content when the admin hasn't explicitly filled them in. Previously,
+      // seoMetaTitle/Description/Keywords defaulted to undefined and were
+      // stripped by cleanForRtdb, so published articles arrived in Firebase
+      // without any SEO metadata — Google couldn't auto-fill rich previews.
+      if (isPublished && (!seoMetaTitle.trim() || !seoMetaDescription.trim() || !seoKeywords.trim())) {
+        const titleFr = compiled.title.fr || '';
+        const titleEn = compiled.title.en || '';
+        const excerptFr = compiled.excerpt.fr || '';
+        const excerptEn = compiled.excerpt.en || '';
+        const autoMetaTitle = seoMetaTitle.trim() || (titleFr || titleEn || 'Article').substring(0, 60);
+        const autoMetaDesc = seoMetaDescription.trim() || (excerptFr || excerptEn || titleFr || titleEn || "Perspective Group — L'actualité. Sans Filtre. Sans Compromis.").substring(0, 160);
+        const autoKeywords = seoKeywords.trim() || (titleFr || titleEn || '').split(/[\s,]+/).filter((w: string) => w.length > 3).join(', ');
+        const autoOgImage = seoOgImage.trim() || imageUrl.trim() || 'https://senperspective.com/og-preview.jpg';
+        const autoCanonical = seoCanonicalUrl.trim() || `https://senperspective.com/article/${compiled.slug}`;
+
+        // Write the auto-generated SEO metadata directly to RTDB
+        try {
+          const { saveArticle } = await import('../../firebase/db');
+          const seoPatch = {
+            ...compiled,
+            seoMetaTitle: autoMetaTitle,
+            seoMetaDescription: autoMetaDesc,
+            seoKeywords: autoKeywords,
+            seoOgImage: autoOgImage,
+            seoCanonicalUrl: autoCanonical,
+            seoRobotsMeta: 'index, follow',
+          };
+          await saveArticle(seoPatch);
+        } catch (seoErr) {
+          console.warn('[ArticleEditor] Auto-SEO update notice:', seoErr);
+        }
+      }
     } catch (err) {
       console.error("Save error:", err);
       alert("Erreur lors de l'enregistrement: " + ((err as Error).message || "Veuillez réessayer"));
