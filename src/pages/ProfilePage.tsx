@@ -321,7 +321,12 @@ export function ProfilePage() {
   // Friend-request flow: adding a friend sends a REQUEST; friendship is only
   // established once the other account CONFIRMS. Data lives in the
   // `friend_requests` collection: {id, from, to, status: 'pending'|'accepted', created_at}
-  const friendRequestId = (a: string, b: string) => `freq_${a}_${b}`;
+  //
+  // CANONICAL KEY FORMAT: `${from}_${to}` where `from` = requester, `to` = recipient.
+  // This matches the format used by AccountDrawer so both pages operate on the same
+  // RTDB records. Older records may exist under `freq_${a}_${b}` — confirmFriendRequest
+  // handles both for backward compatibility.
+  const friendRequestId = (a: string, b: string) => `${a}_${b}`;
 
   const loadPendingRequests = async () => {
     if (!userEmailLow) { setIncomingRequests([]); setOutgoingRequests([]); return; }
@@ -332,8 +337,25 @@ export function ProfilePage() {
         const to = String(r?.to || '').toLowerCase().trim();
         return from === userEmailLow || to === userEmailLow;
       });
-      setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
-      setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+      // Deduplicate by email pair: if multiple records exist for the same from/to
+      // (e.g. legacy `freq_` key + canonical key), keep only the highest-priority status.
+      const byPair = new Map();
+      for (const r of mine) {
+        const from = String(r?.from || '').toLowerCase().trim();
+        const to = String(r?.to || '').toLowerCase().trim();
+        if (!from || !to) continue;
+        const pairKey = `${from}__${to}`;
+        if (!byPair.has(pairKey)) byPair.set(pairKey, []);
+        byPair.get(pairKey).push(r);
+      }
+      const deduped: any[] = [];
+      const priority = { accepted: 3, rejected: 2, pending: 1 };
+      for (const [, records] of byPair) {
+        records.sort((a, b) => (priority[a?.status] || 0) - (priority[b?.status] || 0));
+        deduped.push(records[records.length - 1]); // highest-priority status wins
+      }
+      setIncomingRequests(deduped.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+      setOutgoingRequests(deduped.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
     } catch (err) {
       console.warn('[Profile] Friend requests load notice:', err);
     }
@@ -341,14 +363,27 @@ export function ProfilePage() {
 
   const confirmFriendRequest = async (fromEmail: string) => {
     const me = userEmailLow;
-    const id = friendRequestId(fromEmail, me);
+    // Canonical key: `${from}_${to}` — matches AccountDrawer and the new friendRequestId format.
+    // Also check the legacy `freq_${from}_${me}` key that older code wrote, and migrate it.
+    const canonicalId = friendRequestId(fromEmail, me);
+    const legacyId = `freq_${fromEmail}_${me}`;
     try {
       const ts = Date.now();
       // Establish the mutual friendship (both directions)
       await saveFirestoreDoc('friends', `${me}_${fromEmail}`, { id: `${me}_${fromEmail}`, user_id: me, friend_email: fromEmail, email: fromEmail, connected_at: ts, type: 'friend' });
       await saveFirestoreDoc('friends', `${fromEmail}_${me}`, { id: `${fromEmail}_${me}`, user_id: fromEmail, friend_email: me, email: me, connected_at: ts, type: 'friend' });
-      // Mark request accepted
-      await saveFirestoreDoc('friend_requests', id, { id, from: fromEmail, to: me, status: 'accepted', created_at: ts, accepted_at: ts });
+      // Mark request accepted using the CANONICAL key (same key the pending request was saved under).
+      // Try the canonical key first, then fall back to the legacy key if the pending record lives there.
+      const targetId = canonicalId;
+      await saveFirestoreDoc('friend_requests', targetId, { id: targetId, from: fromEmail, to: me, status: 'accepted', created_at: ts, accepted_at: ts, updatedAt: ts });
+      // If a legacy `freq_`-keyed record also exists, wipe it so it can never reappear as pending.
+      try {
+        const legacySnap = await fetchFirestoreCollection('friend_requests');
+        const legacyRow = (legacySnap as any[]).find((r: any) => r.id === legacyId && r.status === 'pending');
+        if (legacyRow) {
+          await deleteFirestoreDoc('friend_requests', legacyId);
+        }
+      } catch (_) { /* best-effort cleanup — ignore */ }
       // Refresh relationship state
       setTargetFriends(await loadRelations('friends', 'user_id', targetEmailLow, 'friend_email'));
       await loadPendingRequests();
@@ -396,8 +431,15 @@ export function ProfilePage() {
         await confirmFriendRequest(b);
         return;
       } else if (outgoingRequests.some((r: any) => String(r?.to || '').toLowerCase().trim() === b)) {
-        // Cancel my pending outgoing request
-        await deleteFirestoreDoc('friend_requests', requestId);
+        // Cancel my pending outgoing request — delete BOTH key formats so neither
+        // AccountDrawer nor ProfilePage can resurrect it on reload.
+        const cancelKeys = [
+          friendRequestId(a, b),
+          `freq_${a}_${b}`,
+        ];
+        for (const key of cancelKeys) {
+          await deleteFirestoreDoc('friend_requests', key);
+        }
         setOutgoingRequests(prev => prev.filter((r: any) => String(r?.to || '').toLowerCase().trim() !== b));
         setSuccessMsg(language === "fr" ? "Demande d'amitié annulée." : "Friend request cancelled.");
       } else {
