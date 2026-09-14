@@ -122,6 +122,7 @@ export interface ReaderProfile {
   id: string;
   name: string;
   email: string;
+  uid?: string;
   avatarUrl?: string;
   role?: string;
   emailVerified?: boolean;
@@ -136,6 +137,7 @@ export interface ReaderProfile {
   bio?: string;
   accolades?: string[];
   notificationPreferences?: NotificationPreferences;
+  suspended?: boolean;
 }
 
 export interface UserAccount {

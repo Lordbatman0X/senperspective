@@ -25,6 +25,7 @@ export interface AppUserProfile {
   role: 'Admin' | 'Journaliste' | 'Membre' | string;
   avatarUrl: string;
   bio?: string;
+  coverPhotoUrl?: string;
   isOnline?: boolean;
   suspended?: boolean;
   streak?: number;
@@ -110,8 +111,8 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         bio: (userOrData as Partial<AppUserProfile>).bio || data.bio || '',
         streak: data.streak || 1,
         readingTime: data.readingTime || 0,
-        hideEmail: data.hideEmail === true || data.hide_email === true,
-        hidePersonalInfo: data.hidePersonalInfo === true || data.hide_personal_info === true,
+        hideEmail: data.hideEmail === true || (data as any).hide_email === true,
+        hidePersonalInfo: data.hidePersonalInfo === true || (data as any).hide_personal_info === true,
         accolades: isAdmin
           ? ['verified_identity', 'editorial_board', 'elite_clearance']
           : (data.accolades || ['verified_identity']),
@@ -320,7 +321,7 @@ export async function setUserRole(emailOrUid: string, role: string): Promise<voi
         console.warn('[Firebase] Get existing user failed:', getErr);
       }
       await withFirestoreTimeout(
-        set(existingRef, { ...existing, ...stripUndefined({ role, updatedAt: new Date().toISOString() }) }),
+        dbSet(existingRef, { ...existing, ...stripUndefined({ role, updatedAt: new Date().toISOString() }) }),
         5000
       ).catch((setErr) => {
         console.error('[Firebase] Set role failed:', setErr);
@@ -350,7 +351,7 @@ export async function setUserSuspended(emailOrUid: string, suspended: boolean): 
       ? { suspended: true, suspendedAt: new Date().toISOString() }
       : { suspended: false, suspendedAt: null };
     await withFirestoreTimeout(
-      set(existingRef, { ...existing, ...patch }),
+      dbSet(existingRef, { ...existing, ...patch }),
       5000
     ).catch(() => {});
   }

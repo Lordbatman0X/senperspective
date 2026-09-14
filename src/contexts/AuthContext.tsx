@@ -89,7 +89,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           name: userProf.name || userProf.email?.split('@')[0] || 'Utilisateur',
           email: userProf.email || '',
           avatarUrl: userProf.avatarUrl || 'preset-male',
-          coverPhotoUrl: userProf.coverPhotoUrl || userProf.cover_photo_url || '',
+          coverPhotoUrl: userProf.coverPhotoUrl || (userProf as any).cover_photo_url || '',
           role: userProf.role || 'Membre',
           streak: userProf.streak,
           readingTime: userProf.readingTime,
