@@ -716,6 +716,23 @@ export const useStore = create<AppState>()(
           set({ isSyncing: false });
         }
       },
+      loadComments: async () => {
+        try {
+          const remoteComments = await fetchAllComments();
+          // FIX (comments disappearing on reload): never clobber the store with
+          // an empty list. If remote data exists, merge it with the local backup
+          // (deduped by id); if remote is empty, keep the current store state —
+          // the realtime listener will populate it when data arrives.
+          if (remoteComments && remoteComments.length > 0) {
+            const localBackup = loadCommentsFromLocalBackup();
+            set({ comments: dedupeComments([...remoteComments, ...localBackup]) });
+          }
+        } catch (err) {
+          console.warn("[Firebase] loadComments failed:", err);
+          // On error keep existing store state — the realtime listener will
+          // reconcile when it can.
+        }
+      },
       addArticle: async (article) => {
         persistArticleLocally(article);
         set({ articles: dedupeArticles([article, ...(Array.isArray(get().articles) ? get().articles : [])]) });
