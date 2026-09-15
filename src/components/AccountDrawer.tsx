@@ -278,35 +278,15 @@ export function AccountDrawer({
     };
 
     // Load pending incoming + outgoing friend requests (request/confirm flow)
-    // Also cleans up legacy `freq_`-prefixed records that older code wrote, so they
-    // never reappear as phantom pending requests after a reload.
     const loadRequests = async () => {
       try {
         const rows: any[] = await fetchFirestoreCollection('friend_requests');
-        // Deduplicate by (from, to) pair: if multiple records for the same pair exist
-        // (e.g. legacy `freq_` key + canonical `${from}_${to}` key), keep only the
-        // highest-priority status so confirmed/rejected requests never reappear as pending.
-        const byPair = new Map();
-        for (const r of rows) {
-          const from = String(r?.from || '').toLowerCase().trim();
-          const to = String(r?.to || '').toLowerCase().trim();
-          if (!from || !to) continue;
-          const pairKey = `${from}__${to}`;
-          if (!byPair.has(pairKey)) byPair.set(pairKey, []);
-          byPair.get(pairKey).push(r);
-        }
-        const deduped: any[] = [];
-        const priority = { accepted: 3, rejected: 2, pending: 1 };
-        for (const [, records] of byPair) {
-          records.sort((a, b) => (priority[a?.status] || 0) - (priority[b?.status] || 0));
-          deduped.push(records[records.length - 1]);
-        }
         const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-        const incoming = Array.from(new Set(deduped
+        const incoming = Array.from(new Set(rows
           .filter(r => String(r?.to || '').toLowerCase().trim() === email && r?.status === 'pending')
           .map(r => String(r?.from || '').toLowerCase().trim())
           .filter(Boolean))) as string[];
-        const outgoing = Array.from(new Set(deduped
+        const outgoing = Array.from(new Set(rows
           .filter(r => String(r?.from || '').toLowerCase().trim() === email && r?.status === 'pending')
           .map(r => String(r?.to || '').toLowerCase().trim())
           .filter(Boolean))) as string[];
@@ -345,40 +325,19 @@ export function AccountDrawer({
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
       } else if (friendRequests.includes(targetEmail)) {
         // Confirm the incoming request → mutual friendship
-        // The pending request may have been created by AccountDrawer (key =
-        // `${sender}_${recipient}`) or ProfilePage (key = `freq_${sender}_${recipient}`).
-        // Whichever page created it, we must update the SAME key it lives at — never a
-        // swapped-key mirror. Find the actual pending record and update that exact key.
+        // Write `accepted` to BOTH key formats so whichever format the original
+        // pending request was created under gets updated (cross-page fix).
         const ts = Date.now();
         const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
-        try {
-          const allRows: any[] = await fetchFirestoreCollection('friend_requests');
-          const pendingRows = allRows.filter((r: any) => {
-            const from = String(r?.from || '').toLowerCase().trim();
-            const to = String(r?.to || '').toLowerCase().trim();
-            return (from === targetEmail && to === myEmail) && r?.status === 'pending';
-          });
-          for (const row of pendingRows) {
-            await saveFirestoreDoc('friend_requests', row.id, {
-              id: row.id,
-              from: row.from,
-              to: row.to,
-              status: 'accepted',
-              createdAt: row.createdAt || new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
-          }
-        } catch (_) { /* best-effort: also write to both known key patterns as fallback */ }
-        // Fallback: write `accepted` to both known key patterns so whichever key the
-        // original pending request lives at gets updated.
-        const fallbackKeys = [
+        const confirmKeys = [
           `${targetEmail}_${myEmail}`,
           `freq_${targetEmail}_${myEmail}`,
         ];
-        for (const key of fallbackKeys) {
+        for (const key of confirmKeys) {
           await saveFirestoreDoc('friend_requests', key, {
             id: key, from: targetEmail, to: myEmail,
-            status: 'accepted', createdAt: new Date().toISOString(),
+            status: 'accepted',
+            createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           }).catch(() => {});
         }
@@ -415,34 +374,17 @@ export function AccountDrawer({
     const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const targetEmail = fromEmail.toLowerCase().trim();
     try {
-      // Find the actual pending record(s) and update them directly — never write to
-      // a swapped-key mirror. Also update both known key patterns as fallback.
-      try {
-        const allRows: any[] = await fetchFirestoreCollection('friend_requests');
-        const pendingRows = allRows.filter((r: any) => {
-          const from = String(r?.from || '').toLowerCase().trim();
-          const to = String(r?.to || '').toLowerCase().trim();
-          return (from === targetEmail && to === myEmail) && r?.status === 'pending';
-        });
-        for (const row of pendingRows) {
-          await saveFirestoreDoc('friend_requests', row.id, {
-            id: row.id,
-            from: row.from,
-            to: row.to,
-            status: 'rejected',
-            createdAt: row.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-        }
-      } catch (_) { /* best-effort: also write to both known key patterns as fallback */ }
-      const fallbackKeys = [
+      // Write `rejected` to BOTH key formats so whichever format the original
+      // pending request was created under gets updated (cross-page fix).
+      const rejectKeys = [
         `${targetEmail}_${myEmail}`,
         `freq_${targetEmail}_${myEmail}`,
       ];
-      for (const key of fallbackKeys) {
+      for (const key of rejectKeys) {
         await saveFirestoreDoc('friend_requests', key, {
           id: key, from: targetEmail, to: myEmail,
-          status: 'rejected', createdAt: new Date().toISOString(),
+          status: 'rejected',
+          createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }).catch(() => {});
       }

@@ -337,25 +337,8 @@ export function ProfilePage() {
         const to = String(r?.to || '').toLowerCase().trim();
         return from === userEmailLow || to === userEmailLow;
       });
-      // Deduplicate by email pair: if multiple records exist for the same from/to
-      // (e.g. legacy `freq_` key + canonical key), keep only the highest-priority status.
-      const byPair = new Map();
-      for (const r of mine) {
-        const from = String(r?.from || '').toLowerCase().trim();
-        const to = String(r?.to || '').toLowerCase().trim();
-        if (!from || !to) continue;
-        const pairKey = `${from}__${to}`;
-        if (!byPair.has(pairKey)) byPair.set(pairKey, []);
-        byPair.get(pairKey).push(r);
-      }
-      const deduped: any[] = [];
-      const priority = { accepted: 3, rejected: 2, pending: 1 };
-      for (const [, records] of byPair) {
-        records.sort((a, b) => (priority[a?.status] || 0) - (priority[b?.status] || 0));
-        deduped.push(records[records.length - 1]); // highest-priority status wins
-      }
-      setIncomingRequests(deduped.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
-      setOutgoingRequests(deduped.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+      setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+      setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
     } catch (err) {
       console.warn('[Profile] Friend requests load notice:', err);
     }
@@ -363,27 +346,23 @@ export function ProfilePage() {
 
   const confirmFriendRequest = async (fromEmail: string) => {
     const me = userEmailLow;
-    // Canonical key: `${from}_${to}` — matches AccountDrawer and the new friendRequestId format.
-    // Also check the legacy `freq_${from}_${me}` key that older code wrote, and migrate it.
-    const canonicalId = friendRequestId(fromEmail, me);
-    const legacyId = `freq_${fromEmail}_${me}`;
     try {
       const ts = Date.now();
       // Establish the mutual friendship (both directions)
       await saveFirestoreDoc('friends', `${me}_${fromEmail}`, { id: `${me}_${fromEmail}`, user_id: me, friend_email: fromEmail, email: fromEmail, connected_at: ts, type: 'friend' });
       await saveFirestoreDoc('friends', `${fromEmail}_${me}`, { id: `${fromEmail}_${me}`, user_id: fromEmail, friend_email: me, email: me, connected_at: ts, type: 'friend' });
-      // Mark request accepted using the CANONICAL key (same key the pending request was saved under).
-      // Try the canonical key first, then fall back to the legacy key if the pending record lives there.
-      const targetId = canonicalId;
-      await saveFirestoreDoc('friend_requests', targetId, { id: targetId, from: fromEmail, to: me, status: 'accepted', created_at: ts, accepted_at: ts, updatedAt: ts });
-      // If a legacy `freq_`-keyed record also exists, wipe it so it can never reappear as pending.
-      try {
-        const legacySnap = await fetchFirestoreCollection('friend_requests');
-        const legacyRow = (legacySnap as any[]).find((r: any) => r.id === legacyId && r.status === 'pending');
-        if (legacyRow) {
-          await deleteFirestoreDoc('friend_requests', legacyId);
-        }
-      } catch (_) { /* best-effort cleanup — ignore */ }
+      // Mark request accepted — write to BOTH key formats so whichever format the
+      // original pending request was created under gets updated (cross-page fix).
+      const confirmIds = [
+        `${fromEmail}_${me}`,
+        `freq_${fromEmail}_${me}`,
+      ];
+      for (const id of confirmIds) {
+        await saveFirestoreDoc('friend_requests', id, {
+          id, from: fromEmail, to: me,
+          status: 'accepted', created_at: ts, accepted_at: ts,
+        }).catch(() => {});
+      }
       // Refresh relationship state
       setTargetFriends(await loadRelations('friends', 'user_id', targetEmailLow, 'friend_email'));
       await loadPendingRequests();
