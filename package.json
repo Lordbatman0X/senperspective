@@ -40,7 +40,9 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
+    "browserslist": "^4.29.0",
     "firebase-admin": "^14.4.0",
+    "lightningcss": "^1.33.0",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2"

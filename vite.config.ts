@@ -1,11 +1,26 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import browserslist from 'browserslist';
+import { browserslistToTargets } from 'lightningcss';
 import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    css: {
+      // FIX (white screen on phones, part 2): Tailwind v4 emits modern CSS —
+      // oklch() colors, color-mix(), @property — that older mobile browsers
+      // (Chrome <111 / Safari <15.4) treat as INVALID and silently drop.
+      // Result: backgrounds/text render white-on-white → a "blank" page where
+      // only images survive (the "weird logo" report). Lightning CSS with
+      // explicit browser targets downlevels oklch()/color-mix() to rgb()
+      // fallbacks so every browser gets valid colors.
+      transformer: 'lightningcss' as const,
+      lightningcss: {
+        targets: browserslistToTargets(browserslist('chrome >= 75, safari >= 13, firefox >= 75, edge >= 79')),
+      },
+    },
     define: {
       // Changes every build — used by App.tsx to force exactly one reload on
       // devices still running a stale cached bundle after a new deploy.
