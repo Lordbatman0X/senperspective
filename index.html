@@ -54,6 +54,28 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- White-screen watchdog: if the module bundle fails to parse (old browser)
+         or a stale cached index points to a deleted asset, React never mounts
+         and the user sees a blank page. This classic script always runs and
+         surfaces a visible diagnostic + recovery options instead. -->
+    <script>
+      (function () {
+        var CHECK_MS = 5000;
+        var t = setTimeout(function () {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) return; // app mounted fine
+          var host = document.createElement('div');
+          host.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;background:#0a0a0a;color:#e4e4e7;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;');
+          host.innerHTML =
+            '<div style="max-width:420px;width:100%;background:#18181b;border:1px solid #3f3f46;border-top:4px solid #E85D42;padding:28px;border-radius:8px;text-align:left">' +
+            '<h1 style="font-size:15px;font-weight:800;margin:0 0 8px;color:#fff">Affichage impossible / Display unavailable</h1>' +
+            '<p style="font-size:12px;line-height:1.6;color:#a1a1aa;margin:0 0 14px">L\'application n\'a pas pu démarrer sur ce navigateur. Essayez de vider le cache, ou mettez à jour votre navigateur (Chrome / Safari).<br>The app could not start on this browser. Try clearing your browser cache, or update your browser (Chrome / Safari).</p>' +
+            '<button onclick="location.reload(true)" style="width:100%;background:#E85D42;color:#fff;font-weight:800;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;padding:12px;border:0;border-radius:6px;cursor:pointer">Recharger / Reload</button>' +
+            '</div>';
+          document.body.appendChild(host);
+        }, CHECK_MS);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

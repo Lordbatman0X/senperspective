@@ -20,6 +20,13 @@ export default defineConfig(() => {
       outDir: 'dist',
       emptyOutDir: true,
       chunkSizeWarningLimit: 1600,
+      // FIX (white screen on phones): Vite 6's default target
+      // 'baseline-widely-available' only supports Chrome 107+/Safari 16+. Older
+      // phone browsers fail to PARSE the bundle (SyntaxError on `?.`/`??`/class
+      // fields) before React mounts — a pure white screen with no ErrorBoundary.
+      // safari13/chrome75 forces esbuild to transpile ALL ES2020 syntax
+      // (optional chaining, nullish coalescing) down to ~2019 browsers.
+      target: ['chrome75', 'edge79', 'firefox75', 'safari13'],
       rollupOptions: {
         output: {
           manualChunks: {
