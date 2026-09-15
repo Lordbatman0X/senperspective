@@ -272,8 +272,6 @@ export function ArticleEditorTab({
       setForceSocEn(sf?.social?.en || '');
       setForceIntFr(sf?.international?.fr || '');
       setForceIntEn(sf?.international?.en || '');
-       setForceIntFr(sf?.international?.fr || '');
-       setForceIntEn(sf?.international?.en || '');
 
        // SEO fields initialization
        setSeoMetaTitle((article as any).seoMetaTitle || '');
@@ -282,35 +280,6 @@ export function ArticleEditorTab({
        setSeoOgImage((article as any).seoOgImage || '');
        setSeoCanonicalUrl((article as any).seoCanonicalUrl || '');
        setSeoRobotsMeta((article as any).seoRobotsMeta || 'index, follow');
-
-
-  // LIVE SEO AUTO-FILL: keep the editor's SEO fields visible & populated in real
-  // time as the writer types the title / excerpt. Never overwrites a field the
-  // admin has explicitly filled (only fills while the field is still empty).
-  useEffect(() => {
-    if (!seoMetaTitle.trim()) {
-      const auto = (titleFr || titleEn || '').substring(0, 60);
-      if (auto) setSeoMetaTitle(auto);
-    }
-    if (!seoMetaDescription.trim()) {
-      const auto = (excerptFr || excerptEn || titleFr || titleEn || '').substring(0, 160);
-      if (auto) setSeoMetaDescription(auto);
-    }
-    if (!seoKeywords.trim()) {
-      const auto = (titleFr || titleEn || '')
-        .split(/[\s,]+/)
-        .filter((w: string) => w.length > 3)
-        .slice(0, 8)
-        .join(', ');
-      if (auto) setSeoKeywords(auto);
-    }
-    if (!seoOgImage.trim() && imageUrl.trim()) {
-      setSeoOgImage(imageUrl.trim());
-    }
-    if (!seoCanonicalUrl.trim() && slug.trim()) {
-      setSeoCanonicalUrl(`https://senperspective.com/article/${slug.trim()}`);
-    }
-  }, [titleFr, titleEn, excerptFr, excerptEn, imageUrl, slug, seoMetaTitle, seoMetaDescription, seoKeywords, seoOgImage, seoCanonicalUrl]);
 
       setRelatedIds(article.relatedArticleIds || []);
     } else {
@@ -358,6 +327,36 @@ export function ArticleEditorTab({
       setRelatedIds([]);
     }
   }, [article]);
+
+  // LIVE SEO AUTO-FILL: keep the editor's SEO fields visible & populated in real
+  // time as the writer types the title / excerpt. Never overwrites a field the
+  // admin has explicitly filled (only fills while the field is still empty).
+  // NOTE: must live at the component's TOP level — nesting it inside the
+  // article-load effect above violated the Rules of Hooks (React error #321).
+  useEffect(() => {
+    if (!seoMetaTitle.trim()) {
+      const auto = (titleFr || titleEn || '').substring(0, 60);
+      if (auto) setSeoMetaTitle(auto);
+    }
+    if (!seoMetaDescription.trim()) {
+      const auto = (excerptFr || excerptEn || titleFr || titleEn || '').substring(0, 160);
+      if (auto) setSeoMetaDescription(auto);
+    }
+    if (!seoKeywords.trim()) {
+      const auto = (titleFr || titleEn || '')
+        .split(/[\s,]+/)
+        .filter((w: string) => w.length > 3)
+        .slice(0, 8)
+        .join(', ');
+      if (auto) setSeoKeywords(auto);
+    }
+    if (!seoOgImage.trim() && imageUrl.trim()) {
+      setSeoOgImage(imageUrl.trim());
+    }
+    if (!seoCanonicalUrl.trim() && slug.trim()) {
+      setSeoCanonicalUrl(`https://senperspective.com/article/${slug.trim()}`);
+    }
+  }, [titleFr, titleEn, excerptFr, excerptEn, imageUrl, slug, seoMetaTitle, seoMetaDescription, seoKeywords, seoOgImage, seoCanonicalUrl]);
 
   useEffect(() => {
     const splitCount = (text: string) => text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
