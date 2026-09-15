@@ -76,6 +76,135 @@
         }, CHECK_MS);
       })();
     </script>
+    <!-- Runtime API polyfills part 1 (ES5, classic script): esbuild transpiles
+         SYNTAX only, not APIs. Old phone browsers (Chrome <71, iOS <12.2)
+         throw ReferenceError on globalThis/AbortController during module
+         evaluation -> white screen before React mounts. -->
+    <script>
+      (function () {
+        var g = (function () {
+          if (typeof globalThis === 'object') return globalThis;
+          try { return Function('return this')(); } catch (e) {}
+          if (typeof self !== 'undefined') return self;
+          if (typeof window !== 'undefined') return window;
+          return this;
+        })();
+        if (typeof g.globalThis === 'undefined') {
+          try { Object.defineProperty(g, 'globalThis', { value: g, writable: true, configurable: true }); }
+          catch (e) { g.globalThis = g; }
+        }
+        if (typeof Promise !== 'undefined' && typeof Promise.allSettled !== 'function') {
+          Promise.allSettled = function (promises) {
+            return Promise.all(Array.prototype.map.call(promises, function (p) {
+              return Promise.resolve(p).then(
+                function (v) { return { status: 'fulfilled', value: v }; },
+                function (e) { return { status: 'rejected', reason: e }; }
+              );
+            }));
+          };
+        }
+        if (typeof g.AbortController !== 'function') {
+          function Emitter() { this._l = {}; }
+          Emitter.prototype.addEventListener = function (t, fn) { (this._l[t] = this._l[t] || []).push(fn); };
+          Emitter.prototype.removeEventListener = function (t, fn) {
+            var a = this._l[t] || []; var i = a.indexOf(fn); if (i > -1) a.splice(i, 1);
+          };
+          Emitter.prototype._emit = function (t, ev) {
+            var a = (this._l[t] || []).slice();
+            for (var i = 0; i < a.length; i++) { try { a[i](ev); } catch (e) {} }
+          };
+          function AbortSignal() {
+            Emitter.call(this);
+            this.aborted = false;
+            this.onabort = null;
+          }
+          AbortSignal.prototype = Object.create(Emitter.prototype);
+          g.AbortSignal = AbortSignal;
+          g.AbortController = function () { this.signal = new AbortSignal(); };
+          g.AbortController.prototype.abort = function () {
+            if (this.signal.aborted) return;
+            this.signal.aborted = true;
+            this.signal._emit('abort', { type: 'abort', target: this.signal });
+            if (typeof this.signal.onabort === 'function') this.signal.onabort({ type: 'abort', target: this.signal });
+          };
+        }
+      })();
+    </script>
+    <!-- Polyfills part 2: Array.at, String.replaceAll, Object.fromEntries,
+         Array.flat/flatMap, String.matchAll, IntersectionObserver stub -->
+    <script>
+      (function () {
+        var g = (typeof globalThis === 'object' && globalThis) || window;
+        if (!Array.prototype.at) {
+          Object.defineProperty(Array.prototype, 'at', {
+            value: function (n) {
+              n = Math.trunc(n) || 0;
+              if (n < 0) n += this.length;
+              if (n < 0 || n >= this.length) return undefined;
+              return this[n];
+            },
+            writable: true, enumerable: false, configurable: true
+          });
+        }
+        if (!String.prototype.replaceAll) {
+          String.prototype.replaceAll = function (search, replacement) {
+            if (search instanceof RegExp) {
+              if (!search.global) throw new TypeError('replaceAll requires a global regex');
+              return this.replace(search, replacement);
+            }
+            return this.split(search).join(replacement);
+          };
+        }
+        if (typeof Object.fromEntries !== 'function') {
+          Object.fromEntries = function (entries) {
+            var out = {};
+            Array.prototype.forEach.call(entries, function (e) { out[e[0]] = e[1]; });
+            return out;
+          };
+        }
+        if (!Array.prototype.flat) {
+          Array.prototype.flat = function (depth) {
+            depth = depth === undefined ? 1 : Number(depth) || 0;
+            var out = [];
+            (function flatten(arr, d) {
+              for (var i = 0; i < arr.length; i++) {
+                if (Array.isArray(arr[i]) && d > 0) flatten(arr[i], d - 1);
+                else out.push(arr[i]);
+              }
+            })(this, depth);
+            return out;
+          };
+        }
+        if (!Array.prototype.flatMap) {
+          Array.prototype.flatMap = function (fn, thisArg) {
+            return Array.prototype.concat.apply([], Array.prototype.map.call(this, fn, thisArg));
+          };
+        }
+        if (!String.prototype.matchAll) {
+          String.prototype.matchAll = function (regex) {
+            var flags = 'g' + (regex.flags || '').replace('g', '');
+            var r = new RegExp(regex.source, flags);
+            var out = [];
+            var m;
+            while ((m = r.exec(this)) !== null) {
+              out.push(m);
+              if (m.index === r.lastIndex) r.lastIndex++;
+            }
+            var idx = 0;
+            return { next: function () { return idx < out.length ? { done: false, value: out[idx++] } : { done: true }; } };
+          };
+        }
+        if (typeof g.IntersectionObserver !== 'function') {
+          g.IntersectionObserver = function () {
+            this.observe = function () {};
+            this.unobserve = function () {};
+            this.disconnect = function () {};
+            this.takeRecords = function () { return []; };
+          };
+          g.IntersectionObserverEntry = function () {};
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
