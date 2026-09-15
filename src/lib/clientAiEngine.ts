@@ -131,8 +131,9 @@ async function callGeminiGenerative(
 }
 
 /**
- * Kept for API compatibility only. Keys are intentionally session-scoped in
- * memory and are no longer synced from or to the database/localStorage.
+ * Loads API keys into the in-memory cache. Reads the persisted localStorage
+ * entries written by saveClientApiKey (or the diagnostics UI) so keys survive
+ * page reloads.
  */
 export async function loadClientApiKeysFromFirestore(): Promise<Record<string, string>> {
   if (hasLoadedFromFirestore) return cachedFirestoreKeys;
@@ -163,7 +164,10 @@ export async function loadClientApiKeysFromFirestore(): Promise<Record<string, s
 }
 
 /**
- * Gets the cleanest available API key from the in-memory cache only.
+ * Gets the cleanest available API key, from the in-memory cache first and then
+ * from localStorage as a fallback. The localStorage fallback self-heals the
+ * cache when a key was written directly to storage (e.g. by another tab or by
+ * a previous version of the diagnostics UI).
  */
 export function getClientApiKey(provider: string): string | null {
   if (typeof window === 'undefined') return null;
@@ -173,6 +177,21 @@ export function getClientApiKey(provider: string): string | null {
   if (cachedFirestoreKeys[p]) return cachedFirestoreKeys[p];
   if (cachedFirestoreKeys[`${p}_api_key`]) return cachedFirestoreKeys[`${p}_api_key`];
   if (cachedFirestoreKeys[`api_key_${p}`]) return cachedFirestoreKeys[`api_key_${p}`];
+  const candidates = [
+    `api_key_${p}`,
+    `${P}_API_KEY`,
+    `${p}_API_KEY`,
+    `api_key_${P}`,
+    `${p}_api_key`,
+    `${P}_api_key`,
+  ];
+  for (const k of candidates) {
+    const v = localStorage.getItem(k);
+    if (v && v.trim()) {
+      cachedFirestoreKeys[P] = v.trim();
+      return cachedFirestoreKeys[P];
+    }
+  }
   return null;
 }
 
@@ -185,9 +204,9 @@ export function hasAnyClientApiKey(): boolean {
 }
 
 /**
- * Stores an API key in memory for this browser session. It is NOT persisted to
- * localStorage or the database — this keeps keys out of reach of client-side
- * readers and out of the shared Realtime Database.
+ * Stores an API key for this browser: persisted to localStorage (so it survives
+ * reloads) AND updated in the in-memory cache (so it is usable immediately
+ * without a page refresh).
  */
 export async function saveClientApiKey(provider: string, key: string): Promise<void> {
   if (typeof window === 'undefined') return;
@@ -197,8 +216,37 @@ export async function saveClientApiKey(provider: string, key: string): Promise<v
 
   if (cleanKey) {
     cachedFirestoreKeys[P] = cleanKey;
+    try {
+      localStorage.setItem(`api_key_${p}`, cleanKey);
+      localStorage.setItem(`${P}_API_KEY`, cleanKey);
+    } catch (_) { /* storage unavailable — memory still works for this session */ }
   } else {
     delete cachedFirestoreKeys[P];
+    try {
+      localStorage.removeItem(`api_key_${p}`);
+      localStorage.removeItem(`${P}_API_KEY`);
+    } catch (_) { /* ignore */ }
+  }
+}
+
+/**
+ * Removes a stored API key from both the in-memory cache and localStorage.
+ */
+export function revokeClientApiKey(provider: string): void {
+  if (typeof window === 'undefined') return;
+  const p = provider.toLowerCase();
+  const P = provider.toUpperCase();
+  delete cachedFirestoreKeys[P];
+  const candidates = [
+    `api_key_${p}`,
+    `${P}_API_KEY`,
+    `${p}_API_KEY`,
+    `api_key_${P}`,
+    `${p}_api_key`,
+    `${P}_api_key`,
+  ];
+  for (const k of candidates) {
+    try { localStorage.removeItem(k); } catch (_) { /* ignore */ }
   }
 }
 

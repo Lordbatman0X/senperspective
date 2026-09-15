@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ShieldAlert, CheckCircle2, XCircle, RefreshCw, Key, Server, Cpu, Save, Loader2, Play, Trash2, Zap, Globe, Link, Check, AlertTriangle } from 'lucide-react';
 import { useStore } from '../../store';
 import { safeFetchJson, getApiBaseUrl, setApiBaseUrl } from '../../lib/apiUtils';
-import { clientTestProvider, getClientApiKey } from '../../lib/clientAiEngine';
+import { clientTestProvider, getClientApiKey, saveClientApiKey, revokeClientApiKey } from '../../lib/clientAiEngine';
 
 export function ApiDiagnosticTab() {
   const { language } = useStore();
@@ -165,17 +165,10 @@ export function ApiDiagnosticTab() {
     
     setSavingKey(provider);
     try {
-      // 1. Save to local browser storage first to ensure resilience across static/CDN deployments
-      localStorage.setItem(`api_key_${provider.toLowerCase()}`, key.trim());
-      localStorage.setItem(`${provider.toUpperCase()}_API_KEY`, key.trim());
+      // Save through the shared engine helper — persists to localStorage AND
+      // updates the in-memory cache so the key is usable immediately.
+      await saveClientApiKey(provider, key);
 
-      // 2. Also attempt server persistence
-      await safeFetchJson('/api/ai-engine/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, key: key.trim() })
-      });
-      
       // Clear input and refresh status
       setKeysInput(prev => ({ ...prev, [inputKeyName]: '' }));
       await checkStatus();
@@ -189,13 +182,8 @@ export function ApiDiagnosticTab() {
   const handleRevokeKey = async (provider: string) => {
     if (!window.confirm(isFr ? `Révoquer la clé pour ${provider} ?` : `Revoke API key for ${provider}?`)) return;
     try {
-      localStorage.removeItem(`api_key_${provider.toLowerCase()}`);
-      localStorage.removeItem(`${provider.toUpperCase()}_API_KEY`);
-      await safeFetchJson('/api/ai-engine/keys', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider })
-      });
+      // Clear BOTH localStorage and the in-memory cache via the shared helper
+      revokeClientApiKey(provider);
       await checkStatus();
     } catch (err: any) {
       setError(err.message || `Failed to revoke key`);
