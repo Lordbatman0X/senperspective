@@ -168,6 +168,7 @@ export async function saveArticle(article: Article): Promise<{ success: boolean;
     return { success: false, error: msg };
   }
 }
+export const saveCommentToFirestore = addComment;
 export const saveArticleToFirestore = saveArticle;
 
 export async function deleteArticle(articleId: string): Promise<void> {
@@ -204,17 +205,21 @@ export function subscribeToComments(
   );
 }
 
-export async function addComment(comment: Omit<FirestoreComment, 'id'>): Promise<string> {
+export async function addComment(comment: Omit<FirestoreComment, 'id'> & { id?: string }): Promise<string> {
   try {
-    const commentsRef = ref(rtdb, 'comments');
-    const docRef = await withFirestoreTimeout(push(commentsRef));
+    // Deterministic key = the comment's own id. The store later approves/edits/likes/
+    // deletes via saveFirestoreDoc('comments', id) / deleteFirestoreDoc('comments', id),
+    // which resolve to comments/<safeKey(id)> — so the original write MUST live at that
+    // same node, otherwise updates create duplicates and deletes silently no-op.
+    const commentId = (comment as any).id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     await withFirestoreTimeout(
-      set(docRef, {
+      set(ref(rtdb, `comments/${safeKey(commentId)}`), {
         ...cleanForRtdb(comment),
+        id: commentId,
         createdAtServer: Date.now(),
       })
     );
-    return docRef.key as string;
+    return commentId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'comments');
   }
@@ -222,7 +227,21 @@ export async function addComment(comment: Omit<FirestoreComment, 'id'>): Promise
 
 export async function deleteComment(commentId: string): Promise<void> {
   try {
+    // 1) Remove the canonical node comments/<safeKey(id)> (comments created after
+    //    the deterministic-key fix live here).
     await withFirestoreTimeout(remove(ref(rtdb, `comments/${safeKey(commentId)}`)));
+    // 2) Legacy comments were written under random push() keys with their `id`
+    //    stored as a field — scan once and remove any node whose id field matches,
+    //    otherwise deleted legacy comments resurrect on reload.
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'comments')));
+    if (snap.exists()) {
+      const val = snap.val() as Record<string, any>;
+      for (const [key, rec] of Object.entries(val)) {
+        if (key !== safeKey(commentId) && String(rec?.id || '') === String(commentId)) {
+          await withFirestoreTimeout(remove(ref(rtdb, `comments/${key}`))).catch(() => {});
+        }
+      }
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `comments/${commentId}`);
   }

@@ -17,7 +17,8 @@ import {
   deleteFirestoreDoc,
   fetchFirestoreCollection,
   fetchAllComments,
-  subscribeToAllComments
+  subscribeToAllComments,
+  saveCommentToFirestore
 } from './firebase/db';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
@@ -30,6 +31,16 @@ function dedupeArticles(list) {
     const id = String(a && a.id || "");
     if (!id || seen.has(id)) continue;
     seen.add(id); out.push(a);
+  }
+  return out;
+}
+function dedupeComments(list: any[]): any[] {
+  const seen = new Set();
+  const out: any[] = [];
+  for (const c of list) {
+    const id = String(c && c.id || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id); out.push(c);
   }
   return out;
 }
@@ -68,6 +79,32 @@ function loadArticlesFromLocalBackup() {
     const arr = raw ? JSON.parse(raw) : [];
     return Array.isArray(arr) ? arr : [];
   } catch (e) { return []; }
+}
+function persistCommentLocally(c: CommentItem) {
+  try {
+    const raw = localStorage.getItem('senperspective-local-comments-v1');
+    const arr = raw ? JSON.parse(raw) : [];
+    const list = Array.isArray(arr) ? arr : [];
+    const idx = list.findIndex(x => String(x && x.id) === String(c && c.id));
+    if (idx >= 0) list[idx] = c; else list.unshift(c);
+    localStorage.setItem('senperspective-local-comments-v1', JSON.stringify(list.slice(0, 500)));
+  } catch (e) { /* localStorage unavailable */ }
+}
+function loadCommentsFromLocalBackup(): CommentItem[] {
+  try {
+    const raw = localStorage.getItem('senperspective-local-comments-v1');
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function removeLocalCommentBackup(id: string) {
+  try {
+    const raw = localStorage.getItem('senperspective-local-comments-v1');
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    localStorage.setItem('senperspective-local-comments-v1', JSON.stringify(arr.filter(x => String(x && x.id) !== String(id))));
+  } catch (e) { /* localStorage unavailable */ }
 }
 const supabase: any = null;
 const resolveApiUrl = (url: string) => url;
@@ -666,32 +703,17 @@ export const useStore = create<AppState>()(
             set({ articles: seedArticles, isLoadingArticles: false });
           }
           const remoteComments = await fetchAllComments();
-          set({ comments: remoteComments.length > 0 ? remoteComments : seedComments });
+          // Merge remote comments with local backup so nothing is lost if the
+          // cloud write hasn't propagated yet — the local backup acts as a durable
+          // offline cache.
+          const localBackup = loadCommentsFromLocalBackup();
+          const merged = dedupeComments([...(Array.isArray(remoteComments) ? remoteComments : []), ...localBackup]);
+          set({ comments: merged });
         } catch (err) {
-          console.warn("[Firebase] Error syncing data:", err);
-          set({ articles: seedArticles, isLoadingArticles: false });
+          console.error("[Store] loadAllDataFromMongoDB notice:", err);
+          set({ comments: loadCommentsFromLocalBackup() });
         } finally {
-          set({ isSyncing: false, isLoadingArticles: false });
-        }
-      },
-      loadComments: async () => {
-        try {
-          const remoteComments = await fetchAllComments();
-          // FIX (comments disappearing on reload): never fall back to the empty
-          // seedComments array. If Firebase returns comments, use them. If it
-          // returns empty (no comments in DB yet), keep whatever the store
-          // already has (which may be populated by the realtime listener). Only
-          // fall back to seedComments if the store has nothing at all.
-          if (remoteComments && remoteComments.length > 0) {
-            set({ comments: remoteComments });
-          }
-          // If remote is empty, leave the store as-is — the realtime listener
-          // will populate it when data arrives, and we don't want to clobber
-          // with an empty seed array.
-        } catch (err) {
-          console.warn("[Firebase] loadComments failed:", err);
-          // On error, don't clobber with empty seedComments. Keep existing store state.
-          // The realtime listener will reconcile when it can.
+          set({ isSyncing: false });
         }
       },
       addArticle: async (article) => {
@@ -1198,18 +1220,14 @@ export const useStore = create<AppState>()(
         const comments = get().comments || [];
         const filtered = (comments ?? []).filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
-        // FIX (comments disappearing on reload): await the cloud write so the
-        // comment is durably persisted to Firebase RTDB before the operation
-        // resolves. If the write fails we still keep the comment locally — the
-        // realtime listener will reconcile it on the next sync.
-        let wrote = false;
-        try {
-          await cloudSave('comments', comment.id, comment);
-          wrote = true;
-        } catch (err) {
-          console.warn("[Firebase] Comment cloud write notice:", err);
+        // Persist locally so comments survive reloads even if the cloud write
+        // hasn't propagated yet — the realtime listener will reconcile from the
+        // cloud eventually, but the local backup prevents data loss on reload.
+        persistCommentLocally(comment);
+        // Write to Firebase Firestore so other devices see the comment.
+        try { await saveCommentToFirestore(comment); } catch (err) {
+          console.warn("[Firebase] Comment Firestore save notice:", err);
         }
-
         // Log interaction if author email exists
         if (comment.email) {
           get().addInteraction(
@@ -1292,8 +1310,11 @@ export const useStore = create<AppState>()(
       },
       approveComment: (id) => {
         const comment = (get().comments || []).find(c => c.id === id);
-        set({ comments: (get().comments || []).map(c => c.id === id ? { ...c, isApproved: true } : c) });
-        if (comment) { cloudSave('comments', id, { ...comment, isApproved: true }); }
+        if (!comment) return;
+        const updated = { ...comment, isApproved: true };
+        set({ comments: (get().comments || []).map(c => c.id === id ? updated : c) });
+        cloudSave('comments', id, updated);
+        persistCommentLocally(updated);
       },
       deleteComment: (id, requesterEmail) => {
         const comments = get().comments || [];
@@ -1310,6 +1331,10 @@ export const useStore = create<AppState>()(
 
         set({ comments: (comments ?? []).filter(c => c.id !== id) });
         cloudDelete('comments', id);
+        // Also run the dedicated delete (removes legacy push-key nodes whose
+        // `id` field matches) so deleted comments can never resurrect on reload.
+        firestoreDeleteComment(id).catch(() => {});
+        removeLocalCommentBackup(id);
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1338,7 +1363,8 @@ export const useStore = create<AppState>()(
         set({
           comments: (comments ?? []).map(c => c.id === id ? { ...c, text, isApproved: true } : c)
         });
-        if (comment) { cloudSave('comments', id, { ...comment, text, isApproved: true }); }
+        cloudSave('comments', id, { ...comment, text, isApproved: true });
+        persistCommentLocally({ ...comment, text, isApproved: true });
 
         if (comment && comment.email) {
           get().addInteraction(
@@ -1394,7 +1420,8 @@ export const useStore = create<AppState>()(
         set({
           comments: (comments ?? []).map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
-        if (comment) { cloudSave('comments', id, { ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy }); }
+        cloudSave('comments', id, { ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy });
+        persistCommentLocally({ ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy });
 
         get().addInteraction(
           userEmail,
@@ -1448,7 +1475,8 @@ export const useStore = create<AppState>()(
         set({
           comments: (comments ?? []).map(c => c.id === id ? { ...c, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy } : c)
         });
-        if (comment) { cloudSave('comments', id, { ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy }); }
+        cloudSave('comments', id, { ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy });
+        persistCommentLocally({ ...comment, likes, dislikes, likedBy: newLikedBy, dislikedBy: newDislikedBy });
 
         get().addInteraction(
           userEmail,
