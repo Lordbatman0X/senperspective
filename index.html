@@ -54,26 +54,85 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- White-screen watchdog: if the module bundle fails to parse (old browser)
-         or a stale cached index points to a deleted asset, React never mounts
-         and the user sees a blank page. This classic script always runs and
-         surfaces a visible diagnostic + recovery options instead. -->
+    <!-- White-screen diagnostic watchdog:
+         1. Captures every runtime error (window.onerror, unhandledrejection)
+            and script/resource load failures (capture phase) BEFORE the app
+            bundle runs.
+         2. If #root is still empty after 6s, shows a card containing the
+            captured error message + user agent — turning any future white
+            screen into a readable diagnostic. -->
     <script>
       (function () {
-        var CHECK_MS = 5000;
-        var t = setTimeout(function () {
+        var captured = [];
+        function fmt(e) {
+          try {
+            if (!e) return '';
+            var m = e.message || String(e);
+            var loc = (e.filename ? String(e.filename).split('/').pop() : '') + (e.lineno ? ':' + e.lineno : '');
+            return m + (loc ? '  [' + loc + ']' : '');
+          } catch (_) { return String(e); }
+        }
+        window.__wsErrors = captured;
+        window.addEventListener('error', function (e) {
+          if (e && e.target && e.target.tagName && !e.message) {
+            captured.push('LOAD FAIL: ' + (e.target.src || e.target.href || e.target.tagName));
+          } else {
+            captured.push(fmt(e));
+          }
+          showSoon();
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          captured.push('PROMISE: ' + fmt(e && e.reason));
+          showSoon();
+        });
+        var shown = false;
+        function showSoon() {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (root && root.childElementCount > 0) return;
+            render();
+          }, 300);
+        }
+        function render() {
+          if (shown) return;
           var root = document.getElementById('root');
-          if (root && root.childElementCount > 0) return; // app mounted fine
+          if (root && root.childElementCount > 0) return;
+          shown = true;
           var host = document.createElement('div');
-          host.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;background:#0a0a0a;color:#e4e4e7;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px;');
+          host.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;background:#0a0a0a;color:#e4e4e7;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto;');
+          var errHtml = captured.length
+            ? '<pre style="font-size:10px;line-height:1.5;color:#fca5a5;background:#1c1917;border:1px solid #7f1d1d;padding:10px;border-radius:6px;white-space:pre-wrap;word-break:break-word;max-height:180px;overflow:auto;margin:0 0 12px">' +
+              captured.slice(0, 5).map(function (s) { return String(s).replace(/</g, '&lt;'); }).join('\n---\n') + '</pre>'
+            : '<p style="font-size:11px;color:#a1a1aa;margin:0 0 12px">No JS error captured. The bundle may not have executed at all (unsupported browser or stale cache).</p>';
           host.innerHTML =
-            '<div style="max-width:420px;width:100%;background:#18181b;border:1px solid #3f3f46;border-top:4px solid #E85D42;padding:28px;border-radius:8px;text-align:left">' +
+            '<div style="max-width:440px;width:100%;background:#18181b;border:1px solid #3f3f46;border-top:4px solid #E85D42;padding:22px;border-radius:8px;text-align:left">' +
             '<h1 style="font-size:15px;font-weight:800;margin:0 0 8px;color:#fff">Affichage impossible / Display unavailable</h1>' +
-            '<p style="font-size:12px;line-height:1.6;color:#a1a1aa;margin:0 0 14px">L\'application n\'a pas pu démarrer sur ce navigateur. Essayez de vider le cache, ou mettez à jour votre navigateur (Chrome / Safari).<br>The app could not start on this browser. Try clearing your browser cache, or update your browser (Chrome / Safari).</p>' +
-            '<button onclick="location.reload(true)" style="width:100%;background:#E85D42;color:#fff;font-weight:800;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;padding:12px;border:0;border-radius:6px;cursor:pointer">Recharger / Reload</button>' +
+            errHtml +
+            '<p style="font-size:10px;color:#71717a;margin:0 0 14px;word-break:break-all">UA: ' + navigator.userAgent + '</p>' +
+            '<button onclick="location.reload()" style="width:100%;background:#E85D42;color:#fff;font-weight:800;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;padding:12px;border:0;border-radius:6px;cursor:pointer">Recharger / Reload</button>' +
             '</div>';
           document.body.appendChild(host);
-        }, CHECK_MS);
+        }
+        setTimeout(render, 6000);
+      })();
+    </script>
+    <!-- nomodule fallback: browsers that cannot even run ES modules
+         (pre-2018 Safari/Chrome) silently ignore type="module" scripts.
+         This classic script tells them why the page is blank. -->
+    <script nomodule>
+      (function () {
+        function go() {
+          var host = document.createElement('div');
+          host.setAttribute('style', 'position:fixed;inset:0;z-index:2147483647;background:#0a0a0a;color:#e4e4e7;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:16px;');
+          host.innerHTML =
+            '<div style="max-width:400px;width:100%;background:#18181b;border-top:4px solid #E85D42;padding:22px;border-radius:8px">' +
+            '<h1 style="font-size:15px;font-weight:800;margin:0 0 8px;color:#fff">Navigateur trop ancien / Browser too old</h1>' +
+            '<p style="font-size:12px;line-height:1.6;color:#a1a1aa;margin:0 0 14px">Ce site n\u00e9cessite un navigateur r\u00e9cent (Chrome, Safari, Firefox). Mettez-le \u00e0 jour pour continuer.<br>This site requires a modern browser. Please update Chrome or Safari.</p>' +
+            '</div>';
+          document.body.appendChild(host);
+        }
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go);
+        else go();
       })();
     </script>
     <!-- Runtime API polyfills part 1 (ES5, classic script): esbuild transpiles
