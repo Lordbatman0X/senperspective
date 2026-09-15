@@ -778,6 +778,23 @@ Réponds UNIQUEMENT par un tableau JSON d'objets :
 }
 
 /**
+ * Fetch helper with a hard timeout so dead/overloaded CORS bridges can't stall
+ * the fallback chain for 30-60s each (which made RSS loading appear broken).
+ * Returns null on network error or timeout instead of throwing.
+ */
+async function bridgeFetch(url: string, timeoutMs = 8000, headers?: Record<string, string>): Promise<Response | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: ctrl.signal, headers });
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Fetches and parses an RSS feed directly from the client browser
  * Uses high-availability CORS bridge proxies when calling external feeds from HTTPS
  */
@@ -797,8 +814,8 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
   // 1. Primary High-Reliability Strategy: Dedicated RSS-to-JSON services (zero-CORS)
   try {
     const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(cleanUrl)}`;
-    const res = await fetch(rss2jsonUrl);
-    if (res.ok) {
+    const res = await bridgeFetch(rss2jsonUrl, 9000);
+    if (res && res.ok) {
       const data = await res.json();
       if (data && data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
         const items: ClientRssItem[] = data.items.map((it: any) => {
@@ -835,70 +852,36 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
     // Continue to next bridge
   }
 
-  // 2. Secondary Strategy: Feed2JSON RFC-compatible converter
-  try {
-    const feed2jsonUrl = `https://feed2json.org/convert?url=${encodeURIComponent(cleanUrl)}`;
-    const res = await fetch(feed2jsonUrl);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.items) && data.items.length > 0) {
-        const items: ClientRssItem[] = data.items.map((it: any) => {
-          const rawContent = `${it.summary || ''} ${it.content_html || ''} ${it.content_text || ''}`;
-          const imgMatch = rawContent.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
-          const resolvedImg = (it.image || it.banner_image || (imgMatch ? imgMatch[1] : undefined) || '').trim();
-
-          return {
-            title: (it.title || '').trim(),
-            link: it.url || it.id || cleanUrl,
-            description: (it.summary || it.content_html || it.content_text || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
-            pubDate: it.date_published || it.date_modified || new Date().toISOString(),
-            source: feedName || data.title || 'Agence de Presse',
-            guid: it.id || it.url || `rss-${Date.now()}-${Math.random()}`,
-            category: 'Actualité',
-            enclosure: resolvedImg ? { url: resolvedImg } : undefined,
-            imageUrl: resolvedImg || undefined,
-            featuredImage: resolvedImg || undefined
-          };
-        });
-
-        if (items.length > 0) {
-          return {
-            success: true,
-            items,
-            count: items.length,
-            feedUrl: cleanUrl,
-            source: 'feed2json Bridge'
-          };
-        }
-      }
-    }
-  } catch (_) {
-    // Continue to next strategy
-  }
-
-  // 3. Tertiary Strategy: Raw XML bridges with DOMParser
-  const proxyEndpoints = [
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}`,
-    `https://thingproxy.freeboard.io/fetch/${cleanUrl}`,
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}`,
-    cleanUrl // Direct fetch attempt as fallback
+  // 2. Secondary Strategy: Raw XML bridges with DOMParser.
+  // NOTE: feed2json.org was removed — it sends no Access-Control-Allow-Origin
+  // header, so the browser always blocks it. thingproxy.freeboard.io and
+  // api.allorigins.win are dead (connection timeouts). Direct fetch is tried
+  // first because some feeds do send CORS headers.
+  const xmlBridges: Array<{ name: string; url: string; unwrapJson?: boolean }> = [
+    { name: 'Direct', url: cleanUrl },
+    { name: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}` },
+    { name: 'allorigins-raw', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}` },
+    // JSON-wrapped variant: { contents: "<rss ...>" } — sometimes alive when /raw is not
+    { name: 'allorigins-get', url: `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}`, unwrapJson: true },
   ];
 
   let xmlText = '';
   let successfulBridge = '';
 
-  for (const endpoint of proxyEndpoints) {
+  for (const bridge of xmlBridges) {
     try {
-      const res = await fetch(endpoint, {
-        headers: { 'Accept': 'application/rss+xml, application/xml, text/xml, */*' }
+      const res = await bridgeFetch(bridge.url, 8000, {
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*'
       });
-      if (res.ok) {
-        const text = await res.text();
-        if (text && (text.includes('<rss') || text.includes('<feed') || text.includes('<item') || text.includes('<entry'))) {
-          xmlText = text;
-          successfulBridge = endpoint;
-          break;
-        }
+      if (!res || !res.ok) continue;
+      let text = await res.text();
+      if (bridge.unwrapJson) {
+        try { text = String(JSON.parse(text)?.contents || ''); } catch (_) { continue; }
+      }
+      if (text && (text.includes('<rss') || text.includes('<feed') || text.includes('<item') || text.includes('<entry'))) {
+        xmlText = text;
+        successfulBridge = bridge.name;
+        break;
       }
     } catch (_) {
       // Continue to next bridge
@@ -1020,19 +1003,29 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
     }
   }
 
-  // 4. Jina Reader fallback (extracts markdown links from RSS feed)
+  // 3. Jina Reader fallback (extracts markdown links from RSS feed)
+  // NOTE: Jina now renders many feeds with EMPTY link text (### [](url)),
+  // so when the title is blank we derive a readable one from the URL slug.
   try {
     const jinaUrl = `https://r.jina.ai/${cleanUrl}`;
-    const res = await fetch(jinaUrl);
-    if (res.ok) {
+    const res = await bridgeFetch(jinaUrl, 10000);
+    if (res && res.ok) {
       const markdown = await res.text();
-      const regex = /###\s+\[(.*?)\]\((.*?)\)/g;
+      const regex = /###\s*\[(.*?)\]\((.*?)\)/g;
       const items: ClientRssItem[] = [];
       let match;
       while ((match = regex.exec(markdown)) !== null && items.length < 15) {
-        const title = match[1]?.trim();
+        let title = match[1]?.trim() || '';
         const link = match[2]?.trim();
-        if (title && !title.toLowerCase().includes('rss feed') && !title.toLowerCase().includes('accueil')) {
+        if (!title && link) {
+          try {
+            const u = new URL(link);
+            const slug = u.pathname.split('/').filter(Boolean).pop() || '';
+            title = slug.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').trim();
+            if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
+          } catch (_) { /* keep empty — item will be skipped */ }
+        }
+        if (title && link && !title.toLowerCase().includes('rss feed') && !title.toLowerCase().includes('accueil')) {
           items.push({
             title,
             link,
