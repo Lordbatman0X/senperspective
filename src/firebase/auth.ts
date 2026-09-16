@@ -119,6 +119,9 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         createdAt: data.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         suspended: data.suspended === true,
+        friend_ids: Array.isArray((userOrData as any).friend_ids)
+          ? (userOrData as any).friend_ids.map((id: string) => String(id || '').toLowerCase().trim()).filter(Boolean)
+          : (Array.isArray(data?.friend_ids) ? data.friend_ids.map((id: string) => String(id || '').toLowerCase().trim()).filter(Boolean) : []),
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
       await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, lastActive: Date.now() })), 5000).catch(() => {});
