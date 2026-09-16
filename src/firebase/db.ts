@@ -120,7 +120,9 @@ export function subscribeToArticles(
   return onValue(
     articlesRef,
     (snap) => {
-      const list = sortByDateDesc(toList(snap.val()) as Article[]).slice(0, 100);
+    // CAP REMOVED: return the full article list — previously capped at 100,
+    // which silently hid newer/older articles once the count passed 100.
+    const list = sortByDateDesc(toList(snap.val()) as Article[]);
       callback(list);
     },
     (error) => {
@@ -142,7 +144,8 @@ export async function fetchAllArticles(): Promise<Article[]> {
     // sees new articles" failure mode; the real-time listener in App.tsx is
     // the primary sync channel anyway.
     const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 15000);
-    return sortByDateDesc(toList(snap.val()) as Article[]).slice(0, 100);
+    // CAP REMOVED: previously sliced to 100 — return everything.
+    return sortByDateDesc(toList(snap.val()) as Article[]);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'articles');
   }
