@@ -5,7 +5,7 @@ import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import { fetchUserProfile, syncUserProfile, isAdminProfile } from '../firebase/auth';
-import { saveFirestoreDoc, deleteFirestoreDoc, fetchFirestoreCollection } from '../firebase/db';
+import { saveFirestoreDoc, deleteFirestoreDoc, fetchFirestoreCollection, subscribeToFriendRequests } from '../firebase/db';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";
@@ -203,6 +203,34 @@ export function ProfilePage() {
       }
     };
     load();
+  }, [decodedEmailMemo, readerProfile?.email]);
+
+  // Realtime listener for friend_requests — pushes confirmations/cancels across
+  // devices so the other page/device sees the updated state without manual reload.
+  useEffect(() => {
+    const me = ((readerProfile?.email || '') as string).toLowerCase().trim();
+    if (!me) return;
+    const unsub = subscribeToFriendRequests(
+      (rows) => {
+        try {
+          const mine = rows.filter((r: any) => {
+            const from = String(r?.from || '').toLowerCase().trim();
+            const to = String(r?.to || '').toLowerCase().trim();
+            return from === me || to === me;
+          });
+          setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending'));
+          setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending'));
+          // Refresh friendship state (in case a request was confirmed/rejected)
+          loadRelations('friends', 'user_id', decodedEmailMemo, 'friend_email')
+            .then(setTargetFriends)
+            .catch(() => {});
+        } catch (err) {
+          console.warn('[Profile] Friend requests realtime error:', err);
+        }
+      },
+      (err) => console.warn('[Profile] Friend requests subscription error:', err)
+    );
+    return () => unsub();
   }, [decodedEmailMemo, readerProfile?.email]);
 
   // Blocks of CURRENT user

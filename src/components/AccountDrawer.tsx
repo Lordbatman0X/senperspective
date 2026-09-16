@@ -6,7 +6,7 @@ import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
 import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
-import { fetchFirestoreCollection, saveFirestoreDoc, deleteFirestoreDoc } from '../firebase/db';
+import { fetchFirestoreCollection, saveFirestoreDoc, deleteFirestoreDoc, subscribeToFriendRequests } from '../firebase/db';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -278,6 +278,8 @@ export function AccountDrawer({
     };
 
     // Load pending incoming + outgoing friend requests (request/confirm flow)
+    // Realtime listener keeps requests in sync across devices — when one device
+    // confirms/rejects, the other device sees the updated state without reload.
     const loadRequests = async () => {
       try {
         const rows: any[] = await fetchFirestoreCollection('friend_requests');
@@ -296,6 +298,32 @@ export function AccountDrawer({
         console.warn("[AccountDrawer] Notice loading friend requests:", err);
       }
     };
+
+    // Realtime listener for friend_requests — pushes changes across devices
+    useEffect(() => {
+      if (!readerProfile?.email) return;
+      const unsub = subscribeToFriendRequests(
+        (rows) => {
+          try {
+            const email = ((readerProfile.email ?? '').toLowerCase()).trim();
+            const incoming = Array.from(new Set(rows
+              .filter(r => String(r?.to || '').toLowerCase().trim() === email && r?.status === 'pending')
+              .map(r => String(r?.from || '').toLowerCase().trim())
+              .filter(Boolean))) as string[];
+            const outgoing = Array.from(new Set(rows
+              .filter(r => String(r?.from || '').toLowerCase().trim() === email && r?.status === 'pending')
+              .map(r => String(r?.to || '').toLowerCase().trim())
+              .filter(Boolean))) as string[];
+            setFriendRequests(incoming);
+            setSentRequests(outgoing);
+          } catch (err) {
+            console.warn("[AccountDrawer] Friend requests realtime error:", err);
+          }
+        },
+        (err) => console.warn("[AccountDrawer] Friend requests subscription error:", err)
+      );
+      return () => unsub();
+    }, [readerProfile?.email]);
 
     loadFriends();
     loadRequests();
@@ -325,8 +353,8 @@ export function AccountDrawer({
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
       } else if (friendRequests.includes(targetEmail)) {
         // Confirm the incoming request → mutual friendship
-        // Write `accepted` to BOTH key formats so whichever format the original
-        // pending request was created under gets updated (cross-page fix).
+        // Write `accepted` to BOTH key formats + establish the mutual friendship
+        // record in the `friends/` collection (so ProfilePage sees it on reload).
         const ts = Date.now();
         const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
         const confirmKeys = [
@@ -341,6 +369,24 @@ export function AccountDrawer({
             updatedAt: new Date().toISOString(),
           }).catch(() => {});
         }
+        // Also write the mutual friendship records (both directions) — matches
+        // what ProfilePage confirmFriendRequest does, so both pages agree on reload.
+        await saveFirestoreDoc('friends', `${myEmail}_${targetEmail}`, {
+          id: `${myEmail}_${targetEmail}`,
+          user_id: myEmail,
+          friend_email: targetEmail,
+          email: targetEmail,
+          connected_at: ts,
+          type: 'friend',
+        }).catch(() => {});
+        await saveFirestoreDoc('friends', `${targetEmail}_${myEmail}`, {
+          id: `${targetEmail}_${myEmail}`,
+          user_id: targetEmail,
+          friend_email: myEmail,
+          email: myEmail,
+          connected_at: ts,
+          type: 'friend',
+        }).catch(() => {});
         setFriendRequests(prev => prev.filter(e => e !== targetEmail));
         const nextFriends = Array.from(new Set([...friendsList, targetEmail]));
         setFriendsList(nextFriends);
@@ -348,8 +394,15 @@ export function AccountDrawer({
         await syncUserProfile({ ...readerProfile, friend_ids: nextFriends });
         setSettingsSuccessMsg(language === "fr" ? "✓ Demande confirmée — vous êtes amis !" : "✓ Request confirmed — you are now friends!");
       } else if (sentRequests.includes(targetEmail)) {
-        // Cancel the outgoing request
-        await deleteFirestoreDoc('friend_requests', rid);
+        // Cancel the outgoing request — delete BOTH key formats so neither
+        // AccountDrawer nor ProfilePage can resurrect it on reload.
+        const cancelKeys = [
+          `${myEmail}_${targetEmail}`,
+          `freq_${myEmail}_${targetEmail}`,
+        ];
+        for (const key of cancelKeys) {
+          await deleteFirestoreDoc('friend_requests', key);
+        }
         setSentRequests(prev => prev.filter(e => e !== targetEmail));
         setSettingsSuccessMsg(language === "fr" ? "Demande annulée." : "Request cancelled.");
       } else {

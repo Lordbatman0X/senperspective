@@ -547,8 +547,28 @@ export async function fetchFirestoreCollection(coll: string): Promise<any[]> {
 }
 
 // -------------------------------------------------------------
-// ADS
+// FRIEND REQUESTS — realtime subscription (syncs across devices)
 // -------------------------------------------------------------
+export function subscribeToFriendRequests(
+  callback: (rows: any[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const refPath = ref(rtdb, 'friend_requests');
+  return onValue(
+    refPath,
+    (snap) => {
+      const list = toList(snap.val());
+      callback(list);
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.GET, 'friend_requests');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
+    }
+  );
+}
 export async function fetchAllAds(): Promise<any[]> {
   try {
     const snap = await withFirestoreTimeout(get(ref(rtdb, 'ads')));
