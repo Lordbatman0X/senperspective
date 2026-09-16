@@ -299,10 +299,11 @@ export function AccountDrawer({
       }
     };
 
-    // Realtime listener for friend_requests — pushes changes across devices
-    useEffect(() => {
-      if (!readerProfile?.email) return;
-      const unsub = subscribeToFriendRequests(
+    // Realtime listener for friend_requests — pushes changes across devices.
+    // Registered inside the load functions' parent effect so cleanup is correct.
+    let unsubFriendRequests: (() => void) | undefined;
+    if (readerProfile?.email) {
+      unsubFriendRequests = subscribeToFriendRequests(
         (rows) => {
           try {
             const email = ((readerProfile.email ?? '').toLowerCase()).trim();
@@ -322,11 +323,11 @@ export function AccountDrawer({
         },
         (err) => console.warn("[AccountDrawer] Friend requests subscription error:", err)
       );
-      return () => unsub();
-    }, [readerProfile?.email]);
+    }
 
     loadFriends();
     loadRequests();
+    return () => { unsubFriendRequests?.(); };
   }, [readerProfile?.email]);
 
   // Request-aware friend action:

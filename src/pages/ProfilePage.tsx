@@ -183,6 +183,10 @@ export function ProfilePage() {
   // early-return, which would throw a temporal-dead-zone ReferenceError)
   const [targetFriends, setTargetFriends] = useState<string[]>([]);
   const decodedEmailMemo = decodeURIComponent(email || "").toLowerCase().trim();
+  // Realtime listener for friend_requests + one-shot load, both registered at
+  // top level (NOT nested inside a callback — hooks must not be called inside
+  // other hooks' callbacks, which would throw React error #321).
+  let unsubFriendRequestsPP: (() => void) | undefined;
   useEffect(() => {
     if (!decodedEmailMemo) return;
     const me = ((readerProfile?.email || '') as string).toLowerCase().trim();
@@ -205,12 +209,10 @@ export function ProfilePage() {
     load();
   }, [decodedEmailMemo, readerProfile?.email]);
 
-  // Realtime listener for friend_requests — pushes confirmations/cancels across
-  // devices so the other page/device sees the updated state without manual reload.
   useEffect(() => {
     const me = ((readerProfile?.email || '') as string).toLowerCase().trim();
     if (!me) return;
-    const unsub = subscribeToFriendRequests(
+    unsubFriendRequestsPP = subscribeToFriendRequests(
       (rows) => {
         try {
           const mine = rows.filter((r: any) => {
@@ -230,7 +232,7 @@ export function ProfilePage() {
       },
       (err) => console.warn('[Profile] Friend requests subscription error:', err)
     );
-    return () => unsub();
+    return () => unsubFriendRequestsPP?.();
   }, [decodedEmailMemo, readerProfile?.email]);
 
   // Blocks of CURRENT user
