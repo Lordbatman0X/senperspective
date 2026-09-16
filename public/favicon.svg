@@ -1,3 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <path d="M196.86 481L45.14 481L45.14 31L261.79 31Q324.79 31 370.75 51.57Q416.71 72.14 441.79 110.39Q466.86 148.64 466.86 200.71Q466.86 252.79 441.79 290.71Q416.71 328.64 370.75 349.54Q324.79 370.43 261.79 370.43L196.86 370.43L196.86 481M196.86 148L196.86 253.43L252.14 253.43Q283.64 253.43 298.75 239.29Q313.86 225.14 313.86 200.71Q313.86 176.29 298.75 162.14Q283.64 148 252.14 148" fill="#E85D42" fill-rule="evenodd" />
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E85D42"/>
+      <stop offset="100%" stop-color="#C8432A"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Badge filling the frame -->
+  <rect x="0" y="0" width="512" height="512" rx="100" fill="url(#bgGrad)"/>
+
+  <!-- Bold Geometric 'P' Path taking up ~80% of the canvas height -->
+  <path fill="#FFFFFF" d="M 128 80 H 290 C 370 80 424 126 424 206 C 424 286 370 332 290 332 H 216 V 432 H 128V 80 Z M 216 160 V 252 H 282 C 322 252 342 236 342 206C 342 176 322 160 282 160 H 216 Z" />
 </svg>

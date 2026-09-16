@@ -17,6 +17,7 @@ import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 import { subscribeToArticles } from './firebase/db';
 import { subscribeToAllComments } from './firebase/db';
+import { subscribeToAds } from './firebase/db';
 
 // Injected by Vite at build time — changes on every deploy. A device that
 // kept an OLD cached bundle (webviews / add-to-homescreen tabs can ignore
@@ -47,6 +48,7 @@ function App() {
   const loadArticles = useStore(state => state.loadArticles);
   const loadSiteSettings = useStore(state => state.loadSiteSettings);
   const loadComments = useStore(state => state.loadComments);
+  const loadAds = useStore(state => state.loadAds);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
 
   useEffect(() => {
@@ -59,6 +61,9 @@ function App() {
     // FIX (disappearing comments): load persisted comments from the Realtime
     // Database on startup so they survive reloads and are shared across devices.
     loadComments();
+    // FIX (ads disappearing on reload): load persisted ads from RTDB so admin
+    // changes survive reloads and sync across all devices.
+    loadAds();
 
     // FIX (articles not syncing across devices and browsers): replaced the
     // 3-minute polling with a PERSISTENT real-time listener. A one-shot get()
@@ -122,6 +127,26 @@ function App() {
       (err) => console.warn('[App] Comment realtime subscription notice:', err?.message)
     );
 
+    // Realtime listener for ads so admin changes sync across all devices.
+    const unsubAds = subscribeToAds(
+      (remoteAds) => {
+        try {
+          // Merge: remote is source of truth; keep any local ads not yet synced.
+          const localAds = Array.isArray(useStore.getState().ads)
+            ? [...useStore.getState().ads] : [];
+          const remoteIds = new Set(remoteAds.map(a => String(a?.id || '')));
+          const extras = localAds.filter(a => {
+            const id = String(a?.id || '');
+            return id && !remoteIds.has(id);
+          });
+          useStore.setState({ ads: [...remoteAds, ...extras] });
+        } catch (e) {
+          console.warn('[App] Ad realtime merge notice:', e);
+        }
+      },
+      (err) => console.warn('[App] Ad realtime subscription notice:', err?.message)
+    );
+
     // Safety net: when a hidden tab becomes visible again after a long time
     // (device unlock, browser resume), force one fresh fetch in case the
     // listener connection was interrupted while the tab was frozen.
@@ -143,10 +168,11 @@ function App() {
     return () => {
       unsubArticles();
       unsubComments();
+      unsubAds();
       window.clearInterval(pollTimer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [loadArticles, loadSiteSettings, loadComments]);
+  }, [loadArticles, loadSiteSettings, loadComments, loadAds]);
 
   return (
     <Router>

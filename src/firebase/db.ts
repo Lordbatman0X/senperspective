@@ -544,4 +544,65 @@ export async function fetchFirestoreCollection(coll: string): Promise<any[]> {
     console.warn(`[Firebase] fetchFirestoreCollection ${coll} error:`, error);
     return [];
   }
+}
+
+// -------------------------------------------------------------
+// ADS
+// -------------------------------------------------------------
+export async function fetchAllAds(): Promise<any[]> {
+  try {
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'ads')));
+    return toList(snap.val());
+  } catch (error) {
+    console.warn('[Firebase] fetchAllAds error:', error);
+    return [];
   }
+}
+
+export function subscribeToAds(
+  callback: (ads: any[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const adsRef = ref(rtdb, 'ads');
+  return onValue(
+    adsRef,
+    (snap) => {
+      const list = toList(snap.val());
+      callback(list);
+    },
+    (error) => {
+      try {
+        handleFirestoreError(error, OperationType.GET, 'ads');
+      } catch (err: any) {
+        if (onError) onError(err);
+      }
+    }
+  );
+}
+
+export async function saveAdToFirestore(ad: any): Promise<boolean> {
+  try {
+    const adId = ad.id || `ad-${Date.now()}`;
+    await withFirestoreTimeout(
+      set(ref(rtdb, `ads/${safeKey(adId)}`), {
+        ...cleanForRtdb(ad),
+        id: adId,
+        updatedAtServer: Date.now(),
+      })
+    );
+    return true;
+  } catch (error) {
+    console.warn('[Firebase] saveAdToFirestore failed:', error);
+    return false;
+  }
+}
+
+export async function deleteAdFromFirestore(id: string): Promise<boolean> {
+  try {
+    await withFirestoreTimeout(remove(ref(rtdb, `ads/${safeKey(id)}`)));
+    return true;
+  } catch (error) {
+    console.warn(`[Firebase] deleteAdFromFirestore ${id} failed:`, error);
+    return false;
+  }
+}

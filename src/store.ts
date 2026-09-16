@@ -18,7 +18,11 @@ import {
   fetchFirestoreCollection,
   fetchAllComments,
   subscribeToAllComments,
-  saveCommentToFirestore
+  saveCommentToFirestore,
+  fetchAllAds,
+  subscribeToAds,
+  saveAdToFirestore,
+  deleteAdFromFirestore
 } from './firebase/db';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
@@ -289,6 +293,7 @@ interface AppState {
   deleteMedia: (id: string) => void;
   updateMediaName: (id: string, name: string) => void;
   ads: AdItem[];
+  loadAds: () => Promise<void>;
   saveAd: (ad: AdItem) => void;
   deleteAd: (id: string) => void;
   comments: CommentItem[];
@@ -942,12 +947,33 @@ export const useStore = create<AppState>()(
           clicks: 410
         }
       ],
+      loadAds: async () => {
+        try {
+          const remoteAds = await fetchAllAds();
+          if (remoteAds && remoteAds.length > 0) {
+            // Merge remote ads with the seed defaults: replace ads that exist
+            // in RTDB, keep seed ads that haven't been overridden remotely.
+            const remoteIds = new Set(remoteAds.map(a => String(a?.id || '')));
+            const seedOnly = (get().ads || []).filter(a => !remoteIds.has(a.id));
+            set({ ads: [...remoteAds, ...seedOnly] });
+          }
+        } catch (err) {
+          console.warn('[Firebase] loadAds notice:', err);
+        }
+      },
       saveAd: async (ad) => {
         const existing = (get().ads || []).find(a => a.id === ad.id);
         const updatedAds = existing
           ? (get().ads || []).map(a => a.id === ad.id ? ad : a)
           : [ad, ...(get().ads || [])];
         set({ ads: updatedAds });
+        // FIX (ads disappearing on reload): persist to Firebase RTDB so changes
+        // survive across sessions/devices and are synced in real time.
+        try {
+          await saveAdToFirestore(ad);
+        } catch (err) {
+          console.error("[Firebase] Error saving ad:", err);
+        }
         try {
           const clean = await sanitizeFirestorePayload(ad as any);
           if (supabase) { await supabase.from('ads').upsert({ id: ad.id, ...clean }).catch(() => {}); }
@@ -957,6 +983,12 @@ export const useStore = create<AppState>()(
       },
       deleteAd: (id) => {
         set({ ads: (get().ads || []).filter(a => a.id !== id) });
+        // FIX: persist deletion to RTDB so the ad doesn't reappear on reload.
+        try {
+          deleteAdFromFirestore(id);
+        } catch (err) {
+          console.error("[Firebase] Error deleting ad:", err);
+        }
         if (supabase) { supabase.from('ads').delete().eq('id', id).catch(() => {}); }
       },
       comments: seedComments && seedComments.length > 0 ? (seedComments as CommentItem[]) : [],
