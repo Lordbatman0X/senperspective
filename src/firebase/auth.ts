@@ -40,6 +40,7 @@ export interface AppUserProfile {
   registeredAt?: string;
   hideEmail?: boolean;
   hidePersonalInfo?: boolean;
+  friend_ids?: string[];
 }
 
 const googleProvider = new GoogleAuthProvider();
