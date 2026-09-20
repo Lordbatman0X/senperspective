@@ -55,6 +55,10 @@ const cloudSave = (col: string, id: string, data: any) => {
 const cloudDelete = (col: string, id: string) => {
   deleteFirestoreDoc(col, id).catch(() => {});
 };
+// True once the reader's first cloud notifications sync of this session has
+// completed — arrivals detected AFTER it are live and get a toast (backlog
+// pulled on page load / login stays silent to avoid toast spam).
+let remoteNotifFirstSyncDone = false;
 const cloudSaveUserProfile = (email: string, data: any) => {
   saveFirestoreDoc('users', email, data).catch(() => {});
 };
@@ -387,6 +391,8 @@ interface AppState {
   notificationPreferences: NotificationPreferences;
   updateNotificationPreferences: (prefs: Partial<NotificationPreferences>) => void;
   addNotification: (notification: NotificationItem) => void;
+  syncReaderSocialGraph: (email: string) => Promise<void>;
+  loadRemoteNotifications: (email: string) => Promise<void>;
   clearNotifications: (email: string, scope?: 'all' | 'social') => void;
   deleteNotification: (id: string) => void;
   subscribers: SubscriberItem[];
@@ -1658,6 +1664,103 @@ export const useStore = create<AppState>()(
             body: textMsg,
             actionUrl: notification.link
           });
+        }
+      },
+      // FIX (friend publications/comments never notified): `friends` in the
+      // store is a UI-local contact cache that stayed empty unless the user
+      // manually added contacts in this session — so the fan-out in
+      // addComment (which iterates `get().friends`) notified nobody. The
+      // REAL social graph lives in the RTDB `friends` collection (rows in
+      // both directions). This action reconciles it into the store.
+      syncReaderSocialGraph: async (email) => {
+        const me = (email ?? '').toLowerCase().trim();
+        if (!me) return;
+        try {
+          const rows: any[] = await fetchFirestoreCollection('friends');
+          const friendEmails = new Set<string>();
+          for (const r of rows) {
+            const uid = String(r?.user_id || '').toLowerCase().trim();
+            const fem = String(r?.friend_email || r?.email || '').toLowerCase().trim();
+            if (!uid || !fem || uid === fem) continue;
+            if (uid === me) friendEmails.add(fem);
+            else if (fem === me) friendEmails.add(uid);
+          }
+          if (friendEmails.size === 0) return;
+          const current = (get().friends || []) as any[];
+          const byEmail = new Map(current.map((f: any) => [String(f?.email || '').toLowerCase().trim(), f]));
+          const merged: any[] = [];
+          friendEmails.forEach(fe => {
+            const existing = byEmail.get(fe);
+            merged.push(existing || { email: fe, name: fe.split('@')[0], role: 'Membre', avatar: 'preset-male', status: 'offline' });
+          });
+          // Keep UI-local contacts that are not part of the cloud graph.
+          for (const f of current) {
+            const fe = String(f?.email || '').toLowerCase().trim();
+            if (fe && !friendEmails.has(fe)) merged.push(f);
+          }
+          set({ friends: merged });
+        } catch (err) {
+          console.warn('[Store] Social graph sync notice:', err);
+        }
+      },
+      // FIX (cloud notifications never seen by the recipient): addNotification
+      // fans out and persists notifications to RTDB, but nothing ever LOADS
+      // them back on the reader's device — no badge, no activity item, no
+      // toast. This action pulls the reader's cloud notifications, merges new
+      // arrivals into the store, refreshes read-state (cross-device), and
+      // fires the in-app toast for live arrivals only.
+      loadRemoteNotifications: async (email) => {
+        const me = (email ?? '').toLowerCase().trim();
+        if (!me) return;
+        try {
+          const rows: any[] = await fetchFirestoreCollection('notifications');
+          const mine = rows.filter(n => String(n?.email || '').toLowerCase().trim() === me && n?.id);
+          if (mine.length === 0) return;
+          const existing = get().notifications || [];
+          const knownIds = new Set(existing.map((n: any) => String(n?.id || '')));
+          const fresh = mine.filter(n => !knownIds.has(String(n.id)));
+          const cloudById = new Map(mine.map(n => [String(n.id), n]));
+          // Merge: fresh cloud arrivals first, then existing state with
+          // read-state refreshed from the cloud (cloud is the source of
+          // truth so reading on one device clears it everywhere).
+          const mergedExisting = existing.map((n: any) => {
+            const cloud = cloudById.get(String(n?.id || ''));
+            return cloud && typeof cloud.isRead === 'boolean' && cloud.isRead !== n.isRead
+              ? { ...n, isRead: cloud.isRead }
+              : n;
+          });
+          if (fresh.length === 0) {
+            if (mergedExisting.some((n: any, i: number) => n !== (existing as any[])[i])) {
+              set({ notifications: mergedExisting });
+            }
+            return;
+          }
+          set({ notifications: [...fresh, ...mergedExisting] });
+          // Toast ONLY genuinely live arrivals (after the initial sync), so
+          // a page reload never spams the reader with old unread backlog.
+          if (!remoteNotifFirstSyncDone) {
+            remoteNotifFirstSyncDone = true;
+            return;
+          }
+          const lang = get().language;
+          fresh.filter((n: any) => !n.isRead).forEach((n: any) => {
+            const isSocial = n.category === 'social';
+            const textMsg = typeof n.text === 'string'
+              ? n.text
+              : (n.text?.[lang] || n.text?.fr || 'Nouvelle notification');
+            triggerInAppToast({
+              type: isSocial ? 'social' : (n.category === 'system' ? 'system' : (n.category === 'messages' ? 'message' : 'publication')),
+              title: isSocial
+                ? (lang === 'fr' ? 'Activité de votre réseau' : 'Network activity')
+                : (n.category === 'messages'
+                  ? (lang === 'fr' ? 'Nouveau message' : 'New message')
+                  : (lang === 'fr' ? 'Nouvelle publication' : 'New publication')),
+              body: textMsg,
+              actionUrl: n.link
+            });
+          });
+        } catch (err) {
+          console.warn('[Store] Remote notifications load notice:', err);
         }
       },
       clearNotifications: (email, scope) => {

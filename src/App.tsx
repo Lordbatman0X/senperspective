@@ -188,6 +188,35 @@ function App() {
     };
   }, [loadArticles, loadSiteSettings, loadComments, loadAds]);
 
+  // FIX (social notifications invisible to recipients): while a reader is
+  // signed in, keep their social graph (RTDB `friends`) and their cloud
+  // notifications in sync so friend/follower comments & publications show
+  // up as badges, activity items, and 5s toasts on THEIR device too.
+  // Dedicated effect keyed on the reader's email so it (re)runs at login.
+  const readerProfileEmail = useStore((s) => s.readerProfile?.email);
+  useEffect(() => {
+    const email = ((readerProfileEmail ?? '')).toLowerCase().trim();
+    if (!email) return;
+    const { syncReaderSocialGraph, loadRemoteNotifications } = useStore.getState();
+    syncReaderSocialGraph(email);
+    loadRemoteNotifications(email);
+    const notifPoll = window.setInterval(() => {
+      const current = ((useStore.getState().readerProfile?.email ?? '')).toLowerCase().trim();
+      if (current && document.visibilityState === 'visible') loadRemoteNotifications(current);
+    }, 45 * 1000);
+    const onNotifVisible = () => {
+      const current = ((useStore.getState().readerProfile?.email ?? '')).toLowerCase().trim();
+      if (current && document.visibilityState === 'visible') loadRemoteNotifications(current);
+    };
+    document.addEventListener('visibilitychange', onNotifVisible);
+    window.addEventListener('focus', onNotifVisible);
+    return () => {
+      window.clearInterval(notifPoll);
+      document.removeEventListener('visibilitychange', onNotifVisible);
+      window.removeEventListener('focus', onNotifVisible);
+    };
+  }, [readerProfileEmail]);
+
   return (
     <Router>
       <AuthProvider>
