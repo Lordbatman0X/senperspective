@@ -6,7 +6,16 @@ import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
 import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
-import { fetchFirestoreCollection, saveFirestoreDoc, deleteFirestoreDoc, subscribeToFriendRequests } from '../firebase/db';
+import {
+  fetchFirestoreCollection,
+  saveFirestoreDoc,
+  deleteFirestoreDoc,
+  deleteRelationPair,
+  friendsKey,
+  legacyRelationKeys,
+  requestKey,
+  subscribeToFriendRequests,
+} from '../firebase/db';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -266,9 +275,36 @@ export function AccountDrawer({
 
     const loadFriends = async () => {
       try {
-        const u = await fetchUserProfile(email);
-        if (u && Array.isArray((u as any).friend_ids)) {
-          const list = (u as any).friend_ids.map((id: string) => id.toLowerCase().trim());
+        // FIX (friends list empty on reload): friend_ids on the user profile is
+        // only a cache — the source of truth is the `friends` collection.
+        // Merge BOTH: collection rows (either direction, legacy or canonical
+        // fields) + the profile's friend_ids cache, deduped. Self-rows ignored.
+        const found = new Set<string>();
+        try {
+          const rows: any[] = await fetchFirestoreCollection('friends');
+          for (const r of rows) {
+            const uid = String(r?.user_id || '').toLowerCase().trim();
+            const fem = String(r?.friend_email || r?.email || '').toLowerCase().trim();
+            if (!uid || !fem || uid === fem) continue;
+            if (uid === email) found.add(fem);
+            else if (fem === email) found.add(uid);
+          }
+        } catch (e) {
+          console.warn('[AccountDrawer] Friends collection load notice:', e);
+        }
+        try {
+          const u = await fetchUserProfile(email);
+          if (u && Array.isArray((u as any).friend_ids)) {
+            for (const id of (u as any).friend_ids) {
+              const v = String(id || '').toLowerCase().trim();
+              if (v && v !== email) found.add(v);
+            }
+          }
+        } catch (e) {
+          console.warn('[AccountDrawer] friend_ids load notice:', e);
+        }
+        const list = Array.from(found);
+        if (list.length > 0 || found.size === 0) {
           setFriendsList(list);
           useStore.getState().setFriends(list);
         }
@@ -335,6 +371,28 @@ export function AccountDrawer({
   //  - incoming pending request → confirm friendship
   //  - outgoing pending request → cancel request
   //  - otherwise                → send a friend request
+  // FIX (relations not persistent): single source of truth for relation
+  // matching — RTDB keys may use legacy formats, so match on FIELDS and
+  // dedupe case-insensitively. Self-rows are ignored.
+  const keyMatches = (key: string, fromNorm: string, toNorm: string) =>
+    key === `${fromNorm}_${toNorm}` ||
+    key === `${toNorm}_${fromNorm}` ||
+    key === friendsKey(fromNorm, toNorm) ||
+    key === friendsKey(toNorm, fromNorm) ||
+    key === requestKey(fromNorm, toNorm) ||
+    key === requestKey(toNorm, fromNorm);
+
+  const matchRequest = (r: any, fromNorm: string, toNorm: string) => {
+    const from = String(r?.from || '').toLowerCase();
+    const to = String(r?.to || '').toLowerCase();
+    if (from && to) {
+      return (from === fromNorm && to === toNorm) ||
+        (from === toNorm && to === fromNorm);
+    }
+    const key = String(r?.id || '').toLowerCase();
+    return Boolean(key) && keyMatches(key, fromNorm, toNorm);
+  };
+
   const toggleFriend = async (friendEmail: string) => {
     if (!readerProfile?.email) return;
     const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
@@ -342,11 +400,10 @@ export function AccountDrawer({
     if (myEmail === targetEmail) return;
 
     try {
-      const rid = `${myEmail}_${targetEmail}`;
+      const rid = requestKey(myEmail, targetEmail);
       if (friendsList.includes(targetEmail)) {
-        // Remove friendship both directions + friend_ids
-        await deleteFirestoreDoc('friends', `${myEmail}_${targetEmail}`);
-        await deleteFirestoreDoc('friends', `${targetEmail}_${myEmail}`);
+        // Remove friendship both directions (+ legacy key variants) + friend_ids
+        await deleteRelationPair('friends', myEmail, targetEmail);
         const nextFriends = friendsList.filter(e => e !== targetEmail);
         setFriendsList(nextFriends);
         useStore.getState().setFriends(nextFriends);
@@ -354,34 +411,36 @@ export function AccountDrawer({
         setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
       } else if (friendRequests.includes(targetEmail)) {
         // Confirm the incoming request → mutual friendship
-        // Write `accepted` to BOTH key formats + establish the mutual friendship
-        // record in the `friends/` collection (so ProfilePage sees it on reload).
+        // Accept on the canonical key + sweep legacy variants, then establish the
+        // mutual friendship records in `friends/` (so ProfilePage sees it on reload).
         const ts = Date.now();
         const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
-        const confirmKeys = [
-          `${targetEmail}_${myEmail}`,
-          `freq_${targetEmail}_${myEmail}`,
-        ];
-        for (const key of confirmKeys) {
-          await saveFirestoreDoc('friend_requests', key, {
-            id: key, from: targetEmail, to: myEmail,
-            status: 'accepted',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }).catch(() => {});
-        }
+        const acceptKey = requestKey(targetEmail, myEmail);
+        await saveFirestoreDoc('friend_requests', acceptKey, {
+          id: acceptKey, from: targetEmail, to: myEmail,
+          status: 'accepted',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }).catch(() => {});
+        try {
+          for (const legacyId of legacyRelationKeys(targetEmail, myEmail)) {
+            await deleteFirestoreDoc('friend_requests', legacyId).catch(() => {});
+          }
+        } catch { /* best-effort legacy sweep */ }
         // Also write the mutual friendship records (both directions) — matches
         // what ProfilePage confirmFriendRequest does, so both pages agree on reload.
-        await saveFirestoreDoc('friends', `${myEmail}_${targetEmail}`, {
-          id: `${myEmail}_${targetEmail}`,
+        const fk1 = friendsKey(myEmail, targetEmail);
+        await saveFirestoreDoc('friends', fk1, {
+          id: fk1,
           user_id: myEmail,
           friend_email: targetEmail,
           email: targetEmail,
           connected_at: ts,
           type: 'friend',
         }).catch(() => {});
-        await saveFirestoreDoc('friends', `${targetEmail}_${myEmail}`, {
-          id: `${targetEmail}_${myEmail}`,
+        const fk2 = friendsKey(targetEmail, myEmail);
+        await saveFirestoreDoc('friends', fk2, {
+          id: fk2,
           user_id: targetEmail,
           friend_email: myEmail,
           email: myEmail,
@@ -395,15 +454,9 @@ export function AccountDrawer({
         await syncUserProfile({ ...readerProfile, friend_ids: nextFriends });
         setSettingsSuccessMsg(language === "fr" ? "✓ Demande confirmée — vous êtes amis !" : "✓ Request confirmed — you are now friends!");
       } else if (sentRequests.includes(targetEmail)) {
-        // Cancel the outgoing request — delete BOTH key formats so neither
+        // Cancel the outgoing request — delete canonical + legacy keys so neither
         // AccountDrawer nor ProfilePage can resurrect it on reload.
-        const cancelKeys = [
-          `${myEmail}_${targetEmail}`,
-          `freq_${myEmail}_${targetEmail}`,
-        ];
-        for (const key of cancelKeys) {
-          await deleteFirestoreDoc('friend_requests', key);
-        }
+        await deleteRelationPair('friend_requests', myEmail, targetEmail);
         setSentRequests(prev => prev.filter(e => e !== targetEmail));
         setSettingsSuccessMsg(language === "fr" ? "Demande annulée." : "Request cancelled.");
       } else {
@@ -421,6 +474,19 @@ export function AccountDrawer({
   // Confirm / reject incoming request from the Social view
   const confirmFriendRequest = async (fromEmail: string) => {
     await toggleFriend(fromEmail);
+    // Notify the requester that their request was accepted
+    const requester = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === fromEmail.toLowerCase().trim());
+    useStore.getState().addNotification({
+      id: 'notif-friend-accepted-' + Date.now(),
+      email: fromEmail,
+      text: {
+        fr: `${requester?.name || fromEmail.split('@')[0]} a confirmé votre demande d'amitié. Vous êtes maintenant amis !`,
+        en: `${requester?.name || fromEmail.split('@')[0]} confirmed your friend request. You are now friends!`
+      },
+      date: new Date().toISOString().split('T')[0],
+      isRead: false,
+      category: 'system'
+    });
   };
 
   const rejectFriendRequest = async (fromEmail: string) => {
@@ -428,20 +494,20 @@ export function AccountDrawer({
     const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
     const targetEmail = fromEmail.toLowerCase().trim();
     try {
-      // Write `rejected` to BOTH key formats so whichever format the original
-      // pending request was created under gets updated (cross-page fix).
-      const rejectKeys = [
-        `${targetEmail}_${myEmail}`,
-        `freq_${targetEmail}_${myEmail}`,
-      ];
-      for (const key of rejectKeys) {
-        await saveFirestoreDoc('friend_requests', key, {
-          id: key, from: targetEmail, to: myEmail,
-          status: 'rejected',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
-      }
+      // Reject on the canonical key + sweep legacy variants so the pending
+      // request can never resurrect on reload (cross-page fix).
+      const rejectKey = requestKey(targetEmail, myEmail);
+      await saveFirestoreDoc('friend_requests', rejectKey, {
+        id: rejectKey, from: targetEmail, to: myEmail,
+        status: 'rejected',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+      try {
+        for (const legacyId of legacyRelationKeys(targetEmail, myEmail)) {
+          await deleteFirestoreDoc('friend_requests', legacyId).catch(() => {});
+        }
+      } catch { /* best-effort legacy sweep */ }
       setFriendRequests(prev => prev.filter(e => e !== targetEmail));
       setSettingsSuccessMsg(language === "fr" ? "Demande refusée." : "Request declined.");
       setTimeout(() => setSettingsSuccessMsg(""), 3000);

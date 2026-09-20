@@ -49,8 +49,69 @@ function toList(val: any): any[] {
   }));
 }
 
-function safeKey(id: string): string {
+export function safeKey(id: string): string {
   return String(id).replace(/[.#$/[\]]/g, '_');
+}
+
+// -------------------------------------------------------------
+// CANONICAL RELATION KEYS (single source of truth)
+// -------------------------------------------------------------
+// RTDB forbids `. # $ / [ ]` in keys and emails contain dots, so each
+// email segment is sanitized separately and composite keys are joined
+// with '__' (a raw '_' separator would collide with sanitized dots and
+// make keys ambiguous). Every reader/writer MUST use these helpers so
+// writes and deletes always resolve to the same path.
+/** Sanitize one email for use inside a composite RTDB key. */
+export function sanitizeKeySegment(email: string): string {
+  return String(email || '').toLowerCase().trim().replace(/[.#$/[\]]/g, '_');
+}
+
+/** Canonical key for a directional friends/followers/blocks record. */
+export function friendsKey(a: string, b: string): string {
+  return `${sanitizeKeySegment(a)}__${sanitizeKeySegment(b)}`;
+}
+
+/** Canonical key for a friend request record. */
+export function requestKey(a: string, b: string): string {
+  return `freq_${sanitizeKeySegment(a)}__${sanitizeKeySegment(b)}`;
+}
+
+/** All pre-fix key formats — still deleted for backward compatibility. */
+export function legacyRelationKeys(a: string, b: string): string[] {
+  const al = String(a || '').toLowerCase().trim();
+  const bl = String(b || '').toLowerCase().trim();
+  const as = sanitizeKeySegment(al);
+  const bs = sanitizeKeySegment(bl);
+  return [
+    `${al}_${bl}`,
+    `${bl}_${al}`,
+    `${as}_${bs}`,
+    `${bs}_${as}`,
+    `freq_${al}_${bl}`,
+    `freq_${bl}_${al}`,
+    `freq_${as}_${bs}`,
+    `freq_${bs}_${as}`,
+  ];
+}
+
+/** Delete every known key variant for a relation pair (both directions). */
+export async function deleteRelationPair(
+  coll: 'friends' | 'followers' | 'blocks' | 'friend_requests',
+  a: string,
+  b: string
+): Promise<void> {
+  const keys = new Set<string>();
+  if (coll === 'friend_requests') {
+    keys.add(requestKey(a, b));
+    keys.add(requestKey(b, a));
+  } else {
+    keys.add(friendsKey(a, b));
+    keys.add(friendsKey(b, a));
+  }
+  legacyRelationKeys(a, b).forEach(k => keys.add(k));
+  for (const k of keys) {
+    try { await deleteFirestoreDoc(coll, k); } catch { /* best-effort */ }
+  }
 }
 
 // -------------------------------------------------------------
@@ -209,22 +270,35 @@ export function subscribeToComments(
 }
 
 export async function addComment(comment: Omit<FirestoreComment, 'id'> & { id?: string }): Promise<string> {
+  // Deterministic key = the comment's own id. The store later approves/edits/likes/
+  // deletes via saveFirestoreDoc('comments', id) / deleteFirestoreDoc('comments', id),
+  // which resolve to comments/<safeKey(id)> — so the original write MUST live at that
+  // same node, otherwise updates create duplicates and deletes silently no-op.
+  //
+  // IMPORTANT: previously this threw on failure (handleFirestoreError rethrows a
+  // typed FirebaseError). The store's fire-and-forget call then treated the
+  // comment as saved while RTDB never received it → comments "disappear" on
+  // reload. Now the id is ALWAYS returned and the error is rethrown so the
+  // caller can keep the local backup and flag the comment `pendingSync`.
+  const commentId = (comment as any).id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   try {
-    // Deterministic key = the comment's own id. The store later approves/edits/likes/
-    // deletes via saveFirestoreDoc('comments', id) / deleteFirestoreDoc('comments', id),
-    // which resolve to comments/<safeKey(id)> — so the original write MUST live at that
-    // same node, otherwise updates create duplicates and deletes silently no-op.
-    const commentId = (comment as any).id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-    await withFirestoreTimeout(
+    const ok = await withFirestoreTimeout(
       set(ref(rtdb, `comments/${safeKey(commentId)}`), {
         ...cleanForRtdb(comment),
         id: commentId,
         createdAtServer: Date.now(),
       })
     );
+    void ok;
     return commentId;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, 'comments');
+    try {
+      handleFirestoreError(error, OperationType.CREATE, 'comments');
+    } catch (typed) {
+      (typed as any).failedCommentId = commentId;
+      throw typed;
+    }
+    throw error;
   }
 }
 
@@ -503,8 +577,11 @@ export async function addSubscriberEmail(email: string): Promise<void> {
 /**
  * Save a document to Firebase Realtime Database.
  * Returns true if the write succeeded, false if it failed.
- * TODO: Remove the `never` throw from handleFirestoreError or make this
- * function actually surface errors to callers instead of swallowing them.
+ *
+ * IMPORTANT: the caller MUST check the return value and keep its local
+ * state on failure — an unchecked `await saveFirestoreDoc(...)` pretends the
+ * relation was saved while RTDB never received it (offline, expired auth,
+ * permission-denied), which is exactly the "relations not persistent" bug.
  */
 export async function saveFirestoreDoc(coll: string, id: string, data: any): Promise<boolean> {
   try {
@@ -518,6 +595,22 @@ export async function saveFirestoreDoc(coll: string, id: string, data: any): Pro
         updatedAtServer: Date.now(),
       })
     );
+    // Verify the write actually landed (read-back). RTDB set() resolves on
+    // local-cache write even when the server later rejects it — without this
+    // check, permission-denied / offline writes look "successful" and the UI
+    // shows relations that vanish on reload.
+    try {
+      const verify = await withFirestoreTimeout(get(ref(rtdb, `${coll}/${pathId}`)), 5000);
+      if (!verify.exists()) {
+        console.warn(`[Firebase] saveFirestoreDoc ${coll}/${id}: write not confirmed by server.`);
+        return false;
+      }
+    } catch (verifyErr) {
+      console.warn(`[Firebase] saveFirestoreDoc ${coll}/${id}: verify read failed:`, verifyErr);
+      // Write was sent; verification inconclusive (offline?). Report failure so
+      // callers keep local state and let the realtime listener reconcile.
+      return false;
+    }
     return true;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

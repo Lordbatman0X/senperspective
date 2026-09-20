@@ -5,6 +5,7 @@ import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText
 import ReactMarkdown from 'react-markdown';
 import { ARTICLE_CATEGORIES } from '../../constants';
 import { compressImageFile } from '../../lib/imageUtils';
+import { uploadArticleImage } from '../../firebase/storage';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
 import { ImageCropModal } from './ImageCropModal';
 import { getAuthHeaders, safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
@@ -39,6 +40,7 @@ export function ArticleEditorTab({
   const [splitView, setSplitView] = useState<boolean>(true);
   const [activeLangTab, setActiveLangTab] = useState<'fr' | 'en'>('fr');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   // Form states matching types.ts schema properties
   const [slug, setSlug] = useState('');
@@ -424,12 +426,22 @@ export function ArticleEditorTab({
       alert(language === 'fr' ? 'Image trop lourde (Max 15Mo)' : 'Image too large (Max 15MB)');
       return;
     }
+    const cleanName = (file.name ?? '').replace(/\.[^/.]+$/, "") || "Illustration";
     try {
-      const cleanName = (file.name ?? '').replace(/\.[^/.]+$/, "") || "Illustration";
-      const compressed = await compressImageFile(file, 1200, 800, 0.72);
-      insertImageIntoActiveBody(compressed, cleanName);
+      // Upload to Firebase Storage first: embedding base64 in the markdown body
+      // used to push the article over the localStorage quota on save.
+      const articleId = slug || article?.id || 'draft';
+      const url = await uploadArticleImage(file, articleId, 'inline');
+      insertImageIntoActiveBody(url, cleanName);
     } catch (e) {
-      console.error("Failed to compress in-article image:", e);
+      console.warn("Storage upload failed for in-article image, using compressed inline fallback:", e);
+      try {
+        const compressed = await compressImageFile(file, 900, 600, 0.6);
+        insertImageIntoActiveBody(compressed, cleanName);
+      } catch (err) {
+        console.error("Failed to compress in-article image:", err);
+        alert(language === 'fr' ? "Échec du téléversement de l'image." : 'Image upload failed.');
+      }
     }
   };
 
@@ -2684,9 +2696,33 @@ export function ArticleEditorTab({
         <ImageCropModal
           imageSrc={articleCropImageSrc}
           aspectRatio={16 / 9}
-          onCropComplete={(croppedDataUrl) => {
-            setImageUrl(croppedDataUrl);
+          onCropComplete={async (croppedDataUrl) => {
             setArticleCropImageSrc(null);
+            // Show the cropped preview instantly, then swap in the hosted URL
+            // once the Firebase Storage upload finishes. Storing a multi-MB
+            // base64 Data URL in the article caused QuotaExceededError on save.
+            setImageUrl(croppedDataUrl);
+            setIsUploadingCover(true);
+            try {
+              const blob = await (await fetch(croppedDataUrl)).blob();
+              const file = new File(
+                [blob],
+                `cover-${Date.now()}.jpg`,
+                { type: blob.type || 'image/jpeg' }
+              );
+              const articleId = slug || article?.id || 'draft';
+              const hostedUrl = await uploadArticleImage(file, articleId, 'cover');
+              setImageUrl(hostedUrl);
+            } catch (err) {
+              // Keep the compressed inline image as a last resort; the store
+              // layer strips oversized data URLs before localStorage writes.
+              console.warn('[Storage] Cover upload failed, keeping compressed inline preview:', err);
+              alert(language === 'fr'
+                ? 'Le téléversement a échoué — image conservée localement (compressée).'
+                : 'Upload failed — image kept locally (compressed).');
+            } finally {
+              setIsUploadingCover(false);
+            }
           }}
           onClose={() => setArticleCropImageSrc(null)}
         />

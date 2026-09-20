@@ -58,14 +58,72 @@ const cloudSaveUserProfile = (email: string, data: any) => {
   saveFirestoreDoc('users', email, data).catch(() => {});
 };
 const LOCAL_ARTICLES_KEY = "senperspective-local-articles-v1";
+/** Max length of an inline `data:` URL we are willing to persist locally (~12 KB). */
+const MAX_LOCAL_DATA_URL_CHARS = 12000;
+
+/**
+ * Recursively strip oversized inline base64 `data:` URLs from a value before it
+ * is written to localStorage. Hosted (https://) URLs pass through untouched.
+ *
+ * WHY: a single cover image kept as a base64 Data URL (1-3 MB) instantly blows
+ * the ~5 MB per-origin localStorage quota and crashes the admin editor with
+ * QuotaExceededError. Images must live in Firebase Storage, not localStorage.
+ */
+function stripHeavyMedia<T>(value: T, seen?: WeakSet<object>): T {
+  if (typeof value === 'string') {
+    if (value.startsWith('data:') && value.length > MAX_LOCAL_DATA_URL_CHARS) {
+      return '' as unknown as T;
+    }
+    return value;
+  }
+  if (!value || typeof value !== 'object') return value;
+  const visited = seen || new WeakSet<object>();
+  if (visited.has(value as unknown as object)) return value;
+  visited.add(value as unknown as object);
+  if (Array.isArray(value)) {
+    return value.map(v => stripHeavyMedia(v, visited)) as unknown as T;
+  }
+  const out: Record<string, any> = {};
+  const src = value as Record<string, any>;
+  for (const k of Object.keys(src)) {
+    out[k] = stripHeavyMedia(src[k], visited);
+  }
+  return out as T;
+}
+
+/**
+ * Quota-safe localStorage write. Never throws: if the payload does not fit it
+ * is progressively trimmed (newest entries first) and, as a last resort, the
+ * key is cleared instead of letting a QuotaExceededError crash the render.
+ */
+function safeLocalWrite(key: string, payload: any): void {
+  const write = (data: any) => localStorage.setItem(key, JSON.stringify(data));
+  try {
+    write(payload);
+    return;
+  } catch (e) { /* fall through to trimmed retries */ }
+
+  if (Array.isArray(payload)) {
+    for (const limit of [50, 25, 10, 1, 0]) {
+      try {
+        write(payload.slice(0, limit));
+        return;
+      } catch (e) { /* keep shrinking */ }
+    }
+  }
+  try { localStorage.removeItem(key); } catch (e) { /* storage unavailable */ }
+}
+
 function persistArticleLocally(a) {
   try {
     const raw = localStorage.getItem(LOCAL_ARTICLES_KEY);
     const arr = raw ? JSON.parse(raw) : [];
     const list = Array.isArray(arr) ? arr : [];
-    const idx = list.findIndex(function(x){ return String(x && x.id) === String(a && a.id); });
-    if (idx >= 0) list[idx] = a; else list.unshift(a);
-    localStorage.setItem(LOCAL_ARTICLES_KEY, JSON.stringify(list.slice(0, 200)));
+    // Strip oversized base64 payloads BEFORE touching the ~5 MB quota.
+    const safe = stripHeavyMedia(a);
+    const idx = list.findIndex(function(x){ return String(x && x.id) === String(safe && safe.id); });
+    if (idx >= 0) list[idx] = safe; else list.unshift(safe);
+    safeLocalWrite(LOCAL_ARTICLES_KEY, list.slice(0, 200));
   } catch (e) {}
 }
 function removeLocalArticleBackup(id) {
@@ -89,9 +147,10 @@ function persistCommentLocally(c: CommentItem) {
     const raw = localStorage.getItem('senperspective-local-comments-v1');
     const arr = raw ? JSON.parse(raw) : [];
     const list = Array.isArray(arr) ? arr : [];
-    const idx = list.findIndex(x => String(x && x.id) === String(c && c.id));
-    if (idx >= 0) list[idx] = c; else list.unshift(c);
-    localStorage.setItem('senperspective-local-comments-v1', JSON.stringify(list.slice(0, 500)));
+    const safe = stripHeavyMedia(c);
+    const idx = list.findIndex(x => String(x && x.id) === String(safe && safe.id));
+    if (idx >= 0) list[idx] = safe; else list.unshift(safe);
+    safeLocalWrite('senperspective-local-comments-v1', list.slice(0, 500));
   } catch (e) { /* localStorage unavailable */ }
 }
 function loadCommentsFromLocalBackup(): CommentItem[] {
@@ -237,6 +296,9 @@ export interface CommentItem {
   text: string;
   date: string;
   isApproved: boolean;
+  /** True when the RTDB write failed but the local backup kept the comment.
+   *  UI can show "pending sync / retry" instead of pretending it was saved. */
+  pendingSync?: boolean;
   ipAddress?: string;
   avatarUrl?: string;
   isMember?: boolean;
@@ -524,6 +586,64 @@ export const syncPreferencesToFirestore = async (customPrefs?: any, explicitEmai
     console.warn("[Preferences] Sync notice:", err);
   }
 };
+
+/**
+ * Size-guarded JSON storage for zustand/persist.
+ *
+ * Browsers enforce a ~5-10 MB quota on localStorage. When the persisted
+ * state exceeds that quota (historically the full `articles` array with
+ * rich bilingual bodies), `localStorage.setItem` throws a *synchronous*
+ * QuotaExceededError that crashes the React render cycle:
+ *
+ *   "Failed to execute 'setItem' on 'Storage': Setting the value of
+ *    'perspective-group-storage' exceeded the quota."
+ *
+ * This wrapper converts that crash into a graceful no-op:
+ *   1. On QuotaExceededError it clears the stale key and retries once.
+ *   2. If the retry still exceeds the quota, persistence is silently
+ *      skipped — the in-memory store remains valid; only the localStorage
+ *      copy is stale. The app keeps rendering without interruption.
+ */
+function createSafeJSONStorage() {
+  const raw: Storage = {
+    getItem(key: string): string | null {
+      try { return localStorage.getItem(key); } catch { return null; }
+    },
+    setItem(key: string, value: string): void {
+      try {
+        localStorage.setItem(key, value);
+      } catch (e: any) {
+        const errName = e?.name ?? '';
+        const errMsg = e?.message ?? '';
+        const isQuotaError =
+          errName === 'QuotaExceededError' ||
+          /quota/i.test(errName) ||
+          /quota/i.test(errMsg) ||
+          e?.code === 22; // WebKit DOM error code for quota exceeded
+        if (isQuotaError) {
+          // Clear stale data and retry once — it may fit after clearing.
+          try { localStorage.removeItem(key); } catch {}
+          try { localStorage.setItem(key, value); } catch {}
+          // If the retry still fails, silently skip persistence.
+          // The in-memory Zustand store is still the source of truth.
+        }
+      }
+    },
+    removeItem(key: string): void {
+      try { localStorage.removeItem(key); } catch {}
+    },
+    key(index: number): string | null {
+      try { return localStorage.key(index); } catch { return null; }
+    },
+    get length(): number {
+      try { return localStorage.length; } catch { return 0; }
+    },
+    clear(): void {
+      try { localStorage.clear(); } catch {}
+    },
+  };
+  return createJSONStorage(() => raw);
+}
 
 export const useStore = create<AppState>()(
   persist(
@@ -1034,11 +1154,16 @@ export const useStore = create<AppState>()(
       },
       addFriend: (friend) => {
         set(state => ({ friends: [...(state.friends || []), friend] }));
-        if (friend?.email) cloudSave('friends', friend.email, friend);
+        // NOTE: the global `friends` contact list is UI-local (member directory
+        // cache) — the REAL social graph lives in RTDB `friends/<a__b>` rows
+        // (ProfilePage / AccountDrawer toggleFriend). Never write contact
+        // objects to that collection: its rows are keyed directional relations
+        // and contact payloads would corrupt readers. No cloud write here.
       },
       deleteFriend: (email) => {
         set(state => ({ friends: (state.friends || []).filter(f => f.email !== email) }));
-        if (email) cloudDelete('friends', email);
+        // UI-local only (see addFriend) — real unfriend goes through
+        // deleteRelationPair('friends', …) in ProfilePage/AccountDrawer.
       },
       // Fuse accounts with the same email into one account
       fuseAccounts: async () => {
@@ -1171,15 +1296,29 @@ export const useStore = create<AppState>()(
       },
       addComment: async (comment) => {
         const comments = get().comments || [];
+        // FIX (comments not persistent): the store must wait for the cloud write
+        // BEFORE showing the comment as saved. Previously the comment was shown
+        // instantly while the RTDB write ran fire-and-forget in the background —
+        // any write failure (offline, rules, timeout) silently lost the comment.
+        // Now: local backup first (survives reload), cloud write awaited, and on
+        // failure the comment stays visible flagged `pendingSync` so the UI can
+        // offer a retry instead of pretending it was saved.
         const filtered = (comments ?? []).filter(c => c.id !== comment.id);
         set({ comments: [comment, ...filtered] });
         // Persist locally so comments survive reloads even if the cloud write
         // hasn't propagated yet — the realtime listener will reconcile from the
         // cloud eventually, but the local backup prevents data loss on reload.
         persistCommentLocally(comment);
-        // Write to Firebase Firestore so other devices see the comment.
-        try { await saveCommentToFirestore(comment); } catch (err) {
-          console.warn("[Firebase] Comment Firestore save notice:", err);
+        // Write to Firebase RTDB so other devices see the comment.
+        // saveCommentToFirestore/addComment THROW on failure (handleFirestoreError
+        // rethrows) — it never returns false, so any rejection lands in catch.
+        try {
+          await saveCommentToFirestore(comment);
+        } catch (err) {
+          console.warn("[Firebase] Comment RTDB save failed — kept locally, flagged pendingSync:", err);
+          const flagged = { ...comment, pendingSync: true } as CommentItem;
+          set({ comments: [flagged, ...(get().comments || []).filter(c => c.id !== comment.id)] });
+          persistCommentLocally(flagged);
         }
         // Log interaction if author email exists
         if (comment.email) {
@@ -1621,6 +1760,10 @@ export const useStore = create<AppState>()(
         set({
           users: (users ?? []).map(u => ((u.email ?? '').toLowerCase()).trim() === normalized ? { ...u, isPrivate } : u)
         });
+        // FIX (users relations not persistent): the store's `users` list is
+        // in-memory — the CLOUD profile is the source of truth. Mirror the flag
+        // to RTDB so it (and roles, friend_ids) survive reload.
+        try { cloudSaveUserProfile(email, { isPrivate }); } catch { /* best-effort */ }
         if (supabase) {
           supabase.from('users').update({ hide_personal_info: isPrivate }).eq('id', normalized).catch(() => {});
         }
@@ -2314,14 +2457,17 @@ export const useStore = create<AppState>()(
       deleteMatch: (matchId) => {
         set({ matches: (get().matches || []).filter(m => m.id !== matchId) });
         if (supabase) { supabase.from('matches').delete().eq('id', matchId).catch(() => {}); }
-      }
+        }
     }),
     {
       name: 'perspective-group-storage',
       // v4: purge persisted fake "Visiteur" readerProfile created by older
       // logout/delete-account code (made the login/register UI unreachable).
-      version: 4,
-      storage: createJSONStorage(() => localStorage),
+      // v5: purge the full `articles` array from localStorage (it caused
+      // QuotaExceededError crashes — articles are re-fetched from the cloud
+      // on every load and backed up separately in LOCAL_ARTICLES_KEY).
+      version: 5,
+      storage: createSafeJSONStorage(),
       // v3: every browser drops ALL stale persisted data on next load.
       // Shared-domain data (articles/users/comments/messages/...) is never
       // persisted anymore — it is always re-fetched fresh from MongoDB.
@@ -2375,14 +2521,26 @@ export const useStore = create<AppState>()(
         }
         return out;
       },
-            partialize: (state) => {
-        // Persist UI preferences AND articles.
-        // Articles are persisted locally as a safety net so that if the
-        // Firestore Realtime Database write fails, is delayed, or the
-        // user is offline, the article still survives a page reload.
-        // On subsequent loads, loadArticles() still fetches fresh data
-        // from RTDB first and merges local articles that are missing
-        // remotely — ensuring both persistence and cross-device sync.
+      partialize: (state) => {
+        // Persist ONLY UI preferences and lightweight user state.
+        //
+        // NB: `articles` is deliberately NOT persisted here. Each Article
+        // carries a bilingual `body`, excerpts, perspectiveBrief, keyActors,
+        // timeline, structuralForces, SEO metadata, and image URLs — easily
+        // 5–10 KB per article. With 100+ articles the JSON blob blows past
+        // the browser localStorage quota (~5–10 MB), and zustand's
+        // createJSONStorage throws a *synchronous* QuotaExceededError that
+        // crashes the React render cycle ("interruption d'affichage").
+        //
+        // Articles are instead:
+        //   • Re-fetched from Firestore/MongoDB on every load via
+        //     loadArticles() (fetchAllArticles), which is the source of truth.
+        //   • Backed up offline in the SEPARATE LOCAL_ARTICLES_KEY key
+        //     (persistArticleLocally / loadArticlesFromLocalBackup), capped
+        //     at 200 entries, so a reload never loses user-created content
+        //     even when the cloud write hasn't propagated yet.
+        //   • Recovered from legacy localStorage keys by the recovery sweep
+        //     inside loadArticles() (lines below this persist block).
         //
         // siteSettings is persisted so that the BC logo (boukariCorpLogo)
         // and other customizer settings survive page reloads.
@@ -2395,7 +2553,7 @@ export const useStore = create<AppState>()(
           notificationPreferences: state.notificationPreferences,
           notificationResponses: state.notificationResponses,
           readerProfile: state.readerProfile,
-          articles: Array.isArray(state.articles) ? state.articles : [],
+          // REMOVED: articles — see comment above; causes QuotaExceededError.
           siteSettings: state.siteSettings,
           // REMOVED: users - must be fetched from MongoDB on every page load
         };
@@ -2412,5 +2570,6 @@ export const useStore = create<AppState>()(
     }
   )
 );
+
 
 

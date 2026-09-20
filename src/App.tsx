@@ -116,10 +116,29 @@ function App() {
 
     // Realtime listener for comments so edits/approvals/deletes are
     // reflected instantly and survive reloads.
+    // FIX (comments not persistent / disappearing): merge remote truth with
+    // local-only pending comments (pendingSync or not yet echoed by the cloud).
+    // A blind setState(remote) dropped comments the user just posted whenever
+    // the listener fired before the RTDB write propagated, and it also wiped
+    // locally-flagged pendingSync comments whose write had failed.
     const unsubComments = subscribeToAllComments(
       (remoteComments) => {
         try {
-          useStore.setState({ comments: remoteComments });
+          const local = Array.isArray(useStore.getState().comments)
+            ? [...useStore.getState().comments]
+            : [];
+          const remoteIds = new Set((remoteComments || []).map(c => String((c as any)?.id || '')));
+          const pendingLocal = local.filter(c => {
+            const id = String((c as any)?.id || '');
+            // Keep anything the cloud hasn't echoed yet (offline/pending writes)
+            return id && !remoteIds.has(id);
+          });
+          const merged = [...(remoteComments || []), ...pendingLocal];
+          const sig = merged.map(c => `${(c as any)?.id}:${(c as any)?.updatedAtServer || (c as any)?.date || ''}`).join('|');
+          const prevSig = local.map(c => `${(c as any)?.id}:${(c as any)?.updatedAtServer || (c as any)?.date || ''}`).join('|');
+          if (sig !== prevSig) {
+            useStore.setState({ comments: merged as any });
+          }
         } catch (e) {
           console.warn('[App] Comment realtime merge notice:', e);
         }

@@ -45,8 +45,19 @@ export interface AppUserProfile {
 
 const googleProvider = new GoogleAuthProvider();
 
-/** RTDB-safe key: these characters are forbidden in RTDB keys */
-const emailKey = (email: string): string => String(email || '').toLowerCase().trim().replace(/[.#$/[\]]/g, '_');
+import { sanitizeKeySegment, friendsKey, requestKey, legacyRelationKeys } from './db';
+
+/** RTDB-safe key: these characters are forbidden in RTDB keys.
+ *  Canonical helpers (sanitizeKeySegment/friendsKey/requestKey/legacyRelationKeys)
+ *  live in firebase/db.ts — re-exported here so every writer/reader shares
+ *  one implementation. */
+export { sanitizeKeySegment, friendsKey, requestKey, legacyRelationKeys };
+
+/** RTDB-safe key for single-email user records (kept for backward compat). */
+const emailKey = (email: string): string => sanitizeKeySegment(email);
+function normalizeKeySegment(email: string): string {
+  return sanitizeKeySegment(email);
+}
 /** RTDB rejects undefined values — strip them via a JSON round-trip */
 const stripUndefined = (obj: any) => JSON.parse(JSON.stringify(obj));
 
