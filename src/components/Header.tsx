@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
+import { isAdminProfile } from "../firebase/auth";
 import {
   Search,
   Menu,
@@ -207,11 +208,17 @@ export function Header() {
   const [editMatchContextEn, setEditMatchContextEn] = useState<string>("");
 
   const readerEmail = readerProfile?.email;
-  useEffect(() => {
-    if (showProfileModal && readerEmail && clearNotifications) {
-      clearNotifications(readerEmail);
-    }
-  }, [showProfileModal, readerEmail]);
+
+  // Unified unread indicator: ONE total shared by every entry point
+  // (desktop avatar, mobile menu row, scrolled mini avatar). The drawer
+  // clears each section's unread items itself, per-tab — never all at once.
+  const unreadTotal = readerProfile
+    ? (notifications || []).filter(
+        (n: any) =>
+          ((n.email ?? "").toLowerCase().trim()) ===
+            ((readerProfile.email ?? "").toLowerCase().trim()) && !n.isRead
+      ).length
+    : 0;
   const [regEmail, setRegEmail] = useState("");
   const [regName, setRegName] = useState("");
   const [regGenre, setRegGenre] = useState("Homme");
@@ -969,19 +976,23 @@ export function Header() {
                         setIsMobileMenuOpen(false);
                       }}
                     >
-                      <div className="w-8 h-8 rounded-full overflow-hidden border border-[#E85D42] shrink-0">
-                        {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 32)}
+                      <div className="relative shrink-0">
+                        <div className="w-8 h-8 rounded-full overflow-hidden border border-[#E85D42]">
+                          {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 32)}
+                        </div>
+                        {unreadTotal > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-600 text-white text-[8px] font-mono font-black flex items-center justify-center px-0.5 rounded-full border border-white dark:border-zinc-900 shadow-sm">
+                            {unreadTotal > 9 ? "9+" : unreadTotal}
+                          </span>
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-black tracking-wide truncate max-w-[120px] text-zinc-950 dark:text-white">
                           {readerProfile.name}
                         </div>
                         <div className="text-[8px] uppercase tracking-widest text-[#E85D42] font-black truncate">
-                          {readerProfile.email === "kadersdiaz3@gmail.com" ||
-                          readerProfile.role === "Admin"
-                            ? language === "fr"
-                              ? "Admin"
-                              : "Admin"
+                          {isAdminProfile(readerProfile)
+                            ? "Admin"
                             : language === "fr"
                               ? "Membre"
                               : "Member"}
@@ -1547,8 +1558,7 @@ export function Header() {
                           {readerProfile.name}
                         </h4>
                         <span className="text-[8px] font-mono font-bold tracking-wider text-white px-1.5 py-0.5 rounded-none leading-none shrink-0" style={{ backgroundColor: currentSettings.accentColor }}>
-                          {readerProfile.email === "kadersdiaz3@gmail.com" ||
-                          readerProfile.role === "Admin"
+                          {isAdminProfile(readerProfile)
                             ? "ADMIN"
                             : language === "fr" ? "MEMBRE" : "MEMBER"}
                         </span>
@@ -2798,7 +2808,7 @@ export function Header() {
                     {/* Clean editorial footnote instead of tech noise */}
                     <div className="bg-brand-soft/30 border border-brand-border/40 p-4 font-mono space-y-1 text-[8.5px] text-brand-muted uppercase tracking-wider rounded-none">
                       <p>MEMBER ID: {readerProfile.email?.split("@")[0].toUpperCase()}</p>
-                      <p>CLEARANCE TIER: {readerProfile.role === "Admin" ? "LEVEL 4 EXECUTIVE" : "LEVEL 1 READER"}</p>
+                      <p>CLEARANCE TIER: {isAdminProfile(readerProfile) ? "LEVEL 4 EXECUTIVE" : "LEVEL 1 READER"}</p>
                       <p>Dossier Server Node: Sahel-SNDKR</p>
                     </div>
                   </div>

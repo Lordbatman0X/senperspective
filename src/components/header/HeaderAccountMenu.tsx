@@ -2,6 +2,7 @@ import React from "react";
 import { User } from "lucide-react";
 import { useStore } from "../../store";
 import { renderNeutralAvatar } from "../AccountDrawer";
+import { isAdminProfile } from "../../firebase/auth";
 
 export function HeaderAccountMenu() {
   const {
@@ -13,6 +14,16 @@ export function HeaderAccountMenu() {
     setShowProfileDrawer
   } = useStore();
 
+  // Coherent unread indicator: same total-unread count as the mobile menu &
+  // drawer badges, shown as a numbered bubble on the avatar.
+  const unreadCount = readerProfile
+    ? (notifications || []).filter(
+        (n: any) =>
+          ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase()) &&
+          !n.isRead
+      ).length
+    : 0;
+
   if (readerProfile) {
     return (
       <button
@@ -23,21 +34,17 @@ export function HeaderAccountMenu() {
           <div className="w-8 h-8 sm:w-4.5 sm:h-4.5 rounded-full overflow-hidden border-2 border-[#E85D42] shrink-0">
             {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 32)}
           </div>
-          {(notifications || []).filter(
-            (n) =>
-              ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase()) &&
-              !n.isRead
-          ).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-600 rounded-full border border-[#111]" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-600 text-white text-[8px] font-mono font-black flex items-center justify-center px-0.5 rounded-full border border-[#111] shadow-sm">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
           )}
         </div>
         <span className="text-[9px] font-black text-white uppercase hidden sm:inline tracking-wider max-w-[90px] truncate">
           {language === "fr" ? "MON COMPTE" : "ACCOUNT"}
         </span>
         <span className="text-[7px] text-[#E85D42] bg-[#E85D42]/10 px-1.5 py-0.2 border border-[#E85D42]/20 font-black tracking-widest hidden sm:inline">
-          {readerProfile.email === "kadersdiaz3@gmail.com" ||
-          readerProfile.email === "admin@senperspective.com" ||
-          readerProfile.email?.toLowerCase().includes("admin")
+          {isAdminProfile(readerProfile)
             ? "ADMIN"
             : language === "fr"
               ? "MEMBRE"

@@ -18,6 +18,7 @@ import { useStore } from './store';
 import { subscribeToArticles } from './firebase/db';
 import { subscribeToAllComments } from './firebase/db';
 import { subscribeToAds } from './firebase/db';
+import { subscribeToNotifications } from './firebase/db';
 
 // Injected by Vite at build time — changes on every deploy. A device that
 // kept an OLD cached bundle (webviews / add-to-homescreen tabs can ignore
@@ -200,6 +201,23 @@ function App() {
     const { syncReaderSocialGraph, loadRemoteNotifications } = useStore.getState();
     syncReaderSocialGraph(email);
     loadRemoteNotifications(email);
+    // REALTIME DELIVERY (replaces polling as the primary channel): any write
+    // to `notifications` anywhere pushes instantly to this device. Debounced
+    // so a fan-out burst triggers a single merge.
+    let notifSyncTimer: number | null = null;
+    const scheduleNotifSync = () => {
+      if (notifSyncTimer !== null) window.clearTimeout(notifSyncTimer);
+      notifSyncTimer = window.setTimeout(() => {
+        notifSyncTimer = null;
+        const current = ((useStore.getState().readerProfile?.email ?? '')).toLowerCase().trim();
+        if (current && document.visibilityState === 'visible') loadRemoteNotifications(current);
+      }, 400);
+    };
+    const unsubNotifs = subscribeToNotifications(
+      scheduleNotifSync,
+      (err) => console.warn('[App] notifications realtime notice:', err)
+    );
+    // Safety net for environments where the realtime socket drops silently.
     const notifPoll = window.setInterval(() => {
       const current = ((useStore.getState().readerProfile?.email ?? '')).toLowerCase().trim();
       if (current && document.visibilityState === 'visible') loadRemoteNotifications(current);
@@ -211,6 +229,7 @@ function App() {
     document.addEventListener('visibilitychange', onNotifVisible);
     window.addEventListener('focus', onNotifVisible);
     return () => {
+      unsubNotifs();
       window.clearInterval(notifPoll);
       document.removeEventListener('visibilitychange', onNotifVisible);
       window.removeEventListener('focus', onNotifVisible);
