@@ -27,6 +27,7 @@ import {
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
+import { triggerInAppToast } from './lib/notificationSound';
 
 function dedupeArticles(list) {
   const seen = new Set();
@@ -325,7 +326,7 @@ export interface NotificationItem {
   date: string;
   isRead: boolean;
   link?: string;
-  category?: 'messages' | 'newsletters' | 'newPublishes' | 'generalNews' | 'system';
+  category?: 'messages' | 'newsletters' | 'newPublishes' | 'generalNews' | 'system' | 'social';
 }
 
 export interface SubscriberItem {
@@ -386,7 +387,7 @@ interface AppState {
   notificationPreferences: NotificationPreferences;
   updateNotificationPreferences: (prefs: Partial<NotificationPreferences>) => void;
   addNotification: (notification: NotificationItem) => void;
-  clearNotifications: (email: string) => void;
+  clearNotifications: (email: string, scope?: 'all' | 'social') => void;
   deleteNotification: (id: string) => void;
   subscribers: SubscriberItem[];
   addSubscriber: (email: string) => void;
@@ -1364,7 +1365,7 @@ export const useStore = create<AppState>()(
               },
               date: new Date().toISOString().split('T')[0],
               isRead: false,
-              category: 'messages',
+              category: 'social',
               link: `/article/${comment.articleId}`
             });
           }
@@ -1391,7 +1392,7 @@ export const useStore = create<AppState>()(
                 },
                 date: new Date().toISOString().split('T')[0],
                 isRead: false,
-                category: 'messages',
+                category: 'social',
                 link: `/article/${comment.articleId}`
               });
             });
@@ -1636,44 +1637,49 @@ export const useStore = create<AppState>()(
         // Persist so notifications survive reloads and appear on other devices
         cloudSave('notifications', notification.id, { ...notification, isRead: false });
 
-        // Trigger browser notification if permitted
-        if (typeof window !== 'undefined' && 'Notification' in window) {
-          const textMsg = typeof notification.text === 'string' 
-            ? notification.text 
-            : (notification.text?.[get().language] || notification.text?.fr || 'Nouvelle notification');
-          
-          if (Notification.permission === 'granted') {
-            try {
-              new Notification('Perspective Group', {
-                body: textMsg,
-                icon: '/favicon.ico'
-              });
-            } catch (e) {}
-          } else if (Notification.permission === 'default') {
-            Notification.requestPermission().then(permission => {
-              if (permission === 'granted') {
-                try {
-                  new Notification('Perspective Group', {
-                    body: textMsg,
-                    icon: '/favicon.ico'
-                  });
-                } catch (e) {}
-              }
-            }).catch(() => {});
-          }
+        // Live in-app toast + browser push — ONLY for notifications addressed to
+        // the signed-in reader on this device (not for notifications this device
+        // merely fans out to other members). Social items land in "Activité".
+        const me = ((get().readerProfile?.email ?? '')).toLowerCase().trim();
+        const notifTarget = ((notification.email ?? '')).toLowerCase().trim();
+        if (me && notifTarget && me === notifTarget) {
+          const lang = get().language;
+          const textMsg = typeof notification.text === 'string'
+            ? notification.text
+            : (notification.text?.[lang] || notification.text?.fr || 'Nouvelle notification');
+          const isSocial = notification.category === 'social';
+          triggerInAppToast({
+            type: isSocial ? 'social' : (notification.category === 'system' ? 'system' : (notification.category === 'messages' ? 'message' : 'publication')),
+            title: isSocial
+              ? (lang === 'fr' ? 'Activité de votre réseau' : 'Network activity')
+              : (notification.category === 'messages'
+                ? (lang === 'fr' ? 'Nouveau message' : 'New message')
+                : (lang === 'fr' ? 'Nouvelle publication' : 'New publication')),
+            body: textMsg,
+            actionUrl: notification.link
+          });
         }
       },
-      clearNotifications: (email) => {
+      clearNotifications: (email, scope) => {
+        const target = (email ?? '').toLowerCase().trim();
         const list = get().notifications || [];
-        const hasUnread = list.some(n => ((n.email ?? '').toLowerCase()) === email.toLowerCase() && !n.isRead);
+        const matchesScope = (n: NotificationItem) => {
+          if (((n.email ?? '').toLowerCase().trim()) !== target) return false;
+          if (scope === 'social') {
+            // Only "Activité" items: followed/friend comments & publications
+            return n.category === 'social' ||
+              String(n.id || '').startsWith('notif-follower-') ||
+              String(n.id || '').startsWith('notif-friend-');
+          }
+          return true;
+        };
+        const hasUnread = list.some(n => matchesScope(n) && !n.isRead);
         if (!hasUnread) return;
         set({
-          notifications: list.map(n =>
-            ((n.email ?? '').toLowerCase()) === email.toLowerCase() ? { ...n, isRead: true } : n
-          )
+          notifications: list.map(n => (matchesScope(n) ? { ...n, isRead: true } : n))
         });
         // Persist read state per user
-        list.filter(n => ((n.email ?? '').toLowerCase()) === email.toLowerCase() && !n.isRead)
+        list.filter(n => matchesScope(n) && !n.isRead)
           .forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
       },
       deleteNotification: (id) => {

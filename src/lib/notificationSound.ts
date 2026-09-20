@@ -103,7 +103,7 @@ export function showBrowserPushNotification(title: string, options?: Notificatio
 // Custom Event bus for triggering in-app toast alerts with sound
 export interface ToastEventDetail {
   id: string;
-  type: 'message' | 'publication' | 'system';
+  type: 'message' | 'publication' | 'system' | 'social';
   title: string;
   body: string;
   avatarUrl?: string;

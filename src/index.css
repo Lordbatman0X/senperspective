@@ -539,6 +539,38 @@
   animation-play-state: paused;
 }
 
+/* Toast slide-in (new notification toasts, top-right) */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(2rem) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Badge fade-in (unread red-dot counters) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out both;
+}
+
 /* 3D Flip Card Utilities */
 .perspective-1000 {
   perspective: 1000px;

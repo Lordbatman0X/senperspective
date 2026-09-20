@@ -255,8 +255,18 @@ export function AccountDrawer({
   );
 
   const markDirectMessagesAsRead = useStore(s => s.markDirectMessagesAsRead);
+  const clearNotifications = useStore(s => s.clearNotifications);
   const unreadMessagesCount = (directMessages || []).filter(
     dm => dm.receiver?.toLowerCase().trim() === (readerProfile?.email || '').toLowerCase().trim() && !dm.read
+  ).length;
+
+  // Unread "Activité" items: comments/publications from friends & followed accounts
+  const myDrawerEmail = ((readerProfile?.email ?? '')).toLowerCase().trim();
+  const socialUnreadCount = (notifications || []).filter((n: any) =>
+    ((n.email ?? '').toLowerCase().trim()) === myDrawerEmail && !n.isRead &&
+    (n.category === 'social' ||
+     String(n.id || '').startsWith('notif-follower-') ||
+     String(n.id || '').startsWith('notif-friend-'))
   ).length;
 
   useEffect(() => {
@@ -264,6 +274,13 @@ export function AccountDrawer({
       markDirectMessagesAsRead('', readerProfile.email);
     }
   }, [showProfileModal, activeSubMenu, readerProfile?.email, markDirectMessagesAsRead]);
+
+  // Opening the "Activité" section clears (checks) its unread red-dot count
+  useEffect(() => {
+    if (showProfileModal && activeSubMenu === "social" && readerProfile?.email) {
+      clearNotifications(readerProfile.email, 'social');
+    }
+  }, [showProfileModal, activeSubMenu, readerProfile?.email, clearNotifications]);
 
   // Real-time Firestore listener for friends
   const [friendRequests, setFriendRequests] = useState<string[]>([]);
@@ -658,8 +675,13 @@ export function AccountDrawer({
                       {language === "fr" ? item.labelFr : item.labelEn}
                     </span>
                     {item.id === "messages" && unreadMessagesCount > 0 && !isSelected && (
-                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md">
+                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md animate-fadeIn">
                         {unreadMessagesCount}
+                      </span>
+                    )}
+                    {item.id === "social" && socialUnreadCount > 0 && !isSelected && (
+                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md animate-fadeIn">
+                        {socialUnreadCount}
                       </span>
                     )}
                     {isSelected && (
