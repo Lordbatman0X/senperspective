@@ -152,7 +152,7 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
           </span>
           <Radio size={13} className="animate-pulse" />
           <h2 id="heading-now" className="text-[10px] font-mono font-black uppercase tracking-widest">
-            {language === 'fr' ? 'EN DIRECT • FIL INFO' : 'HAPPENING NOW • LIVE WIRE'}
+            {language === 'fr' ? 'EN DIRECT • FLASH INFO LIVE' : 'HAPPENING NOW • FLASH INFO LIVE'}
           </h2>
         </div>
 

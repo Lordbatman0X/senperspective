@@ -4,7 +4,7 @@ import { useStore } from '../store';
 import { Article } from '../types';
 import { calculateReadingTime, formatRelativeDate, getSafeText, formatCategory } from '../lib/utils';
 import { motion } from 'motion/react';
-import { SlidersHorizontal, Filter, Bookmark, Waves, Ship, CloudSun, Wind, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle, Trophy, Megaphone } from 'lucide-react';
+import { SlidersHorizontal, Filter, Bookmark, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle, Trophy, Megaphone } from 'lucide-react';
 import { SportsSlider } from '../components/SportsSlider';
 import { SportsQuadrant } from '../components/SportsQuadrant';
 import { useSEO } from '../hooks/useSEO';
@@ -317,54 +317,6 @@ export function HomePage() {
   const [subscribedEmail, setSubscribedEmail] = useState('');
   const [selectedDossierModal, setSelectedDossierModal] = useState<any | null>(null);
 
-  const dossierItems = [
-    {
-      id: 'dossier-real-estate',
-      tag: language === 'fr' ? 'DOSSIER MACRO' : 'MACRO DOSSIER',
-      titleFr: 'Dakar Real Estate & Bulle Foncière : Analyse des Grands Projets de Diamniadio',
-      titleEn: 'Dakar Real Estate Macro: Land Values & Diamniadio Expansion Report',
-      descFr: 'L\'immobilier à Dakar est l\'un des marchés les plus dynamiques de la région. Ce dossier spécial décortique les forces macro-économiques.',
-      descEn: 'Dakar real estate is one of the most dynamic markets in West Africa. This special report analyzes macro-economic forces driving prices.',
-      readTime: '12 MIN',
-      fullTextFr: 'L’expansion urbaine de Dakar vers le pôle de Diamniadio et la Saly Portudal redéfinit la cartographie foncière de la région du Cap-Vert. Notre équipe d’analystes décortique l’impact des taux d’intérêt souverains, de l’urbanisation accélérée et de l’injection de capitaux privés dans l’immobilier résidentiel et tertiaire.',
-      fullTextEn: 'Dakar’s urban expansion towards the Diamniadio hub and Saly Portudal is reshaping the real estate map of the Cap-Vert region. Our intelligence unit analyzes sovereign interest rates, rapid urbanization, and capital inflows in residential and commercial real estate.',
-      key1Fr: 'Pression foncière élevée sur les Almadies, Plateau et Ngor (+18.4% YoY).',
-      key1En: 'Sustained land pressure in Almadies, Plateau, and Ngor (+18.4% YoY).',
-      key2Fr: 'L\'axe autoroutier TER-AIBD agit comme catalyseur d\'investissements institutionnels.',
-      key2En: 'The TER-AIBD transit corridor serves as a major institutional investment catalyst.'
-    },
-    {
-      id: 'dossier-ecowas-trade',
-      tag: language === 'fr' ? 'INTÉGRATION UEMOA' : 'ECOWAS TRADE',
-      titleFr: 'Échanges Commerciaux en Afrique de l\'Ouest : Dynamiques & Monnaie Unique',
-      titleEn: 'ECOWAS Regional Trade Dynamics & Monetary Integration Report',
-      descFr: 'Rapport spécial d’analyse sur les flux de fret transfrontaliers, les politiques tarifaires et l’harmonisation douanière CEDEAO.',
-      descEn: 'Special intelligence briefing on cross-border freight flows, tariff policies, and ECOWAS customs harmonization.',
-      readTime: '15 MIN',
-      fullTextFr: 'Les corridors logistiques entre le Port Autonome de Dakar, Bamako, Ouagadougou et Abidjan constituent la colonne vertébrale des échanges régionaux. Ce dossier passe en revue les données douanières du premier semestre 2026.',
-      fullTextEn: 'The logistics corridors linking the Port Authority of Dakar, Bamako, Ouagadougou, and Abidjan form the backbone of regional commerce. This dossier reviews H1 2026 customs and trade volume datasets.',
-      key1Fr: 'Croissance de 14.2% des flux de marchandises conteneurisées par le port de Dakar.',
-      key1En: '14.2% growth in containerized cargo throughput via the Port of Dakar.',
-      key2Fr: 'Rôle pivot de la BCEAO dans la stabilisation des liquidités de marché.',
-      key2En: 'Central role of the BCEAO in maintaining regional market liquidity.'
-    },
-    {
-      id: 'dossier-gas-energy',
-      tag: language === 'fr' ? 'ÉNERGIE & GAZ' : 'ENERGY & GAS',
-      titleFr: 'Stratégie Gazière Sangomar & GTA : Vers l\'Indépendance Énergétique',
-      titleEn: 'Sangomar & GTA Offshore Gas Strategy: Path to Regional Sovereignty',
-      descFr: 'Dossier exclusif sur l\'exploitation des gisements offshore, le gaz-to-power et la transformation industrielle locale.',
-      descEn: 'Exclusive dossier on offshore gas field operations, gas-to-power infrastructure, and domestic industrialization.',
-      readTime: '18 MIN',
-      fullTextFr: 'L’entrée en production industrielle des gisements offshore de Sangomar et du champ GTA (Grand Tortue Ahmeyim) transforme la trajectoire budgétaire du Sénégal. Ce dossier explore les retombées pour la SENELEC, les PME locales et la pétrochimie.',
-      fullTextEn: 'The ramp-up of offshore production at Sangomar and GTA transforms Senegal’s fiscal trajectory. This dossier explores spinoff benefits for SENELEC, local SMEs, and domestic petrochemicals.',
-      key1Fr: 'Réduction de 35% des coûts de production électrique grâce au Gaz-To-Power.',
-      key1En: 'Expected 35% reduction in electricity generation costs via domestic Gas-To-Power.',
-      key2Fr: 'Souveraineté budgétaire renforcée par les recettes d\'exportation de GNL.',
-      key2En: 'Strengthened fiscal sovereignty backed by LNG export revenues.'
-    }
-  ];
-
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newsletterEmail || !newsletterEmail.includes('@')) return;
@@ -394,7 +346,6 @@ export function HomePage() {
     coastAndHarbor: {},
     dailyWisdom: {}
   };
-  const [activeCoastTab, setActiveCoastTab] = useState<'tide' | 'goree' | 'meteo' | 'gale' | null>(null);
   
   let featuredArticles = (articles ?? []).filter(a => a.isFeatured).slice(0, 6);
   if (featuredArticles.length < 6) {
@@ -404,8 +355,6 @@ export function HomePage() {
   }
   const flashArticles = (articles ?? []).filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');
   const arenaArticles = (articles ?? []).filter(a => a.category === 'Sports' || a.category?.toLowerCase().includes('sport') || a.category?.toLowerCase().includes('arène'));
-  const dossierArticles = (articles ?? []).filter(a => a.category === 'Dossiers' || a.category === 'Dossier' || a.category?.toLowerCase().includes('dossier'));
-  const maritimeArticles = (articles ?? []).filter(a => a.category === 'Météo & Maritime' || a.category === 'Chaloupe & Transports' || a.category?.toLowerCase().includes('météo') || a.category?.toLowerCase().includes('chaloupe'));
 
   const largeSet = [...articles, ...articles, ...articles]; // Mock more articles for layout
   const allMixedSet = [...largeSet].sort(() => Math.random() - 0.5);
@@ -551,7 +500,7 @@ export function HomePage() {
                   return titleA.localeCompare(titleB);
                 }
               })
-              .slice(0, 20) // expanded feed scale
+              .slice(0, 14) // main feed scale
               .map((article, idx, array) => {
                 const elements = [];
                 // Render regular article card
@@ -677,96 +626,6 @@ export function HomePage() {
                   </Link>
                 ));
               })()}
-            </div>
-          </div>
-
-          {/* Widget 1.5: FLASH INFO / DÉPÊCHES D'ANALYSTES (Placed right under Trendings) */}
-          <div className="glass p-5 border-t-4 border-t-[#E85D42] bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: currentSettings.accentColor }}>
-            <div className="flex items-center gap-1.5 mb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
-              <Zap size={14} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
-              <span className="text-xs font-serif font-black uppercase tracking-widest text-[#E85D42]">
-                {language === 'fr' ? 'FLASH INFO' : 'BREAKING FLASH'}
-              </span>
-            </div>
-
-            <div className="space-y-4 font-sans text-left">
-              {flashArticles.length > 0 && (
-                <div className="space-y-3 pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                  {flashArticles.slice(0, 3).map((art, idx) => (
-                    <Link
-                      key={`${art.id}-${idx}`}
-                      to={`/article/${art.slug || art.id}`}
-                      className="group block pb-2 border-b border-zinc-200/40 dark:border-zinc-800/20 last:border-0 last:pb-0 text-left"
-                    >
-                      <span className="text-[7px] font-mono font-black uppercase px-1.5 py-0.5 rounded inline-block mb-1 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                        FLASH INFO
-                      </span>
-                      <p className="font-extrabold text-xs leading-relaxed dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors text-left block">
-                        {art.title?.[language] || art.title?.fr}
-                      </p>
-                      <span className="text-[9px] font-mono font-bold text-[#E85D42] block mt-1 text-left" style={{ color: currentSettings.accentColor }}>
-                        {formatRelativeDate(art.date, language)}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              )}
-
-              {(currentSettings.analystDispatches && currentSettings.analystDispatches.length > 0) ? (
-                currentSettings.analystDispatches.map((dispatch: any, idx: number) => (
-                  <div 
-                    key={`${dispatch.id}-${idx}`} 
-                    className="group pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0 text-left"
-                  >
-                    {dispatch.level && (
-                      <span className={`text-[7px] font-mono font-extrabold uppercase px-1.5 py-0.5 rounded inline-block mb-1.5 ${
-                        dispatch.level === 'crimson' || dispatch.level === 'pulse'
-                          ? 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20' 
-                          : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {dispatch.level === 'pulse' ? 'URGENT' : dispatch.level}
-                      </span>
-                    )}
-                    <p 
-                      className="font-extrabold text-xs leading-relaxed dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors text-left block"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {language === 'fr' ? dispatch.contentFr : dispatch.contentEn}
-                    </p>
-                    <span 
-                      className="text-[10px] font-mono font-bold text-[#E85D42] block mt-1.5 text-left" 
-                      style={{ color: currentSettings.accentColor }}
-                    >
-                      {dispatch.time}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <div className="space-y-3 font-sans text-left">
-                  <div className="group pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 text-left">
-                    <p 
-                      className="font-extrabold text-xs leading-relaxed dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors text-left block"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {language === 'fr' 
-                        ? "Tensions d'arbitrage levées sur l'axe maritime Dakar-Gorée." 
-                        : "Maritime transit clearance issued for the Dakar-Gorée axis."}
-                    </p>
-                    <span className="text-[10px] font-mono font-bold text-[#E85D42] block mt-1.5 text-left" style={{ color: currentSettings.accentColor }}>14:22 DKR</span>
-                  </div>
-                  <div className="group pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 text-left">
-                    <p 
-                      className="font-extrabold text-xs leading-relaxed dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors text-left block"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {language === 'fr' 
-                        ? "Hausse des obligations souveraines suite aux déclarations sur le gaz naturel." 
-                        : "Sovereign bonds rise following regional natural gas production updates."}
-                    </p>
-                    <span className="text-[10px] font-mono font-bold text-[#E85D42] block mt-1.5 text-left" style={{ color: currentSettings.accentColor }}>11:05 ZLR</span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -901,225 +760,6 @@ export function HomePage() {
             );
           })()}
 
-          {/* Widget 5: Senegal Coasts & Harbors */}
-          <div className="glass p-5 border-t-4 border-t-[#E85D42] bg-white/85 dark:bg-zinc-900/80 text-left">
-            <span className="text-[9px] font-black uppercase tracking-widest text-[#E85D42] flex items-center gap-1.5">
-              <Waves size={10} /> {language === 'fr' ? 'PORTS & HORAIRES' : 'PORTS & TIME'}
-            </span>
-            <h2 className="text-sm font-black uppercase tracking-wider text-[#E85D42] mb-4 mt-1">
-              {language === 'fr' ? 'Maritime' : 'Maritime'}
-            </h2>
-            
-            <div className="space-y-3 font-sans">
-              <div className="grid grid-cols-2 gap-2">
-                {/* 1. PORT TIDE CARD */}
-                <button 
-                  onClick={() => setActiveCoastTab(activeCoastTab === 'tide' ? null : 'tide')}
-                  className={`p-2.5 text-left border transition-all duration-200 cursor-pointer focus:outline-none ${activeCoastTab === 'tide' ? 'bg-[#E85D42]/10 border-[#E85D42]' : 'bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-950/50 dark:hover:bg-zinc-950/80 border-zinc-200/60 dark:border-zinc-800/60'}`}
-                >
-                  <div className="text-[7.5px] uppercase tracking-widest font-black flex items-center gap-1 text-[#E85D42]">
-                    <Waves size={8} /> {language === 'fr' ? 'MARÉE DU PORT' : 'PORT TIDE'}
-                  </div>
-                  <div className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1 font-mono">
-                    16:48 UT
-                  </div>
-                  <div 
-                    className="text-[8px] text-zinc-600 dark:text-zinc-400 font-extrabold"
-                    style={{ color: '#4a4a4f' }}
-                  >
-                    {language === 'fr' ? '+1,64 Mètre (Montante)' : '+1.64 Meters (Rising)'}
-                  </div>
-                </button>
-
-                {/* 2. GOREE FERRY CARD */}
-                <button 
-                  onClick={() => setActiveCoastTab(activeCoastTab === 'goree' ? null : 'goree')}
-                  className={`p-2.5 text-left border transition-all duration-200 cursor-pointer focus:outline-none ${activeCoastTab === 'goree' ? 'bg-[#E85D42]/10 border-[#E85D42]' : 'bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-950/50 dark:hover:bg-zinc-950/80 border-zinc-200/60 dark:border-zinc-800/60'}`}
-                >
-                  <div className="text-[7.5px] uppercase tracking-widest font-black flex items-center gap-1 text-[#E85D42]">
-                    <Ship size={8} /> {language === 'fr' ? 'LIAISON GORÉE' : 'GORÉE FERRY'}
-                  </div>
-                  <div className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1 font-mono">
-                    {language === 'fr' ? '12 Liaisons / Jour' : '12 Departures / Day'}
-                  </div>
-                  <div className="text-[8px] text-emerald-600 dark:text-emerald-400 font-extrabold">
-                    {language === 'fr' ? 'Statut : Fluide' : 'Status: Normal'}
-                  </div>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {/* 3. METEOROLOGY CARD */}
-                <button 
-                  onClick={() => setActiveCoastTab(activeCoastTab === 'meteo' ? null : 'meteo')}
-                  className={`p-2.5 text-left border transition-all duration-200 cursor-pointer focus:outline-none ${activeCoastTab === 'meteo' ? 'bg-[#E85D42]/10 border-[#E85D42]' : 'bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-950/50 dark:hover:bg-zinc-950/80 border-zinc-200/60 dark:border-zinc-800/60'}`}
-                >
-                  <div className="text-[7.5px] uppercase tracking-widest font-black flex items-center gap-1 text-[#E85D42]">
-                    <CloudSun size={8} className="text-amber-500" /> {language === 'fr' ? 'MÉTÉOROLOGIE' : 'METEOROLOGY'}
-                  </div>
-                  <div className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1 font-mono">
-                    29°C / 84°F
-                  </div>
-                  <div 
-                    className="text-[8px] text-zinc-600 dark:text-zinc-400 font-extrabold"
-                    style={{ color: '#434345' }}
-                  >
-                    {language === 'fr' ? 'Ensoleillé & Venté' : 'Sunny & Windy'}
-                  </div>
-                </button>
-
-                {/* 4. MARINE GALE CARD */}
-                <button 
-                  onClick={() => setActiveCoastTab(activeCoastTab === 'gale' ? null : 'gale')}
-                  className={`p-2.5 text-left border transition-all duration-200 cursor-pointer focus:outline-none ${activeCoastTab === 'gale' ? 'bg-[#E85D42]/10 border-[#E85D42]' : 'bg-zinc-100/70 hover:bg-zinc-100 dark:bg-zinc-950/50 dark:hover:bg-zinc-950/80 border-zinc-200/60 dark:border-zinc-800/60'}`}
-                >
-                  <div className="text-[7.5px] uppercase tracking-widest font-black flex items-center gap-1 text-[#E85D42]">
-                    <Wind size={8} className="text-blue-500 animate-pulse" /> {language === 'fr' ? 'COUP DE VENT' : 'MARINE GALE'}
-                  </div>
-                  <div className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1 font-mono">
-                    18 kt NW (ANACIM)
-                  </div>
-                  <div className="text-[8px] text-red-600 dark:text-red-400 font-extrabold">
-                    {language === 'fr' ? 'Avis : Vigilance Houle' : 'Warning: High Swells'}
-                  </div>
-                </button>
-              </div>
-
-              {/* INTERACTIVE EXPANDABLE DRAWERS */}
-              {activeCoastTab === 'tide' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }} 
-                  className="bg-zinc-50 dark:bg-zinc-950 p-3 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2"
-                >
-                  <p className="font-bold text-zinc-900 dark:text-white uppercase text-[9px] tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">
-                    {language === 'fr' ? 'PRÉVISIONS DES MARÉES - PORT DE DAKAR' : 'TIDE FORECASTS - PORT OF DAKAR'}
-                  </p>
-                  <div className="space-y-1 font-mono text-[10.5px] text-zinc-800 dark:text-zinc-200">
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Basse Mer :' : 'Low Tide:'}</span>
-                      <span className="font-bold">10:35 UT (0,45m)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Pleine Mer (Pic) :' : 'High Tide (Peak):'}</span>
-                      <span className="font-bold text-[#E85D42]">16:48 UT (+1,64m)</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Coefficient :' : 'Tidal Coeff:'}</span>
-                      <span className="font-bold">84 (Pleine Lune)</span>
-                    </div>
-                  </div>
-                  <p className="text-[9.5px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-medium italic mt-1 font-sans">
-                    {language === 'fr' 
-                      ? "Données de marégraphie corrigées en temps réel d'après les éphémérides de la Capitainerie du Port Autonome de Dakar." 
-                      : 'Tidal telemetry corrected in real-time under astronomical tables from the Port Authority of Dakar.'}
-                  </p>
-                </motion.div>
-              )}
-
-              {activeCoastTab === 'goree' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }} 
-                  className="bg-zinc-50 dark:bg-zinc-950 p-3 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2"
-                >
-                  <div className="flex justify-between items-center border-b border-zinc-200 dark:border-zinc-800 pb-1">
-                    <p className="font-bold text-zinc-900 dark:text-white uppercase text-[9px] tracking-widest">
-                      {language === 'fr' ? 'HORAIRES OFFICIELS CHALOUPE GORÉE' : 'GORÉE FERRY DEPARTURES (CHALOUPE)'}
-                    </p>
-                    <a href="https://www.lmdg.sn" target="_blank" rel="noopener noreferrer" className="text-[8.5px] text-[#E85D42] font-bold hover:underline">
-                      LMDG ↗
-                    </a>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-[10px] font-mono leading-relaxed text-zinc-800 dark:text-zinc-200">
-                    <div>
-                      <span className="font-bold text-[#E85D42] uppercase text-[8px] tracking-wider block mb-1">
-                        {language === 'fr' ? '► DE DAKAR :' : '► FROM DAKAR:'}
-                      </span>
-                      <div className="space-y-0.5">
-                        <p>06:15 | 07:30</p>
-                        <p>10:00 | 11:00</p>
-                        <p>12:30 | 14:30</p>
-                        <p>16:00 | 17:00</p>
-                        <p>18:30 | 20:00</p>
-                        <p className="text-[#E85D42] font-black">22:30 | 23:30</p>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="font-bold text-[#E85D42] uppercase text-[8px] tracking-wider block mb-1">
-                        {language === 'fr' ? '◄ DE GORÉE :' : '◄ FROM GORÉE:'}
-                      </span>
-                      <div className="space-y-0.5">
-                        <p>06:45 | 08:00</p>
-                        <p>10:30 | 11:30</p>
-                        <p>13:00 | 15:00</p>
-                        <p>16:30 | 17:30</p>
-                        <p>19:00 | 20:30</p>
-                        <p className="text-[#E85D42] font-black">23:00 | 00:00</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeCoastTab === 'meteo' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }} 
-                  className="bg-zinc-50 dark:bg-zinc-950 p-3 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2"
-                >
-                  <p className="font-bold text-zinc-900 dark:text-white uppercase text-[9px] tracking-widest border-b border-zinc-200 dark:border-zinc-800 pb-1">
-                    {language === 'fr' ? 'OBSERVATIONS MÉTÉOROLOGIQUES' : 'METEOROLOGICAL OBS.'}
-                  </p>
-                  <div className="space-y-1 font-mono text-[10.5px] text-zinc-800 dark:text-zinc-200">
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Température :' : 'Temperature:'}</span>
-                      <span className="font-bold">29°C / 84°F</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Vent :' : 'Wind speed:'}</span>
-                      <span className="font-bold">18 km/h NW</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Humidité :' : 'Humidity:'}</span>
-                      <span className="font-bold">64%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>{language === 'fr' ? 'Visibilité :' : 'Visibility:'}</span>
-                      <span className="font-bold">10 km</span>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {activeCoastTab === 'gale' && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }} 
-                  animate={{ opacity: 1, height: 'auto' }} 
-                  className="bg-red-50 dark:bg-red-950/20 p-3 border border-red-200 dark:border-red-900/40 text-xs text-zinc-800 dark:text-zinc-200 space-y-2 mt-2"
-                >
-                  <div className="flex justify-between items-center border-b border-red-200 dark:border-red-900/20 pb-1">
-                    <p className="font-black text-red-700 dark:text-red-400 uppercase text-[9px] tracking-widest">
-                      {language === 'fr' ? '⚠️ BULLETIN SPÉCIAL (ANACIM)' : '⚠️ SPECIAL ADVISORY (ANACIM)'}
-                    </p>
-                    <a href="https://anacim.sn" target="_blank" rel="noopener noreferrer" className="text-[8.5px] text-red-600 dark:text-red-400 font-bold hover:underline">
-                      ANACIM ↗
-                    </a>
-                  </div>
-                  <p className="text-[11px] leading-relaxed font-bold text-zinc-900 dark:text-zinc-100">
-                    {language === 'fr' 
-                      ? (currentSettings.coastAndHarbor?.galeWarningFr || "Avis de coup de vent et de houle dangereuse de secteur Nord-Ouest dépassant 2,5 mètres de hauteur sur l'axe Saint-Louis - Dakar - Mbour.") 
-                      : (currentSettings.coastAndHarbor?.galeWarningEn || "Severe NW gale warning with hazardous offshore swells reaching 2.5 to 3.0 meters along the Saint-Louis - Dakar - Mbour coast.")}
-                  </p>
-                  <p className="text-[9.5px] leading-relaxed text-red-600 dark:text-red-300 italic">
-                    {language === 'fr' 
-                      ? 'Recommandation officielle ANACIM : Les sorties en haute mer des pirogues artisanales et bateaux légers sont vivement déconseillées.' 
-                      : 'ANACIM official directive: Traditional fishing pirogues and small watercraft operations are advised to suspend high seas navigation.'}
-                  </p>
-                </motion.div>
-              )}
-            </div>
-          </div>
           {/* Ad Banner 2 (TER - Trans-Dakar - Dynamic Ad) */}
           {(() => {
             const terAd = ads?.find(a => a.active && (a.position === 'sidebar-ter' || a.id === 'ad-ter-trans-dakar'));
@@ -1189,57 +829,6 @@ export function HomePage() {
                   ? (currentSettings.dailyWisdom?.translationFr || "Ceux qui avancent avec sagesse et vérité ne craignent point l'obscurité.") 
                   : (currentSettings.dailyWisdom?.translationEn || "Those who walk in integrity and light never fear the shadow.")}
               </p>
-            </div>
-          </div>
-
-          {/* Briefings / Dossiers Box (Adapted to Actualités design) */}
-          <div className="glass p-5 bg-white/95 dark:bg-zinc-900/80 border-t-4 border-t-[#E85D42] text-left" style={{ borderTopColor: currentSettings.accentColor }}>
-            <div className="flex items-center justify-between mb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
-              <div className="flex items-center gap-1.5">
-                <FolderKanban size={14} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
-                <span className="text-xs font-serif font-black uppercase tracking-widest text-[#E85D42]">
-                  {language === 'fr' ? 'DOSSIERS & ENQUÊTES' : 'DOSSIERS & INVESTIGATIONS'}
-                </span>
-              </div>
-              <Link to="/category/dossiers" className="text-[9px] font-mono font-black uppercase tracking-widest text-[#E85D42] hover:underline">
-                {language === 'fr' ? 'VOIR TOUT →' : 'SEE ALL →'}
-              </Link>
-            </div>
-
-            <div className="space-y-3 font-sans">
-              {dossierItems.map((dossier, idx) => (
-                <div 
-                  key={dossier.id}
-                  onClick={() => setSelectedDossierModal(dossier)}
-                  className="group flex gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0 cursor-pointer"
-                >
-                  <span className="text-sm font-mono font-black text-[#E85D42] shrink-0" style={{ color: currentSettings.accentColor }}>
-                    0{idx + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <span className="text-[8px] font-mono font-black uppercase tracking-widest text-[#E85D42]">
-                        {getSafeText(dossier.tag, language)}
-                      </span>
-                      <span className="text-[8px] font-mono text-zinc-500 font-bold">
-                        {dossier.readTime}
-                      </span>
-                    </div>
-                    <h4 
-                      className="font-black text-xs leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {language === 'fr' ? dossier.titleFr : dossier.titleEn}
-                    </h4>
-                    <p 
-                      className="text-[10px] font-medium leading-relaxed line-clamp-1 mt-0.5 dark:text-zinc-400"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {language === 'fr' ? dossier.descFr : dossier.descEn}
-                    </p>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
 
