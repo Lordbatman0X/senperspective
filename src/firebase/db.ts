@@ -94,23 +94,80 @@ export function legacyRelationKeys(a: string, b: string): string[] {
   ];
 }
 
-/** Delete every known key variant for a relation pair (both directions). */
+/**
+ * Canonical key for a TYPED relation record (block / mute).
+ *
+ * WHY: the `blocks/` collection stores TWO different relations between the same
+ * pair of members (a block AND a mute). Writing both under friendsKey() made the
+ * second write overwrite the first node — muting a blocked member silently
+ * removed the block — and made any delete drop both at once. The relation type
+ * is part of the key so the two can coexist. Readers filter on the `type`
+ * FIELD, so they keep working with legacy untyped keys too.
+ */
+export function typedRelationKey(type: string, a: string, b: string): string {
+  const t = String(type || '').toLowerCase().replace(/[^a-z0-9_-]/g, '_') || 'rel';
+  return `${t}_${sanitizeKeySegment(a)}__${sanitizeKeySegment(b)}`;
+}
+
+/**
+ * Delete a legacy (untyped-key) record ONLY when it holds the same relation
+ * type. Without this guard, unblocking would also wipe the mute (or vice
+ * versa) that shares the legacy key.
+ */
+async function deleteLegacyRelationIfSameType(
+  coll: string,
+  key: string,
+  type?: string
+): Promise<void> {
+  if (!type) {
+    try { await deleteFirestoreDoc(coll, key); } catch { /* best-effort */ }
+    return;
+  }
+  try {
+    const snap = await withFirestoreTimeout(get(ref(rtdb, `${coll}/${safeKey(key)}`)), 5000);
+    if (!snap.exists()) return;
+    const stored = String((snap.val() as any)?.type || '').toLowerCase();
+    if (stored && stored !== String(type).toLowerCase()) return; // other relation — keep it
+    await deleteFirestoreDoc(coll, key);
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Delete every known key variant for a relation pair (both directions).
+ *
+ * Pass `type` for typed collections (`blocks`: 'block' | 'mute') so only that
+ * relation is removed — legacy untyped keys are then swept only when they hold
+ * the same relation type.
+ */
 export async function deleteRelationPair(
   coll: 'friends' | 'followers' | 'blocks' | 'friend_requests',
   a: string,
-  b: string
+  b: string,
+  type?: 'block' | 'mute' | string
 ): Promise<void> {
-  const keys = new Set<string>();
+  const isTyped = Boolean(type) && coll === 'blocks';
+  const canonical = new Set<string>();
   if (coll === 'friend_requests') {
-    keys.add(requestKey(a, b));
-    keys.add(requestKey(b, a));
+    canonical.add(requestKey(a, b));
+    canonical.add(requestKey(b, a));
+  } else if (isTyped) {
+    canonical.add(typedRelationKey(String(type), a, b));
+    canonical.add(typedRelationKey(String(type), b, a));
   } else {
-    keys.add(friendsKey(a, b));
-    keys.add(friendsKey(b, a));
+    canonical.add(friendsKey(a, b));
+    canonical.add(friendsKey(b, a));
   }
-  legacyRelationKeys(a, b).forEach(k => keys.add(k));
-  for (const k of keys) {
+  for (const k of canonical) {
     try { await deleteFirestoreDoc(coll, k); } catch { /* best-effort */ }
+  }
+
+  // Legacy sweep: rows written before the canonical-key fix (friendsKey / `a_b`
+  // / `freq_a_b` variants) and, for blocks, before the typed-key fix.
+  const legacy = new Set<string>([friendsKey(a, b), friendsKey(b, a)]);
+  legacyRelationKeys(a, b).forEach(k => legacy.add(k));
+  canonical.forEach(k => legacy.delete(k)); // already deleted above
+  for (const k of legacy) {
+    await deleteLegacyRelationIfSameType(coll, k, isTyped ? String(type) : undefined);
   }
 }
 
@@ -282,14 +339,13 @@ export async function addComment(comment: Omit<FirestoreComment, 'id'> & { id?: 
   // caller can keep the local backup and flag the comment `pendingSync`.
   const commentId = (comment as any).id || `c-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
   try {
-    const ok = await withFirestoreTimeout(
+    await withFirestoreTimeout(
       set(ref(rtdb, `comments/${safeKey(commentId)}`), {
         ...cleanForRtdb(comment),
         id: commentId,
         createdAtServer: Date.now(),
       })
     );
-    void ok;
     return commentId;
   } catch (error) {
     try {

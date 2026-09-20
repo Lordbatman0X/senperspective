@@ -12,6 +12,7 @@ import {
   legacyRelationKeys,
   friendsKey,
   requestKey,
+  typedRelationKey,
   fetchFirestoreCollection,
   subscribeToFriendRequests,
 } from '../firebase/db';
@@ -579,11 +580,15 @@ export function ProfilePage() {
     const isCurrentlyBlocked = blocks.includes(targetEmail);
     try {
       if (isCurrentlyBlocked) {
-        await deleteRelationPair('blocks', myEmail, targetEmail);
+        // Type-scoped delete: only removes the BLOCK, never the mute that
+        // may share this pair (blocks collection holds both relations).
+        await deleteRelationPair('blocks', myEmail, targetEmail, 'block');
         setBlocks(blocks.filter(x => x !== targetEmail));
         setSuccessMsg(language === "fr" ? "Membre débloqué." : "Unblocked member.");
       } else {
-        const blockKey = friendsKey(myEmail, targetEmail);
+        // Typed canonical key — block and mute for the same pair coexist
+        // instead of overwriting each other under a shared friendsKey.
+        const blockKey = typedRelationKey('block', myEmail, targetEmail);
         const ok = await saveFirestoreDoc('blocks', blockKey, { id: blockKey, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'block' });
         setBlocks([...new Set([...blocks, targetEmail])]);
         if (ok !== true) {
@@ -616,11 +621,12 @@ export function ProfilePage() {
     const isCurrentlyMuted = mutes.includes(targetEmail);
     try {
       if (isCurrentlyMuted) {
-        await deleteRelationPair('blocks', myEmail, targetEmail);
+        // Type-scoped delete: only removes the MUTE, never the block.
+        await deleteRelationPair('blocks', myEmail, targetEmail, 'mute');
         setMutes(mutes.filter(x => x !== targetEmail));
         setSuccessMsg(language === "fr" ? "Notifications réactivées." : "Unmuted member.");
       } else {
-        const muteKey = friendsKey(myEmail, targetEmail);
+        const muteKey = typedRelationKey('mute', myEmail, targetEmail);
         await saveFirestoreDoc('blocks', muteKey, { id: muteKey, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'mute' });
         setMutes([...new Set([...mutes, targetEmail])]);
         setSuccessMsg(language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications.");
