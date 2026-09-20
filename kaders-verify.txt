@@ -1,9 +1,0 @@
-﻿found 2 record(s) for kadersdiaz3@gmail.com:
-KEY=Sq7D8wLDqyLpbSH51cP5wBfikLk2
-  email=kadersdiaz3@gmail.com name=Kader  role=Admin suspended=false uid=Sq7D8wLDqyLpbSH51cP5wBfikLk2
-  avatarUrl=(base64 9519 chars) coverPhotoUrl=(base64 47959 chars) bio=Direction ├®ditoriale Perspective Group
-  streak=1 readingTime=0 accolades=["verified_identity","editorial_board","elite_clearance"]
-KEY=kadersdiaz3@gmail_com
-  email=kadersdiaz3@gmail.com name=undefined role=undefined suspended=undefined uid=Sq7D8wLDqyLpbSH51cP5wBfikLk2
-  avatarUrl=undefined coverPhotoUrl= bio=
-  streak=undefined readingTime=undefined accolades=undefined
