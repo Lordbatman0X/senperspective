@@ -517,6 +517,28 @@
   animation: floatBubble 4s ease-in-out infinite;
 }
 
+/* Continuous slow-moving news ticker */
+@keyframes smoothTicker {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-smooth-ticker {
+  display: inline-flex;
+  width: max-content;
+  white-space: nowrap;
+  animation: smoothTicker 65s linear infinite;
+  will-change: transform;
+}
+
+.animate-smooth-ticker:hover {
+  animation-play-state: paused;
+}
+
 /* 3D Flip Card Utilities */
 .perspective-1000 {
   perspective: 1000px;

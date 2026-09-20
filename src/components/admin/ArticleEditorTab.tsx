@@ -2698,28 +2698,30 @@ export function ArticleEditorTab({
           aspectRatio={16 / 9}
           onCropComplete={async (croppedDataUrl) => {
             setArticleCropImageSrc(null);
-            // Show the cropped preview instantly, then swap in the hosted URL
-            // once the Firebase Storage upload finishes. Storing a multi-MB
-            // base64 Data URL in the article caused QuotaExceededError on save.
+            // Show the cropped preview instantly
             setImageUrl(croppedDataUrl);
             setIsUploadingCover(true);
             try {
-              const blob = await (await fetch(croppedDataUrl)).blob();
-              const file = new File(
-                [blob],
-                `cover-${Date.now()}.jpg`,
-                { type: blob.type || 'image/jpeg' }
-              );
+              let file: File;
+              if (croppedDataUrl.startsWith('data:') || croppedDataUrl.startsWith('blob:')) {
+                const blob = await (await fetch(croppedDataUrl)).blob();
+                file = new File(
+                  [blob],
+                  `cover-${Date.now()}.jpg`,
+                  { type: blob.type || 'image/jpeg' }
+                );
+              } else {
+                // Already a remote URL
+                setIsUploadingCover(false);
+                return;
+              }
               const articleId = slug || article?.id || 'draft';
               const hostedUrl = await uploadArticleImage(file, articleId, 'cover');
-              setImageUrl(hostedUrl);
+              if (hostedUrl) {
+                setImageUrl(hostedUrl);
+              }
             } catch (err) {
-              // Keep the compressed inline image as a last resort; the store
-              // layer strips oversized data URLs before localStorage writes.
-              console.warn('[Storage] Cover upload failed, keeping compressed inline preview:', err);
-              alert(language === 'fr'
-                ? 'Le téléversement a échoué — image conservée localement (compressée).'
-                : 'Upload failed — image kept locally (compressed).');
+              console.warn('[Storage] Cover upload fallback used, keeping cropped image:', err);
             } finally {
               setIsUploadingCover(false);
             }

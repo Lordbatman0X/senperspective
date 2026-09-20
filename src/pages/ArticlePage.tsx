@@ -344,12 +344,31 @@ export function ArticlePage() {
     return () => clearTimeout(timer);
   }, [id]);
 
+  const articleHeadline = article?.title?.[language] || article?.title?.fr || 'Article';
+  const articleCategory = formatCategory(article?.category, language);
+  const articleCanonical = article?.seoCanonicalUrl || `https://senperspective.com/article/${article?.slug || article?.id || ''}`;
+
   useSEO({
-    title: article ? (article.seoMetaTitle || `${article.title?.[language] || article.title?.fr || 'Article'} | The Perspective Group`) : 'Perspective Journal Article',
+    title: article ? (article.seoMetaTitle || `${articleHeadline} | SenPerspective`) : 'Article | SenPerspective',
     description: article ? (article.seoMetaDescription || article.excerpt?.[language] || article.excerpt?.fr) : undefined,
     keywords: article?.seoKeywords,
     ogImage: article?.seoOgImage || article?.featuredImage || article?.imageUrl,
-    canonical: article?.seoCanonicalUrl,
+    canonical: articleCanonical,
+    type: 'article',
+    articleData: article ? {
+      headline: articleHeadline,
+      description: article.excerpt?.[language] || article.excerpt?.fr || '',
+      imageUrl: getSafeImageUrl(article.featuredImage || article.imageUrl),
+      datePublished: article.date,
+      dateModified: (article as any).updatedAtServer || (article as any).updatedAt || article.date,
+      author: article.author || 'Rédaction SenPerspective',
+      section: articleCategory
+    } : undefined,
+    breadcrumbs: article ? [
+      { name: 'Accueil', url: 'https://senperspective.com/' },
+      { name: articleCategory, url: `https://senperspective.com/category/${(article.category || 'actualite').toLowerCase()}` },
+      { name: articleHeadline, url: articleCanonical }
+    ] : undefined
   });
 
   const handleCommentSubmit = (e: React.FormEvent) => {

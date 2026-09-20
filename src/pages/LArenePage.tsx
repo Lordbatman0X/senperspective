@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
-import { Trophy, Activity, MessageSquare, ChevronLeft, Calendar, HelpCircle, ShieldAlert, Star, Award, MapPin, Newspaper, Clock, ArrowRight } from "lucide-react";
+import { Trophy, Activity, MessageSquare, ChevronLeft, Calendar, HelpCircle, ShieldAlert, Star, Award, MapPin, Newspaper, Clock, ArrowRight, Hourglass } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Match, Article } from "../types";
 import { useSEO } from "../hooks/useSEO";
@@ -12,10 +12,17 @@ export function LArenePage() {
   const { language, articles = [], matches = [] } = useStore();
   
   useSEO({
-    title: language === 'fr' ? "Sports & L'Arène - Actualités, Analyses & Directs | The Perspective Group" : "Sports & L'Arène - News, Analysis & Live Scores | The Perspective Group",
+    title: language === 'fr' 
+      ? "L'Arène — Sports & Lutte Sénégalaise | SenPerspective" 
+      : "L'Arène — Sports & Senegalese Wrestling | SenPerspective",
     description: language === 'fr'
-      ? "Toutes les actualités et analyses sportives au Sénégal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et Navétanes."
-      : "All sports news and analysis in Senegal, plus live coverage of Senegalese Wrestling (Lamb), BAL, D1 Basketball, and Navetanes."
+      ? "Toutes les actualités et analyses sportives au Sénégal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et Navétanes sur SenPerspective."
+      : "All sports news, wrestling lamb analysis and live match scores on SenPerspective.",
+    canonical: "https://senperspective.com/larene",
+    breadcrumbs: [
+      { name: "Accueil", url: "https://senperspective.com/" },
+      { name: "L'Arène — Sports", url: "https://senperspective.com/larene" }
+    ]
   });
 
   const [activeCategory, setActiveCategory] = useState<string>("all");
@@ -172,8 +179,12 @@ export function LArenePage() {
 
                   <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">
                     <span className="flex items-center gap-1.5">
-                      <Clock size={12} className="text-[#E85D42]" />
-                      {formatRelativeDate(article.date, language)} • {article.readingTime} MIN
+                      <span>{formatRelativeDate(article.date, language)}</span>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1 text-[#E85D42]">
+                        <Hourglass size={11} className="shrink-0 stroke-[2.2]" />
+                        <span>{article.readingTime} MIN</span>
+                      </span>
                     </span>
                     <Link 
                       to={`/article/${article.slug || article.id}`}

@@ -10,6 +10,12 @@ import { SportsQuadrant } from '../components/SportsQuadrant';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { NewsletterSignup } from '../components/NewsletterSignup';
+import { NowBar } from '../components/home/NowBar';
+import { DecryptagesSection } from '../components/home/DecryptagesSection';
+import { SocietyPeopleSection } from '../components/home/SocietyPeopleSection';
+import { DossiersSection } from '../components/home/DossiersSection';
+import { SportsArenaSection } from '../components/home/SportsArenaSection';
+import { UtilitySection } from '../components/home/UtilitySection';
 
 function ArticleCard({ article, large = false, small = false, tall = false }: { article: Article, large?: boolean, small?: boolean, tall?: boolean }) {
   const navigate = useNavigate();
@@ -42,9 +48,9 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
         {/* Right Side: Title & Content */}
         <div className="w-1/2 sm:w-[48%] md:w-[45%] h-full shrink-0 flex flex-col justify-between p-3.5 sm:p-5 md:p-6 lg:p-7 z-10 relative bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 overflow-hidden">
            <div className="flex-1 min-w-0 flex flex-col justify-center">
-             <h2 className="relative text-brand-dark dark:text-zinc-100 font-black text-xs sm:text-base md:text-xl lg:text-2xl leading-tight mb-1.5 sm:mb-2 group-hover:text-brand-primary transition-colors line-clamp-2 md:line-clamp-3">
+             <h3 className="relative text-brand-dark dark:text-zinc-100 font-black text-xs sm:text-base md:text-xl lg:text-2xl leading-tight mb-1.5 sm:mb-2 group-hover:text-brand-primary transition-colors line-clamp-2 md:line-clamp-3">
                {getSafeText(article.title, language) || 'Sans titre'}
-             </h2>
+             </h3>
              <p className="relative text-brand-muted dark:text-zinc-400 font-medium text-[10px] sm:text-xs md:text-sm line-clamp-2 sm:line-clamp-3 mb-2 leading-relaxed">
                {getSafeText(article.excerpt, language) || ''}
              </p>
@@ -369,10 +375,14 @@ export function HomePage() {
   };
   
   useSEO({
-    title: language === 'fr' ? 'The Perspective Group | Grand Journal d’Information' : 'The Perspective Group | Independent News & Journal',
+    title: language === 'fr' 
+      ? 'SenPerspective — Actualités du Sénégal, analyses et décryptages' 
+      : 'SenPerspective — Senegal News, In-Depth Analysis & Decryptions',
     description: language === 'fr' 
-      ? "Grand journal d’information, de décryptage et d’analyse basé à Dakar : Politique, Économie, Société, Tech, Culture, Sports, Santé et International." 
-      : "Major independent news, analysis, and investigation journal based in Dakar covering Politics, Economics, Tech, Culture, Sports, Health, and World news.",
+      ? "Grand journal d’information, de décryptage et d’analyse basé à Dakar : Politique, Économie, Société, Tech, Culture, Sports, Santé et International au Sénégal." 
+      : "Major independent news, analysis, and investigation journal based in Dakar covering Politics, Economics, Tech, Culture, Sports, Health, and World news in Senegal.",
+    canonical: "https://senperspective.com/",
+    type: 'website'
   });
 
   const currentSettings: any = useStore((s) => s.siteSettings) || {
@@ -478,12 +488,30 @@ export function HomePage() {
     : 'lg:col-span-12';
 
   return (
-    <div className="max-w-[1280px] mx-auto px-4 py-6">
-      
-      {/* Big Carousel of HotTopics */}
-      <HeroCarousel articles={featuredArticles} />
+    <main id="main-content" className="max-w-[1280px] mx-auto px-4 py-4 md:py-6">
+      {/* Primary Accessible Title for Document Outline & SEO */}
+      <h1 className="sr-only">
+        {language === 'fr' 
+          ? 'SenPerspective — Grand journal d’information, de décryptage et d’analyse au Sénégal' 
+          : 'SenPerspective — Independent journal of news, analysis and investigations in Senegal'}
+      </h1>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* LEVEL 1: WHAT IS HAPPENING NOW */}
+      <NowBar 
+        flashArticles={flashArticles} 
+        analystDispatches={currentSettings.analystDispatches} 
+      />
+
+      {/* LEVEL 2: THE MAIN STORIES */}
+      <section id="section-main-stories" aria-labelledby="heading-main-stories" className="mb-12">
+        <h2 id="heading-main-stories" className="sr-only">
+          {language === 'fr' ? 'Les Grands Titres' : 'Main Stories'}
+        </h2>
+
+        {/* Big Carousel of HotTopics (Lead Stories) */}
+        <HeroCarousel articles={featuredArticles} />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
         
         {/* Main Content: Chronological Journal Feed */}
         <div className={`${hasRightAd ? 'lg:col-span-7' : 'lg:col-span-9'} min-w-0 space-y-8`}>
@@ -1355,9 +1383,23 @@ export function HomePage() {
           </div>
         )}
 
-      </div>
+        </div>
+      </section>
 
-      {/* INTERACTIVE MODAL 1: Newsletter Registration Confirmation */}
+      {/* SECTION: DÉCRYPTAGES */}
+      <DecryptagesSection articles={articles} />
+
+      {/* SECTION: SOCIÉTÉ & PEOPLE */}
+      <SocietyPeopleSection articles={articles} />
+
+      {/* SECTION: GRANDS DOSSIERS */}
+      <DossiersSection onSelectDossier={(dossier) => setSelectedDossierModal(dossier)} />
+
+      {/* SECTION: L'ARÈNE (SPORTS) */}
+      <SportsArenaSection articles={articles} />
+
+      {/* SECTION: MÉTÉO MARITIME */}
+      <UtilitySection />
       {showNewsletterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white dark:bg-zinc-900 border-2 border-[#E85D42] p-6 sm:p-8 max-w-md w-full shadow-2xl relative text-left space-y-4 font-sans">
@@ -1489,7 +1531,7 @@ export function HomePage() {
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }
 

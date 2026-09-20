@@ -458,14 +458,14 @@ export function Header() {
   };
 
   const defaultNavItems = [
+    { id: 'senegal', labelFr: 'Sénégal', labelEn: 'Senegal', url: '/category/senegal', enabled: true },
     { id: 'politique', labelFr: 'Politique', labelEn: 'Politics', url: '/category/politique', enabled: true },
     { id: 'economie', labelFr: 'Économie', labelEn: 'Economy', url: '/category/economie', enabled: true },
     { id: 'societe', labelFr: 'Société', labelEn: 'Society', url: '/category/societe', enabled: true },
-    { id: 'international', labelFr: 'International', labelEn: 'International', url: '/category/international', enabled: true },
+    { id: 'monde', labelFr: 'Monde', labelEn: 'World', url: '/category/monde', enabled: true },
+    { id: 'sports', labelFr: "Sports", labelEn: 'Sports', url: '/larene', enabled: true },
     { id: 'tech', labelFr: 'Tech', labelEn: 'Tech', url: '/category/tech', enabled: true },
-    { id: 'sante', labelFr: 'Santé', labelEn: 'Health', url: '/category/sante', enabled: true },
-    { id: 'sports', labelFr: "L'Arène", labelEn: 'The Arena', url: '/larene', enabled: true },
-    { id: 'gouvernance', labelFr: 'Gouvernance', labelEn: 'Governance', url: '/category/gouvernance', enabled: true },
+    { id: 'decryptages', labelFr: 'Décryptages', labelEn: 'Decryptions', url: '/category/decryptages', enabled: true },
   ];
 
   const activeNavItems = (siteSettings?.headerNavItems && siteSettings.headerNavItems.length > 0)
