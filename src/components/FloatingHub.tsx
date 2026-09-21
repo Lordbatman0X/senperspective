@@ -227,15 +227,12 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     }
   }, [allUsers, friends]);
 
-  const notifications = useStore().notifications || [];
-  const unreadNotifsCount = (notifications ?? []).filter(n => (n.email === userEmail || !n.email) && !n.isRead).length;
-
-  // Unread chat messages count directly from database
+  // The hub is the messenger launcher: its bubble reflects UNREAD DMs only.
+  // Social/network notification counts live on the header avatar + drawer tabs,
+  // so counting them here too would double-report the same items.
   const unreadDMsCount = (directMessages || []).filter(
     dm => dm.receiver?.toLowerCase().trim() === (userEmail || '').toLowerCase().trim() && !dm.read
   ).length;
-
-  const unreadCount = unreadDMsCount + unreadNotifsCount;
 
   // Conditionally hide the message bubble immediately when the user opens the chat section
   const isChatOpen = isOpen && activeTab === "chat";

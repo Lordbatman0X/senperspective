@@ -330,7 +330,31 @@ export interface NotificationItem {
   date: string;
   isRead: boolean;
   link?: string;
-  category?: 'messages' | 'newsletters' | 'newPublishes' | 'generalNews' | 'system' | 'social';
+  category?: 'messages' | 'newsletters' | 'newPublishes' | 'generalNews' | 'system' | 'social' | 'network';
+}
+
+/* Locally acknowledged notification ids. Read-state has to survive a reload and a
+   failed offline cloud write, otherwise an already-opened item re-notifies the
+   reader the moment the connection comes back. */
+const ACKED_NOTIF_KEY = 'sp_acked_notification_ids';
+function loadAckedNotificationIds(): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ACKED_NOTIF_KEY) || '[]');
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+function ackNotificationIds(ids: Array<string | undefined>): void {
+  const clean = ids.filter(Boolean).map(String);
+  if (clean.length === 0) return;
+  try {
+    const set = loadAckedNotificationIds();
+    clean.forEach(id => set.add(id));
+    localStorage.setItem(ACKED_NOTIF_KEY, JSON.stringify(Array.from(set).slice(-500)));
+  } catch {
+    /* storage unavailable or quota exceeded — non-fatal */
+  }
 }
 
 export interface SubscriberItem {
@@ -393,7 +417,7 @@ interface AppState {
   addNotification: (notification: NotificationItem) => void;
   syncReaderSocialGraph: (email: string) => Promise<void>;
   loadRemoteNotifications: (email: string) => Promise<void>;
-  clearNotifications: (email: string, scope?: 'all' | 'social') => void;
+  clearNotifications: (email: string, scope?: 'all' | 'social' | 'network') => void;
   deleteNotification: (id: string) => void;
   subscribers: SubscriberItem[];
   addSubscriber: (email: string) => void;
@@ -1511,6 +1535,7 @@ export const useStore = create<AppState>()(
           if (comment.email && comment.email !== userEmail) {
             get().addNotification({
               id: 'notif-like-' + Date.now() + '-' + Math.random().toString(36).substring(4),
+              category: 'social',
               email: comment.email,
               text: {
                 fr: `${userEmail.split('@')[0]} a aimé votre commentaire sur "${comment.articleTitle}"`,
@@ -1566,6 +1591,7 @@ export const useStore = create<AppState>()(
           if (comment.email && comment.email !== userEmail) {
             get().addNotification({
               id: 'notif-dislike-' + Date.now() + '-' + Math.random().toString(36).substring(4),
+              category: 'social',
               email: comment.email,
               text: {
                 fr: `${userEmail.split('@')[0]} n'a pas aimé votre commentaire sur "${comment.articleTitle}"`,
@@ -1721,7 +1747,10 @@ export const useStore = create<AppState>()(
         if (!me) return;
         try {
           const rows: any[] = await fetchFirestoreCollection('notifications');
-          const mine = rows.filter(n => String(n?.email || '').toLowerCase().trim() === me && n?.id);
+          const ackedIds = loadAckedNotificationIds();
+          const mine = rows
+            .filter(n => String(n?.email || '').toLowerCase().trim() === me && n?.id)
+            .map(n => (ackedIds.has(String(n.id)) && !n.isRead ? { ...n, isRead: true } : n));
           if (mine.length === 0) return;
           const existing = get().notifications || [];
           const knownIds = new Set(existing.map((n: any) => String(n?.id || '')));
@@ -1779,7 +1808,13 @@ export const useStore = create<AppState>()(
             // Only "Activité" items: followed/friend comments & publications
             return n.category === 'social' ||
               String(n.id || '').startsWith('notif-follower-') ||
-              String(n.id || '').startsWith('notif-friend-');
+              String(n.id || '').startsWith('notif-friend-comment-');
+          }
+          if (scope === 'network') {
+            // Friend requests / acceptances — network, not Activité
+            return n.category === 'network' ||
+              String(n.id || '').startsWith('notif-friend-request-') ||
+              String(n.id || '').startsWith('notif-friend-accepted-');
           }
           return true;
         };
@@ -1791,9 +1826,12 @@ export const useStore = create<AppState>()(
         // Persist read state per user
         list.filter(n => matchesScope(n) && !n.isRead)
           .forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
+        // Local receipt: keeps the item read even if the cloud write was offline
+        ackNotificationIds(list.filter(matchesScope).map(n => String(n.id)));
       },
       deleteNotification: (id) => {
         set({ notifications: (get().notifications || []).filter(n => n.id !== id) });
+        ackNotificationIds([id]);
         cloudDelete('notifications', id);
       },
       notificationResponses: {},

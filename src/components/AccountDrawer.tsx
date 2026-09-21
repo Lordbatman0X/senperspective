@@ -262,12 +262,20 @@ export function AccountDrawer({
 
   // Unread "Activité" items: comments/publications from friends & followed accounts
   const myDrawerEmail = ((readerProfile?.email ?? '')).toLowerCase().trim();
-  const socialUnreadCount = (notifications || []).filter((n: any) =>
-    ((n.email ?? '').toLowerCase().trim()) === myDrawerEmail && !n.isRead &&
-    (n.category === 'social' ||
-     String(n.id || '').startsWith('notif-follower-') ||
-     String(n.id || '').startsWith('notif-friend-'))
-  ).length;
+  const isSocialNotif = (n: any) =>
+    n.category === 'social' ||
+    String(n.id || '').startsWith('notif-follower-') ||
+    String(n.id || '').startsWith('notif-friend-comment-');
+  const isNetworkNotif = (n: any) =>
+    n.category === 'network' ||
+    String(n.id || '').startsWith('notif-friend-request-') ||
+    String(n.id || '').startsWith('notif-friend-accepted-');
+  const countUnread = (match: (n: any) => boolean) =>
+    (notifications || []).filter((n: any) =>
+      ((n.email ?? '').toLowerCase().trim()) === myDrawerEmail && !n.isRead && match(n)
+    ).length;
+  const socialUnreadCount = countUnread(isSocialNotif);
+  const networkUnreadCount = countUnread(isNetworkNotif);
 
   useEffect(() => {
     if (showProfileModal && activeSubMenu === "messages" && readerProfile?.email) {
@@ -279,6 +287,13 @@ export function AccountDrawer({
   useEffect(() => {
     if (showProfileModal && activeSubMenu === "social" && readerProfile?.email) {
       clearNotifications(readerProfile.email, 'social');
+    }
+  }, [showProfileModal, activeSubMenu, readerProfile?.email, clearNotifications]);
+
+  // Opening the "Réseau" section clears its unread red-dot count
+  useEffect(() => {
+    if (showProfileModal && activeSubMenu === "connections" && readerProfile?.email) {
+      clearNotifications(readerProfile.email, 'network');
     }
   }, [showProfileModal, activeSubMenu, readerProfile?.email, clearNotifications]);
 
@@ -502,7 +517,7 @@ export function AccountDrawer({
       },
       date: new Date().toISOString().split('T')[0],
       isRead: false,
-      category: 'system'
+      category: 'network'
     });
   };
 
@@ -674,16 +689,18 @@ export function AccountDrawer({
                     >
                       {language === "fr" ? item.labelFr : item.labelEn}
                     </span>
-                    {item.id === "messages" && unreadMessagesCount > 0 && !isSelected && (
-                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md animate-fadeIn">
-                        {unreadMessagesCount}
-                      </span>
-                    )}
-                    {item.id === "social" && socialUnreadCount > 0 && !isSelected && (
-                      <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-mono font-black px-1.5 py-0.5 rounded-full shadow-md animate-fadeIn">
-                        {socialUnreadCount}
-                      </span>
-                    )}
+                    {(() => {
+                      const tabUnread =
+                        item.id === "messages" ? unreadMessagesCount :
+                        item.id === "social" ? socialUnreadCount :
+                        item.id === "connections" ? networkUnreadCount : 0;
+                      if (tabUnread <= 0 || isSelected) return null;
+                      return (
+                        <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] bg-red-600 text-white text-[8px] font-mono font-black leading-none flex items-center justify-center px-1 rounded-full shadow-sm border border-white/60 dark:border-zinc-900/60 animate-fadeIn">
+                          {tabUnread > 9 ? "9+" : tabUnread}
+                        </span>
+                      );
+                    })()}
                     {isSelected && (
                       <div
                         className="absolute -bottom-1 left-3 right-3 h-0.5 rounded-full"
@@ -1523,7 +1540,7 @@ export function AccountDrawer({
                             ((n.email ?? '').toLowerCase().trim() === myEmail) &&
                             (n.category === 'social' ||
                              String(n.id || '').startsWith('notif-follower-') ||
-                             String(n.id || '').startsWith('notif-friend-'))
+                             String(n.id || '').startsWith('notif-friend-comment-'))
                           );
                           if (socialNotifs.length === 0) {
                             return (
