@@ -456,6 +456,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const [curationAccentColor, setCurationAccentColor] = useState(currentSettings.accentColor || '#E85D42');
   const [curationHeaderStyle, setCurationHeaderStyle] = useState(currentSettings.headerStyle || 'glass');
   const [curationSpotlightId, setCurationSpotlightId] = useState('');
+  // Live Band (Flash Ticker above the homepage carousel) draft state
+  const [liveBandDraft, setLiveBandDraft] = useState({
+    enabled: (currentSettings as any).liveBand?.enabled !== false,
+    titleFr: (currentSettings as any).liveBand?.titleFr || 'EN DIRECT • FLASH INFO LIVE',
+    titleEn: (currentSettings as any).liveBand?.titleEn || 'HAPPENING NOW • FLASH INFO LIVE',
+    showFallbackWires: (currentSettings as any).liveBand?.showFallbackWires !== false,
+    maxItems: (currentSettings as any).liveBand?.maxItems || 10,
+  });
 
   // Sports Quadrant Curation Form States
   const [quadZone1Type, setQuadZone1Type] = useState<'match' | 'article'>(currentSettings.sportsQuadrantSelection?.zone1Type || 'match');
@@ -510,6 +518,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       setCurationSiteName(siteSettings.siteName || 'Perspective');
       setCurationAccentColor(siteSettings.accentColor || '#E85D42');
       setCurationHeaderStyle(siteSettings.headerStyle || 'glass');
+      {
+        const lb = (siteSettings as any).liveBand || {};
+        setLiveBandDraft({
+          enabled: lb.enabled !== false,
+          titleFr: lb.titleFr || 'EN DIRECT • FLASH INFO LIVE',
+          titleEn: lb.titleEn || 'HAPPENING NOW • FLASH INFO LIVE',
+          showFallbackWires: lb.showFallbackWires !== false,
+          maxItems: lb.maxItems || 10,
+        });
+      }
       setSettingsPaywallThreshold(siteSettings.paywallThreshold || 3);
       setSettingsPaywallEnabled(siteSettings.paywallEnabled !== false);
       setSeoTitleSuffix(siteSettings.seoTitleSuffix !== undefined ? siteSettings.seoTitleSuffix : '| Perspective Group Dakar');
@@ -1069,6 +1087,81 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </div>
               </div>
 
+              {/* 0. Live Band (Flash Ticker) — sits above the homepage hero carousel */}
+              <div className="border-t border-brand-border/10 pt-6 space-y-4">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-zinc-400">
+                    0. {language === 'fr' ? 'Bande Live (au-dessus du Carrousel)' : 'Live Band (above the Carousel)'}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setLiveBandDraft(d => ({ ...d, enabled: !d.enabled }))}
+                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${liveBandDraft.enabled ? 'bg-emerald-500' : 'bg-zinc-700'}`}
+                    aria-label={liveBandDraft.enabled ? 'Live band enabled' : 'Live band disabled'}
+                  >
+                    <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${liveBandDraft.enabled ? 'left-[22px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 font-mono -mt-2">
+                  {liveBandDraft.enabled
+                    ? (language === 'fr' ? 'La bande défilante "Flash Info" est visible en haut de la page d\'accueil.' : 'The "Flash Info" live ticker band is visible at the top of the homepage.')
+                    : (language === 'fr' ? 'La bande live est masquée pour tous les visiteurs.' : 'The live band is hidden from all visitors.')}
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5 text-zinc-400">Titre (FR)</label>
+                    <input
+                      type="text"
+                      value={liveBandDraft.titleFr}
+                      onChange={(e) => setLiveBandDraft(d => ({ ...d, titleFr: e.target.value }))}
+                      disabled={!liveBandDraft.enabled}
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs font-mono font-bold outline-none focus:border-brand-primary text-brand-dark dark:text-brand-white disabled:opacity-40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5 text-zinc-400">Title (EN)</label>
+                    <input
+                      type="text"
+                      value={liveBandDraft.titleEn}
+                      onChange={(e) => setLiveBandDraft(d => ({ ...d, titleEn: e.target.value }))}
+                      disabled={!liveBandDraft.enabled}
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs font-mono font-bold outline-none focus:border-brand-primary text-brand-dark dark:text-brand-white disabled:opacity-40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5 text-zinc-400">
+                      {language === 'fr' ? 'Dépêches affichées (max)' : 'Ticker items shown (max)'}
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={liveBandDraft.maxItems}
+                      onChange={(e) => setLiveBandDraft(d => ({ ...d, maxItems: Math.max(1, Math.min(30, Number(e.target.value) || 1)) }))}
+                      disabled={!liveBandDraft.enabled}
+                      className="w-full bg-zinc-50 dark:bg-zinc-950 border border-brand-border/20 p-2.5 text-xs font-mono font-bold outline-none focus:border-brand-primary text-brand-dark dark:text-brand-white disabled:opacity-40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider mb-1.5 text-zinc-400">
+                      {language === 'fr' ? 'Fils de secours' : 'Fallback wires'}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setLiveBandDraft(d => ({ ...d, showFallbackWires: !d.showFallbackWires }))}
+                      disabled={!liveBandDraft.enabled}
+                      className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 border text-[10px] font-black uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-40 ${liveBandDraft.showFallbackWires ? 'border-emerald-500/60 bg-emerald-500/10 text-emerald-400' : 'border-zinc-700 bg-zinc-900 text-zinc-400'}`}
+                    >
+                      <span>{liveBandDraft.showFallbackWires ? (language === 'fr' ? 'Affichés si peu de flash' : 'Shown when few flashes') : (language === 'fr' ? 'Masqués' : 'Hidden')}</span>
+                      <span className={`w-8 h-4 rounded-full relative transition-colors shrink-0 ${liveBandDraft.showFallbackWires ? 'bg-emerald-500' : 'bg-zinc-700'}`}>
+                        <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${liveBandDraft.showFallbackWires ? 'left-[18px]' : 'left-0.5'}`} />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Spotlight select */}
               <div>
                 <h3 className="text-xs font-black uppercase tracking-widest mb-2 text-zinc-400">1. Article en Vedette Principal (Spotlight Frame)</h3>
@@ -1375,6 +1468,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                       siteName: curationSiteName,
                       accentColor: curationAccentColor,
                       headerStyle: curationHeaderStyle as any,
+                      liveBand: { ...liveBandDraft },
                       sportsQuadrantSelection: {
                         zone1Type: quadZone1Type,
                         zone1Id: quadZone1Id,

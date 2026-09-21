@@ -538,6 +538,13 @@ interface AppState {
       sourceFr: string;
       sourceEn: string;
     };
+    liveBand?: {
+      enabled: boolean;
+      titleFr: string;
+      titleEn: string;
+      showFallbackWires: boolean;
+      maxItems: number;
+    };
     trendingCount: number;
     mostReadCount: number;
     curatedTrendingArticleIds?: string[];
@@ -2182,6 +2189,13 @@ export const useStore = create<AppState>()(
           translationEn: "Those who walk in integrity and light never fear the shadow.",
           sourceFr: "EXP: PROVERBE WOLOF",
           sourceEn: "EXP: WOLOF PROVERB"
+        },
+        liveBand: {
+          enabled: true,
+          titleFr: 'EN DIRECT • FLASH INFO LIVE',
+          titleEn: 'HAPPENING NOW • FLASH INFO LIVE',
+          showFallbackWires: true,
+          maxItems: 10
         },
         trendingCount: 4,
         mostReadCount: 5,

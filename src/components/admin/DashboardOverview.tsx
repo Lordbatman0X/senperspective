@@ -216,7 +216,7 @@ export function DashboardOverview({
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-zinc-300 mb-3 flex items-center gap-1.5">
               <Activity size={14} className="text-[#E85D42]" /> {language === 'fr' ? 'Volume des interactions enregistrées' : 'Recorded Audience Activity'}
             </h4>
-            <div className="grid grid-cols-3 gap-4 text-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
               <div className="bg-zinc-950/80 p-3 border border-zinc-800 rounded-md">
                 <p className="text-[10px] text-zinc-400 uppercase font-mono font-bold flex items-center justify-center gap-1">
                   <Eye size={12} /> {language === 'fr' ? 'Lectures' : 'Reads'}

@@ -14,6 +14,15 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
   const siteSettings = useStore((s) => s.siteSettings);
   const accentColor = siteSettings?.accentColor || '#E85D42';
 
+  // Admin-controlled live band configuration (Homepage Curation tab)
+  const bandConfig = (siteSettings as any)?.liveBand || {};
+  const bandEnabled = bandConfig.enabled !== false; // default ON
+  const bandTitle = language === 'fr'
+    ? (bandConfig.titleFr || 'EN DIRECT • FLASH INFO LIVE')
+    : (bandConfig.titleEn || 'HAPPENING NOW • FLASH INFO LIVE');
+  const showFallbackWires = bandConfig.showFallbackWires !== false; // default ON
+  const maxItems = Math.max(1, Math.min(30, Number(bandConfig.maxItems) || 10));
+
   // Build a rich set of items for the continuous moving ticker
   const tickerItems: Array<{
     id: string;
@@ -22,6 +31,8 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
     link?: string;
     badgeColor?: string;
   }> = [];
+
+  if (!bandEnabled) return null;
 
   // 1. Add Flash breaking articles
   flashArticles.forEach((art, idx) => {
@@ -45,7 +56,7 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
   });
 
   // 3. Fallback / foundational Senegal news wires if list is short
-  if (tickerItems.length < 4) {
+  if (showFallbackWires && tickerItems.length < 4) {
     const fallbackNews = language === 'fr' ? [
       {
         id: 'wire-1',
@@ -101,10 +112,13 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
     fallbackNews.forEach(item => tickerItems.push(item));
   }
 
+  // Cap the ticker to the admin-configured number of items
+  const visibleItems = tickerItems.slice(0, maxItems);
+
   // Render a single sequence of ticker items
   const renderItemSequence = (keyPrefix: string) => (
     <div className="inline-flex items-center gap-6 pr-6">
-      {tickerItems.map((item, idx) => {
+      {visibleItems.map((item, idx) => {
         const content = (
           <div className="inline-flex items-center gap-2 shrink-0 group">
             <span className={`text-[8.5px] font-mono font-black uppercase px-2 py-0.5 tracking-wider ${item.badgeColor || 'bg-zinc-200 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200'}`}>
@@ -152,7 +166,7 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
           </span>
           <Radio size={13} className="animate-pulse" />
           <h2 id="heading-now" className="text-[10px] font-mono font-black uppercase tracking-widest">
-            {language === 'fr' ? 'EN DIRECT • FLASH INFO LIVE' : 'HAPPENING NOW • FLASH INFO LIVE'}
+            {bandTitle}
           </h2>
         </div>
 

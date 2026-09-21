@@ -289,7 +289,7 @@ export function TaxonomyTab() {
           </div>
 
           {/* Categories Grid Table */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden shadow-xl">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-x-auto shadow-xl">
             <table className="w-full text-left font-sans text-xs whitespace-nowrap">
               <thead className="bg-black border-b border-zinc-800 text-[10px] uppercase tracking-widest text-[#E85D42] font-black">
                 <tr>

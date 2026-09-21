@@ -111,7 +111,7 @@ export function CommentsTab({ comments, approveComment, deleteComment }: Comment
       )}
 
       {/* Stats Bar */}
-      <div className="grid grid-cols-3 gap-4 text-center bg-zinc-950 text-white p-5 border border-zinc-900">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center bg-zinc-950 text-white p-5 border border-zinc-900">
         <div>
           <span className="text-[10px] text-zinc-200 font-mono block uppercase tracking-widest">{t.total}</span>
           <span className="text-xl font-black font-mono mt-1 block">{(comments ?? []).length}</span>

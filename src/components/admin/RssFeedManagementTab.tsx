@@ -2007,7 +2007,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                 <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block mb-2 font-bold">
                   {isFr ? "1. Choisissez votre fournisseur IA" : "1. Choose your AI provider"}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
