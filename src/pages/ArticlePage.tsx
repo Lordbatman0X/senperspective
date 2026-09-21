@@ -280,7 +280,6 @@ export function ArticlePage() {
   const [regEmail, setRegEmail] = useState('');
   const [regAvatar, setRegAvatar] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&fit=crop');
   const [regRole, setRegRole] = useState(language === 'fr' ? 'Membre Perspective' : 'Perspective Member');
-  const [toBeMember, setToBeMember] = useState(true);
   const [activeTab, setActiveTab] = useState<'guest' | 'register'>('guest');
   const regName = commentAuthor;
   const setRegName = setCommentAuthor;
@@ -373,19 +372,27 @@ export function ArticlePage() {
 
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!article || !comment.trim() || !readerProfile) return;
+    if (!article || !comment.trim()) return;
+
+    // Guests can comment too — they only need a display name (email optional).
+    const isGuest = !readerProfile;
+    const guestName = commentAuthor.trim();
+    if (isGuest && !guestName) return;
+
+    const authorName = readerProfile?.name || guestName;
+    const authorEmail = readerProfile?.email || regEmail.trim();
 
     addComment({
       id: "comment-" + Date.now().toString() + Math.random().toString(36).substring(4),
       articleId: article.slug || article.id,
       articleTitle: article.title?.[language] || "Untitled",
-      author: readerProfile.name,
-      email: readerProfile.email,
+      author: authorName,
+      email: authorEmail || "",
       text: comment,
       date: new Date().toISOString().split("T")[0],
       isApproved: true,
-      isMember: true,
-      avatarUrl: readerProfile.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(readerProfile.name)}`
+      isMember: !isGuest,
+      avatarUrl: readerProfile?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(authorName)}`
     });
 
     setComment("");
@@ -400,7 +407,14 @@ export function ArticlePage() {
 
   const handleReplySubmit = (e: React.FormEvent, parentId: string, parentCommenter: string, parentEmail?: string) => {
     e.preventDefault();
-    if (!article || !replyText.trim() || !readerProfile) return;
+    if (!article || !replyText.trim()) return;
+
+    const isGuest = !readerProfile;
+    const guestName = commentAuthor.trim();
+    if (isGuest && !guestName) return;
+
+    const authorName = readerProfile?.name || guestName;
+    const authorEmail = readerProfile?.email || regEmail.trim();
 
     const replyId = "reply-" + Date.now().toString() + Math.random().toString(36).substring(4);
     
@@ -408,24 +422,28 @@ export function ArticlePage() {
       id: replyId,
       articleId: article.slug || article.id,
       articleTitle: article.title?.[language] || "Untitled",
-      author: readerProfile.name,
-      email: readerProfile.email,
+      author: authorName,
+      email: authorEmail || "",
       text: replyText,
       date: new Date().toISOString().split("T")[0],
       isApproved: true,
-      isMember: true,
-      avatarUrl: readerProfile.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(readerProfile.name)}`,
+      isMember: !isGuest,
+      avatarUrl: readerProfile?.avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(authorName)}`,
       parentId: parentId,
       replyTo: parentCommenter
     });
 
-    if (parentEmail && parentEmail.toLowerCase() !== ((readerProfile.email ?? '').toLowerCase())) {
+    // Notify the parent commenter — only when we know who's replying (member
+    // with email, or a guest who voluntarily left an email).
+    const normalizedParent = (parentEmail || '').toLowerCase().trim();
+    const normalizedActor = (authorEmail || '').toLowerCase().trim();
+    if (normalizedParent && normalizedActor && normalizedParent !== normalizedActor) {
       useStore.getState().addNotification({
         id: "notif-" + Date.now().toString(),
         email: parentEmail,
         text: {
-          fr: `${readerProfile.name} a répondu à votre commentaire sur "${article.title?.[language] || 'Untitled'}"`,
-          en: `${readerProfile.name} replied to your comment on "${article.title?.[language] || 'Untitled'}"`
+          fr: `${authorName} a répondu à votre commentaire sur "${article.title?.[language] || 'Untitled'}"`,
+          en: `${authorName} replied to your comment on "${article.title?.[language] || 'Untitled'}"`
         },
         date: new Date().toISOString().split("T")[0],
         isRead: false,
@@ -1085,16 +1103,11 @@ export function ArticlePage() {
                           <span>{c.dislikes || 0}</span>
                         </button>
 
-                        {/* Reply Button */}
+                        {/* Reply Button — open to everyone, guests included */}
                         <button 
                           onClick={() => {
-                            if (!readerProfile) {
-                              setShowSignUpModal(true);
-                              setAuthTab("login");
-                            } else {
-                              setActiveReplyId(activeReplyId === c.id ? null : c.id);
-                              setReplyText("");
-                            }
+                            setActiveReplyId(activeReplyId === c.id ? null : c.id);
+                            setReplyText("");
                           }}
                           className="text-[9px] font-black uppercase tracking-widest text-[#E85D42] hover:underline transition-all cursor-pointer font-sans"
                         >
@@ -1142,7 +1155,19 @@ export function ArticlePage() {
 
                       {/* Inline Reply Form */}
                       {activeReplyId === c.id && (
-                        <form onSubmit={(e) => handleReplySubmit(e, c.id, c.author, c.email)} className="mt-3 flex gap-2 font-sans">
+                        <form onSubmit={(e) => handleReplySubmit(e, c.id, c.author, c.email)} className="mt-3 flex flex-col gap-2 font-sans">
+                          {!readerProfile && !commentAuthor.trim() && (
+                            <input
+                              type="text"
+                              value={commentAuthor}
+                              onChange={(e) => setCommentAuthor(e.target.value)}
+                              maxLength={40}
+                              placeholder={language === 'fr' ? 'Votre nom ou pseudo *' : 'Your name or pseudonym *'}
+                              required
+                              className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 px-3 py-1.5 text-xs focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+                            />
+                          )}
+                          <div className="flex gap-2">
                           <input 
                             type="text" 
                             placeholder={language === 'fr' ? `Répondre à ${c.author}...` : `Reply to ${c.author}...`}
@@ -1157,6 +1182,7 @@ export function ArticlePage() {
                           >
                             {language === 'fr' ? 'POSTER' : 'POST'}
                           </button>
+                          </div>
                         </form>
                       )}
                     </div>
@@ -1383,35 +1409,66 @@ export function ArticlePage() {
                 </button>
               </div>
             ) : (
-              // Not Registered Tabbed Area
-              <div className="mb-6 glass p-6 text-center flex flex-col items-center justify-center gap-4 py-8 relative overflow-hidden font-sans rounded-none animate-fadeIn" id="unauthenticated-comment-form-root">
+              // Not Registered — Guest identity block (commenting is open to everyone)
+              <div className="mb-6 glass p-4 sm:p-5 text-left font-sans relative overflow-hidden rounded-none animate-fadeIn" id="unauthenticated-comment-form-root">
                 <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-yellow-500 via-[#E85D42] to-rose-600" />
-                <MessageSquare size={24} className="text-[#E85D42] mb-1" />
-                <div className="max-w-md">
-                  <h5 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 uppercase tracking-widest mb-1 font-sans">
-                    {language === 'fr' ? 'REJOINDRE LA DISCUSSION' : 'JOIN THE DISCUSSION'}
+                <div className="flex items-center gap-2 mb-3">
+                  <MessageSquare size={14} className="text-[#E85D42] shrink-0" />
+                  <h5 className="font-extrabold text-[11px] text-zinc-900 dark:text-zinc-100 uppercase tracking-widest font-sans">
+                    {language === 'fr' ? 'COMMENTER EN INVITÉ' : 'COMMENT AS A GUEST'}
                   </h5>
-                  <p className="text-xs text-zinc-600 dark:text-zinc-200 font-medium leading-relaxed font-sans mt-2">
-                    {language === 'fr' 
-                      ? 'Pour écrire un commentaire, veuillez vous connecter ou vous inscrire gratuitement.' 
-                      : 'To leave a comment on this article, please log in or sign up.'}
-                  </p>
                 </div>
-                <div className="flex gap-4 items-center justify-center font-sans mt-2">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthTab('login'); setShowSignUpModal(true); }}
-                    className="px-5 py-2.5 bg-[#E85D42] text-white hover:bg-[#c94931] border border-[#E85D42] hover:border-[#c94931] transition-all cursor-pointer text-[10px] font-black uppercase tracking-widest font-sans"
-                  >
-                    {language === 'fr' ? 'Se Connecter' : 'Log In'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthTab('register'); setShowSignUpModal(true); }}
-                    className="px-5 py-2.5 bg-[#E85D42] text-white hover:bg-[#c94931] border border-[#E85D42] hover:border-[#c94931] transition-all cursor-pointer text-[10px] font-black uppercase tracking-widest font-sans"
-                  >
-                    {language === 'fr' ? "S'inscrire" : 'Register'}
-                  </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="guest-comment-name" className="block text-[10px] font-black uppercase tracking-wider mb-1 text-zinc-500 dark:text-zinc-400">
+                      {language === 'fr' ? 'Nom affiché *' : 'Display name *'}
+                    </label>
+                    <input
+                      id="guest-comment-name"
+                      type="text"
+                      value={commentAuthor}
+                      onChange={(e) => setCommentAuthor(e.target.value)}
+                      maxLength={40}
+                      placeholder={language === 'fr' ? 'Votre nom ou pseudo' : 'Your name or pseudonym'}
+                      className="w-full bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-xs focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="guest-comment-email" className="block text-[10px] font-black uppercase tracking-wider mb-1 text-zinc-500 dark:text-zinc-400">
+                      {language === 'fr' ? 'E-mail (optionnel)' : 'Email (optional)'}
+                    </label>
+                    <input
+                      id="guest-comment-email"
+                      type="email"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      placeholder={language === 'fr' ? 'Pour être averti des réponses' : 'To be notified of replies'}
+                      className="w-full bg-white dark:bg-zinc-950/40 border border-zinc-200 dark:border-zinc-800 px-3 py-2 text-xs focus:outline-none focus:border-[#E85D42] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-3 flex-wrap">
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">
+                    {language === 'fr'
+                      ? 'Aucun compte requis. Votre commentaire apparaîtra avec votre nom d\'invité.'
+                      : 'No account required. Your comment will appear with your guest name.'}
+                  </p>
+                  <div className="flex gap-3 items-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('login'); setShowSignUpModal(true); }}
+                      className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all cursor-pointer text-[9px] font-black uppercase tracking-widest font-sans"
+                    >
+                      {language === 'fr' ? 'Se Connecter' : 'Log In'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthTab('register'); setShowSignUpModal(true); }}
+                      className="px-3 py-1.5 bg-[#E85D42] text-white hover:bg-[#c94931] border border-[#E85D42] transition-all cursor-pointer text-[9px] font-black uppercase tracking-widest font-sans"
+                    >
+                      {language === 'fr' ? "S'inscrire" : 'Register'}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1423,7 +1480,7 @@ export function ArticlePage() {
                      onKeyDown={(e) => {
                        if (e.key === 'Enter' && !e.shiftKey) {
                          e.preventDefault();
-                         if (comment.trim() && readerProfile) {
+                         if (comment.trim() && (readerProfile || commentAuthor.trim())) {
                            const form = e.currentTarget.form;
                            if (form) form.requestSubmit();
                          }
@@ -1431,9 +1488,8 @@ export function ArticlePage() {
                      }}
                      placeholder={readerProfile 
                        ? (language === 'fr' ? 'Saisissez votre commentaire (Entrée pour publier, Maj+Entrée pour saut de ligne)...' : 'Enter your comment (Press Enter to post, Shift+Enter for line break)...')
-                       : (language === 'fr' ? 'Veuillez vous connecter pour écrire un commentaire' : 'Please log in to add a comment')}
-                     className="w-full bg-zinc-50 dark:bg-zinc-950/20 border border-zinc-200 dark:border-zinc-800 p-4 text-xs focus:outline-none focus:border-[#E85D42] resize-none h-24 transition-colors font-semibold shadow-xs disabled:opacity-60 disabled:cursor-not-allowed text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans"
-                     disabled={!readerProfile}
+                       : (language === 'fr' ? 'Écrivez votre commentaire en tant qu\'invité (Entrée pour publier)...' : 'Write your comment as a guest (Press Enter to post)...')}
+                     className="w-full bg-zinc-50 dark:bg-zinc-950/20 border border-zinc-200 dark:border-zinc-800 p-4 text-xs focus:outline-none focus:border-[#E85D42] resize-none h-24 transition-colors font-semibold shadow-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans"
                   />
                </div>
                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mt-2">
@@ -1444,7 +1500,7 @@ export function ArticlePage() {
                  </span>
                  <button 
                    type="submit" 
-                   disabled={!comment.trim() || (!readerProfile && !commentAuthor.trim()) || (!readerProfile && toBeMember && !regEmail.trim())}
+                   disabled={!comment.trim() || (!readerProfile && !commentAuthor.trim())}
                    style={{ backgroundColor: '#e85d42', color: '#ffffff' }}
                    className="flex items-center gap-2 border border-black dark:border-zinc-800 px-6 py-3 text-xs font-black uppercase tracking-widest hover:bg-zinc-800 dark:hover:bg-zinc-900 transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] cursor-pointer shadow-md disabled:bg-zinc-200 dark:disabled:bg-zinc-800 disabled:text-zinc-400 disabled:cursor-not-allowed rounded-xs font-sans"
                  >
