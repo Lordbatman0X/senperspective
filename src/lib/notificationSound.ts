@@ -110,6 +110,8 @@ export interface ToastEventDetail {
   actionUrl?: string;
   onClick?: () => void;
   timestamp: number;
+  /** Id of the NotificationItem this toast represents (used to check it off). */
+  notificationId?: string;
 }
 
 export function triggerInAppToast(detail: Omit<ToastEventDetail, 'id' | 'timestamp'>) {

@@ -89,6 +89,11 @@ export const NotificationToastHost: React.FC = () => {
             <div 
               className="flex-1 cursor-pointer pr-4"
               onClick={() => {
+                // Opening a toast = reading that item: check it off so it never
+                // re-announces itself on a later reconnect.
+                if (toast.notificationId) {
+                  useStore.getState().markNotificationRead(toast.notificationId);
+                }
                 if (toast.onClick) {
                   toast.onClick();
                 } else if (toast.actionUrl) {

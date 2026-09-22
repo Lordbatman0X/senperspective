@@ -357,6 +357,47 @@ function ackNotificationIds(ids: Array<string | undefined>): void {
   }
 }
 
+/* Shared notification classification — the SINGLE source of truth used by the
+   drawer tab badges and the header bubble, so a given item is never counted in
+   two places and the bubble always equals the sum of the sections. */
+export function isSocialNotification(n: any): boolean {
+  return (
+    n?.category === 'social' ||
+    String(n?.id || '').startsWith('notif-follower-') ||
+    String(n?.id || '').startsWith('notif-friend-comment-')
+  );
+}
+export function isNetworkNotification(n: any): boolean {
+  return (
+    n?.category === 'network' ||
+    String(n?.id || '').startsWith('notif-friend-request-') ||
+    String(n?.id || '').startsWith('notif-friend-accepted-')
+  );
+}
+export function isMessageNotification(n: any): boolean {
+  return n?.category === 'messages' || String(n?.id || '').startsWith('notif-dm-');
+}
+export function isSystemNotification(n: any): boolean {
+  return (
+    !isSocialNotification(n) &&
+    !isNetworkNotification(n) &&
+    !isMessageNotification(n) &&
+    (n?.category === 'system' ||
+      n?.category === 'newPublishes' ||
+      n?.category === 'generalNews' ||
+      n?.category === 'newsletters' ||
+      String(n?.id || '').startsWith('warning-'))
+  );
+}
+/** Unread notifications addressed to `email`. */
+export function unreadForEmail(list: any[], email: string): any[] {
+  const me = (email ?? '').toLowerCase().trim();
+  if (!me) return [];
+  return (list || []).filter(
+    n => ((n?.email ?? '').toLowerCase().trim()) === me && !n?.isRead
+  );
+}
+
 export interface SubscriberItem {
   email: string;
   date: string;
@@ -417,7 +458,8 @@ interface AppState {
   addNotification: (notification: NotificationItem) => void;
   syncReaderSocialGraph: (email: string) => Promise<void>;
   loadRemoteNotifications: (email: string) => Promise<void>;
-  clearNotifications: (email: string, scope?: 'all' | 'social' | 'network') => void;
+  clearNotifications: (email: string, scope?: 'all' | 'social' | 'network' | 'messages' | 'system') => void;
+  markNotificationRead: (id: string) => void;
   deleteNotification: (id: string) => void;
   subscribers: SubscriberItem[];
   addSubscriber: (email: string) => void;
@@ -1078,7 +1120,7 @@ export const useStore = create<AppState>()(
 
         // Trigger notification for receiver
         get().addNotification({
-          id: 'notif-dm-' + Date.now(),
+          id: 'notif-dm-' + Date.now() + '-' + Math.random().toString(36).substring(4),
           email: cleanReceiver,
           text: {
             fr: `Nouveau message de la part de ${cleanSender === 'admin@senperspective.com' ? 'l\'Administrateur' : cleanSender}.`,
@@ -1086,7 +1128,8 @@ export const useStore = create<AppState>()(
           },
           date: new Date().toISOString().split('T')[0],
           isRead: false,
-          category: 'messages'
+          category: 'messages',
+          link: '/discussion'
         });
 
         // If message is directed to Abdel (Official AI Assistant in Messenger), generate response
@@ -1165,13 +1208,22 @@ export const useStore = create<AppState>()(
         }
 
         const notifs = get().notifications || [];
+        const isMyMessageNotif = (n: any) =>
+          ((n.email ?? '').toLowerCase() === receiverClean) &&
+          (n.category === 'messages' || String(n.id || '').startsWith('notif-dm-')) &&
+          !n.isRead;
         const updatedNotifs = notifs.map(n => {
-          if ((!n.email || ((n.email ?? '').toLowerCase()) === receiverClean) && n.category === 'messages' && !n.isRead) {
-            return { ...n, isRead: true };
-          }
+          if (isMyMessageNotif(n)) return { ...n, isRead: true };
           return n;
         });
         set({ notifications: updatedNotifs });
+        // Persist + record a local receipt. Without this the cloud row stays
+        // isRead:false, so reading a message in the hub/messenger still
+        // re-announced itself as a fresh notification after every reconnect.
+        notifs.filter(isMyMessageNotif).forEach(n => {
+          cloudSave('notifications', n.id, { ...n, isRead: true });
+          ackNotificationIds([n.id]);
+        });
       },
       friends: [],
       setFriends: (list: any) => {
@@ -1695,7 +1747,8 @@ export const useStore = create<AppState>()(
                 ? (lang === 'fr' ? 'Nouveau message' : 'New message')
                 : (lang === 'fr' ? 'Nouvelle publication' : 'New publication')),
             body: textMsg,
-            actionUrl: notification.link
+            actionUrl: notification.link,
+            notificationId: notification.id
           });
         }
       },
@@ -1792,7 +1845,8 @@ export const useStore = create<AppState>()(
                   ? (lang === 'fr' ? 'Nouveau message' : 'New message')
                   : (lang === 'fr' ? 'Nouvelle publication' : 'New publication')),
               body: textMsg,
-              actionUrl: n.link
+              actionUrl: n.link,
+              notificationId: n.id
             });
           });
         } catch (err) {
@@ -1816,6 +1870,13 @@ export const useStore = create<AppState>()(
               String(n.id || '').startsWith('notif-friend-request-') ||
               String(n.id || '').startsWith('notif-friend-accepted-');
           }
+          if (scope === 'messages') {
+            // Direct-message notifications — cleared when the Messages tab opens
+            return n.category === 'messages' || String(n.id || '').startsWith('notif-dm-');
+          }
+          if (scope === 'system') {
+            return n.category === 'system' || String(n.id || '').startsWith('warning-');
+          }
           return true;
         };
         const hasUnread = list.some(n => matchesScope(n) && !n.isRead);
@@ -1828,6 +1889,22 @@ export const useStore = create<AppState>()(
           .forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
         // Local receipt: keeps the item read even if the cloud write was offline
         ackNotificationIds(list.filter(matchesScope).map(n => String(n.id)));
+      },
+      // Marks a SINGLE notification as read (clicking/opening one item). This is
+      // what stops an already-opened item from re-notifying on reconnect: the
+      // cloud row is updated AND a local receipt is recorded, so a failed or
+      // offline cloud write can never resurrect it as "unread".
+      markNotificationRead: (id) => {
+        const clean = String(id || '');
+        if (!clean) return;
+        const list = get().notifications || [];
+        const target = list.find(n => String(n.id) === clean);
+        ackNotificationIds([clean]);
+        if (!target || target.isRead) return;
+        set({
+          notifications: list.map(n => (String(n.id) === clean ? { ...n, isRead: true } : n))
+        });
+        cloudSave('notifications', target.id, { ...target, isRead: true });
       },
       deleteNotification: (id) => {
         set({ notifications: (get().notifications || []).filter(n => n.id !== id) });

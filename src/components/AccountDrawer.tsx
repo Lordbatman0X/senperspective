@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useStore } from "../store";
+import { useStore, isSocialNotification, isNetworkNotification, isSystemNotification, unreadForEmail } from "../store";
 import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
@@ -256,32 +256,28 @@ export function AccountDrawer({
 
   const markDirectMessagesAsRead = useStore(s => s.markDirectMessagesAsRead);
   const clearNotifications = useStore(s => s.clearNotifications);
+  const markNotificationRead = useStore(s => s.markNotificationRead);
   const unreadMessagesCount = (directMessages || []).filter(
     dm => dm.receiver?.toLowerCase().trim() === (readerProfile?.email || '').toLowerCase().trim() && !dm.read
   ).length;
 
   // Unread "Activité" items: comments/publications from friends & followed accounts
+  // Unread "Activité" / "Réseau" items — classified by the SAME shared helpers the
+  // header bubble uses, so the numbers can never drift apart or double-count.
   const myDrawerEmail = ((readerProfile?.email ?? '')).toLowerCase().trim();
-  const isSocialNotif = (n: any) =>
-    n.category === 'social' ||
-    String(n.id || '').startsWith('notif-follower-') ||
-    String(n.id || '').startsWith('notif-friend-comment-');
-  const isNetworkNotif = (n: any) =>
-    n.category === 'network' ||
-    String(n.id || '').startsWith('notif-friend-request-') ||
-    String(n.id || '').startsWith('notif-friend-accepted-');
-  const countUnread = (match: (n: any) => boolean) =>
-    (notifications || []).filter((n: any) =>
-      ((n.email ?? '').toLowerCase().trim()) === myDrawerEmail && !n.isRead && match(n)
-    ).length;
-  const socialUnreadCount = countUnread(isSocialNotif);
-  const networkUnreadCount = countUnread(isNetworkNotif);
+  const myUnreadNotifs = unreadForEmail(notifications || [], myDrawerEmail);
+  const socialUnreadCount = myUnreadNotifs.filter(isSocialNotification).length;
+  const networkUnreadCount = myUnreadNotifs.filter(isNetworkNotification).length;
+  const systemUnreadCount = myUnreadNotifs.filter(isSystemNotification).length;
 
   useEffect(() => {
     if (showProfileModal && activeSubMenu === "messages" && readerProfile?.email) {
       markDirectMessagesAsRead('', readerProfile.email);
+      // Also check the message NOTIFICATIONS, otherwise they stay unread and
+      // re-announce themselves after a reconnect.
+      clearNotifications(readerProfile.email, 'messages');
     }
-  }, [showProfileModal, activeSubMenu, readerProfile?.email, markDirectMessagesAsRead]);
+  }, [showProfileModal, activeSubMenu, readerProfile?.email, markDirectMessagesAsRead, clearNotifications]);
 
   // Opening the "Activité" section clears (checks) its unread red-dot count
   useEffect(() => {
@@ -294,6 +290,13 @@ export function AccountDrawer({
   useEffect(() => {
     if (showProfileModal && activeSubMenu === "connections" && readerProfile?.email) {
       clearNotifications(readerProfile.email, 'network');
+    }
+  }, [showProfileModal, activeSubMenu, readerProfile?.email, clearNotifications]);
+
+  // Opening the "Briefing" section checks its unread Dépêches (system notices)
+  useEffect(() => {
+    if (showProfileModal && activeSubMenu === "main" && readerProfile?.email) {
+      clearNotifications(readerProfile.email, 'system');
     }
   }, [showProfileModal, activeSubMenu, readerProfile?.email, clearNotifications]);
 
@@ -691,6 +694,7 @@ export function AccountDrawer({
                     </span>
                     {(() => {
                       const tabUnread =
+                        item.id === "main" ? systemUnreadCount :
                         item.id === "messages" ? unreadMessagesCount :
                         item.id === "social" ? socialUnreadCount :
                         item.id === "connections" ? networkUnreadCount : 0;
@@ -818,13 +822,25 @@ export function AccountDrawer({
                           <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                             {notifications && (notifications ?? []).length > 0 ? (
                               (notifications ?? []).slice(0, 3).map((n) => (
-                                <div key={n.id} className="p-2.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] font-mono flex flex-col gap-1 text-left">
+                                <button
+                                  key={n.id}
+                                  type="button"
+                                  onClick={() => markNotificationRead(n.id)}
+                                  className={`w-full p-2.5 border text-[11px] font-mono flex flex-col gap-1 text-left transition-colors cursor-pointer ${
+                                    n.isRead
+                                      ? 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
+                                      : 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800/60'
+                                  }`}
+                                  title={language === "fr" ? "Marquer comme lu" : "Mark as read"}
+                                >
                                   <div className="flex justify-between font-bold text-zinc-900 dark:text-zinc-100 text-[8.5px]">
                                     <span>{n.date || "TODAY"}</span>
-                                    <span className="text-amber-600 font-bold">INFO</span>
+                                    <span className={n.isRead ? 'text-zinc-400 font-bold' : 'text-amber-600 font-bold'}>
+                                      {n.isRead ? (language === "fr" ? "LU" : "READ") : "INFO"}
+                                    </span>
                                   </div>
                                   <p className="text-zinc-600 dark:text-zinc-300 truncate text-[11px] leading-snug">{typeof n.text === 'string' ? n.text : (n.text?.[language] || n.text?.fr || n.text?.en || '')}</p>
-                                </div>
+                                </button>
                               ))
                             ) : (
                               <p className="text-xs text-zinc-500 dark:text-zinc-400 italic py-3 font-mono">
@@ -1417,8 +1433,59 @@ export function AccountDrawer({
 
                   {/* VIEW: CONNECTIONS & PROFILE SETTINGS */}
                   {(activeSubMenu === "connections" || activeSubMenu === "settings") && (
-                    <ConnectionsAndProfile
-                      activeSubMenu={activeSubMenu}
+                    <>
+                                      {/* Pending friend requests */}
+                      <div>
+                        <h4 className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
+                          <UserPlus size={11} />
+                          {language === "fr" ? "Demandes d'amitié" : "Friend Requests"}
+                          {friendRequests.length > 0 && (
+                            <span className="ml-auto px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}>
+                              {friendRequests.length}
+                            </span>
+                          )}
+                        </h4>
+                        {friendRequests.length === 0 ? (
+                          <p className="text-[10px] italic text-zinc-400 py-2">
+                            {language === "fr" ? "Aucune demande en attente." : "No pending requests."}
+                          </p>
+                        ) : (
+                          <div className="space-y-2">
+                            {friendRequests.map(reqEmail => {
+                              const reqUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === reqEmail);
+                              return (
+                                <div key={reqEmail} className="flex items-center gap-2.5 p-2.5 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
+                                  <div className="w-8 h-8 shrink-0 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 overflow-hidden flex items-center justify-center">
+                                    {renderNeutralAvatar(reqUser?.avatarUrl, reqUser?.name || reqEmail, 32)}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 truncate">{reqUser?.name || reqEmail.split('@')[0]}</p>
+                                    <p className="text-[11px] text-zinc-500 font-mono truncate">{reqEmail}</p>
+                                  </div>
+                                  <button
+                                    onClick={() => confirmFriendRequest(reqEmail)}
+                                    className="px-2 py-1.5 text-[11px] font-mono font-bold uppercase text-white cursor-pointer shrink-0 border-none"
+                                    style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
+                                    title={language === "fr" ? "Confirmer" : "Confirm"}
+                                  >
+                                    <Check size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => rejectFriendRequest(reqEmail)}
+                                    className="px-2 py-1.5 text-[11px] font-mono font-bold uppercase text-rose-600 border border-rose-300 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40 cursor-pointer shrink-0 bg-transparent"
+                                    title={language === "fr" ? "Refuser" : "Decline"}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <ConnectionsAndProfile
+                        activeSubMenu={activeSubMenu}
                       setActiveSubMenu={setActiveSubMenu}
                       readerProfile={readerProfile}
                       setReaderProfile={setReaderProfile}
@@ -1473,61 +1540,12 @@ export function AccountDrawer({
                       setSelectedChatUser={setSelectedChatUser}
                       setShowProfileModal={setShowProfileModal}
                     />
+                    </>
                   )}
 
-                  {/* VIEW: SOCIAL ACTIVITY (friend requests + followed-accounts feed) */}
+                  {/* VIEW: SOCIAL ACTIVITY (activity of the accounts you follow) */}
                   {activeSubMenu === "social" && (
                     <div className="space-y-6 text-left font-serif px-1">
-                      {/* Pending friend requests */}
-                      <div>
-                        <h4 className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
-                          <UserPlus size={11} />
-                          {language === "fr" ? "Demandes d'amitié" : "Friend Requests"}
-                          {friendRequests.length > 0 && (
-                            <span className="ml-auto px-1.5 py-0.5 text-white text-[10px] font-bold" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}>
-                              {friendRequests.length}
-                            </span>
-                          )}
-                        </h4>
-                        {friendRequests.length === 0 ? (
-                          <p className="text-[10px] italic text-zinc-400 py-2">
-                            {language === "fr" ? "Aucune demande en attente." : "No pending requests."}
-                          </p>
-                        ) : (
-                          <div className="space-y-2">
-                            {friendRequests.map(reqEmail => {
-                              const reqUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === reqEmail);
-                              return (
-                                <div key={reqEmail} className="flex items-center gap-2.5 p-2.5 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40">
-                                  <div className="w-8 h-8 shrink-0 bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 overflow-hidden flex items-center justify-center">
-                                    {renderNeutralAvatar(reqUser?.avatarUrl, reqUser?.name || reqEmail, 32)}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-[10px] font-bold text-zinc-900 dark:text-zinc-100 truncate">{reqUser?.name || reqEmail.split('@')[0]}</p>
-                                    <p className="text-[11px] text-zinc-500 font-mono truncate">{reqEmail}</p>
-                                  </div>
-                                  <button
-                                    onClick={() => confirmFriendRequest(reqEmail)}
-                                    className="px-2 py-1.5 text-[11px] font-mono font-bold uppercase text-white cursor-pointer shrink-0 border-none"
-                                    style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }}
-                                    title={language === "fr" ? "Confirmer" : "Confirm"}
-                                  >
-                                    <Check size={12} />
-                                  </button>
-                                  <button
-                                    onClick={() => rejectFriendRequest(reqEmail)}
-                                    className="px-2 py-1.5 text-[11px] font-mono font-bold uppercase text-rose-600 border border-rose-300 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/40 cursor-pointer shrink-0 bg-transparent"
-                                    title={language === "fr" ? "Refuser" : "Decline"}
-                                  >
-                                    <X size={12} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-
                       {/* Social feed: publications & comments of followed accounts */}
                       <div>
                         <h4 className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-500 border-b border-zinc-200 dark:border-zinc-800 pb-1.5 mb-2 flex items-center gap-1.5">
@@ -1538,9 +1556,7 @@ export function AccountDrawer({
                           const myEmail = ((readerProfile?.email ?? '')).toLowerCase().trim();
                           const socialNotifs = (notifications || []).filter((n: any) =>
                             ((n.email ?? '').toLowerCase().trim() === myEmail) &&
-                            (n.category === 'social' ||
-                             String(n.id || '').startsWith('notif-follower-') ||
-                             String(n.id || '').startsWith('notif-friend-comment-'))
+                            isSocialNotification(n)
                           );
                           if (socialNotifs.length === 0) {
                             return (
@@ -1567,7 +1583,10 @@ export function AccountDrawer({
                                     {n.link && (
                                       <Link
                                         to={n.link}
-                                        onClick={() => setShowProfileModal(false)}
+                                        onClick={() => {
+                                          markNotificationRead(n.id);
+                                          setShowProfileModal(false);
+                                        }}
                                         className="p-1.5 border border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-white cursor-pointer shrink-0 bg-transparent"
                                         title={language === "fr" ? "Ouvrir" : "Open"}
                                       >

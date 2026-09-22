@@ -347,10 +347,12 @@ export function HomePage() {
     dailyWisdom: {}
   };
   
-  let featuredArticles = (articles ?? []).filter(a => a.isFeatured).slice(0, 6);
-  if (featuredArticles.length < 6) {
+  // Head carousel: 10 lead stories (featured first, then the most recent to fill)
+  const HERO_CAROUSEL_SIZE = 10;
+  let featuredArticles = (articles ?? []).filter(a => a.isFeatured).slice(0, HERO_CAROUSEL_SIZE);
+  if (featuredArticles.length < HERO_CAROUSEL_SIZE) {
     const existingIds = new Set(featuredArticles.map(a => a.id));
-    const additional = (articles ?? []).filter(a => !existingIds.has(a.id)).slice(0, 6 - featuredArticles.length);
+    const additional = (articles ?? []).filter(a => !existingIds.has(a.id)).slice(0, HERO_CAROUSEL_SIZE - featuredArticles.length);
     featuredArticles = [...featuredArticles, ...additional];
   }
   const flashArticles = (articles ?? []).filter(a => a.category === 'Flash Info' || a.category === 'Flash' || (a as any).type === 'flash');

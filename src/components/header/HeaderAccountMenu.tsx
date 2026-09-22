@@ -1,6 +1,6 @@
 import React from "react";
 import { User } from "lucide-react";
-import { useStore } from "../../store";
+import { useStore, isSocialNotification, isNetworkNotification, isSystemNotification, unreadForEmail } from "../../store";
 import { renderNeutralAvatar } from "../AccountDrawer";
 import { isAdminProfile } from "../../firebase/auth";
 
@@ -9,19 +9,27 @@ export function HeaderAccountMenu() {
     readerProfile,
     language,
     notifications,
+    directMessages,
     setAuthTab,
     setShowSignUpModal,
     setShowProfileDrawer
   } = useStore();
 
-  // Coherent unread indicator: same total-unread count as the mobile menu &
-  // drawer badges, shown as a numbered bubble on the avatar.
+  // Coherent unread indicator: computed with the SAME classification helpers the
+  // drawer tabs use, so the bubble always equals
+  //   unread DMs + Activité + Réseau + Briefing(system)
+  // and an item is never counted twice.
+  const myUnreadNotifs = unreadForEmail(notifications || [], readerProfile?.email || '');
+  const unreadMessagesCount = (directMessages || []).filter(
+    dm =>
+      dm.receiver?.toLowerCase().trim() === (readerProfile?.email || '').toLowerCase().trim() &&
+      !dm.read
+  ).length;
   const unreadCount = readerProfile
-    ? (notifications || []).filter(
-        (n: any) =>
-          ((n.email ?? '').toLowerCase()) === ((readerProfile.email ?? '').toLowerCase()) &&
-          !n.isRead
-      ).length
+    ? unreadMessagesCount +
+      myUnreadNotifs.filter(isSocialNotification).length +
+      myUnreadNotifs.filter(isNetworkNotification).length +
+      myUnreadNotifs.filter(isSystemNotification).length
     : 0;
 
   if (readerProfile) {
@@ -35,7 +43,14 @@ export function HeaderAccountMenu() {
             {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 32)}
           </div>
           {unreadCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-600 text-white text-[8px] font-mono font-black flex items-center justify-center px-0.5 rounded-full border border-[#111] shadow-sm">
+            <span
+              className="absolute -top-1 -right-1 min-w-[13px] h-[13px] bg-red-500 text-white text-[7.5px] font-sans font-bold flex items-center justify-center px-[3px] rounded-full leading-none ring-2 ring-zinc-950 tabular-nums"
+              title={
+                language === "fr"
+                  ? `${unreadCount} notification${unreadCount > 1 ? "s" : ""} non lue${unreadCount > 1 ? "s" : ""}`
+                  : `${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`
+              }
+            >
               {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
