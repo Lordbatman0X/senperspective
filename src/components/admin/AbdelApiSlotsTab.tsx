@@ -1,9 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Bot, Server, Save, Sparkles } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Bot, Save, Sparkles, KeyRound, Eye, EyeOff, Loader2, Play, CheckCircle2, XCircle } from 'lucide-react';
 import { useStore } from '../../store';
-import { callAbdelSlot, normalizeAbdelSlots } from '../../lib/abdelRouter';
-import type { AbdelApiSlot, AbdelKeyProvider } from '../../lib/abdelRouter';
-import { AbdelApiSlotsGrid } from './AbdelApiSlotsGrid';
+import { clientTestProvider, getClientApiKey, saveClientApiKey } from '../../lib/clientAiEngine';
 
 interface AbdelApiSlotsTabProps {
   /** Admin toast hook — falls back to an inline banner when not provided. */
@@ -30,21 +28,13 @@ export function AbdelApiSlotsTab({ onNotify }: AbdelApiSlotsTabProps) {
     else console.info('[AbdelApiSlotsTab]', msg);
   };
 
-  // ---------------------------------------------------------------- slots
-  const storedSlots = useMemo(
-    () => normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots),
-    [siteSettings]
-  );
-  const [slots, setSlots] = useState<AbdelApiSlot[]>(storedSlots);
-  const [testingSlot, setTestingSlot] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<
-    Record<string, { ok: boolean; message: string }>
-  >({});
-
-  // Re-sync when the cloud settings hydrate (another device saved something).
-  useEffect(() => {
-    setSlots(normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots));
-  }, [siteSettings]);
+  // ---------------------------------------------------------- Gemini key
+  const [geminiKey, setGeminiKey] = useState('');
+  const [hasSavedKey, setHasSavedKey] = useState(() => !!getClientApiKey('gemini'));
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [savingGeminiKey, setSavingGeminiKey] = useState(false);
+  const [testingGeminiKey, setTestingGeminiKey] = useState(false);
+  const [geminiKeyTest, setGeminiKeyTest] = useState<{ ok: boolean; message: string } | null>(null);
 
   // ------------------------------------------------------- welcome message
   const [welcomeFr, setWelcomeFr] = useState(String(siteSettings?.abdelIntroMessageFr || ''));
@@ -81,45 +71,32 @@ export function AbdelApiSlotsTab({ onNotify }: AbdelApiSlotsTabProps) {
     );
   };
 
-  const updateSlot = (id: string, patch: Partial<AbdelApiSlot>) => {
-    setSlots(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)));
-  };
-
-  const handleSaveSlots = () => {
-    updateSiteSettings({ abdelApiSlots: slots } as any);
-    const active = slots.filter(s => s.enabled).length;
-    notify(
-      isFr
-        ? `Configuration Abdel enregistrée — ${active} moteur(s) actif(s).`
-        : `Abdel configuration saved — ${active} active engine(s).`
-    );
-  };
-
-  const handleTestSlot = async (slot: AbdelApiSlot) => {
-    setTestingSlot(slot.id);
-    setTestResult(prev => ({ ...prev, [slot.id]: { ok: false, message: '…' } }));
+  const handleSaveGeminiKey = async () => {
+    const key = geminiKey.trim();
+    if (!key) {
+      notify(isFr ? 'Collez d’abord votre clé Gemini.' : 'Paste your Gemini key first.');
+      return;
+    }
+    setSavingGeminiKey(true);
     try {
-      const res = await callAbdelSlot(
-        slot,
-        {
-          message: isFr ? 'Bonjour Abdel, confirme que tu es en ligne.' : 'Hello Abdel, confirm you are online.',
-          language,
-        },
-        15000
-      );
-      setTestResult(prev => ({
-        ...prev,
-        [slot.id]: res.ok
-          ? { ok: true, message: res.text.slice(0, 180) }
-          : { ok: false, message: res.error || (isFr ? 'Échec' : 'Failed') },
-      }));
-    } catch (err: any) {
-      setTestResult(prev => ({
-        ...prev,
-        [slot.id]: { ok: false, message: err?.message || 'Error' },
-      }));
+      await saveClientApiKey('gemini', key);
+      setGeminiKey('');
+      setHasSavedKey(true);
+      setGeminiKeyTest(null);
+      notify(isFr ? 'Clé Gemini enregistrée. Abdel est prêt.' : 'Gemini key saved. Abdel is ready.');
     } finally {
-      setTestingSlot(null);
+      setSavingGeminiKey(false);
+    }
+  };
+
+  const handleTestGeminiKey = async () => {
+    setTestingGeminiKey(true);
+    setGeminiKeyTest(null);
+    try {
+      const result = await clientTestProvider('gemini');
+      setGeminiKeyTest({ ok: result.success, message: result.message });
+    } finally {
+      setTestingGeminiKey(false);
     }
   };
 
@@ -213,59 +190,88 @@ export function AbdelApiSlotsTab({ onNotify }: AbdelApiSlotsTabProps) {
         </div>
       </div>
 
-      {/* ======================== FOUR API BLOCKS ======================= */}
+      {/* ============================ GEMINI API KEY ==================== */}
       <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-5 shadow-xl">
-        <div className="flex items-start justify-between gap-4 flex-wrap pb-4 border-b border-zinc-800">
-          <div>
-            <h2 className="text-sm font-mono uppercase tracking-wider text-[#E85D42] font-bold flex items-center gap-2">
-              <Server className="w-4 h-4" />
-              {isFr ? 'Moteurs IA d’Abdel (4 blocs API)' : 'Abdel AI engines (4 API blocks)'}
-            </h2>
-            <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-              {isFr
-                ? 'Liez Abdel à quatre backends distincts. Ils sont appelés dans l’ordre de priorité : dès qu’un moteur répond, les suivants sont ignorés ; en cas d’erreur, de délai dépassé ou de bloc désactivé, le moteur suivant prend le relais. Si aucun ne répond, le moteur local du navigateur est utilisé.'
-                : 'Link Abdel to four separate backends. They are called in priority order: the first engine that answers wins; on error, timeout or disabled block, the next one takes over. If none responds, the in-browser engine is used.'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border text-emerald-400 border-emerald-500/40 bg-emerald-500/10">
-              {slots.filter(s => s.enabled).length} {isFr ? 'actif(s)' : 'active'}
-            </span>
-            <button
-              onClick={handleSaveSlots}
-              className="bg-[#E85D42] hover:bg-[#c94931] text-white text-xs font-bold uppercase tracking-wider rounded-lg px-4 py-2 transition-colors cursor-pointer flex items-center gap-2"
-            >
-              <Save size={14} />
-              {isFr ? 'Enregistrer tout' : 'Save all'}
-            </button>
-          </div>
+        <div>
+          <h2 className="text-sm font-mono uppercase tracking-wider text-[#E85D42] font-bold flex items-center gap-2">
+            <Bot className="w-4 h-4" />
+            {isFr ? 'Connexion d’Abdel' : 'Connect Abdel'}
+          </h2>
+          <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+            {isFr
+              ? 'Collez votre clé API Google Gemini, puis cliquez sur Enregistrer. C’est tout — aucune URL ni aucun autre réglage.'
+              : 'Paste your Google Gemini API key, then click Save. That’s all — no URL or other setting needed.'}
+          </p>
         </div>
 
-        <AbdelApiSlotsGrid
-          slots={slots}
-          isFr={isFr}
-          testingSlot={testingSlot}
-          testResult={testResult}
-          onUpdate={updateSlot}
-          onTest={handleTestSlot}
-        />
+        <div className="max-w-2xl space-y-3">
+          <label className="block text-xs font-bold text-zinc-300">
+            {isFr ? 'Clé API Gemini' : 'Gemini API key'}
+          </label>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+              <input
+                type={showGeminiKey ? 'text' : 'password'}
+                value={geminiKey}
+                onChange={e => {
+                  setGeminiKey(e.target.value);
+                  setGeminiKeyTest(null);
+                }}
+                placeholder={hasSavedKey
+                  ? (isFr ? 'Une clé est déjà enregistrée' : 'A key is already saved')
+                  : 'AIza…'}
+                autoComplete="off"
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-11 py-3 text-sm text-white focus:outline-none focus:border-[#E85D42]"
+              />
+              <button
+                type="button"
+                onClick={() => setShowGeminiKey(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 cursor-pointer"
+                aria-label={showGeminiKey ? 'Hide API key' : 'Show API key'}
+              >
+                {showGeminiKey ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveGeminiKey}
+              disabled={savingGeminiKey || !geminiKey.trim()}
+              className="bg-[#E85D42] hover:bg-[#c94931] disabled:opacity-40 text-white text-xs font-bold uppercase tracking-wider rounded-lg px-5 py-3 transition-colors cursor-pointer flex items-center justify-center gap-2"
+            >
+              {savingGeminiKey ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+              {isFr ? 'Enregistrer' : 'Save'}
+            </button>
+          </div>
 
-        <div className="bg-blue-950/20 border border-blue-900/50 rounded-lg p-4">
-          <h4 className="text-blue-400 text-xs font-bold uppercase mb-2 flex items-center gap-2">
-            <Bot size={13} />
-            {isFr ? 'Contrat attendu par le backend' : 'Backend contract'}
-          </h4>
-          <p className="text-zinc-400 text-[11px] font-mono leading-relaxed">
-            POST{' '}
-            {`{ message, language, model, temperature, systemPrompt, history[], locationInfo, context, slot }`}
-            <br />
-            {isFr ? 'Réponse acceptée' : 'Accepted response'}: {`{ response }`} · {`{ reply }`} · {`{ text }`} ·{' '}
-            {`{ output }`} · OpenAI {`{ choices[0].message.content }`} · Gemini{' '}
-            {`{ candidates[0].content.parts[0].text }`}
-            <br />
-            {isFr ? 'Clés transmises via' : 'Keys sent as'}: x-gemini-key · x-openai-key · x-groq-key ·
-            x-openrouter-key · x-anthropic-key · x-deepseek-key · x-abdel-slot
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={handleTestGeminiKey}
+              disabled={testingGeminiKey || !hasSavedKey}
+              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 text-white text-[11px] font-bold uppercase tracking-wider rounded-lg px-4 py-2 transition-colors cursor-pointer flex items-center gap-2"
+            >
+              {testingGeminiKey ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+              {isFr ? 'Tester la clé' : 'Test key'}
+            </button>
+            <span className={`text-xs flex items-center gap-1.5 ${hasSavedKey ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {hasSavedKey ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+              {hasSavedKey
+                ? (isFr ? 'Clé enregistrée sur cet appareil' : 'Key saved on this device')
+                : (isFr ? 'Aucune clé enregistrée' : 'No key saved')}
+            </span>
+          </div>
+
+          {geminiKeyTest && (
+            <div className={`flex items-start gap-2 text-xs rounded-lg px-3 py-2 border ${
+              geminiKeyTest.ok
+                ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'
+                : 'text-red-300 bg-red-500/10 border-red-500/30'
+            }`}>
+              {geminiKeyTest.ok ? <CheckCircle2 size={14} className="mt-0.5 shrink-0" /> : <XCircle size={14} className="mt-0.5 shrink-0" />}
+              <span>{geminiKeyTest.message}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
