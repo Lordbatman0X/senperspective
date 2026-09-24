@@ -608,11 +608,11 @@ export function AccountDrawer({
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            className="account-drawer-panel relative w-[85vw] max-w-[420px] sm:w-[480px] h-dvh max-h-dvh self-start bg-white/25 dark:bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-l-2xl sm:rounded-l-3xl border-l border-white/20 dark:border-zinc-800/40 text-zinc-950 dark:text-zinc-50 flex flex-col min-h-0 z-50 font-serif shadow-2xl overflow-hidden"
+            className="account-drawer-panel relative w-[85vw] max-w-[420px] sm:w-[480px] h-dvh max-h-dvh self-start bg-white dark:bg-zinc-950 rounded-l-2xl sm:rounded-l-3xl border-l border-zinc-200 dark:border-zinc-800 text-zinc-950 dark:text-zinc-50 flex flex-col min-h-0 z-50 font-serif shadow-2xl overflow-hidden"
             transition={{ type: "spring", damping: 30, stiffness: 280 }}
           >
             {/* Drawer Header Area */}
-            <div className="flex justify-between items-center px-6 py-4.5 border-b border-zinc-300/30 dark:border-zinc-800/30 bg-white/10 dark:bg-black/20 backdrop-blur-md select-none shrink-0">
+            <div className="flex justify-between items-center px-6 py-4.5 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 select-none shrink-0">
               <div className="flex flex-col text-left">
                 <span className="text-[11px] font-mono font-black uppercase tracking-widest text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-none" style={{ backgroundColor: currentSettings?.accentColor || "#E85D42" }} />
@@ -684,7 +684,7 @@ export function AccountDrawer({
                     className={`flex-1 min-w-[68px] py-2.5 px-2 flex flex-col items-center justify-center transition-all cursor-pointer relative rounded-md ${
                       isSelected
                         ? "bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 font-black shadow-lg border border-zinc-950 dark:border-white opacity-100"
-                        : "bg-white/20 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 hover:text-black dark:hover:text-white hover:bg-white/40 dark:hover:bg-zinc-800/60 border border-zinc-300/40 dark:border-zinc-700/50 backdrop-blur-sm"
+                        : "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
                     }`}
                   >
                     <Icon
@@ -726,7 +726,7 @@ export function AccountDrawer({
             </div>
 
             {/* Main Content Workspace */}
-            <div className="flex-1 min-h-0 basis-0 overflow-y-auto overscroll-contain py-5 px-6 relative overflow-x-hidden rounded-none bg-transparent backdrop-blur-md text-zinc-900 dark:text-zinc-100">
+            <div className="flex-1 min-h-0 basis-0 overflow-y-auto overscroll-contain py-5 px-6 relative overflow-x-hidden rounded-none bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
               
               {/* Feedback Alert Toast */}
               {settingsSuccessMsg && (
