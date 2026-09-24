@@ -31,7 +31,7 @@ export function getApiBaseUrl(): string {
   if (stored && stored.trim()) {
     return stored.trim().replace(/\/+$/, '');
   }
-  const envUrl = (import.meta as any).env?.VITE_BACKEND_URL;
+  const envUrl = (import.meta as any).env?.VITE_BACKEND_URL || (import.meta as any).env?.VITE_API_BASE_URL;
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, '');
   }
@@ -69,6 +69,13 @@ export function resolveApiUrl(path: string): string {
     return `${base}${cleanPath}`;
   }
   return path;
+}
+
+/** True when a relative API route would be served by a static SPA host. */
+export function isStaticApiRoute(path: string): boolean {
+  if (/^https?:\/\//i.test(path) || !path.startsWith('/')) return false;
+  if (typeof window === 'undefined') return false;
+  return /\.(web\.app|firebaseapp|vercel\.app|netlify\.app|pages\.dev)$/i.test(window.location.hostname);
 }
 
 /**

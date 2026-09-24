@@ -99,7 +99,11 @@ function App() {
           const sig = merged.map(a => `${(a as any)?.id}:${(a as any)?.updatedAtServer || ''}`).join('|');
           const prevSig = local.map(a => `${(a as any)?.id}:${(a as any)?.updatedAtServer || ''}`).join('|');
           if (sig !== prevSig) {
-            useStore.setState({ articles: merged as any });
+            useStore.setState({ articles: merged as any, isLoadingArticles: false });
+          } else {
+            // The realtime snapshot is the fastest successful source. Do not keep
+            // the startup progress bar alive while the redundant one-shot get() finishes.
+            useStore.setState({ isLoadingArticles: false });
           }
           prevIdsRef.current = remoteIds;
           hasPrevSnapshot = true;
@@ -238,12 +242,12 @@ function App() {
 
   return (
     <Router>
+      <div className="app-page-enter min-h-screen">
       <AuthProvider>
         {/* Glassy sync indicator - top edge only (no full-screen overlay) */}
         {isLoadingArticles && (
-          <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 overflow-hidden">
+          <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 overflow-hidden pointer-events-none" role="status" aria-label="Syncing articles">
             <div className="h-full w-1/3 bg-gradient-to-r from-transparent via-[#E85D42] to-transparent animate-[syncbar_1.2s_ease-in-out_infinite]" />
-                        <style>{`@keyframes syncbar { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }`}</style>
           </div>
         )}
         {/* No full-screen overlay - articles always show from cache while fresh content loads in background */}
@@ -273,7 +277,8 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
-      </AuthProvider>
+        </AuthProvider>
+      </div>
     </Router>
   );
 }

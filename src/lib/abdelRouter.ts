@@ -20,7 +20,7 @@
  * This module is deliberately free of any store import: the caller passes the
  * configured slots in, which keeps it side-effect free and testable.
  */
-import { getAuthHeaders, resolveApiUrl, safeJsonParse } from './apiUtils';
+import { getApiBaseUrl, getAuthHeaders, isStaticApiRoute, resolveApiUrl, safeJsonParse } from './apiUtils';
 import { clientAbdelChat } from './clientAiEngine';
 
 export type AbdelSlotId = 'slot1' | 'slot2' | 'slot3' | 'slot4';
@@ -241,6 +241,16 @@ export async function callAbdelSlot(
   };
 
   let timer: number | null = null;
+  const configuredEndpoint = String(slot.endpoint || '').trim();
+  // A relative /api route on Firebase Hosting is the SPA fallback, never an API.
+  // Avoid a request that can only return index.html and give the admin a useful fix.
+  if (isStaticApiRoute(configuredEndpoint) && !getApiBaseUrl()) {
+    return {
+      ok: false,
+      text: '',
+      error: 'Route API relative indisponible sur l’hébergement statique. Configurez une URL backend absolue (VITE_API_BASE_URL ou Admin → API).',
+    };
+  }
   try {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     if (controller) {

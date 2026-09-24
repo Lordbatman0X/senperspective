@@ -1063,7 +1063,9 @@ export const useStore = create<AppState>()(
         const preExisting = Array.isArray(get().articles) ? [...get().articles] : [];
         const localBackup = loadArticlesFromLocalBackup();
         if (preExisting.length === 0 && localBackup.length > 0) { set({ articles: localBackup }); }
-        set({ isLoadingArticles: true });
+        // Existing seed/cache content is already usable; a cloud refresh is a
+        // background sync and must not make the first render look stuck.
+        set({ isLoadingArticles: preExisting.length === 0 });
         // --- Legacy localStorage article recovery --------------------------
         // Earlier builds persisted articles in localStorage. The current build
         // persists only UI preferences (see partialize), and Firestore was

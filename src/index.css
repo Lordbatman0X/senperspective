@@ -279,7 +279,17 @@
   }
 }
 
-/* Custom Scrollbar for mini-carousel */
+/* Shared, restrained motion system. Keep animations subtle and accessible. */
+@keyframes syncbar { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
+@keyframes page-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes soft-in { from { opacity: 0; } to { opacity: 1; } }
+.app-page-enter { animation: page-enter 360ms ease-out both; }
+.content-soft-in { animation: soft-in 260ms ease-out both; }
+.smooth-transition { transition-property: color, background-color, border-color, box-shadow, opacity, transform; transition-timing-function: cubic-bezier(.2,.8,.2,1); transition-duration: 220ms; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; }
+}
+
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
