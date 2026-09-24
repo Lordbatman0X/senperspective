@@ -83,16 +83,16 @@ export const ABDEL_PROVIDER_HEADERS: Record<AbdelKeyProvider, string> = {
 };
 
 /**
- * Out-of-the-box state: ONE slot pointed at the bundled `/api/chat` route,
- * three spare blocks ready to be linked. Nothing is silently enabled beyond
- * that, so an untouched install keeps behaving exactly as before.
+ * Out-of-the-box state: all slots are inactive until an operator links a real
+ * backend URL. A relative `/api/chat` route would be served by the Firebase
+ * SPA fallback, so it must not be presented as a working API.
  */
 export const DEFAULT_ABDEL_SLOTS: AbdelApiSlot[] = ABDEL_SLOT_IDS.map((id, i) => ({
   id,
   label: `Abdel AI ${i + 1}`,
   role: ABDEL_SLOT_ROLES[i],
-  enabled: i === 0,
-  endpoint: '/api/chat',
+  enabled: false,
+  endpoint: '',
   model: '',
   keyProvider: 'none',
   temperature: 0.7,
@@ -113,14 +113,21 @@ export function normalizeAbdelSlots(raw: any): AbdelApiSlot[] {
     const fallback = DEFAULT_ABDEL_SLOTS[i];
     const temp = Number(found.temperature);
     const priority = Number(found.priority);
+    const endpoint = String(found.endpoint || fallback.endpoint).trim();
+    const enabledBySetting = found.enabled === undefined
+      ? fallback.enabled
+      : Boolean(found.enabled);
+    // Migrate legacy relative SPA routes away from active settings on static
+    // Firebase hosting. Absolute backend URLs and configured API bases stay valid.
+    const staticRelative = isStaticApiRoute(endpoint);
     return {
       id,
       label: String(found.label || fallback.label).slice(0, 60),
       role: (ABDEL_SLOT_ROLES as string[]).includes(found.role)
         ? (found.role as AbdelSlotRole)
         : fallback.role,
-      enabled: found.enabled === undefined ? fallback.enabled : Boolean(found.enabled),
-      endpoint: String(found.endpoint || fallback.endpoint).trim(),
+      enabled: enabledBySetting && !staticRelative,
+      endpoint: staticRelative ? '' : endpoint,
       model: String(found.model || '').trim(),
       keyProvider: (ABDEL_KEY_PROVIDERS as string[]).includes(found.keyProvider)
         ? (found.keyProvider as AbdelKeyProvider)
@@ -240,17 +247,24 @@ export async function callAbdelSlot(
     slot: { id: slot.id, label: slot.label, role: slot.role },
   };
 
-  let timer: number | null = null;
   const configuredEndpoint = String(slot.endpoint || '').trim();
+  if (!configuredEndpoint) {
+    return {
+      ok: false,
+      text: '',
+      error: 'Aucun endpoint API configuré. Renseignez une URL backend absolue.',
+    };
+  }
   // A relative /api route on Firebase Hosting is the SPA fallback, never an API.
   // Avoid a request that can only return index.html and give the admin a useful fix.
-  if (isStaticApiRoute(configuredEndpoint) && !getApiBaseUrl()) {
+  if (isStaticApiRoute(configuredEndpoint)) {
     return {
       ok: false,
       text: '',
       error: 'Route API relative indisponible sur l’hébergement statique. Configurez une URL backend absolue (VITE_API_BASE_URL ou Admin → API).',
     };
   }
+  let timer: number | null = null;
   try {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     if (controller) {

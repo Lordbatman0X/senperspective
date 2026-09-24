@@ -73,9 +73,29 @@ export function resolveApiUrl(path: string): string {
 
 /** True when a relative API route would be served by a static SPA host. */
 export function isStaticApiRoute(path: string): boolean {
-  if (/^https?:\/\//i.test(path) || !path.startsWith('/')) return false;
-  if (typeof window === 'undefined') return false;
-  return /\.(web\.app|firebaseapp|vercel\.app|netlify\.app|pages\.dev)$/i.test(window.location.hostname);
+  if (!path || /^(data|javascript):/i.test(path)) return true;
+  if (/^https?:\/\//i.test(path)) {
+    if (typeof window === 'undefined') return false;
+    try {
+      const endpointUrl = new URL(path);
+      // Firebase Hosting rewrites unknown API paths to index.html. The
+      // current site origin and the known Firebase host variants must never
+      // be treated as AI backends, even if another base URL is configured.
+      const firebaseHost = /\.(web\.app|firebaseapp\.com)$/i.test(endpointUrl.hostname);
+      return firebaseHost || endpointUrl.origin === window.location.origin;
+    } catch {
+      return true;
+    }
+  }
+  if (!path.startsWith('/')) return true;
+  // Local Express/Vite development serves the API on the same origin.
+  if (typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(window.location.hostname)) {
+    return false;
+  }
+  // A relative endpoint has no server to target unless an explicit backend
+  // base is configured. This also covers Firebase custom domains (for example
+  // senperspective.com), which are not matched by the *.web.app regex.
+  return !getApiBaseUrl();
 }
 
 /**

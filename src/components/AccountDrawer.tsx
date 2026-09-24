@@ -582,7 +582,7 @@ export function AccountDrawer({
           key="account-drawer-modal"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex justify-end"
+          className="account-drawer-overlay fixed inset-x-0 top-0 bottom-0 z-50 flex justify-end overflow-hidden overscroll-contain"
         >
           {/* Backdrop Blur Overlay */}
           <motion.div
@@ -598,8 +598,8 @@ export function AccountDrawer({
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
+            className="account-drawer-panel relative w-[85vw] max-w-[420px] sm:w-[480px] h-[100dvh] max-h-[100dvh] self-start bg-white/25 dark:bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-l-2xl sm:rounded-l-3xl border-l border-white/20 dark:border-zinc-800/40 text-zinc-950 dark:text-zinc-50 flex flex-col min-h-0 z-50 font-serif shadow-2xl overflow-hidden"
             transition={{ type: "spring", damping: 30, stiffness: 280 }}
-            className="relative w-[85vw] max-w-[420px] sm:w-[480px] h-full bg-white/25 dark:bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-l-2xl sm:rounded-l-3xl border-l border-white/20 dark:border-zinc-800/40 text-zinc-950 dark:text-zinc-50 flex flex-col z-50 font-serif shadow-2xl overflow-hidden"
           >
             {/* Drawer Header Area */}
             <div className="flex justify-between items-center px-6 py-4.5 border-b border-zinc-300/30 dark:border-zinc-800/30 bg-white/10 dark:bg-black/20 backdrop-blur-md select-none shrink-0">
@@ -716,7 +716,7 @@ export function AccountDrawer({
             </div>
 
             {/* Main Content Workspace */}
-            <div className="flex-grow overflow-y-auto py-5 px-6 relative overflow-x-hidden rounded-none bg-transparent backdrop-blur-md text-zinc-900 dark:text-zinc-100">
+            <div className="flex-grow min-h-0 overflow-y-auto overscroll-contain py-5 px-6 relative overflow-x-hidden rounded-none bg-transparent backdrop-blur-md text-zinc-900 dark:text-zinc-100">
               
               {/* Feedback Alert Toast */}
               {settingsSuccessMsg && (
