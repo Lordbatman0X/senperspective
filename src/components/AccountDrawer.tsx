@@ -276,6 +276,16 @@ export function AccountDrawer({
   // actually read (the floating hub checks a conversation off when it opens
   // it), which is what keeps the numbers accurate.
 
+  useEffect(() => {
+    if (!showProfileModal) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showProfileModal]);
+
   // Opening the "Activité" section clears (checks) its unread red-dot count
   useEffect(() => {
     if (showProfileModal && activeSubMenu === "social" && readerProfile?.email) {
@@ -598,7 +608,7 @@ export function AccountDrawer({
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
-            className="account-drawer-panel relative w-[85vw] max-w-[420px] sm:w-[480px] h-[100dvh] max-h-[100dvh] self-start bg-white/25 dark:bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-l-2xl sm:rounded-l-3xl border-l border-white/20 dark:border-zinc-800/40 text-zinc-950 dark:text-zinc-50 flex flex-col min-h-0 z-50 font-serif shadow-2xl overflow-hidden"
+            className="account-drawer-panel relative w-[85vw] max-w-[420px] sm:w-[480px] h-dvh max-h-dvh self-start bg-white/25 dark:bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-l-2xl sm:rounded-l-3xl border-l border-white/20 dark:border-zinc-800/40 text-zinc-950 dark:text-zinc-50 flex flex-col min-h-0 z-50 font-serif shadow-2xl overflow-hidden"
             transition={{ type: "spring", damping: 30, stiffness: 280 }}
           >
             {/* Drawer Header Area */}
@@ -716,7 +726,7 @@ export function AccountDrawer({
             </div>
 
             {/* Main Content Workspace */}
-            <div className="flex-grow min-h-0 overflow-y-auto overscroll-contain py-5 px-6 relative overflow-x-hidden rounded-none bg-transparent backdrop-blur-md text-zinc-900 dark:text-zinc-100">
+            <div className="flex-1 min-h-0 basis-0 overflow-y-auto overscroll-contain py-5 px-6 relative overflow-x-hidden rounded-none bg-transparent backdrop-blur-md text-zinc-900 dark:text-zinc-100">
               
               {/* Feedback Alert Toast */}
               {settingsSuccessMsg && (
