@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageSquare, Newspaper, Users, X, Volume2 } from 'lucide-react';
+import { Bell, MessageSquare, Newspaper, Users, X } from 'lucide-react';
 import { ToastEventDetail, requestBrowserNotificationPermission } from '../lib/notificationSound';
 import { useStore } from '../store';
 
 const AUTO_DISMISS_MS = 5000; // Toasts vanish on their own after 5 seconds
-const EXIT_ANIM_MS = 350;     // Smooth slide/fade-out duration before removal
+const EXIT_ANIM_MS = 220;     // Short fade-out before removal
+
+/**
+ * MINIMAL NOTIFICATION HOST
+ * -------------------------
+ * A quiet, editorial notice: one hairline accent, one bold line of context,
+ * one line of detail, a thin 5s life bar and a discreet close button. No
+ * gradients, no pulsing badges. The event contract (`app-toast-notification`)
+ * is unchanged so every existing emitter keeps working.
+ */
 
 export const NotificationToastHost: React.FC = () => {
   const [toasts, setToasts] = useState<ToastEventDetail[]>([]);
@@ -29,10 +38,18 @@ export const NotificationToastHost: React.FC = () => {
     const timers: number[] = [];
     const handleToastEvent = (e: Event) => {
       const customEvent = e as CustomEvent<ToastEventDetail>;
-      if (customEvent.detail) {
-        setToasts(prev => [customEvent.detail, ...prev].slice(0, 5)); // Keep max 5 toasts
+      const detail = customEvent.detail;
+      if (detail) {
+        setToasts(prev => {
+          // The same subject must never stack (a burst from one correspondent
+          // collapses into a single visible notice).
+          const withoutSameSubject = prev.filter(
+            t => !detail.notificationId || t.notificationId !== detail.notificationId
+          );
+          return [detail, ...withoutSameSubject].slice(0, 3); // Keep at most 3 notices
+        });
         // Auto-dismiss after 5 seconds
-        timers.push(window.setTimeout(() => removeToast(customEvent.detail!.id), AUTO_DISMISS_MS));
+        timers.push(window.setTimeout(() => removeToast(detail.id), AUTO_DISMISS_MS));
       }
     };
 
@@ -46,103 +63,107 @@ export const NotificationToastHost: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-20 right-4 z-[9999] flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+    <div
+      aria-live="polite"
+      role="status"
+      className="fixed top-[72px] right-3 sm:right-4 z-[9999] flex flex-col gap-2 w-[calc(100vw-24px)] max-w-[330px] pointer-events-none"
+    >
+      <style>{`
+        @keyframes sp-toast-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes sp-toast-life { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+      `}</style>
+
       {toasts.map(toast => {
         const isMessage = toast.type === 'message';
         const isPublication = toast.type === 'publication';
         const isSocial = toast.type === 'social';
         const isExiting = exitingIds.includes(toast.id);
 
+        const accent = isPublication
+          ? 'bg-amber-500'
+          : isSocial
+            ? 'bg-emerald-500'
+            : isMessage
+              ? 'bg-[#E85D42]'
+              : 'bg-zinc-400 dark:bg-zinc-600';
+
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto relative overflow-hidden flex items-start gap-3.5 p-4 rounded-xl bg-white/95 dark:bg-zinc-900/95 border border-zinc-200 dark:border-zinc-800 shadow-2xl backdrop-blur-md transition-all duration-300 ease-out transform animate-slide-in ${isExiting ? 'opacity-0 translate-x-8 scale-95' : 'opacity-100 translate-x-0 scale-100'}`}
+            role="button"
+            tabIndex={0}
+            style={{ animation: 'sp-toast-in 200ms ease-out' }}
+            onClick={() => {
+              // Opening a toast = reading that item: check it off so it never
+              // re-announces itself on a later reconnect.
+              if (toast.notificationId) {
+                useStore.getState().markNotificationRead(toast.notificationId);
+              }
+              if (toast.onClick) {
+                toast.onClick();
+              } else if (toast.actionUrl) {
+                navigate(toast.actionUrl);
+              } else if (isMessage) {
+                navigate('/discussion');
+              }
+              removeToast(toast.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                (e.currentTarget as HTMLDivElement).click();
+              }
+            }}
+            className={`group pointer-events-auto relative overflow-hidden cursor-pointer rounded-sm border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm pl-3.5 pr-2 py-2.5 flex items-start gap-2.5 transition-all duration-200 ${
+              isExiting ? 'opacity-0 translate-x-2' : 'opacity-100 translate-x-0'
+            }`}
           >
-            {/* Top red accent bar */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500" />
+            {/* Hairline type accent */}
+            <span className={`absolute left-0 top-0 bottom-0 w-[2px] ${accent}`} />
 
-            {/* Icon with animated red notification badge */}
-            <div className="relative shrink-0 mt-0.5">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                isMessage 
-                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400' 
-                  : isPublication 
-                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' 
+            <span className="mt-[1px] shrink-0 text-zinc-400 dark:text-zinc-500">
+              {isMessage ? <MessageSquare size={13} />
+                : isPublication ? <Newspaper size={13} />
+                  : isSocial ? <Users size={13} />
+                    : <Bell size={13} />}
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+                {isPublication
+                  ? (language === 'fr' ? 'Publication' : 'Publication')
                   : isSocial
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                  : 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400'
-              }`}>
-                {isMessage && <MessageSquare size={18} />}
-                {isPublication && <Newspaper size={18} />}
-                {isSocial && <Users size={18} />}
-                {!isMessage && !isPublication && !isSocial && <Bell size={18} />}
-              </div>
-
-              {/* Pulsing Red Notification Badge Dot */}
-              <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-red-600 border-2 border-white dark:border-zinc-900"></span>
+                    ? (language === 'fr' ? 'Activité' : 'Activity')
+                    : isMessage
+                      ? 'Message'
+                      : (language === 'fr' ? 'Briefing' : 'Briefing')}
               </span>
-            </div>
-
-            {/* Content */}
-            <div 
-              className="flex-1 cursor-pointer pr-4"
-              onClick={() => {
-                // Opening a toast = reading that item: check it off so it never
-                // re-announces itself on a later reconnect.
-                if (toast.notificationId) {
-                  useStore.getState().markNotificationRead(toast.notificationId);
-                }
-                if (toast.onClick) {
-                  toast.onClick();
-                } else if (toast.actionUrl) {
-                  navigate(toast.actionUrl);
-                } else if (isMessage) {
-                  navigate('/discussion');
-                }
-                removeToast(toast.id);
-              }}
-            >
-              <div className="flex items-center gap-1.5 mb-1">
-                <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded border ${
-                  isPublication
-                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                    : isSocial
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                    : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
-                }`}>
-                  {isPublication 
-                    ? (language === 'fr' ? 'FLASH INFO' : 'NEW PUBLICATION') 
-                    : isSocial
-                    ? (language === 'fr' ? 'ACTIVITÉ' : 'NETWORK ACTIVITY')
-                    : (language === 'fr' ? 'NOUVEAU MESSAGE' : 'NEW MESSAGE')}
-                </span>
-                <Volume2 size={12} className="text-zinc-400 animate-pulse" />
-              </div>
-
-              <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 line-clamp-1">
+              <h4 className="text-[12px] font-semibold text-zinc-900 dark:text-zinc-100 leading-snug truncate mt-0.5">
                 {toast.title}
               </h4>
-              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 line-clamp-2 mt-0.5">
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-snug truncate">
                 {toast.body}
               </p>
-              
-              <span className="inline-block mt-2 text-[10px] font-medium text-red-600 dark:text-red-400 hover:underline">
-                {language === 'fr' ? 'Cliquez pour ouvrir →' : 'Click to view →'}
-              </span>
             </div>
 
-            {/* Close button */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 removeToast(toast.id);
               }}
-              className="shrink-0 p-1 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              aria-label={language === 'fr' ? 'Fermer' : 'Dismiss'}
+              className="shrink-0 p-0.5 -mt-0.5 text-zinc-300 dark:text-zinc-600 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors cursor-pointer bg-transparent border-none"
             >
-              <X size={14} />
+              <X size={13} />
             </button>
+
+            {/* Life bar — the notice's own 5s countdown */}
+            <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-zinc-100 dark:bg-zinc-800/60 overflow-hidden">
+              <span
+                className={`block h-full origin-left ${accent} opacity-60`}
+                style={{ animation: `sp-toast-life ${AUTO_DISMISS_MS}ms linear forwards` }}
+              />
+            </span>
           </div>
         );
       })}

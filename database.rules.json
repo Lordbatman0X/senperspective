@@ -54,6 +54,14 @@
       ".read": "auth != null",
       ".write": "auth != null"
     },
+    "notifications": {
+      ".read": true,
+      ".write": true
+    },
+    "notification_responses": {
+      ".read": true,
+      ".write": true
+    },
     "dispatches": {
       ".read": "auth != null"
     },

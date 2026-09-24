@@ -433,23 +433,10 @@ export function ArticlePage() {
       replyTo: parentCommenter
     });
 
-    // Notify the parent commenter — only when we know who's replying (member
-    // with email, or a guest who voluntarily left an email).
-    const normalizedParent = (parentEmail || '').toLowerCase().trim();
-    const normalizedActor = (authorEmail || '').toLowerCase().trim();
-    if (normalizedParent && normalizedActor && normalizedParent !== normalizedActor) {
-      useStore.getState().addNotification({
-        id: "notif-" + Date.now().toString(),
-        email: parentEmail,
-        text: {
-          fr: `${authorName} a répondu à votre commentaire sur "${article.title?.[language] || 'Untitled'}"`,
-          en: `${authorName} replied to your comment on "${article.title?.[language] || 'Untitled'}"`
-        },
-        date: new Date().toISOString().split("T")[0],
-        isRead: false,
-        link: `/article/${article.slug}`
-      });
-    }
+    // The reply notice is emitted ONCE by the store's addComment (it owns the
+    // parent lookup and the social fan-out) — emitting it here too produced two
+    // identical rows / two identical toasts for a single reply.
+    void parentEmail;
 
     setReplyText("");
     setActiveReplyId(null);

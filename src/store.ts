@@ -331,6 +331,16 @@ export interface NotificationItem {
   isRead: boolean;
   link?: string;
   category?: 'messages' | 'newsletters' | 'newPublishes' | 'generalNews' | 'system' | 'social' | 'network';
+  /**
+   * Coalescing key for the UNREAD state. Two unread items addressed to the same
+   * member that share a `groupKey` are the SAME live subject (one conversation,
+   * one article+author, one relation), so the newer one REPLACES the older one
+   * instead of stacking a duplicate row. This is what keeps the bell/panel from
+   * filling up with repeated notices "from the same correspondent".
+   */
+  groupKey?: string;
+  /** Email of the member whose action produced this item (per-account dots). */
+  actorEmail?: string;
 }
 
 /* Locally acknowledged notification ids. Read-state has to survive a reload and a
@@ -396,6 +406,231 @@ export function unreadForEmail(list: any[], email: string): any[] {
   return (list || []).filter(
     n => ((n?.email ?? '').toLowerCase().trim()) === me && !n?.isRead
   );
+}
+
+/* =====================================================================
+   UNREAD COUNTERS — THE SINGLE SOURCE OF TRUTH
+   ---------------------------------------------------------------------
+   Every red dot in the app (header avatar, scrolled mini avatar, mobile
+   menu footer, drawer tab ribbons, floating hub bubbles, per-contact
+   avatar dots) is derived from the helpers below. One rule set ⇒ the
+   numbers can never drift apart, and the header bubble always equals the
+   exact sum of the drawer sections:
+
+       total = messages + social + network + system
+
+   • messages : unread DMs addressed to me  (1 per unread message, which is
+                what the per-account dots add up to). Message-notification
+                rows mirror the same inbox, so the larger of the two is
+                used — if the DM rows have not streamed in yet (offline or
+                realtime lag) the badge stays honest instead of dropping.
+   • social   : followers/friends comments & publications ("Activité")
+   • network  : friend requests / acceptances ("Réseau")
+   • system   : editorial briefs, warnings, newsletters ("Briefing")
+   ===================================================================== */
+export function normalizeEmail(value?: string | null): string {
+  return String(value ?? '').toLowerCase().trim();
+}
+
+/** Unread direct messages addressed to `email` (one per message). */
+export function unreadMessagesForEmail(list: any[], email: string): number {
+  const me = normalizeEmail(email);
+  if (!me) return 0;
+  return (list || []).filter(dm => normalizeEmail(dm?.receiver) === me && !dm?.read).length;
+}
+
+/**
+ * Per-conversation unread map: `{ '<sender email>': unreadCount }`.
+ * Used for the "red dot on each account where unread messages are" — a
+ * conversation disappears from the map the moment its messages are read.
+ */
+export function unreadByContact(list: any[], email: string): Record<string, number> {
+  const me = normalizeEmail(email);
+  const out: Record<string, number> = {};
+  if (!me) return out;
+  for (const dm of (list || [])) {
+    if (!dm || dm.read) continue;
+    if (normalizeEmail(dm.receiver) !== me) continue;
+    const from = normalizeEmail(dm.sender);
+    if (!from || from === me) continue;
+    out[from] = (out[from] || 0) + 1;
+  }
+  return out;
+}
+
+export interface UnreadCounts {
+  messages: number;
+  social: number;
+  network: number;
+  system: number;
+  total: number;
+}
+
+/** Every section counter + the coherent total for one member. */
+export function unreadCountsFor(
+  email: string | undefined | null,
+  notifications: any[],
+  directMessages: any[]
+): UnreadCounts {
+  const me = normalizeEmail(email);
+  if (!me) return { messages: 0, social: 0, network: 0, system: 0, total: 0 };
+  const mine = unreadForEmail(notifications || [], me);
+  const dmMessages = unreadMessagesForEmail(directMessages || [], me);
+  const notifMessages = mine.filter(isMessageNotification).length;
+  const messages = Math.max(dmMessages, notifMessages);
+  const social = mine.filter(isSocialNotification).length;
+  const network = mine.filter(isNetworkNotification).length;
+  const system = mine.filter(isSystemNotification).length;
+  return { messages, social, network, system, total: messages + social + network + system };
+}
+
+/** Coherent total used by every avatar / bell badge. */
+export function unreadTotalFor(
+  email: string | undefined | null,
+  notifications: any[],
+  directMessages: any[]
+): number {
+  return unreadCountsFor(email, notifications, directMessages).total;
+}
+
+/* ---------------------------------------------------------------------
+   SEEN-DM BOOKKEEPING
+   The message listener must never re-announce an inbox it already knows:
+   the ids it has already processed are kept in localStorage so a reload,
+   a logout/login or a reconnect can not replay the whole history as a
+   burst of "new message" toasts.
+   --------------------------------------------------------------------- */
+const SEEN_DM_IDS_KEY = 'sp_seen_dm_ids';
+export function loadSeenDmIds(): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SEEN_DM_IDS_KEY) || '[]');
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+export function rememberSeenDmIds(ids: Array<string | undefined>): void {
+  const clean = ids.filter(Boolean).map(String);
+  if (clean.length === 0) return;
+  try {
+    const set = loadSeenDmIds();
+    clean.forEach(id => set.add(id));
+    localStorage.setItem(SEEN_DM_IDS_KEY, JSON.stringify(Array.from(set).slice(-800)));
+  } catch {
+    /* storage unavailable — non fatal */
+  }
+}
+
+/* =====================================================================
+   FAN-OUT AUDIENCE RESOLUTION (followers + friends)
+   ---------------------------------------------------------------------
+   A follow row is authored by the FOLLOWER: `user_id` = the follower and
+   `follower_email` = the FOLLOWED account (see ProfilePage.toggleFollow and
+   AccountDrawer). A friend row is mutual (`friends/<a__b>` + `friends/<b__a>`).
+   Everything is read from the CLOUD collections, which are the source of
+   truth: the store's `friends` array is only a UI cache and is frequently
+   empty on a fresh device — relying on it is why activity from followed
+   accounts reached nobody. The cache is used ONLY as a last-resort fallback
+   when the cloud returns nothing at all (offline / denied), so a fan-out is
+   never silently empty.
+   ===================================================================== */
+export async function resolveAudienceEmails(actorEmail: string, localFriends: any[] = []): Promise<string[]> {
+  const me = normalizeEmail(actorEmail);
+  const out = new Set<string>();
+  if (!me) return [];
+
+  // 1. Members who FOLLOW the author (author === followed, reader === follower)
+  try {
+    const followerRows: any[] = await fetchFirestoreCollection('followers');
+    for (const r of followerRows) {
+      const followed = normalizeEmail(r?.follower_email ?? r?.followed_email ?? r?.following);
+      const follower = normalizeEmail(r?.user_id ?? r?.follower ?? r?.follower_id ?? r?.email);
+      if (!followed || !follower || followed === follower) continue;
+      if (followed === me) out.add(follower);
+    }
+  } catch { /* fall through to the friends scan */ }
+
+  // 2. Mutual FRIENDS of the author (either direction of the relation row)
+  try {
+    const friendRows: any[] = await fetchFirestoreCollection('friends');
+    for (const r of friendRows) {
+      const a = normalizeEmail(r?.user_id ?? r?.from ?? r?.email);
+      const b = normalizeEmail(r?.friend_email ?? r?.to);
+      if (!a || !b || a === b) continue;
+      if (a === me) out.add(b);
+      else if (b === me) out.add(a);
+    }
+  } catch { /* fall through */ }
+
+  // 3. Last resort: this device's local contact cache (never over-notify when
+  //    the cloud answered — only fill in when it answered nothing).
+  if (out.size === 0) {
+    (localFriends || []).forEach((f: any) => {
+      const e = normalizeEmail(typeof f === 'string' ? f : f?.email);
+      if (e) out.add(e);
+    });
+  }
+
+  out.delete(me);
+  return Array.from(out);
+}
+
+/**
+ * Effective coalescing key of an unread notification. Rows written before the
+ * `groupKey` field existed are mapped onto the same buckets so legacy
+ * duplicates can be folded away on load:
+ *   • every message notification of one inbox ⇒ one bucket (the DM list holds
+ *     the per-correspondent truth, so the notice rows must never stack);
+ *   • social items keep their author+article bucket;
+ *   • network items keep their actor bucket.
+ */
+export function notificationGroupKey(n: any): string {
+  const explicit = String(n?.groupKey || '').trim();
+  if (explicit) return explicit;
+  const id = String(n?.id || '');
+  if (isMessageNotification(n)) {
+    const actor = normalizeEmail(n?.actorEmail);
+    return actor ? `dm:${actor}` : 'dm:__legacy__';
+  }
+  if (isSocialNotification(n)) {
+    const actor = normalizeEmail(n?.actorEmail);
+    if (id.startsWith('notif-follower-publish-')) return `social-publish:${actor || 'unknown'}`;
+    return `social-comment:${actor || 'unknown'}:${n?.link || ''}`;
+  }
+  if (isNetworkNotification(n)) return `network:${normalizeEmail(n?.actorEmail) || 'unknown'}`;
+  return '';
+}
+
+/**
+ * Fold a notification list into its canonical shape:
+ *  - one row per id,
+ *  - at most ONE UNREAD row per coalescing group (newest wins),
+ *  - newest first, capped so the local list can not grow forever.
+ * Returns the kept list plus the ids of superseded unread rows, which the
+ * caller persists as read so they can never resurrect from the cloud.
+ */
+export function compactNotifications(list: any[], email: string): { kept: any[]; supersededIds: string[] } {
+  const me = normalizeEmail(email);
+  const seenIds = new Set<string>();
+  const unreadGroup = new Set<string>();
+  const supersededIds: string[] = [];
+  const kept: any[] = [];
+  for (const n of (list || [])) {
+    if (!n || !n.id) continue;
+    const id = String(n.id);
+    if (seenIds.has(id)) { supersededIds.push(id); continue; }
+    if (me && normalizeEmail(n.email) !== me) { seenIds.add(id); kept.push(n); continue; }
+    if (!n.isRead) {
+      const group = notificationGroupKey(n);
+      if (group) {
+        if (unreadGroup.has(group)) { supersededIds.push(id); continue; }
+        unreadGroup.add(group);
+      }
+    }
+    seenIds.add(id);
+    kept.push(n);
+  }
+  return { kept: kept.slice(0, 300), supersededIds };
 }
 
 export interface SubscriberItem {
@@ -966,34 +1201,34 @@ export const useStore = create<AppState>()(
             link: `/article/${article.slug}`
           });
 
-          // FIX (social notifications): notify the author's followers about the
-          // new publication so their Account Drawer "Social" feed shows it.
+          // SOCIAL FAN-OUT: notify everyone who follows or is friends with the
+          // author that a new publication is out, so their Account Drawer
+          // "Activité" feed shows it and the section's red dot lights up.
+          // Audience = cloud relation collections (with local fallback).
           (async () => {
             try {
-              const authorClean = (article.authorEmail || currentProfile?.email || '').toLowerCase().trim();
+              const authorClean = normalizeEmail(article.authorEmail || currentProfile?.email);
               if (!authorClean) return;
-              const followerRows: any[] = await fetchFirestoreCollection('followers');
-              const followerEmails = Array.from(new Set(followerRows
-                .filter((r: any) => String(r?.follower_email || '').toLowerCase().trim() === authorClean)
-                .map((r: any) => String(r?.user_id || '').toLowerCase().trim())
-                .filter(Boolean)));
-              followerEmails.forEach(followerEmail => {
-                if (followerEmail === authorClean) return;
+              const audience = await resolveAudienceEmails(authorClean, get().friends || []);
+              const authorLabel = article.author || authorClean.split('@')[0];
+              audience.forEach(followerEmail => {
                 get().addNotification({
                   id: 'notif-follower-publish-' + Date.now() + '-' + Math.random().toString(36).substring(4),
                   email: followerEmail,
                   text: {
-                    fr: `${article.author || authorClean} que vous suivez a publié : \"${artTitleFr}\"`,
-                    en: `${article.author || authorClean}, whom you follow, published: \"${artTitleEn}\"`
+                    fr: `${authorLabel} que vous suivez a publié : "${artTitleFr}"`,
+                    en: `${authorLabel}, whom you follow, published: "${artTitleEn}"`
                   },
                   date: new Date().toISOString().split('T')[0],
                   isRead: false,
                   category: 'social',
-                  link: `/article/${article.slug}`
+                  link: `/article/${article.slug}`,
+                  groupKey: `social-publish:${authorClean}`,
+                  actorEmail: authorClean
                 });
               });
             } catch (err) {
-              console.warn('[Store] Follower publish notification notice:', err);
+              console.warn('[Store] Social publish fan-out notice:', err);
             }
           })();
         }
@@ -1129,7 +1364,11 @@ export const useStore = create<AppState>()(
           date: new Date().toISOString().split('T')[0],
           isRead: false,
           category: 'messages',
-          link: '/discussion'
+          link: '/discussion',
+          // One unread notice per correspondent: a second message from the same
+          // account refreshes that line instead of stacking a duplicate.
+          groupKey: `dm:${cleanSender}`,
+          actorEmail: cleanSender
         });
 
         // If message is directed to Abdel (Official AI Assistant in Messenger), generate response
@@ -1188,14 +1427,25 @@ export const useStore = create<AppState>()(
         set({ directMessages: dms.filter(dm => dm.id !== id) });
         cloudDelete('messages', id);
       },
+      // Marks a CONVERSATION as read. Pass a contact email to check off only
+      // that account (the floating hub / drawer do this when a conversation is
+      // opened) or '' to check off the whole inbox. Both the DM rows and the
+      // message-notification rows covering those messages are checked off, and
+      // the read state is persisted, so a per-account red dot disappears for
+      // good the moment its messages are actually read.
       markDirectMessagesAsRead: (contactEmail, userEmail) => {
         const dms = get().directMessages || [];
-        const senderClean = contactEmail ? contactEmail.toLowerCase() : '';
-        const receiverClean = userEmail ? userEmail.toLowerCase() : '';
+        const senderClean = normalizeEmail(contactEmail);
+        const receiverClean = normalizeEmail(userEmail);
+        if (!receiverClean) return;
         let updated = false;
 
         const newDms = dms.map(dm => {
-          if (!dm.read && dm.receiver?.toLowerCase() === receiverClean && (!senderClean || dm.sender?.toLowerCase() === senderClean)) {
+          if (
+            !dm.read &&
+            normalizeEmail(dm.receiver) === receiverClean &&
+            (!senderClean || normalizeEmail(dm.sender) === senderClean)
+          ) {
             updated = true;
             cloudSave('messages', dm.id, { ...dm, read: true });
             return { ...dm, read: true };
@@ -1208,22 +1458,32 @@ export const useStore = create<AppState>()(
         }
 
         const notifs = get().notifications || [];
-        const isMyMessageNotif = (n: any) =>
-          ((n.email ?? '').toLowerCase() === receiverClean) &&
-          (n.category === 'messages' || String(n.id || '').startsWith('notif-dm-')) &&
-          !n.isRead;
-        const updatedNotifs = notifs.map(n => {
-          if (isMyMessageNotif(n)) return { ...n, isRead: true };
-          return n;
-        });
-        set({ notifications: updatedNotifs });
-        // Persist + record a local receipt. Without this the cloud row stays
-        // isRead:false, so reading a message in the hub/messenger still
-        // re-announced itself as a fresh notification after every reconnect.
-        notifs.filter(isMyMessageNotif).forEach(n => {
-          cloudSave('notifications', n.id, { ...n, isRead: true });
-          ackNotificationIds([n.id]);
-        });
+        const isScopedMessageNotif = (n: any) => {
+          if (!isMessageNotification(n)) return false;
+          if (normalizeEmail(n?.email) !== receiverClean) return false;
+          if (!senderClean) return true;
+          // New rows carry actorEmail and are cleared with their own
+          // conversation. Legacy rows (no actor) belong to the whole inbox and
+          // are swept too: the DM rows are the truth for which accounts still
+          // have unread messages, so a stale notice can never inflate the
+          // Messages counter beyond the per-account dots.
+          const actor = normalizeEmail(n?.actorEmail) || normalizeEmail(String(n?.groupKey || '').replace(/^dm:/, ''));
+          return !actor || actor === senderClean;
+        };
+        const touched = notifs.filter(n => isScopedMessageNotif(n) && !n.isRead);
+        if (touched.length > 0) {
+          const touchedIds = new Set(touched.map(n => String(n.id)));
+          set({
+            notifications: notifs.map(n => (touchedIds.has(String(n?.id)) ? { ...n, isRead: true } : n))
+          });
+          // Persist + record a local receipt. Without this the cloud row stays
+          // isRead:false, so reading a message in the hub/messenger still
+          // re-announced itself as a fresh notification after every reconnect.
+          touched.forEach(n => {
+            cloudSave('notifications', n.id, { ...n, isRead: true });
+            ackNotificationIds([n.id]);
+          });
+        }
       },
       friends: [],
       setFriends: (list: any) => {
@@ -1422,72 +1682,69 @@ export const useStore = create<AppState>()(
           );
         }
 
-        // Notify parent author if this is a reply!
+        // Notify the parent author if this is a reply!
+        // (Kept in the store so EVERY caller — article page, internal share,
+        // member drawer — fans out exactly once; the article page used to send a
+        // second, duplicate notice for the same reply.)
         if (comment.parentId) {
           const parent = (comments ?? []).find(p => p.id === comment.parentId);
-          if (parent && parent.email && ((parent.email ?? '').toLowerCase()) !== comment.email?.toLowerCase()) {
+          const parentClean = normalizeEmail(parent?.email);
+          const actorClean = normalizeEmail(comment.email);
+          if (parent && parentClean && parentClean !== actorClean) {
             get().addNotification({
-              id: 'notif-reply-' + Date.now(),
-              email: parent.email,
+              id: 'notif-reply-' + Date.now() + '-' + Math.random().toString(36).substring(4),
+              email: parentClean,
               text: {
                 fr: `${comment.author} a répondu à votre commentaire : "${comment.text.substring(0, 40)}..."`,
                 en: `${comment.author} replied to your comment: "${comment.text.substring(0, 40)}..."`
               },
               date: new Date().toISOString().split('T')[0],
               isRead: false,
-              category: 'messages',
-              link: `/article/${comment.articleId}`
+              category: 'social',
+              link: `/article/${comment.articleId}`,
+              groupKey: `reply:${comment.articleId}:${actorClean || 'guest'}`,
+              actorEmail: actorClean || undefined
             });
           }
         }
 
-        // Notify reader friends about the new comment/activity across the app
-        const friendsList = get().friends || [];
-        friendsList.forEach(friend => {
-          if (friend.email && ((friend.email ?? '').toLowerCase()) !== comment.email?.toLowerCase()) {
-            get().addNotification({
-              id: 'notif-friend-comment-' + Date.now() + '-' + Math.random().toString(36).substring(4),
-              email: friend.email,
-              text: {
-                fr: `${comment.author} (Ami) a publié un commentaire sur "${comment.articleTitle || 'un article'}" : "${comment.text.substring(0, 35)}..."`,
-                en: `${comment.author} (Friend) posted a comment on "${comment.articleTitle || 'an article'}": "${comment.text.substring(0, 35)}..."`
-              },
-              date: new Date().toISOString().split('T')[0],
-              isRead: false,
-              category: 'social',
-              link: `/article/${comment.articleId}`
-            });
-          }
-        });
-
-        // Notify FOLLOWERS of the comment author (real verified relations
-        // from the `followers` collection: rows where follower_email = author)
+        // SOCIAL FAN-OUT — "Activité".
+        // Every follower AND every friend of the comment author is notified, so
+        // the activity is visible in their drawer "Activité" feed and raises the
+        // section's red dot. The audience comes from the CLOUD relation
+        // collections (`followers` / `friends`), which are the source of truth —
+        // the local `friends` cache is only a fallback, because on a fresh
+        // device (or for a guest author) it is empty and the whole fan-out used
+        // to reach nobody.
         try {
-          const authorClean = (comment.email || '').toLowerCase().trim();
+          const authorClean = normalizeEmail(comment.email);
           if (authorClean) {
-            const followerRows = await fetchFirestoreCollection('followers');
-            const followerEmails = Array.from(new Set(followerRows
-              .filter((r: any) => String(r?.follower_email || '').toLowerCase().trim() === authorClean)
-              .map((r: any) => String(r?.user_id || '').toLowerCase().trim())
-              .filter(Boolean)));
-            followerEmails.forEach(followerEmail => {
-              if (followerEmail === authorClean) return;
+            const audience = await resolveAudienceEmails(authorClean, get().friends || []);
+            const actorLabel = comment.author || authorClean.split('@')[0];
+            const articleRef = comment.articleId || '';
+            const snippet = (comment.text || '').substring(0, 35);
+            const today = new Date().toISOString().split('T')[0];
+            audience.forEach(target => {
               get().addNotification({
                 id: 'notif-follower-comment-' + Date.now() + '-' + Math.random().toString(36).substring(4),
-                email: followerEmail,
+                email: target,
                 text: {
-                  fr: `${comment.author} que vous suivez a commenté \"${comment.articleTitle || 'un article'}\" : \"${comment.text.substring(0, 35)}...\"`,
-                  en: `${comment.author}, whom you follow, commented on \"${comment.articleTitle || 'an article'}\": \"${comment.text.substring(0, 35)}...\"`
+                  fr: `${actorLabel} a commenté « ${comment.articleTitle || 'un article'} » : « ${snippet}... »`,
+                  en: `${actorLabel} commented on “${comment.articleTitle || 'an article'}”: “${snippet}...”`
                 },
-                date: new Date().toISOString().split('T')[0],
+                date: today,
                 isRead: false,
                 category: 'social',
-                link: `/article/${comment.articleId}`
+                link: `/article/${comment.articleId}`,
+                // One unread line per author + article: a second comment from
+                // the same author refreshes that line instead of stacking.
+                groupKey: `social-comment:${authorClean}:${articleRef}`,
+                actorEmail: authorClean
               });
             });
           }
         } catch (err) {
-          console.warn('[Store] Follower comment notification notice:', err);
+          console.warn('[Store] Social comment fan-out notice:', err);
         }
       },
       approveComment: (id) => {
@@ -1716,39 +1973,80 @@ export const useStore = create<AppState>()(
         syncPreferencesToFirestore({ notificationPreferences: updated });
       },
       addNotification: (notification) => {
-        // Check category preferences
-        const prefs = get().notificationPreferences;
-        if (notification.category && prefs && notification.category !== 'system') {
-          if (prefs[notification.category] === false) {
-            // Category is muted by user setup preference
-            return;
-          }
+        const id = String(notification?.id || '');
+        const notifTarget = normalizeEmail(notification?.email);
+        if (!id || !notifTarget) return;
+
+        const me = normalizeEmail(get().readerProfile?.email);
+        const isMine = Boolean(me) && me === notifTarget;
+
+        // Mute rules apply ONLY to the reader's own inbox. A fan-out to other
+        // members must never be silenced by THIS device's preferences — the
+        // recipient's own device holds their real preferences. (Previously a
+        // muted category on the commenter's account silently killed the
+        // followers' activity feed.)
+        if (isMine && notification.category && notification.category !== 'system') {
+          const prefs = get().notificationPreferences;
+          if (prefs && (prefs as any)[notification.category] === false) return;
         }
-        set({ notifications: [notification, ...(get().notifications || [])] });
+
+        const list = get().notifications || [];
+        const entry: NotificationItem = {
+          ...notification,
+          id,
+          email: notifTarget,
+          isRead: false,
+        };
+        const group = String(entry.groupKey || '').trim();
+
+        // Coalesce: an unread item already covering the SAME subject (groupKey)
+        // for the SAME member is replaced by the newer one instead of stacking a
+        // duplicate row. The superseded rows are persisted as read + acked so
+        // they can never come back from the cloud and re-notify later.
+        const superseded: NotificationItem[] = [];
+        const next = list.filter(n => {
+          if (String(n?.id) === id) return false;                       // exact duplicate
+          if (
+            group &&
+            !n?.isRead &&
+            normalizeEmail(n?.email) === notifTarget &&
+            String(n?.groupKey || '').trim() === group
+          ) {
+            superseded.push(n);
+            return false;
+          }
+          return true;
+        });
+        set({ notifications: [entry, ...next].slice(0, 300) });
         // Persist so notifications survive reloads and appear on other devices
-        cloudSave('notifications', notification.id, { ...notification, isRead: false });
+        cloudSave('notifications', id, entry);
+        superseded.forEach(old => {
+          ackNotificationIds([old.id]);
+          cloudSave('notifications', old.id, { ...old, isRead: true });
+        });
 
         // Live in-app toast + browser push — ONLY for notifications addressed to
         // the signed-in reader on this device (not for notifications this device
         // merely fans out to other members). Social items land in "Activité".
-        const me = ((get().readerProfile?.email ?? '')).toLowerCase().trim();
-        const notifTarget = ((notification.email ?? '')).toLowerCase().trim();
-        if (me && notifTarget && me === notifTarget) {
+        if (isMine) {
           const lang = get().language;
           const textMsg = typeof notification.text === 'string'
             ? notification.text
             : (notification.text?.[lang] || notification.text?.fr || 'Nouvelle notification');
           const isSocial = notification.category === 'social';
+          const isNetwork = notification.category === 'network';
           triggerInAppToast({
             type: isSocial ? 'social' : (notification.category === 'system' ? 'system' : (notification.category === 'messages' ? 'message' : 'publication')),
             title: isSocial
               ? (lang === 'fr' ? 'Activité de votre réseau' : 'Network activity')
-              : (notification.category === 'messages'
-                ? (lang === 'fr' ? 'Nouveau message' : 'New message')
-                : (lang === 'fr' ? 'Nouvelle publication' : 'New publication')),
+              : (isNetwork
+                ? (lang === 'fr' ? 'Réseau' : 'Network')
+                : (notification.category === 'messages'
+                  ? (lang === 'fr' ? 'Nouveau message' : 'New message')
+                  : (lang === 'fr' ? 'Nouvelle publication' : 'New publication'))),
             body: textMsg,
             actionUrl: notification.link,
-            notificationId: notification.id
+            notificationId: id
           });
         }
       },
@@ -1795,14 +2093,20 @@ export const useStore = create<AppState>()(
       // toast. This action pulls the reader's cloud notifications, merges new
       // arrivals into the store, refreshes read-state (cross-device), and
       // fires the in-app toast for live arrivals only.
+      //
+      // It also COMPACTS what it pulls: duplicate ids and the repeated notices
+      // "from the same correspondent" that older builds wrote are folded into
+      // one unread row per subject (see compactNotifications) and the
+      // superseded rows are persisted as read, so an existing account gets a
+      // clean, coherent badge on its very next load.
       loadRemoteNotifications: async (email) => {
-        const me = (email ?? '').toLowerCase().trim();
+        const me = normalizeEmail(email);
         if (!me) return;
         try {
           const rows: any[] = await fetchFirestoreCollection('notifications');
           const ackedIds = loadAckedNotificationIds();
           const mine = rows
-            .filter(n => String(n?.email || '').toLowerCase().trim() === me && n?.id)
+            .filter(n => normalizeEmail(n?.email) === me && n?.id)
             .map(n => (ackedIds.has(String(n.id)) && !n.isRead ? { ...n, isRead: true } : n));
           if (mine.length === 0) return;
           const existing = get().notifications || [];
@@ -1818,13 +2122,19 @@ export const useStore = create<AppState>()(
               ? { ...n, isRead: cloud.isRead }
               : n;
           });
-          if (fresh.length === 0) {
-            if (mergedExisting.some((n: any, i: number) => n !== (existing as any[])[i])) {
-              set({ notifications: mergedExisting });
-            }
-            return;
-          }
-          set({ notifications: [...fresh, ...mergedExisting] });
+          const merged = [...fresh, ...mergedExisting];
+          const { kept, supersededIds } = compactNotifications(merged, me);
+          const changed = fresh.length > 0
+            || supersededIds.length > 0
+            || mergedExisting.some((n: any, i: number) => n !== (existing as any[])[i]);
+          if (changed) set({ notifications: kept });
+          // Persist the folded-away duplicates so they can never resurrect.
+          supersededIds.slice(0, 60).forEach(id => {
+            ackNotificationIds([id]);
+            const old = cloudById.get(id);
+            if (old && !old.isRead) cloudSave('notifications', id, { ...old, isRead: true });
+          });
+          if (fresh.length === 0) return;
           // Toast ONLY genuinely live arrivals (after the initial sync), so
           // a page reload never spams the reader with old unread backlog.
           if (!remoteNotifFirstSyncDone) {
@@ -1832,8 +2142,15 @@ export const useStore = create<AppState>()(
             return;
           }
           const lang = get().language;
-          fresh.filter((n: any) => !n.isRead).forEach((n: any) => {
+          const freshLive = fresh.filter((n: any) => {
+            if (n.isRead) return false;
+            // A fresh row whose subject is already covered by a kept unread row
+            // was folded away — no second toast for the same correspondent.
+            return kept.some((k: any) => String(k.id) === String(n.id));
+          });
+          freshLive.forEach((n: any) => {
             const isSocial = n.category === 'social';
+            const isNetwork = n.category === 'network';
             const textMsg = typeof n.text === 'string'
               ? n.text
               : (n.text?.[lang] || n.text?.fr || 'Nouvelle notification');
@@ -1841,9 +2158,11 @@ export const useStore = create<AppState>()(
               type: isSocial ? 'social' : (n.category === 'system' ? 'system' : (n.category === 'messages' ? 'message' : 'publication')),
               title: isSocial
                 ? (lang === 'fr' ? 'Activité de votre réseau' : 'Network activity')
-                : (n.category === 'messages'
-                  ? (lang === 'fr' ? 'Nouveau message' : 'New message')
-                  : (lang === 'fr' ? 'Nouvelle publication' : 'New publication')),
+                : (isNetwork
+                  ? (lang === 'fr' ? 'Réseau' : 'Network')
+                  : (n.category === 'messages'
+                    ? (lang === 'fr' ? 'Nouveau message' : 'New message')
+                    : (lang === 'fr' ? 'Nouvelle publication' : 'New publication'))),
               body: textMsg,
               actionUrl: n.link,
               notificationId: n.id
@@ -1854,41 +2173,29 @@ export const useStore = create<AppState>()(
         }
       },
       clearNotifications: (email, scope) => {
-        const target = (email ?? '').toLowerCase().trim();
+        const target = normalizeEmail(email);
         const list = get().notifications || [];
+        // Scope matching delegates to the exported classifiers — the SAME
+        // predicates the counters use, so a section's red dot can only be
+        // cleared by clearing exactly what it counted.
         const matchesScope = (n: NotificationItem) => {
-          if (((n.email ?? '').toLowerCase().trim()) !== target) return false;
-          if (scope === 'social') {
-            // Only "Activité" items: followed/friend comments & publications
-            return n.category === 'social' ||
-              String(n.id || '').startsWith('notif-follower-') ||
-              String(n.id || '').startsWith('notif-friend-comment-');
-          }
-          if (scope === 'network') {
-            // Friend requests / acceptances — network, not Activité
-            return n.category === 'network' ||
-              String(n.id || '').startsWith('notif-friend-request-') ||
-              String(n.id || '').startsWith('notif-friend-accepted-');
-          }
-          if (scope === 'messages') {
-            // Direct-message notifications — cleared when the Messages tab opens
-            return n.category === 'messages' || String(n.id || '').startsWith('notif-dm-');
-          }
-          if (scope === 'system') {
-            return n.category === 'system' || String(n.id || '').startsWith('warning-');
-          }
+          if (normalizeEmail(n.email) !== target) return false;
+          if (scope === 'social') return isSocialNotification(n);
+          if (scope === 'network') return isNetworkNotification(n);
+          if (scope === 'messages') return isMessageNotification(n);
+          if (scope === 'system') return isSystemNotification(n);
           return true;
         };
         const hasUnread = list.some(n => matchesScope(n) && !n.isRead);
         if (!hasUnread) return;
+        const touched = list.filter(n => matchesScope(n) && !n.isRead);
         set({
           notifications: list.map(n => (matchesScope(n) ? { ...n, isRead: true } : n))
         });
         // Persist read state per user
-        list.filter(n => matchesScope(n) && !n.isRead)
-          .forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
+        touched.forEach(n => cloudSave('notifications', n.id, { ...n, isRead: true }));
         // Local receipt: keeps the item read even if the cloud write was offline
-        ackNotificationIds(list.filter(matchesScope).map(n => String(n.id)));
+        ackNotificationIds(touched.map(n => String(n.id)));
       },
       // Marks a SINGLE notification as read (clicking/opening one item). This is
       // what stops an already-opened item from re-notifying on reconnect: the

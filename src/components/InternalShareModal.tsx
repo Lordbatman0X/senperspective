@@ -276,7 +276,7 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
     });
 
     addNotification({
-      id: 'notif-' + Date.now(),
+      id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substring(4),
       email: selectedRecipientEmail,
       text: {
         fr: `💬 ${readerProfile?.name || 'Un membre'} vous a partagé : "${attachmentTitle}"`,
@@ -285,7 +285,9 @@ export const InternalShareModal: React.FC<InternalShareModalProps> = ({
       date: new Date().toISOString().split('T')[0],
       isRead: false,
       category: 'messages',
-      link: currentAttachment.link
+      link: currentAttachment.link,
+      groupKey: `dm:${((readerProfile?.email ?? '')).toLowerCase().trim()}`,
+      actorEmail: ((readerProfile?.email ?? '')).toLowerCase().trim()
     });
 
     setToastMessage(language === 'fr' ? '✓ Envoyé en message direct !' : '✓ Sent in Direct Message!');

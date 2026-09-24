@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useStore } from "../store";
+import { useStore, unreadTotalFor } from "../store";
 import { useAuth } from "../contexts/AuthContext";
 
 import { compressImageFile } from "../lib/imageUtils";
@@ -210,14 +210,13 @@ export function Header() {
   const readerEmail = readerProfile?.email;
 
   // Unified unread indicator: ONE total shared by every entry point
-  // (desktop avatar, mobile menu row, scrolled mini avatar). The drawer
-  // clears each section's unread items itself, per-tab — never all at once.
+  // (desktop avatar, mobile menu footer, scrolled mini avatar). It is the exact
+  // SUM of what the drawer shows per section — unread DMs + Activité + Réseau +
+  // Briefing — computed by the shared rule set (store.unreadTotalFor), never a
+  // raw dump of the notification list (message notifications mirror DMs and
+  // would double-count). The drawer clears each section itself, per-tab.
   const unreadTotal = readerProfile
-    ? (notifications || []).filter(
-        (n: any) =>
-          ((n.email ?? "").toLowerCase().trim()) ===
-            ((readerProfile.email ?? "").toLowerCase().trim()) && !n.isRead
-      ).length
+    ? unreadTotalFor(readerProfile.email, notifications || [], directMessages || [])
     : 0;
   const [regEmail, setRegEmail] = useState("");
   const [regName, setRegName] = useState("");
@@ -706,8 +705,15 @@ export function Header() {
                       onClick={() => setShowProfileModal(true)}
                       className="flex items-center gap-2 hover:opacity-90 cursor-pointer"
                     >
-                      <div className="w-5 h-5 rounded-full overflow-hidden border border-[#E85D42]">
-                        {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 20)}
+                      <div className="relative w-5 h-5 rounded-full">
+                        <div className="w-5 h-5 rounded-full overflow-hidden border border-[#E85D42]">
+                          {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 20)}
+                        </div>
+                        {unreadTotal > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] bg-red-600 text-white text-[8px] font-mono font-black flex items-center justify-center px-0.5 rounded-full border border-white dark:border-zinc-900 shadow-sm tabular-nums">
+                            {unreadTotal > 9 ? "9+" : unreadTotal}
+                          </span>
+                        )}
                       </div>
                     </button>
                   ) : (

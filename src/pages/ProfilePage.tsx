@@ -452,7 +452,9 @@ export function ProfilePage() {
         },
         date: new Date().toISOString().split('T')[0],
         isRead: false,
-        category: 'network'
+        category: 'network',
+        groupKey: `network:${me}`,
+        actorEmail: me
       });
       setSuccessMsg(language === "fr" ? "Demande confirmée — vous êtes désormais amis !" : "Request confirmed — you are now friends!");
       setTimeout(() => setSuccessMsg(""), 4000);
@@ -513,7 +515,9 @@ export function ProfilePage() {
           },
           date: new Date().toISOString().split('T')[0],
           isRead: false,
-          category: 'network'
+          category: 'network',
+          groupKey: `network:${a}`,
+          actorEmail: a
         });
         setSuccessMsg(language === "fr" ? "Demande d'amitié envoyée. En attente de confirmation." : "Friend request sent. Awaiting confirmation.");
       }

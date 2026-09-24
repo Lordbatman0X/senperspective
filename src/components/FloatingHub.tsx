@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { useStore } from "../store";
+import { useStore, unreadByContact, normalizeEmail, unreadMessagesForEmail } from "../store";
 import { fetchUserProfile } from '../firebase/auth';
 import { useAuth } from "../contexts/AuthContext";
 import { Bot, MessageSquare, X, Send, Trash2, Paperclip, Check, ChevronDown, Sparkles, RefreshCw, RotateCcw } from "lucide-react";
@@ -227,23 +227,30 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     }
   }, [allUsers, friends]);
 
-  // The hub is the messenger launcher: its bubble reflects UNREAD DMs only.
-  // Social/network notification counts live on the header avatar + drawer tabs,
-  // so counting them here too would double-report the same items.
-  const unreadDMsCount = (directMessages || []).filter(
-    dm => dm.receiver?.toLowerCase().trim() === (userEmail || '').toLowerCase().trim() && !dm.read
-  ).length;
+  // ---------------------------------------------------------------------
+  // UNREAD STATE (single source of truth: store.unreadByContact)
+  //  • perContact : unread messages coming from each account (email → count)
+  //  • total      : every unread message of my inbox
+  //  • abdel      : what the Abdel bubble must show (messages from Abdel only)
+  // A conversation leaves the map the moment its messages are READ — that is
+  // what makes the per-account dots disappear on their own.
+  // ---------------------------------------------------------------------
+  const perContactUnread = unreadByContact(directMessages || [], userEmail);
+  const unreadDMsCount = unreadMessagesForEmail(directMessages || [], userEmail);
+  const abdelUnreadCount = perContactUnread[normalizeEmail(abdelEmail)] || 0;
 
   // Conditionally hide the message bubble immediately when the user opens the chat section
   const isChatOpen = isOpen && activeTab === "chat";
+  const isAbdelOpen = isOpen && activeTab === "abdel";
   const showLauncherMessageBadge = unreadDMsCount > 0 && !isChatOpen;
+  const showLauncherAbdelBadge = abdelUnreadCount > 0 && !isAbdelOpen;
 
-  const userEmailLow = (userEmail || '').toLowerCase().trim();
-  const selectedContactLow = (selectedContact || '').toLowerCase().trim();
+  const userEmailLow = normalizeEmail(userEmail);
+  const selectedContactLow = normalizeEmail(selectedContact);
 
   const conversation = (directMessages || []).filter(dm => {
-    const sLow = (dm.sender || '').toLowerCase().trim();
-    const rLow = (dm.receiver || '').toLowerCase().trim();
+    const sLow = normalizeEmail(dm.sender);
+    const rLow = normalizeEmail(dm.receiver);
     return (sLow === userEmailLow && rLow === selectedContactLow) ||
            (sLow === selectedContactLow && rLow === userEmailLow);
   });
@@ -271,13 +278,17 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     }
   }, [abdelMessages.length, conversation.length, activeTab, isOpen, selectedContact]);
 
-  // Mark unread messages as read when user opens the chat tab or views conversation
+  // Read-state rule: opening a conversation checks off ONLY that conversation.
+  // The other accounts keep their unread dots until they are actually opened —
+  // this is what makes the per-account badges accurate instead of all-at-once.
   useEffect(() => {
-    if (isOpen && activeTab === "chat" && userEmail) {
+    if (!isOpen || !userEmail) return;
+    if (activeTab === "abdel") {
+      markDirectMessagesAsRead(abdelEmail, userEmail);
+    } else if (activeTab === "chat" && selectedContact) {
       markDirectMessagesAsRead(selectedContact, userEmail);
-      markDirectMessagesAsRead("", userEmail);
     }
-  }, [isOpen, activeTab, selectedContact, conversation.length, userEmail, markDirectMessagesAsRead]);
+  }, [isOpen, activeTab, selectedContact, conversation.length, userEmail, markDirectMessagesAsRead, abdelEmail]);
 
   // Listen for custom trigger events from the app
   useEffect(() => {
@@ -459,10 +470,26 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
               setIsOpen(true);
             }}
             className="group relative flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-[#E85D42] text-white hover:bg-[#d04a30] transition-all cursor-pointer shadow-md"
-            title={language === "fr" ? "Discuter avec Abdel AI" : "Chat with Abdel AI"}
+            title={
+              abdelUnreadCount > 0
+                ? (language === "fr"
+                    ? `Abdel — ${abdelUnreadCount} message${abdelUnreadCount > 1 ? 's' : ''} non lu${abdelUnreadCount > 1 ? 's' : ''}`
+                    : `Abdel — ${abdelUnreadCount} unread message${abdelUnreadCount > 1 ? 's' : ''}`)
+                : (language === "fr" ? "Discuter avec Abdel AI" : "Chat with Abdel AI")
+            }
           >
             <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px]" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>A</span>
             <span className="text-[11px] tracking-tight hidden sm:inline" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>Abdel</span>
+
+            {/* Unread messages FROM Abdel only */}
+            {showLauncherAbdelBadge && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-md border border-black/20 tabular-nums"
+                aria-label={language === "fr" ? "Messages non lus d'Abdel" : "Unread messages from Abdel"}
+              >
+                {abdelUnreadCount > 9 ? "9+" : abdelUnreadCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -472,14 +499,23 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
               setIsOpen(true);
             }}
             className="relative w-9 h-9 rounded-full bg-white/10 hover:bg-zinc-800 text-zinc-100 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-md"
-            title={language === "fr" ? "Messagerie Lecteurs" : "Reader Messenger"}
+            title={
+              unreadDMsCount > 0
+                ? (language === "fr"
+                    ? `${unreadDMsCount} message${unreadDMsCount > 1 ? 's' : ''} non lu${unreadDMsCount > 1 ? 's' : ''}`
+                    : `${unreadDMsCount} unread message${unreadDMsCount > 1 ? 's' : ''}`)
+                : (language === "fr" ? "Messagerie Lecteurs" : "Reader Messenger")
+            }
           >
             <Send size={15} className="translate-x-[-0.5px] translate-y-[0.5px]" />
 
-            {/* Chat Indicator */}
+            {/* Chat Indicator — exact number of unread messages in the inbox */}
             {showLauncherMessageBadge && (
-              <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-md">
-                {unreadDMsCount}
+              <span
+                className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center shadow-md border border-black/20 tabular-nums"
+                aria-label={language === "fr" ? "Messages non lus" : "Unread messages"}
+              >
+                {unreadDMsCount > 9 ? "9+" : unreadDMsCount}
               </span>
             )}
           </button>
@@ -502,7 +538,7 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                 <div className="flex bg-zinc-950 p-0.5 rounded-lg border border-zinc-800">
                   <button
                     onClick={() => setActiveTab("abdel")}
-                    className={`px-3 py-1.5 rounded-md text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                    className={`relative px-3 py-1.5 rounded-md text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                       activeTab === "abdel"
                         ? "bg-[#E85D42] text-white shadow-md"
                         : "text-zinc-400 hover:text-zinc-200"
@@ -510,6 +546,11 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                   >
                     <span className="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[9px]" style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }}>A</span>
                     <span style={{ fontFamily: '"Montserrat", sans-serif', fontWeight: 800 }} className="text-xs tracking-tight">Abdel</span>
+                    {abdelUnreadCount > 0 && activeTab !== "abdel" && (
+                      <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center tabular-nums">
+                        {abdelUnreadCount > 9 ? "9+" : abdelUnreadCount}
+                      </span>
+                    )}
                   </button>
                   <button
                     onClick={() => setActiveTab("chat")}
@@ -521,9 +562,9 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                   >
                     <MessageSquare size={13} />
                     <span>{language === "fr" ? "Messagerie" : "Messenger"}</span>
-                    {unreadDMsCount > 0 && (
-                      <span className="absolute -top-1 -right-1 px-1.5 py-0.2 bg-red-600 text-white text-[8px] font-bold rounded-full">
-                        {unreadDMsCount}
+                    {unreadDMsCount > 0 && activeTab !== "chat" && (
+                      <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center tabular-nums">
+                        {unreadDMsCount > 9 ? "9+" : unreadDMsCount}
                       </span>
                     )}
                   </button>
@@ -672,16 +713,18 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                   ) : (
                     <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
                       {filteredContacts.map((c) => {
-                        const contactUnread = (directMessages || []).filter(
-                          dm => dm.sender.toLowerCase() === ((c.email ?? '').toLowerCase()) && dm.receiver.toLowerCase() === userEmail.toLowerCase() && !dm.read
-                        ).length;
+                        const contactKey = normalizeEmail(c.email);
+                        // Per-account red dot: exact number of unread messages
+                        // from THIS account. It disappears on its own once the
+                        // conversation is opened (the messages become read).
+                        const contactUnread = perContactUnread[contactKey] || 0;
 
                         return (
                           <button
                             key={c.email}
                             onClick={() => setSelectedContact(c.email)}
                             className={`shrink-0 ${isMobile ? 'w-28' : 'w-36'} flex items-center gap-2 p-2 rounded-xl text-left border transition-all cursor-pointer ${
-                              selectedContact === c.email
+                              normalizeEmail(selectedContact) === contactKey
                                 ? "bg-zinc-800/90 border-[#E85D42] text-white shadow-sm"
                                 : "bg-zinc-950/60 border-zinc-800/60 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                             }`}
@@ -692,8 +735,11 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
                                 <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-zinc-950 animate-pulse" title={language === "fr" ? "En ligne" : "Online"} />
                               )}
                               {contactUnread > 0 && (
-                                <span className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-xs">
-                                  {contactUnread}
+                                <span
+                                  className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 bg-red-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-xs tabular-nums"
+                                  title={language === "fr" ? `${contactUnread} message(s) non lu(s)` : `${contactUnread} unread message(s)`}
+                                >
+                                  {contactUnread > 9 ? "9+" : contactUnread}
                                 </span>
                               )}
                             </div>

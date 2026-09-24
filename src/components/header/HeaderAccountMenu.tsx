@@ -1,6 +1,6 @@
 import React from "react";
 import { User } from "lucide-react";
-import { useStore, isSocialNotification, isNetworkNotification, isSystemNotification, unreadForEmail } from "../../store";
+import { useStore, unreadTotalFor } from "../../store";
 import { renderNeutralAvatar } from "../AccountDrawer";
 import { isAdminProfile } from "../../firebase/auth";
 
@@ -15,21 +15,12 @@ export function HeaderAccountMenu() {
     setShowProfileDrawer
   } = useStore();
 
-  // Coherent unread indicator: computed with the SAME classification helpers the
-  // drawer tabs use, so the bubble always equals
-  //   unread DMs + Activité + Réseau + Briefing(system)
-  // and an item is never counted twice.
-  const myUnreadNotifs = unreadForEmail(notifications || [], readerProfile?.email || '');
-  const unreadMessagesCount = (directMessages || []).filter(
-    dm =>
-      dm.receiver?.toLowerCase().trim() === (readerProfile?.email || '').toLowerCase().trim() &&
-      !dm.read
-  ).length;
+  // Coherent unread indicator: the exact sum of the drawer sections
+  //   unread DMs + Activité + Réseau + Briefing
+  // from the shared rule set, so the bubble can never drift from the drawer
+  // ribbons or double-count a message (a DM raises both a DM row and a notice).
   const unreadCount = readerProfile
-    ? unreadMessagesCount +
-      myUnreadNotifs.filter(isSocialNotification).length +
-      myUnreadNotifs.filter(isNetworkNotification).length +
-      myUnreadNotifs.filter(isSystemNotification).length
+    ? unreadTotalFor(readerProfile.email, notifications || [], directMessages || [])
     : 0;
 
   if (readerProfile) {

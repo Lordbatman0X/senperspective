@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useStore, isSocialNotification, isNetworkNotification, isSystemNotification, unreadForEmail } from "../store";
+import { useStore, unreadCountsFor, unreadByContact, normalizeEmail, isSocialNotification } from "../store";
 import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
@@ -254,30 +254,27 @@ export function AccountDrawer({
     sessionStorage.getItem("perspective-temp-admin-session") === "authenticated"
   );
 
-  const markDirectMessagesAsRead = useStore(s => s.markDirectMessagesAsRead);
   const clearNotifications = useStore(s => s.clearNotifications);
   const markNotificationRead = useStore(s => s.markNotificationRead);
-  const unreadMessagesCount = (directMessages || []).filter(
-    dm => dm.receiver?.toLowerCase().trim() === (readerProfile?.email || '').toLowerCase().trim() && !dm.read
-  ).length;
 
-  // Unread "Activité" items: comments/publications from friends & followed accounts
-  // Unread "Activité" / "Réseau" items — classified by the SAME shared helpers the
-  // header bubble uses, so the numbers can never drift apart or double-count.
-  const myDrawerEmail = ((readerProfile?.email ?? '')).toLowerCase().trim();
-  const myUnreadNotifs = unreadForEmail(notifications || [], myDrawerEmail);
-  const socialUnreadCount = myUnreadNotifs.filter(isSocialNotification).length;
-  const networkUnreadCount = myUnreadNotifs.filter(isNetworkNotification).length;
-  const systemUnreadCount = myUnreadNotifs.filter(isSystemNotification).length;
+  // Every section counter comes from ONE shared rule set (store.unreadCountsFor)
+  // so the drawer ribbons, the header bubble, the hub bubbles and the
+  // per-account dots can never disagree:
+  //   Briefing = system briefs/warnings · Messages = unread DMs
+  //   Activité = followers/friends activity · Réseau = friend relations
+  const myDrawerEmail = normalizeEmail(readerProfile?.email);
+  const unreadCounts = unreadCountsFor(myDrawerEmail, notifications || [], directMessages || []);
+  const unreadMessagesCount = unreadCounts.messages;
+  const socialUnreadCount = unreadCounts.social;
+  const networkUnreadCount = unreadCounts.network;
+  const systemUnreadCount = unreadCounts.system;
+  // Per-account unread dots shown inside the Messages view
+  const perContactUnreadDrawer = unreadByContact(directMessages || [], myDrawerEmail);
 
-  useEffect(() => {
-    if (showProfileModal && activeSubMenu === "messages" && readerProfile?.email) {
-      markDirectMessagesAsRead('', readerProfile.email);
-      // Also check the message NOTIFICATIONS, otherwise they stay unread and
-      // re-announce themselves after a reconnect.
-      clearNotifications(readerProfile.email, 'messages');
-    }
-  }, [showProfileModal, activeSubMenu, readerProfile?.email, markDirectMessagesAsRead, clearNotifications]);
+  // NOTE (Messages): opening the Messages section does NOT mass-check the
+  // inbox. Each account keeps its own red dot until that conversation is
+  // actually read (the floating hub checks a conversation off when it opens
+  // it), which is what keeps the numbers accurate.
 
   // Opening the "Activité" section clears (checks) its unread red-dot count
   useEffect(() => {
@@ -520,7 +517,9 @@ export function AccountDrawer({
       },
       date: new Date().toISOString().split('T')[0],
       isRead: false,
-      category: 'network'
+      category: 'network',
+      groupKey: `network:${((readerProfile?.email ?? '')).toLowerCase().trim()}`,
+      actorEmail: ((readerProfile?.email ?? '')).toLowerCase().trim()
     });
   };
 
@@ -1124,6 +1123,10 @@ export function AccountDrawer({
                             const isSelected = selectedChatUser === contact.email;
                             const firstName = (contact.name ?? '').split(" ")[0];
                             const brandAccent = currentSettings?.accentColor || "#E85D42";
+                            // Per-account red dot: the exact number of unread
+                            // messages from this account, cleared the moment the
+                            // conversation is opened and read.
+                            const contactUnreadCount = perContactUnreadDrawer[normalizeEmail(contact.email)] || 0;
 
                             return (
                               <button
@@ -1148,6 +1151,14 @@ export function AccountDrawer({
                                     {renderNeutralAvatar(contact.avatarUrl, contact.name, 42)}
                                   </div>
                                   <span className="w-3 h-3 bg-emerald-500 rounded-full border-2 border-white dark:border-zinc-950 absolute bottom-0 right-0 z-10" />
+                                  {contactUnreadCount > 0 && (
+                                    <span
+                                      className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-1 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white dark:border-zinc-950 tabular-nums z-20"
+                                      title={language === "fr" ? `${contactUnreadCount} message(s) non lu(s)` : `${contactUnreadCount} unread message(s)`}
+                                    >
+                                      {contactUnreadCount > 9 ? "9+" : contactUnreadCount}
+                                    </span>
+                                  )}
                                 </div>
                                 <span 
                                   className={`text-[10px] truncate max-w-[56px] ${isSelected ? "font-bold" : "text-zinc-700 dark:text-zinc-300"}`}

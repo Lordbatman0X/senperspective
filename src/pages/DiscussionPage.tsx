@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore } from '../store';
+import { useStore, unreadByContact, normalizeEmail } from '../store';
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeText } from '../lib/utils';
@@ -48,7 +48,10 @@ export const DiscussionPage: React.FC = () => {
   });
 
   const userEmail = readerProfile?.email || "visitor@senperspective.com";
-  const myEmailLower = userEmail.toLowerCase().trim();
+  const myEmailLower = normalizeEmail(userEmail);
+  // Per-account unread map — shared rule set with the hub / drawer / header so
+  // the same conversation always shows the same count everywhere.
+  const perContactUnread = unreadByContact(directMessages || [], myEmailLower);
 
   // Get contacts synchronized across all 3 messenger interfaces
   const contacts = getMessengerContacts(allUsers, friends, userEmail, language);
@@ -191,16 +194,15 @@ export const DiscussionPage: React.FC = () => {
             className="flex-1 overflow-y-auto divide-y divide-zinc-800/40"
           >
             {filteredContacts.map(c => {
-              const isSelected = ((c.email ?? '').toLowerCase()).trim() === activeContactEmailLow;
-              const contactUnread = (directMessages || []).filter(
-                dm => (dm.sender || '').toLowerCase().trim() === ((c.email ?? '').toLowerCase()).trim() &&
-                      (dm.receiver || '').toLowerCase().trim() === myEmailLower &&
-                      !dm.read
-              ).length;
+              const contactKey = normalizeEmail(c.email);
+              const isSelected = contactKey === activeContactEmailLow;
+              // Shared per-account counter (same rule set as the hub, the drawer
+              // and the header bubble) so every surface shows the same number.
+              const contactUnread = perContactUnread[contactKey] || 0;
 
               const lastMsg = (directMessages || []).filter(
-                dm => ((dm.sender || '').toLowerCase().trim() === ((c.email ?? '').toLowerCase()).trim() && (dm.receiver || '').toLowerCase().trim() === myEmailLower) ||
-                      ((dm.sender || '').toLowerCase().trim() === myEmailLower && (dm.receiver || '').toLowerCase().trim() === ((c.email ?? '').toLowerCase()).trim())
+                dm => (normalizeEmail(dm.sender) === contactKey && normalizeEmail(dm.receiver) === myEmailLower) ||
+                      (normalizeEmail(dm.sender) === myEmailLower && normalizeEmail(dm.receiver) === contactKey)
               ).slice(-1)[0];
 
               return (

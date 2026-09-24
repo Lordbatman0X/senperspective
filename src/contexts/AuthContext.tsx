@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { useStore } from '../store';
+import { useStore, loadSeenDmIds, rememberSeenDmIds } from '../store';
 import { subscribeToMessages } from '../firebase/db';
 import {
   AppUserProfile,
@@ -168,15 +168,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   //  - read flags written on any device propagate to all devices;
   //  - local offline drafts are preserved alongside the cloud history.
   // Requires Firebase Auth (the database rules gate `messages` on auth).
-  const seenMessageIdsRef = { current: new Set<string>() };
+  // Ids of DM rows this device has ALREADY processed. Persisted through
+  // loadSeenDmIds/rememberSeenDmIds (localStorage) and held in a ref so the
+  // listener closure stays stable: without this, every reload/login rebuilt an
+  // empty set and re-announced the whole history — the "random notifications
+  // from the same correspondent" storm.
+  const seenMessageIdsRef = useRef<Set<string>>(loadSeenDmIds());
+  const firstMsgSnapshotRef = useRef(false);
   useEffect(() => {
     const email = profile?.email;
     if (!user || !email) return;
     const myEmail = email.toLowerCase().trim();
+    const sessionStart = Date.now();
+    firstMsgSnapshotRef.current = false;
+    // Seed with what this device already holds so the first cloud snapshot is
+    // never mistaken for live traffic.
+    (useStore.getState().directMessages || []).forEach((dm: any) => {
+      const id = String(dm?.id || '');
+      if (id) seenMessageIdsRef.current.add(id);
+    });
     const unsub = subscribeToMessages(
       myEmail,
       (cloudMsgs) => {
         try {
+          const isFirstSnapshot = !firstMsgSnapshotRef.current;
+          firstMsgSnapshotRef.current = true;
           const current = useStore.getState().directMessages || [];
           const cloudById = new Map<string, any>();
           for (const m of cloudMsgs) {
@@ -212,9 +228,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const id = String((m as any)?.id || '');
             if (!id || seenMessageIdsRef.current.has(id)) continue;
             seenMessageIdsRef.current.add(id);
+            rememberSeenDmIds([id]);
             const sender = String((m as any)?.sender || '').toLowerCase().trim();
             const receiver = String((m as any)?.receiver || '').toLowerCase().trim();
             if (receiver === myEmail && sender && sender !== myEmail) {
+              // Backlog guard: a row that already existed when the session
+              // started (or that is already read) is history, not an arrival.
+              const arrivedAt = Number((m as any)?.timestamp || 0);
+              const isBacklog = isFirstSnapshot && arrivedAt > 0 && arrivedAt < sessionStart - 60000;
+              if (isBacklog || (m as any)?.read) continue;
               const users = useStore.getState().users || [];
               const senderUser = users.find((u: any) =>
                 String(u?.email || '').toLowerCase().trim() === sender);
@@ -225,12 +247,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   id: 'notif-dm-live-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
                   email: myEmail,
                   text: {
-                    fr: `Nouveau message de la part de ${senderLabel}.`,
-                    en: `New direct message from ${senderLabel}.`
+                    fr: `Nouveau message de ${senderLabel} : "${String((m as any)?.text || '').slice(0, 40)}"`,
+                    en: `New message from ${senderLabel}: "${String((m as any)?.text || '').slice(0, 40)}"`
                   },
                   date: new Date().toISOString().split('T')[0],
                   isRead: false,
-                  category: 'messages'
+                  category: 'messages',
+                  link: '/discussion',
+                  // One unread line per correspondent — the drawer/hub show the
+                  // exact per-account unread counts from the messages themselves.
+                  groupKey: `dm:${sender}`,
+                  actorEmail: sender
                 } as any);
               } catch {}
             }
