@@ -5,10 +5,9 @@ import { Compass, X, Send, Bot, RefreshCw, Sun, Moon, Sparkles, RotateCcw } from
 import { motion, AnimatePresence } from "motion/react";
 import { Article } from "../types";
 import { Markdown } from "../components/Markdown";
-import { getAbdelContextualPrompts } from "../lib/abdelPrompts";
+import { getAbdelContextualPrompts, resolveAbdelGreeting } from "../lib/abdelPrompts";
 import { getSafeText } from "../lib/utils";
-import { safeFetchJson } from "../lib/apiUtils";
-import { clientAbdelChat } from "../lib/clientAiEngine";
+import { askAbdel, normalizeAbdelSlots } from "../lib/abdelRouter";
 
 export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();
@@ -29,14 +28,31 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const currentPrompts = contextualData.prompts[language] || contextualData.prompts.fr || [];
   const currentSectionLabel = contextualData.sectionLabel[language] || contextualData.sectionLabel.fr;
   
-  const adminCustomGreeting = (siteSettings?.abdelIntroMessageFr || siteSettings?.abdelIntroMessageEn) ? {
-    fr: siteSettings.abdelIntroMessageFr || contextualData.greeting.fr,
-    en: siteSettings.abdelIntroMessageEn || contextualData.greeting.en
-  } : null;
+  // ---------------------------------------------------------------------
+  // WELCOME MESSAGE — single source of truth: resolveAbdelGreeting().
+  // Fixes the old behaviour where the store's hardcoded intro text was
+  // indistinguishable from an admin-set value and therefore overrode EVERY
+  // contextual greeting (article, admin, sports, saved, search…), and where
+  // the custom text bled across languages.
+  // ---------------------------------------------------------------------
+  const currentGreeting = resolveAbdelGreeting({
+    context: contextualData,
+    language,
+    settings: siteSettings as any
+  });
 
-  const currentGreeting = (adminCustomGreeting && adminCustomGreeting[language])
-    ? adminCustomGreeting[language]
-    : (contextualData.greeting[language] || contextualData.greeting.fr);
+  /**
+   * The welcome message is part of the CONVERSATION, not a one-off block that
+   * vanished as soon as the reader asked something. It is the first Abdel
+   * bubble, stays in the history, and can be copied like any other answer.
+   */
+  const conversation = React.useMemo(
+    () => [
+      { role: "abdel" as const, text: currentGreeting, isWelcome: true },
+      ...messages.map(m => ({ ...m, isWelcome: false }))
+    ],
+    [currentGreeting, messages]
+  );
 
   const buttonRef = useRef<HTMLDivElement>(null);
   const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
@@ -155,7 +171,7 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [messages.length, isOpen]);
+  }, [conversation.length, isOpen]);
 
   useEffect(() => {
     if (isMobile && isOpen) {
@@ -176,62 +192,36 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
     setLoading(true);
 
     try {
-      const { ok, data, error } = await safeFetchJson<{ response?: string }>("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      // ABDEL ROUTER: the four AI backends linked in Admin →
+      // "Assistant Abdel & Chat" are tried in priority order (each with its
+      // own endpoint, model, provider key and persona), then the in-browser
+      // engine as a last resort. Replaces the single hardcoded /api/chat call.
+      const result = await askAbdel(
+        {
           message: text,
           language,
+          history: messages.map(m => ({ role: m.role, text: m.text })),
+          contextArticle,
           locationInfo: {
             pathname: location.pathname,
             section: currentSectionLabel,
             isArticle: !!contextArticle,
             articleTitle: contextArticle?.title?.[language] || contextArticle?.title?.fr || null,
             category: contextArticle?.category || null
-          },
-          context: contextArticle ? {
-            title: contextArticle.title?.[language] || contextArticle.title?.fr || 'Untitled',
-            category: contextArticle.category,
-            tags: contextArticle.tags,
-            author: typeof contextArticle.author === "string" ? contextArticle.author : 'Perspective Group',
-            date: contextArticle.date || '',
-            excerpt: contextArticle.excerpt?.[language] || contextArticle.excerpt?.fr || '',
-            body: contextArticle.body?.[language] || contextArticle.body?.fr || ''
-          } : null
-        })
-      });
-
-      if (ok && data?.response) {
-        setMessages((prev) => [...prev, { role: "abdel", text: data.response }]);
-      } else {
-        // Client-side fallback using clientAbdelChat
-        try {
-          const clientReply = await clientAbdelChat({
-            message: text,
-            language,
-            contextArticle: contextArticle || undefined
-          });
-          if (clientReply && typeof clientReply === 'string' && clientReply.trim()) {
-            setMessages((prev) => [...prev, { role: "abdel", text: clientReply }]);
-          } else {
-            setMessages((prev) => [...prev, {
-              role: "abdel",
-              text: language === "fr"
-                ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
-                : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment."
-            }]);
           }
-        } catch (clientErr) {
-          setMessages((prev) => [...prev, {
-            role: "abdel",
-            text: language === "fr"
-              ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
-              : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment."
-          }]);
+        },
+        normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots)
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "abdel",
+          text: result?.text?.trim() || (language === "fr"
+            ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
+            : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment.")
         }
-      }
+      ]);
     } catch (e) {
       setMessages((prev) => [...prev, {
         role: "abdel",
@@ -336,14 +326,12 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                       <Sparkles size={10} />
                       <span className="truncate max-w-[220px]">{currentSectionLabel}</span>
                     </div>
-                    <div className="text-xs text-zinc-900 dark:text-zinc-100 leading-relaxed font-sans bg-white dark:bg-zinc-800 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-600 shadow-md text-left abdel-response-bubble">
-                      <div className="markdown-body abdel-text-content text-xs text-zinc-900 dark:text-zinc-100">
-                        <Markdown invertInDark={false}>{currentGreeting}</Markdown>
-                      </div>
-                    </div>
+                    {/* The welcome message is now the FIRST bubble of the
+                        conversation (see `conversation`), so it stays in the
+                        history instead of vanishing on the first question. */}
                   </div>
                 )}
-                {messages.map((m, i) => (
+                {conversation.map((m, i) => (
                   <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                     <div className={`max-w-[85%] p-3.5 text-sm border shadow-md relative group rounded-xl ${
                       m.role === "user" 
@@ -569,14 +557,12 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                     <Sparkles size={10} />
                     <span className="truncate max-w-[240px]">{currentSectionLabel}</span>
                   </div>
-                  <div className="text-xs text-zinc-900 dark:text-zinc-100 leading-relaxed font-sans bg-white dark:bg-zinc-800 p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-600 shadow-md text-left abdel-response-bubble">
-                    <div className="markdown-body abdel-text-content text-xs text-zinc-900 dark:text-zinc-100">
-                      <Markdown invertInDark={false}>{currentGreeting}</Markdown>
-                    </div>
-                  </div>
+                  {/* The welcome message is now the FIRST bubble of the
+                      conversation (see `conversation`), so it stays in the
+                      history instead of vanishing on the first question. */}
                 </div>
               )}
-              {messages.map((m, i) => (
+              {conversation.map((m, i) => (
                 <div key={i} className={`flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                   <div className={`max-w-[85%] p-3.5 text-sm border shadow-md relative group rounded-xl ${
                     m.role === "user" 

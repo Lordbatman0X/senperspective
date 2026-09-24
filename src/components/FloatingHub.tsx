@@ -10,7 +10,7 @@ import { Markdown } from "./Markdown";
 import { getAbdelContextualPrompts } from "../lib/abdelPrompts";
 import { getSafeText } from "../lib/utils";
 import { safeFetchJson } from "../lib/apiUtils";
-import { clientAbdelChat } from "../lib/clientAiEngine";
+import { askAbdel, normalizeAbdelSlots } from "../lib/abdelRouter";
 
 export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();
@@ -326,87 +326,50 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
     setAbdelLoading(true);
 
     try {
-      const { ok, data, error } = await safeFetchJson<{ response?: string }>("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // ABDEL ROUTER: the four AI backends configured in Admin →
+      // "Assistant Abdel & Chat" are tried in priority order (endpoint, model,
+      // provider key, persona), then the in-browser engine. This replaces the
+      // single hardcoded /api/chat call so each backend can be linked and
+      // failover-tested independently.
+      const result = await askAbdel(
+        {
           message: text,
           language,
-          aiProvider: selectedAbdelAi,
           history: abdelMessages.map(m => ({ role: m.role, text: m.text })),
+          contextArticle,
+          providerHint: selectedAbdelAi,
           locationInfo: {
             pathname: location.pathname,
             section: currentSectionLabel,
             isArticle: !!contextArticle,
             articleTitle: contextArticle?.title?.[language] || contextArticle?.title?.fr || null,
             category: contextArticle?.category || null
-          },
-          context: contextArticle ? {
-            title: contextArticle.title?.[language] || contextArticle.title?.fr || "Untitled",
-            category: contextArticle.category,
-            tags: contextArticle.tags,
-            author: typeof contextArticle.author === "string" ? contextArticle.author : "Perspective Group",
-            date: contextArticle.date || "",
-            excerpt: contextArticle.excerpt?.[language] || contextArticle.excerpt?.fr || "",
-            body: contextArticle.body?.[language] || contextArticle.body?.fr || ""
-          } : null
-        })
-      });
-
-      if (ok && data?.response) {
-        setAbdelMessages(prev => [
-          ...prev,
-          { role: "abdel", text: data.response.replace(/\*\*/g, "").replace(/\*/g, "").trim() }
-        ]);
-      } else {
-        // Direct client-side Abdel fallback
-        try {
-          const directReply = await clientAbdelChat({
-            message: text,
-            language,
-            history: abdelMessages.map(m => ({ role: m.role, text: m.text })),
-            contextArticle
-          });
-          setAbdelMessages(prev => [
-            ...prev,
-            { role: "abdel", text: directReply }
-          ]);
-        } catch (_) {
-          setAbdelMessages(prev => [
-            ...prev,
-            {
-              role: "abdel",
-              text: language === "fr"
-                ? "Abdel est à votre écoute pour analyser les dossiers en cours."
-                : "Abdel is at your disposal to analyze current developments."
-            }
-          ]);
-        }
-      }
-    } catch (err: any) {
-      console.error("Abdel chat fetch error:", err);
-      try {
-        const directReply = await clientAbdelChat({
-          message: text,
-          language,
-          history: abdelMessages.map(m => ({ role: m.role, text: m.text })),
-          contextArticle
-        });
-        setAbdelMessages(prev => [
-          ...prev,
-          { role: "abdel", text: directReply }
-        ]);
-      } catch (_) {
-        setAbdelMessages(prev => [
-          ...prev,
-          {
-            role: "abdel",
-            text: language === "fr"
-              ? "Abdel est à votre écoute pour analyser les dossiers en cours."
-              : "Abdel is at your disposal to analyze current developments."
           }
-        ]);
-      }
+        },
+        normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots)
+      );
+
+      const cleanedReply = String(result?.text || "").replace(/\*\*/g, "").replace(/\*/g, "").trim();
+      setAbdelMessages(prev => [
+        ...prev,
+        {
+          role: "abdel",
+          text: cleanedReply || (language === "fr"
+            ? "Abdel est à votre écoute pour analyser les dossiers en cours."
+            : "Abdel is at your disposal to analyze current developments.")
+        }
+      ]);
+    } catch (err: any) {
+      console.error("Abdel chat error:", err);
+      setAbdelMessages(prev => [
+        ...prev,
+        {
+          role: "abdel",
+          text: language === "fr"
+            ? "Abdel est à votre écoute pour analyser les dossiers en cours."
+            : "Abdel is at your disposal to analyze current developments."
+        }
+      ]);
     } finally {
       setAbdelLoading(false);
     }

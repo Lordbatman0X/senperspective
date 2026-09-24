@@ -30,6 +30,7 @@ import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { RssFeedManagementTab } from '../components/admin/RssFeedManagementTab';
 import { DraftGenerationTab } from '../components/admin/DraftGenerationTab';
 import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
+import { AbdelApiSlotsTab } from '../components/admin/AbdelApiSlotsTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
 import AccountsTab from '../components/admin/AccountsTab';
@@ -1881,6 +1882,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 </p>
               </div>
             </div>
+
+            {/* WELCOME MESSAGE + THE FOUR ABDEL AI API BLOCKS.
+                Each block links Abdel to a separate backend (endpoint, model,
+                provider key, persona); the router tries them in priority order
+                with failover. Persisted to siteSettings.abdelApiSlots. */}
+            <AbdelApiSlotsTab onNotify={showToast} />
 
             {/* Abdel AI Questions Config */}
             <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-6 space-y-6 shadow-xl">

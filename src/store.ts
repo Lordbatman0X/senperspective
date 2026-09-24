@@ -28,6 +28,8 @@ import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';
 import { triggerInAppToast } from './lib/notificationSound';
+import { askAbdel, normalizeAbdelSlots } from './lib/abdelRouter';
+import type { AbdelApiSlot } from './lib/abdelRouter';
 
 function dedupeArticles(list) {
   const seen = new Set();
@@ -730,6 +732,20 @@ interface AppState {
     maintenanceMessageEn?: string;
     abdelIntroMessageFr?: string;
     abdelIntroMessageEn?: string;
+    /**
+     * Welcome-message rules (see `resolveAbdelGreeting`).
+     *  • `abdelUseCustomWelcome === false` → always use the contextual greeting.
+     *  • `abdelWelcomeOnlyOnHome === false` → apply the custom message on every
+     *    page, not just the homepage (default = homepage only).
+     */
+    abdelUseCustomWelcome?: boolean;
+    abdelWelcomeOnlyOnHome?: boolean;
+    /**
+     * Four independently configurable AI backends for Abdel. Each block in
+     * Admin → "Assistant Abdel & Chat" owns its endpoint, model, provider key
+     * and persona; the router tries them in priority order with failover.
+     */
+    abdelApiSlots?: AbdelApiSlot[];
     dossiers?: any[];
     announcements?: any[];
     fontPairing?: string;
@@ -1376,10 +1392,11 @@ export const useStore = create<AppState>()(
           setTimeout(async () => {
             try {
               let replyText = "";
-              const response = await fetch(resolveApiUrl('/api/chat'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+              // ABDEL ROUTER: try the four admin-configured AI backends in
+              // priority order (Admin → "Assistant Abdel & Chat"), then the
+              // in-browser engine. Replaces the single hardcoded /api/chat call.
+              const abdelResult = await askAbdel(
+                {
                   message: newMsg.text,
                   language: get().language,
                   history: (get().directMessages || [])
@@ -1389,12 +1406,12 @@ export const useStore = create<AppState>()(
                       role: m.sender === 'abdel@senperspective.com' ? 'assistant' : 'user',
                       content: m.text
                     }))
-                })
-              });
+                } as any,
+                normalizeAbdelSlots((get().siteSettings as any)?.abdelApiSlots)
+              );
 
-              if (response.ok) {
-                const data = await response.json();
-                replyText = data.response || data.text || "";
+              if (abdelResult?.text) {
+                replyText = abdelResult.text;
               }
 
               if (!replyText) {
@@ -2484,6 +2501,15 @@ export const useStore = create<AppState>()(
         maintenanceMessageFr: "Notre site est actuellement en cours de maintenance et de mise à jour technique. Nous serons de retour très rapidement.",
         maintenanceMessageEn: "Our platform is currently undergoing scheduled maintenance and updates. We will be back online shortly.",
         siteName: 'Perspective Group',
+        // WELCOME-MESSAGE FIX: the custom greeting is now OPT-IN. Previously
+        // the seeded text below was indistinguishable from an admin-set value,
+        // so it silently overrode every contextual greeting (article pages,
+        // admin console, sports, saved, search). With the flag off by default,
+        // `resolveAbdelGreeting` uses the contextual greeting, and the admin
+        // turns the custom message on (and edits it) from
+        // Admin → "Assistant Abdel & Chat".
+        abdelUseCustomWelcome: false,
+        abdelWelcomeOnlyOnHome: true,
         abdelIntroMessageFr: "Bonjour ! Je suis Abdel, votre guide d'actualité sur Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?",
         abdelIntroMessageEn: "Hello! I am Abdel, your news guide on Perspective Group. What would you like to unpack today?",
         dossiers: [

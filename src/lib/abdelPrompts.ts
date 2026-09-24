@@ -9,6 +9,62 @@ export interface AbdelPromptContext {
   prompts: { fr: string[]; en: string[] };
 }
 
+/* =====================================================================
+   WELCOME-MESSAGE RULE
+   ---------------------------------------------------------------------
+   THE BUG THIS FIXES: the store used to ship a hardcoded
+   `abdelIntroMessageFr/En`, so the "custom" greeting was ALWAYS present
+   and therefore overrode every contextual greeting — Abdel addressed
+   readers on an article page, in the admin console, in sports, saved and
+   search with the same generic homepage line. It also bled languages:
+   with only the French text set, an English reader silently got the
+   English *contextual* greeting while a French reader got the admin text.
+
+   THE RULE (predictable, admin-controllable):
+     1. Opt-out  — `abdelUseCustomWelcome === false` disables the custom
+        message for good; contextual greetings are used everywhere.
+     2. Scope    — by default the custom message is the HOMEPAGE welcome.
+        Context pages (article, admin, sports, search, saved, category)
+        keep their own greeting so the guide matches where the reader is.
+        `abdelWelcomeOnlyOnHome === false` makes it apply everywhere.
+     3. Language — strictly per-language, never bleeding: a language with
+        no custom text falls back to the CONTEXTUAL greeting of that same
+        language, not to the other language's custom text.
+   ===================================================================== */
+export interface AbdelWelcomeSettings {
+  abdelIntroMessageFr?: string;
+  abdelIntroMessageEn?: string;
+  abdelUseCustomWelcome?: boolean;
+  abdelWelcomeOnlyOnHome?: boolean;
+}
+
+export function resolveAbdelGreeting(opts: {
+  context: AbdelPromptContext;
+  language?: string;
+  settings?: AbdelWelcomeSettings | null;
+}): string {
+  const { context, language, settings } = opts;
+  const lang: 'fr' | 'en' = language === 'en' ? 'en' : 'fr';
+
+  const contextual =
+    (context?.greeting?.[lang] || context?.greeting?.fr || '').trim();
+
+  const customFr = String(settings?.abdelIntroMessageFr || '').trim();
+  const customEn = String(settings?.abdelIntroMessageEn || '').trim();
+  const custom = lang === 'en' ? customEn : customFr;
+
+  // 1. Explicit opt-out, or no custom text at all → contextual greeting.
+  if (settings?.abdelUseCustomWelcome === false) return contextual;
+  if (!customFr && !customEn) return contextual;
+
+  // 2. Scope: homepage by default, everywhere only if the admin says so.
+  const onlyOnHome = settings?.abdelWelcomeOnlyOnHome !== false;
+  if (onlyOnHome && context?.locationType !== 'home') return contextual;
+
+  // 3. Same-language only — no cross-language bleed.
+  return custom || contextual;
+}
+
 export function getAbdelContextualPrompts(
   pathname: string,
   contextArticle?: Article,
