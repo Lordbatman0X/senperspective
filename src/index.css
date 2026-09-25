@@ -618,36 +618,22 @@
 }
 
 /* ============================================================================
-   FROSTED GLASS INTENSITY
+   BACKDROP BLUR — DEFAULTS RESTORED
    ----------------------------------------------------------------------------
-   Tailwind's `backdrop-blur-*` utilities are amplified here for a consistent
-   frosted look. Radii stay in the 14-40px band on purpose: browsers back the
-   backdrop with a snapshot of the page, and very large radii on FULL-SCREEN
-   surfaces (drawer backdrops, modals) exhaust that budget and make the
-   composited page visibly tear/smear. Big radii belong on small panels only.
+   This block used to override every Tailwind `backdrop-blur-*` utility with
+   `!important` radii of 14-40px so the whole app shared one intense frost.
+
+   That was reverted. Browsers implement `backdrop-filter` by snapshotting the
+   pixels behind the element, and an amplified radius on a FULL-SCREEN surface
+   (a drawer backdrop spans the viewport) blows past the compositor's budget:
+   the snapshot is re-taken as the page scrolls or animates, which shows up as
+   duplicated/smeared text and a page that visibly tears while the drawer is
+   open. It is a rendering artifact, not a styling choice.
+
+   Tailwind's own values are small and safe, so they are used again. Any
+   surface that genuinely needs a stronger frost now gets a purpose-built class
+   below, scoped to a SMALL element where the cost is bounded.
    ========================================================================== */
-.backdrop-blur-xs {
-  backdrop-filter: blur(14px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-}
-.backdrop-blur-sm {
-  backdrop-filter: blur(18px) saturate(165%) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(165%) !important;
-}
-.backdrop-blur-md {
-  backdrop-filter: blur(22px) saturate(170%) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(170%) !important;
-}
-.backdrop-blur-lg {
-  backdrop-filter: blur(28px) saturate(175%) !important;
-  -webkit-backdrop-filter: blur(28px) saturate(175%) !important;
-}
-.backdrop-blur-xl,
-.backdrop-blur-2xl,
-.backdrop-blur-3xl {
-  backdrop-filter: blur(36px) saturate(185%) !important;
-  -webkit-backdrop-filter: blur(36px) saturate(185%) !important;
-}
 
 /* ============================================================================
    STICKY HEADER - MAMMOUTH-STYLE FROSTED GLASS
@@ -655,21 +641,25 @@
    The header must carry its own `backdrop-filter` so the page scrolling
    underneath is refracted, and its tint must be translucent. An opaque tint
    (the old .glass-orange) makes the blur invisible no matter how large the
-   radius is. Radius is the largest in the app but the surface is a thin strip,
-   so it stays well inside the compositor budget.
+   radius is.
+
+   The radius is deliberately modest: this is a thin strip, so even a large
+   value is safe here, but there is no need to push it. The visible "glassy"
+   character comes mostly from the translucent tint plus saturation, not from
+   an extreme radius.
    ========================================================================== */
 .header-glass {
   background: rgba(255, 255, 255, 0.55) !important;
-  backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
   box-shadow: 0 10px 30px -18px rgba(15, 23, 42, 0.35),
               inset 0 -1px 0px 0px rgba(255, 255, 255, 0.6) !important;
 }
 .dark .header-glass {
   background: rgba(9, 13, 20, 0.55) !important;
-  backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
   box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8),
               inset 0 -1px 0px 0px rgba(255, 255, 255, 0.07) !important;
@@ -678,26 +668,27 @@
 /* The unscrolled branded header: same trick, tinted instead of neutral. */
 .glass-orange {
   background: linear-gradient(135deg, rgba(232, 93, 66, 0.82), rgba(201, 67, 47, 0.78)) !important;
-  backdrop-filter: blur(40px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
   box-shadow: 0 12px 30px -8px rgba(232, 93, 66, 0.28) !important;
 }
 .dark .glass-orange {
   background: linear-gradient(135deg, rgba(240, 106, 80, 0.8), rgba(210, 75, 55, 0.76)) !important;
-  backdrop-filter: blur(40px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   box-shadow: 0 12px 30px -8px rgba(240, 106, 80, 0.2) !important;
 }
 
-/* Full-screen scrim behind drawers/modals. Deliberately cheap: a huge radius
-   here is what smears the page. A soft tint + a modest radius reads as glass. */
+/* Full-screen scrim behind drawers/modals.
+   No `backdrop-filter` at all. This element covers the entire viewport, which
+   is exactly the case where the browser's backdrop snapshot is too expensive
+   and smears the page. The dimming tint alone is enough to separate the drawer
+   from the content behind it, and it costs nothing to composite. */
 .overlay-scrim {
   background: rgba(4, 7, 12, 0.55) !important;
-  backdrop-filter: blur(10px) saturate(120%) !important;
-  -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
 }
 
 /* Reserve the scrollbar gutter permanently so locking scroll (drawer open)

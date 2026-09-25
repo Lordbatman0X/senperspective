@@ -276,15 +276,13 @@ export function AccountDrawer({
   // actually read (the floating hub checks a conversation off when it opens
   // it), which is what keeps the numbers accurate.
 
-  useEffect(() => {
-    if (!showProfileModal) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [showProfileModal]);
+  // NOTE: scroll locking lives in the single `drawer-scroll-lock` effect further
+  // down. There used to be a second, simpler `overflow: hidden` effect here as
+  // well. Both were keyed on `showProfileModal`, and because this one ran first
+  // the robust effect captured an `overflow` of "hidden" as its "previous"
+  // value, then restored that same "hidden" on close — leaving the page
+  // permanently unscrollable. Two competing effects must not manage the same
+  // inline style; the single lock below owns it.
 
   // Opening the "Activité" section clears (checks) its unread red-dot count
   useEffect(() => {
@@ -312,8 +310,16 @@ export function AccountDrawer({
   // `overflow: hidden` on <body> alone is not enough: the browser keeps the
   // scroll offset but the document loses its scrollbar, so the page visibly
   // shifts and re-lays out while the fixed overlay is on screen. We instead
-  // pin the body with `position: fixed` and compensate the lost scrollbar
-  // width, then restore the exact scroll position on close.
+  // pin the body with `position: fixed` and restore the exact scroll position
+  // on close.
+  //
+  // This is the ONLY place the drawer's scroll lock is managed. The styles are
+  // applied by the `drawer-scroll-lock` class alone (not by inline overrides),
+  // and the inline `top`/`left` offsets that the class cannot express are
+  // cleared on the way out. Clearing every inline property we touched — rather
+  // than restoring a captured snapshot of them — is what guarantees the body is
+  // never left in a pinned state if the capture happened while another effect
+  // had already mutated the same property.
   useEffect(() => {
     if (!showProfileModal) return;
 
@@ -322,28 +328,23 @@ export function AccountDrawer({
     const body = document.body;
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 
-    const previous = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      width: body.style.width,
-      paddingRight: body.style.paddingRight,
-      overflow: body.style.overflow,
-    };
-
-    body.classList.add('drawer-scroll-lock');
+    body.classList.add("drawer-scroll-lock");
     if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
     body.style.top = `${-scrollY}px`;
     body.style.left = `${-scrollX}px`;
 
     return () => {
-      body.classList.remove('drawer-scroll-lock');
-      body.style.position = previous.position;
-      body.style.top = previous.top;
-      body.style.left = previous.left;
-      body.style.width = previous.width;
-      body.style.paddingRight = previous.paddingRight;
-      body.style.overflow = previous.overflow;
+      // Remove the class FIRST so the body is unpinned before the scroll
+      // position is restored; otherwise `position: fixed` would swallow the
+      // scrollTo and the reader would land back at the top of the page.
+      body.classList.remove("drawer-scroll-lock");
+      body.style.position = "";
+      body.style.top = "";
+      body.style.left = "";
+      body.style.right = "";
+      body.style.width = "";
+      body.style.paddingRight = "";
+      body.style.overflow = "";
       window.scrollTo(scrollX, scrollY);
     };
   }, [showProfileModal]);
