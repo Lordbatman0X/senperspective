@@ -4,6 +4,7 @@ import { Radio, Trophy } from "lucide-react";
 import type { Match } from "../../types";
 import { useArenaScores } from "../../lib/sports/useArenaScores";
 import { apiLeagues } from "../../lib/sports/leagues";
+import { ArenaMatchTile } from "./ArenaMatchTile";
 
 interface ArenaSidebarLiveProps {
   /** Editor/seeded matches (the Senegalese competitions) always outrank rows. */
@@ -41,23 +42,6 @@ export function ArenaSidebarLive({
   const rows = matches.slice(0, limit);
   const liveCount = matches.filter((m) => String(m.status) === "live").length;
 
-  const scoreOf = (m: Match, side: "A" | "B") => {
-    const v = side === "A" ? m.teamA.score : m.teamB.score;
-    return v === undefined || v === null ? null : v;
-  };
-
-  const kickoff = (m: Match) => {
-    if (!m.date) return null;
-    const d = new Date(m.date);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toLocaleString(isFr ? "fr-FR" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   return (
     <div
       className="glass p-5 bg-white/95 dark:bg-zinc-900/80 border-t-4 text-left"
@@ -74,7 +58,16 @@ export function ArenaSidebarLive({
             className="text-xs font-serif font-black uppercase tracking-widest"
             style={{ color: accentColor }}
           >
-            {isFr ? "L'ARÈNE · DIRECT" : "THE ARENA · LIVE"}
+            {/* "DIRECT" is only shown when something is actually in play. A
+                hardcoded LIVE label on a board of upcoming fixtures implies
+                coverage that does not exist. */}
+            {liveCount > 0
+              ? isFr
+                ? `L'ARÈNE · ${liveCount} DIRECT`
+                : `THE ARENA · ${liveCount} LIVE`
+              : isFr
+                ? "L'ARÈNE · SCORES"
+                : "THE ARENA · SCORES"}
           </span>
         </div>
         <Link
@@ -99,50 +92,21 @@ export function ArenaSidebarLive({
               : "No fixtures available right now."}
           </p>
         ) : (
-          rows.map((m) => {
-            const sa = scoreOf(m, "A");
-            const sb = scoreOf(m, "B");
-            const played = sa !== null || sb !== null;
-            const isLive = String(m.status) === "live";
-            const when = kickoff(m);
-
-            return (
-              <Link
-                key={m.id}
-                to="/larene"
-                className="block p-2.5 bg-zinc-50/80 dark:bg-zinc-950/40 border border-zinc-200/60 dark:border-zinc-800/60 transition-colors hover:border-current"
-              >
-                <div className="flex justify-between items-center text-[8px] font-mono font-bold uppercase tracking-wider mb-1 gap-2">
-                  <span className="truncate text-zinc-500 dark:text-zinc-400">
-                    {m.leagueLabel?.[language] || m.league}
-                  </span>
-                  {isLive ? (
-                    <span className="shrink-0 text-red-600 dark:text-red-400">
-                      {isFr ? "DIRECT" : "LIVE"}
-                    </span>
-                  ) : when ? (
-                    <span className="shrink-0 text-zinc-500 dark:text-zinc-400">
-                      {when}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                    {m.teamA.name}
-                  </span>
-                  <span className="shrink-0 font-mono font-black text-sm tabular-nums text-zinc-900 dark:text-zinc-50">
-                    {/* An unplayed fixture shows no score at all. Rendering "0"
-                        would imply a result that does not exist. */}
-                    {played ? `${sa ?? 0} - ${sb ?? 0}` : "vs"}
-                  </span>
-                  <span className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 truncate text-right">
-                    {m.teamB.name}
-                  </span>
-                </div>
-              </Link>
-            );
-          })
+          rows.map((m) => (
+            <Link
+              key={m.id}
+              to="/larene"
+              className="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-current"
+            >
+              <ArenaMatchTile
+                match={m}
+                language={language}
+                accentColor={accentColor}
+                density="compact"
+                leagueLabel={m.leagueLabel?.[language] || m.league}
+              />
+            </Link>
+          ))
         )}
       </div>
 

@@ -10,6 +10,10 @@ import {
   type ArenaSport,
 } from "../../lib/sports/leagues";
 import { withoutDemoMatches } from "../../lib/sports/demoMatches";
+import { ArenaMatchTile } from "./ArenaMatchTile";
+
+/** Brand accent, matching the site-wide default in siteSettings. */
+const ACCENT = "#E85D42";
 
 interface ArenaGroupedScoresProps {
   editorialMatches: Match[];
@@ -107,24 +111,6 @@ export function ArenaGroupedScores({ editorialMatches, language }: ArenaGroupedS
       })
     : null;
 
-  const scoreOf = (m: Match, side: "A" | "B") => {
-    const v = side === "A" ? m.teamA.score : m.teamB.score;
-    return v === undefined || v === null ? null : v;
-  };
-
-  const when = (m: Match) => {
-    if (m.clock) return m.clock;
-    if (!m.date) return m.time || null;
-    const d = new Date(m.date);
-    if (Number.isNaN(d.getTime())) return m.time || null;
-    return d.toLocaleString(isFr ? "fr-FR" : "en-GB", {
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   return (
     <section aria-label={isFr ? "Scores et résultats" : "Scores and results"}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-zinc-900 dark:border-zinc-100 pb-3 mb-6">
@@ -191,39 +177,17 @@ export function ArenaGroupedScores({ editorialMatches, language }: ArenaGroupedS
                       {lg.league}
                     </h4>
 
-                    <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60 border-t border-zinc-100 dark:border-zinc-800/60">
-                      {lg.rows.map((m) => {
-                        const sa = scoreOf(m, "A");
-                        const sb = scoreOf(m, "B");
-                        // An unplayed fixture has no score. Showing "0" invents one.
-                        const played = sa !== null || sb !== null;
-                        const isLive = String(m.status) === "live";
-                        return (
-                          <li key={m.id} className="py-2.5 flex items-center justify-between gap-3">
-                            <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                                {m.teamA.name}
-                              </span>
-                              <span className="shrink-0 font-mono font-black text-sm tabular-nums text-zinc-900 dark:text-zinc-50">
-                                {played ? `${sa ?? 0} - ${sb ?? 0}` : "vs"}
-                              </span>
-                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate text-right">
-                                {m.teamB.name}
-                              </span>
-                            </span>
-
-                            <span className="w-24 sm:w-28 shrink-0 text-right text-[9px] font-mono uppercase tracking-wider">
-                              {isLive ? (
-                                <span className="text-red-600 dark:text-red-400 font-black">
-                                  {m.clock || (isFr ? "Direct" : "Live")}
-                                </span>
-                              ) : when(m) ? (
-                                <span className="text-zinc-500 dark:text-zinc-400">{when(m)}</span>
-                              ) : null}
-                            </span>
-                          </li>
-                        );
-                      })}
+                    <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                      {lg.rows.map((m) => (
+                        <li key={m.id}>
+                          <ArenaMatchTile
+                            match={m}
+                            language={language}
+                            accentColor={ACCENT}
+                            density="detailed"
+                          />
+                        </li>
+                      ))}
                     </ul>
                   </div>
                 ))}
