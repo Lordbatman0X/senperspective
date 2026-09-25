@@ -30,3 +30,10 @@ kaders-dump.txt
 kaders-verify.txt
 deploy-log.txt
 build-log.txt
+
+# local browser-probe scratch (headless Chrome + screenshots)
+.chrome-cdp/
+.chrome-cdp2/
+.chrome-tmp/
+probe-*.mjs
+shot_*.png
