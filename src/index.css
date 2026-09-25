@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 @variant dark (&:where(.dark, .dark *));
 @plugin "@tailwindcss/typography";
 
@@ -134,8 +134,8 @@
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.3s ease, background 0.4s ease;
     @apply rounded-none overflow-hidden relative;
     background: rgba(248, 250, 252, 0.88) !important;
-    backdrop-filter: blur(24px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
     border: 1px solid #e2e8f0 !important;
     border-bottom-color: #cbd5e1 !important;
     box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08),
@@ -144,8 +144,8 @@
   
   .dark .square-card {
     background: rgba(17, 25, 34, 0.85) !important;
-    backdrop-filter: blur(24px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
     border: 1px solid rgba(148, 163, 184, 0.25) !important;
     box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.45),
                 inset 1px 1px 0px 0px rgba(255, 255, 255, 0.06) !important;
@@ -155,8 +155,8 @@
     transform: translateY(-6px) !important;
     border-color: #E85D42 !important;
     background: rgba(255, 255, 255, 0.92) !important;
-    backdrop-filter: blur(30px) saturate(190%) !important;
     -webkit-backdrop-filter: blur(30px) saturate(190%) !important;
+    backdrop-filter: blur(30px) saturate(190%) !important;
     box-shadow: 0 20px 40px -10px rgba(232, 93, 66, 0.20),
                 0 15px 30px -12px rgba(0, 0, 0, 0.12),
                 inset 1px 1px 0px 0px rgba(255, 255, 255, 0.5) !important;
@@ -164,8 +164,8 @@
 
   .dark .square-card:hover {
     background: rgba(25, 34, 46, 0.9) !important;
-    backdrop-filter: blur(30px) saturate(190%) !important;
     -webkit-backdrop-filter: blur(30px) saturate(190%) !important;
+    backdrop-filter: blur(30px) saturate(190%) !important;
     border-color: #F06A50 !important;
     box-shadow: 0 20px 40px -10px rgba(240, 106, 80, 0.20),
                 0 15px 30px -12px rgba(0, 0, 0, 0.45),
@@ -175,15 +175,15 @@
   /* 1. Light glass - for navigation and secondary decorative elements */
   .glass-light {
     background: rgba(248, 250, 252, 0.82) !important;
-    backdrop-filter: blur(28px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+    backdrop-filter: blur(28px) saturate(180%) !important;
     border: 1px solid #e2e8f0 !important;
     box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08) !important;
   }
   .dark .glass-light {
     background: rgba(11, 16, 23, 0.78) !important;
-    backdrop-filter: blur(28px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+    backdrop-filter: blur(28px) saturate(180%) !important;
     border: 1px solid rgba(148, 163, 184, 0.25) !important;
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.35) !important;
   }
@@ -191,8 +191,8 @@
   /* 2. Medium glass - for article cards, drawers, and standard modules */
   .glass, .glass-medium {
     background: rgba(241, 245, 249, 0.85) !important;
-    backdrop-filter: blur(32px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+    backdrop-filter: blur(32px) saturate(180%) !important;
     border: 1px solid #e2e8f0 !important;
     border-bottom-color: #cbd5e1 !important;
     box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08),
@@ -200,8 +200,8 @@
   }
   .dark .glass, .dark .glass-medium {
     background: rgba(17, 25, 34, 0.82) !important;
-    backdrop-filter: blur(32px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+    backdrop-filter: blur(32px) saturate(180%) !important;
     border: 1px solid rgba(148, 163, 184, 0.25) !important;
     box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.45),
                 inset 1px 1px 0px 0px rgba(255, 255, 255, 0.05) !important;
@@ -210,8 +210,8 @@
   /* 3. Strong glass - for article reading panels, forms, data tables, and admin work areas */
   .glass-strong {
     background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(40px) saturate(190%) !important;
     -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+    backdrop-filter: blur(40px) saturate(190%) !important;
     border: 1px solid #e2e8f0 !important;
     border-bottom-color: #cbd5e1 !important;
     box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.07),
@@ -219,8 +219,8 @@
   }
   .dark .glass-strong {
     background: rgba(13, 19, 27, 0.88) !important;
-    backdrop-filter: blur(40px) saturate(190%) !important;
     -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+    backdrop-filter: blur(40px) saturate(190%) !important;
     border: 1px solid rgba(148, 163, 184, 0.25) !important;
     box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.38),
                 inset 1px 1px 0px 0px rgba(255, 255, 255, 0.06) !important;
@@ -234,8 +234,8 @@
   /* Micro glassy accents for tags, badges, buttons and floating cards */
   .glass-accent {
     background: rgba(255, 255, 255, 0.78) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
     border: 1px solid #e2e8f0 !important;
     border-bottom-color: rgba(23, 32, 51, 0.08) !important;
     box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.02),
@@ -244,8 +244,8 @@
 
   .dark .glass-accent {
     background: rgba(30, 41, 59, 0.78) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
     border: 1px solid rgba(148, 163, 184, 0.25) !important;
     box-shadow: 0 4px 15px -2px rgba(0, 0, 0, 0.2),
                 inset 1px 1px 0px 0px rgba(255, 255, 255, 0.05) !important;
@@ -618,7 +618,7 @@
 }
 
 /* ============================================================================
-   BACKDROP BLUR — DEFAULTS RESTORED
+   BACKDROP BLUR â€” DEFAULTS RESTORED
    ----------------------------------------------------------------------------
    This block used to override every Tailwind `backdrop-blur-*` utility with
    `!important` radii of 14-40px so the whole app shared one intense frost.
@@ -654,7 +654,7 @@
    The frosted character comes from radius + saturation + a translucent tint.
    ========================================================================== */
 /* ============================================================================
-   HEADER FROST — APPLIES TO EVERY HEADER STYLE
+   HEADER FROST â€” APPLIES TO EVERY HEADER STYLE
    ----------------------------------------------------------------------------
    Why this class exists. The header picks one of three visual styles at
    runtime from `siteSettings.headerStyle`:
@@ -665,7 +665,7 @@
    Those live on an INNER div, so the frosting used to depend entirely on which
    branch the settings happened to select. With `headerStyle: "dark-imm"` saved
    in Firestore the header rendered a solid `bg-zinc-950` and the
-   `.header-glass` / `.glass-orange` rules never applied at all — the header
+   `.header-glass` / `.glass-orange` rules never applied at all â€” the header
    stayed flat no matter what those classes were set to.
 
    Putting the backdrop-filter on the sticky <header> itself makes the frost
@@ -673,12 +673,12 @@
    value. The background tint is NOT touched here, so each style keeps its own
    colour; only the refraction is guaranteed.
 
-   This is a thin strip, so the snapshot is cheap and a large radius is safe —
+   This is a thin strip, so the snapshot is cheap and a large radius is safe â€”
    unlike on full-screen surfaces (see `.overlay-scrim`).
    ========================================================================== */
 .header-frost {
-  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
 }
 
 /* `dark-imm` is a solid fill, which would hide the blur it now inherits.
@@ -689,16 +689,16 @@
 
 .header-glass {
   background: rgba(255, 255, 255, 0.5) !important;
-  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
   box-shadow: 0 10px 30px -18px rgba(15, 23, 42, 0.35),
               inset 0 -1px 0px 0px rgba(255, 255, 255, 0.6) !important;
 }
 .dark .header-glass {
   background: rgba(9, 13, 20, 0.5) !important;
-  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
   box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8),
               inset 0 -1px 0px 0px rgba(255, 255, 255, 0.07) !important;
@@ -707,16 +707,16 @@
 /* The unscrolled branded header: same trick, tinted instead of neutral. */
 .glass-orange {
   background: linear-gradient(135deg, rgba(232, 93, 66, 0.78), rgba(201, 67, 47, 0.74)) !important;
-  backdrop-filter: blur(32px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
   box-shadow: 0 12px 30px -8px rgba(232, 93, 66, 0.28) !important;
 }
 .dark .glass-orange {
   background: linear-gradient(135deg, rgba(240, 106, 80, 0.76), rgba(210, 75, 55, 0.72)) !important;
-  backdrop-filter: blur(32px) saturate(190%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   box-shadow: 0 12px 30px -8px rgba(240, 106, 80, 0.2) !important;
 }
