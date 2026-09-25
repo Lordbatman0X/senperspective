@@ -499,7 +499,7 @@ export function Header() {
         style={{
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
-        className="sticky top-0 z-40"
+        className="header-frost sticky top-0 z-40"
       >
 
       {/* Main logo row */}

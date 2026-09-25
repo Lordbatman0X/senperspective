@@ -653,6 +653,40 @@
 
    The frosted character comes from radius + saturation + a translucent tint.
    ========================================================================== */
+/* ============================================================================
+   HEADER FROST — APPLIES TO EVERY HEADER STYLE
+   ----------------------------------------------------------------------------
+   Why this class exists. The header picks one of three visual styles at
+   runtime from `siteSettings.headerStyle`:
+       "glass"      -> .glass-orange   (has its own backdrop-filter)
+       "editorial"  -> Tailwind bg-white/70 + backdrop-blur-md
+       "dark-imm"   -> bg-zinc-950     (FULLY OPAQUE, no backdrop-filter)
+
+   Those live on an INNER div, so the frosting used to depend entirely on which
+   branch the settings happened to select. With `headerStyle: "dark-imm"` saved
+   in Firestore the header rendered a solid `bg-zinc-950` and the
+   `.header-glass` / `.glass-orange` rules never applied at all — the header
+   stayed flat no matter what those classes were set to.
+
+   Putting the backdrop-filter on the sticky <header> itself makes the frost
+   unconditional: it holds for every style and no longer depends on a database
+   value. The background tint is NOT touched here, so each style keeps its own
+   colour; only the refraction is guaranteed.
+
+   This is a thin strip, so the snapshot is cheap and a large radius is safe —
+   unlike on full-screen surfaces (see `.overlay-scrim`).
+   ========================================================================== */
+.header-frost {
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+}
+
+/* `dark-imm` is a solid fill, which would hide the blur it now inherits.
+   Translucent it, so the frost is actually visible in that style too. */
+.header-frost.bg-zinc-950 {
+  background: rgba(9, 13, 20, 0.72) !important;
+}
+
 .header-glass {
   background: rgba(255, 255, 255, 0.5) !important;
   backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
