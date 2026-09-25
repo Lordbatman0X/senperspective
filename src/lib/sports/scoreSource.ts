@@ -228,6 +228,7 @@ export function normalizeSportsDBEvent(e: any, league: ArenaLeague): Match | nul
   return {
     id: `tsdb-${league.id}-${externalId || `${home}-${away}`.toLowerCase().replace(/\s+/g, "-")}`,
     league: league.id,
+    sport: league.sport,
     leagueLabel: league.label,
     teamA: { name: home, score: homeScore, color: CARD_GRADIENT },
     teamB: { name: away, score: awayScore, color: CARD_GRADIENT },
@@ -266,11 +267,10 @@ export function normalizeOpenLigaMatch(m: any, league: ArenaLeague): Match | nul
   const final =
     results.find((r: any) => r?.resultTypeKind === "After90Minutes") || results[results.length - 1];
 
-  const goalCount = Array.isArray(m.goals) ? m.goals.length : 0;
-
   return {
     id: `openliga-${league.id}-${m.matchID}`,
     league: league.id,
+    sport: league.sport,
     leagueLabel: league.label,
     teamA: { name: home, score: toNumber(final?.pointsTeam1), color: CARD_GRADIENT },
     teamB: { name: away, score: toNumber(final?.pointsTeam2), color: CARD_GRADIENT },
@@ -280,8 +280,11 @@ export function normalizeOpenLigaMatch(m: any, league: ArenaLeague): Match | nul
     source: "openligadb",
     sourceUrl: `https://www.openligadb.de/getmatchdetails/${league.openLigaShortcut}/${m.matchID}`,
     externalId: String(m.matchID),
+    // No `clock` here on purpose. The card renders `clock` in the same slot as
+    // the kickoff time, so a goal tally would appear in place of the date and
+    // read as "4 buts" where a timestamp belongs. OpenLigaDB's per-goal scorer
+    // detail belongs in the match page, not in the score list.
     period: m.group?.groupName || undefined,
-    clock: goalCount ? `${goalCount} but${goalCount > 1 ? "s" : ""}` : undefined,
     provenance: "api",
     verification: status === "upcoming" ? "unverified" : "verified",
     updatedAt: new Date().toISOString(),

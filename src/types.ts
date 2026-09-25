@@ -138,6 +138,12 @@ export interface Match {
   externalId?: string;
   /** Period / round label, e.g. "Q3", "2e mi-temps", "Round 5". */
   period?: string;
+  /**
+   * Sport bucket, used to group the board by discipline before league. Set by
+   * the normalizers from the league registry; absent on editor-created rows,
+   * which fall back to their league id.
+   */
+  sport?: "football" | "basketball" | "mma" | "wrestling" | "other";
   /** Live clock, e.g. "67'", "4:32 Q3". */
   clock?: string;
   /** How this row was produced. Defaults to "manual" when absent. */

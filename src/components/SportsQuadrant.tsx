@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Trophy, ArrowRight, Radio } from "lucide-react";
 import { useStore } from "../store";
@@ -44,8 +44,17 @@ export function SportsQuadrant() {
     return v === undefined || v === null ? null : v;
   };
 
+  // Only a genuine in-play minute ("67'") may occupy this slot. Providers put
+  // arbitrary text in `clock` (OpenLigaDB was carrying a goal tally), which
+  // rendered as "4 buts" where a kickoff time belongs. Anything that is not a
+  // match clock is ignored and the real date is shown instead.
+  const isMatchClock = (v?: string) =>
+    /^\d{1,3}(\+\d{1,2})?'?$|^\d{1,3}\+\d{0,2}$|^(mt|ht|mi-?temps?|halftime)$/i.test(
+      (v || "").trim()
+    );
+
   const when = (m: Row) => {
-    if (m.clock) return m.clock;
+    if (isMatchClock(m.clock)) return m.clock!;
     if (!m.date) return m.time || null;
     const d = new Date(m.date);
     if (Number.isNaN(d.getTime())) return m.time || null;
@@ -57,6 +66,39 @@ export function SportsQuadrant() {
     });
   };
 
+  // Grouped by sport, then by league, so a reader reaches their competition
+  // without scanning a flat list. Group order follows the board's own
+  // live-first ordering, so whichever sport is live is the one on top.
+  const groups = useMemo(() => {
+    const bySport = new Map<string, Map<string, Row[]>>();
+    rows.forEach((m) => {
+      const sport = m.sport || "other";
+      if (!bySport.has(sport)) bySport.set(sport, new Map());
+      const leagues = bySport.get(sport)!;
+      const name = m.leagueLabel?.[language] || m.league || sport;
+      if (!leagues.has(name)) leagues.set(name, []);
+      leagues.get(name)!.push(m);
+    });
+    return Array.from(bySport.entries()).map(([sport, leagues]) => ({
+      sport,
+      leagues: Array.from(leagues.entries()).map(([name, rows]) => ({
+        name,
+        rows,
+        live: rows.filter((m) => String(m.status) === "live").length,
+      })),
+    }));
+  }, [rows, language]);
+
+  const sportName = (id: string) =>
+    (
+      {
+        football: "Football",
+        basketball: language === "fr" ? "Basket" : "Basketball",
+        mma: "MMA",
+        wrestling: language === "fr" ? "Lutte" : "Wrestling",
+        other: language === "fr" ? "Autres" : "Other",
+      } as Record<string, string>
+    )[id] || id;
   return (
     <div
       className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 border-t-4 p-5 sm:p-6 font-sans my-6"
@@ -93,42 +135,52 @@ export function SportsQuadrant() {
             : "No fixtures available right now."}
         </p>
       ) : (
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-          {rows.map((m) => {
-            const sa = scoreOf(m, "A");
-            const sb = scoreOf(m, "B");
-            // An unplayed fixture has no score. Showing "0" would invent one.
-            const played = sa !== null || sb !== null;
-            const isLive = String(m.status) === "live";
-            return (
-              <li key={m.id} className="py-2.5 flex items-center gap-3">
-                <span className="w-24 sm:w-32 shrink-0 text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 truncate">
-                  {m.leagueLabel?.[language] || m.league}
-                </span>
-
-                <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                    {m.teamA.name}
-                  </span>
-                  <span className="shrink-0 font-mono font-black text-sm tabular-nums text-zinc-900 dark:text-zinc-50">
-                    {played ? `${sa ?? 0} - ${sb ?? 0}` : "vs"}
-                  </span>
-                  <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate text-right">
-                    {m.teamB.name}
-                  </span>
-                </span>
-
-                <span className="w-20 sm:w-28 shrink-0 text-right text-[9px] font-mono uppercase tracking-wider">
-                  {isLive ? (
-                    <span className="text-red-600 dark:text-red-400 font-black">LIVE</span>
-                  ) : when(m) ? (
-                    <span className="text-zinc-500 dark:text-zinc-400">{when(m)}</span>
-                  ) : null}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="space-y-5">
+          {groups.map((g) => (
+            <section key={g.sport}>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100 mb-2 flex items-center gap-2">
+                {sportName(g.sport)}
+                {g.leagues.some((l) => l.live > 0) && (
+                  <span className="text-[8px] font-black text-red-600 dark:text-red-400">LIVE</span>
+                )}
+              </h3>
+              <div className="space-y-3">
+                {g.leagues.map((l) => (
+                  <div key={l.name}>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">{l.name}</p>
+                    <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                      {l.rows.map((m) => {
+                        const sa = scoreOf(m, "A");
+                        const sb = scoreOf(m, "B");
+                        // An unplayed fixture has no score. Showing "0" would invent one.
+                        const played = sa !== null || sb !== null;
+                        const isLive = String(m.status) === "live";
+                        return (
+                          <li key={m.id} className="py-2 flex items-center gap-3">
+                            <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{m.teamA.name}</span>
+                              <span className="shrink-0 font-mono font-black text-sm tabular-nums text-zinc-900 dark:text-zinc-50">
+                                {played ? `${sa ?? 0} - ${sb ?? 0}` : "vs"}
+                              </span>
+                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate text-right">{m.teamB.name}</span>
+                            </span>
+                            <span className="w-20 sm:w-28 shrink-0 text-right text-[9px] font-mono uppercase tracking-wider">
+                              {isLive ? (
+                                <span className="text-red-600 dark:text-red-400 font-black">LIVE</span>
+                              ) : when(m) ? (
+                                <span className="text-zinc-500 dark:text-zinc-400">{when(m)}</span>
+                              ) : null}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );

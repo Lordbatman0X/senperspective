@@ -69,6 +69,18 @@ export function ArenaMatchCard({ match, language }: ArenaMatchCardProps) {
   })();
   const BadgeIcon = badge.icon;
 
+  // `clock` is the in-play minute ("67'"), never a date and never a count of
+  // goals. Providers do send free text in this field, so it is only rendered
+  // when it actually looks like a match clock; anything else is dropped rather
+  // than shown where a timestamp is expected.
+  const liveClock = (() => {
+    const c = (match.clock || "").trim();
+    // "67'", "67", "90+3", "2e mi-temps", "MT", "HT"
+    return /^\d{1,3}(\+\d{1,2})?'?$|^\d{1,3}\+{1,2}\d{0,2}$|^(mt|ht|mi-?temps?|halftime)$/i.test(c)
+      ? c
+      : null;
+  })();
+
   const kickoff = (() => {
     if (!match.date) return match.time || null;
     const d = new Date(match.date);
@@ -92,9 +104,9 @@ export function ArenaMatchCard({ match, language }: ArenaMatchCardProps) {
           <p className="text-[10px] font-mono font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 truncate">
             {match.leagueLabel?.[language] || match.league}
           </p>
-          {(match.period || match.clock) && (
+          {(match.period || liveClock) && (
             <p className="text-[9px] font-mono text-zinc-400 dark:text-zinc-500 mt-0.5">
-              {[match.period, match.clock].filter(Boolean).join(" · ")}
+              {[match.period, liveClock].filter(Boolean).join(" · ")}
             </p>
           )}
         </div>
