@@ -152,5 +152,16 @@ export interface Match {
   teamBLogo?: string;
   /** Set when the provider flags the fixture as postponed/suspended. */
   postponed?: boolean;
+  /**
+   * Marks placeholder/demo rows shipped with the app (the seeded Champions
+   * League, World Cup, BAL, D1, Lutte and Navétanes fixtures).
+   *
+   * Those rows are INVENTED — fabricated teamings and scores like
+   * "Real Madrid 2 - 3 PSG" and a Navétane match pinned at "88'" with a 1-1
+   * score. Presenting them as results is misinformation, so every arena
+   * surface filters them out. Only a match actually created in the admin panel
+   * (no `isDemo` flag) is ever shown to readers.
+   */
+  isDemo?: boolean;
 }
 

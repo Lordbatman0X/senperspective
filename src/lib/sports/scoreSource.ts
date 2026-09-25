@@ -24,6 +24,7 @@
 import type { Match } from "../../types";
 import type { ArenaLeague } from "./leagues";
 import { getCached, setCached } from "./cache";
+import { withoutDemoMatches } from "./demoMatches";
 
 const TSDB = "https://www.thesportsdb.com/api/v1/json/3";
 const OPENLIGA = "https://api.openligadb.de";
@@ -448,9 +449,12 @@ export function mergeWithEditorial(editorial: Match[], provider: Match[]): Match
   const byKey = new Map<string, Match>();
   const keyOf = (m: Match) => m.externalId || `${m.league}:${m.id}`;
 
+  // Demo fixtures are dropped here, at the single merge point shared by every
+  // live surface (the board, the sidebar and the category page). Filtering
+  // once means no consumer can forget to do it and leak a fabricated score.
   provider.forEach((m) => byKey.set(keyOf(m), m));
 
-  const merged = editorial.map((e) => {
+  const merged = withoutDemoMatches(editorial).map((e) => {
     if (e.provenance && e.provenance !== "manual") return e;
     const incoming = byKey.get(keyOf(e));
     if (!incoming) return e;

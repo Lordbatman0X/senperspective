@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { Trophy, Activity, MessageSquare, ChevronLeft, Calendar, HelpCircle, ShieldAlert, Star, Award, MapPin, Newspaper, Clock, ArrowRight, Hourglass } from "lucide-react";
@@ -8,21 +8,30 @@ import { useSEO } from "../hooks/useSEO";
 import { formatRelativeDate, formatCategory } from "../lib/utils";
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from "../lib/imageUtils";
 import { ArenaLiveBoard } from "../components/arena/ArenaLiveBoard";
+import { withoutDemoMatches } from "../lib/sports/demoMatches";
 
 export function LArenePage() {
-  const { language, articles = [], matches = [] } = useStore();
+  const { language, articles = [], matches: rawMatches = [] } = useStore();
+
+  // The store ships with 14 INVENTED demo fixtures (fabricated Champions
+  // League / World Cup / BAL / D1 / Lutte / Navetane teamings and scores, one
+  // of them pinned at "88'" with status "live"). They are stripped out before
+  // anything is rendered, so a fabricated score can never reach a reader here.
+  // Matches genuinely created in the admin panel have no `isDemo` flag and are
+  // unaffected.
+  const matches = withoutDemoMatches(rawMatches);
   
   useSEO({
     title: language === 'fr' 
-      ? "L'Arène — Sports & Lutte Sénégalaise | SenPerspective" 
-      : "L'Arène — Sports & Senegalese Wrestling | SenPerspective",
+      ? "L'ArÃ¨ne â€” Sports & Lutte SÃ©nÃ©galaise | SenPerspective" 
+      : "L'ArÃ¨ne â€” Sports & Senegalese Wrestling | SenPerspective",
     description: language === 'fr'
-      ? "Toutes les actualités et analyses sportives au Sénégal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et Navétanes sur SenPerspective."
+      ? "Toutes les actualitÃ©s et analyses sportives au SÃ©nÃ©gal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et NavÃ©tanes sur SenPerspective."
       : "All sports news, wrestling lamb analysis and live match scores on SenPerspective.",
     canonical: "https://senperspective.com/larene",
     breadcrumbs: [
       { name: "Accueil", url: "https://senperspective.com/" },
-      { name: "L'Arène — Sports", url: "https://senperspective.com/larene" }
+      { name: "L'ArÃ¨ne â€” Sports", url: "https://senperspective.com/larene" }
     ]
   });
 
@@ -42,8 +51,8 @@ export function LArenePage() {
     { id: "all", label: { fr: "Tous les sports", en: "All Sports" } },
     { id: "wrestling", label: { fr: "Lutte avec Frappe (Lamb)", en: "Senegalese Wrestling" }, priority: true },
     { id: "nba-bal", label: { fr: "Basketball BAL & Afrique", en: "BAL & Africa Basketball" }, priority: true },
-    { id: "d1-basket", label: { fr: "D1 Basket Sénégal", en: "Senegal D1 Basketball" }, priority: true },
-    { id: "navetane", label: { fr: "Championnats Navétanes", en: "Navetane League" }, priority: true },
+    { id: "d1-basket", label: { fr: "D1 Basket SÃ©nÃ©gal", en: "Senegal D1 Basketball" }, priority: true },
+    { id: "navetane", label: { fr: "Championnats NavÃ©tanes", en: "Navetane League" }, priority: true },
     { id: "world-cup", label: { fr: "Coupe du Monde", en: "World Cup" } },
     { id: "champions-league", label: { fr: "Champions League", en: "Champions League" } },
   ];
@@ -54,7 +63,7 @@ export function LArenePage() {
     const isBAL = match.league === "nba-bal";
     const isNavetane = match.league === "navetane";
     const isD1 = match.league === "d1-basket";
-    const includesSenegal = (match.teamA.name ?? '').includes("🇸🇳") || (match.teamB.name ?? '').includes("🇸🇳") || (match.teamA.name ?? '').includes("Sénégal") || (match.teamB.name ?? '').includes("Senegal");
+    const includesSenegal = (match.teamA.name ?? '').includes("ðŸ‡¸ðŸ‡³") || (match.teamB.name ?? '').includes("ðŸ‡¸ðŸ‡³") || (match.teamA.name ?? '').includes("SÃ©nÃ©gal") || (match.teamB.name ?? '').includes("Senegal");
 
     if (isWrestling) return 10;
     if (isNavetane) return 9;
@@ -74,26 +83,26 @@ export function LArenePage() {
 
   const renderFlag = (name: string) => {
     const cleanName = name.replace(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/g, "").trim();
-    const isWrestling = !name.includes("🇪🇸") && !name.includes("🏴󠁧󠁢󠁥󠁮󠁧󠁿") && !name.includes("🇫🇷") && !name.includes("🇩🇪") && !name.includes("🇳🇱") && !name.includes("🇦🇷") && !name.includes("🇧🇷") && !name.includes("🇪🇬") && !name.includes("🇹🇳") && !name.includes("🇦🇴");
+    const isWrestling = !name.includes("ðŸ‡ªðŸ‡¸") && !name.includes("ðŸ´ó §ó ¢ó ¥ó ®ó §ó ¿") && !name.includes("ðŸ‡«ðŸ‡·") && !name.includes("ðŸ‡©ðŸ‡ª") && !name.includes("ðŸ‡³ðŸ‡±") && !name.includes("ðŸ‡¦ðŸ‡·") && !name.includes("ðŸ‡§ðŸ‡·") && !name.includes("ðŸ‡ªðŸ‡¬") && !name.includes("ðŸ‡¹ðŸ‡³") && !name.includes("ðŸ‡¦ðŸ‡´");
 
     if (isWrestling) {
       return (
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded-full bg-[#C69B52]/20 border border-[#C69B52]/40 flex items-center justify-center text-[9px] font-black text-[#C69B52]">
-            🤼
+            ðŸ¤¼
           </div>
           <span className="text-sm font-extrabold text-zinc-900 dark:text-zinc-100">{cleanName}</span>
         </div>
       );
     }
 
-    if (name.includes("🇸🇳") || name.toLowerCase().includes("sénégal") || name.toLowerCase().includes("senegal")) {
+    if (name.includes("ðŸ‡¸ðŸ‡³") || name.toLowerCase().includes("sÃ©nÃ©gal") || name.toLowerCase().includes("senegal")) {
       return (
         <div className="flex items-center gap-2">
           <div className="relative w-5 h-5 rounded-full overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-sm flex shrink-0">
             <div className="w-1/3 bg-[#00853F]" />
             <div className="w-1/3 bg-[#FDEF42] flex items-center justify-center relative">
-              <span className="text-[6px] text-[#00853F] absolute font-black">★</span>
+              <span className="text-[6px] text-[#00853F] absolute font-black">â˜…</span>
             </div>
             <div className="w-1/3 bg-[#E31B23]" />
           </div>
@@ -121,7 +130,7 @@ export function LArenePage() {
           Sports
         </h1>
         <p className="mt-4 text-brand-muted font-semibold text-base md:text-lg max-w-3xl">
-          {language === 'fr' ? 'Tous les articles de la catégorie Sports' : 'All articles in Sports'}
+          {language === 'fr' ? 'Tous les articles de la catÃ©gorie Sports' : 'All articles in Sports'}
         </p>
       </header>
 
@@ -181,7 +190,7 @@ export function LArenePage() {
                   <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">
                     <span className="flex items-center gap-1.5">
                       <span>{formatRelativeDate(article.date, language)}</span>
-                      <span>•</span>
+                      <span>â€¢</span>
                       <span className="inline-flex items-center gap-1 text-[#E85D42]">
                         <Hourglass size={11} className="shrink-0 stroke-[2.2]" />
                         <span>{article.readingTime} MIN</span>
@@ -206,7 +215,7 @@ export function LArenePage() {
         )}
       </section>
 
-      {/* BOTTOM SECTION: L'ARÈNE MATCH CENTER */}
+      {/* BOTTOM SECTION: L'ARÃˆNE MATCH CENTER */}
       <section className="pt-10 border-t-4 border-[#C69B52] space-y-8" id="larene-center">
         
         {/* Section Banner */}
@@ -215,29 +224,29 @@ export function LArenePage() {
           <div className="space-y-2 relative z-10">
             <div className="inline-flex items-center gap-2 bg-[#C69B52] text-zinc-950 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest">
               <Trophy size={12} />
-              <span>{language === "fr" ? "L'Arène - Centre de Matchs" : "L'Arène Live Arena"}</span>
+              <span>{language === "fr" ? "L'ArÃ¨ne - Centre de Matchs" : "L'ArÃ¨ne Live Arena"}</span>
             </div>
             <h2 className="text-3xl md:text-4xl font-serif font-black tracking-tight text-white">
-              L’ARÈNE : DIRECTS & RÉSULTATS
+              Lâ€™ARÃˆNE : DIRECTS & RÃ‰SULTATS
             </h2>
             <p className="text-xs md:text-sm text-zinc-400 max-w-2xl font-medium">
               {language === "fr"
-                ? "Suivez les scores en direct, les résultats officiels et l'analyse socio-politique des grandes confrontations (Lamb, BAL, D1 Sénégal, Navétanes)."
+                ? "Suivez les scores en direct, les rÃ©sultats officiels et l'analyse socio-politique des grandes confrontations (Lamb, BAL, D1 SÃ©nÃ©gal, NavÃ©tanes)."
                 : "Live scores, official results, and socio-political analysis of key clashes (Wrestling, BAL, Senegal D1, Navetanes)."}
             </p>
           </div>
         </div>
 
-        {/* Live scoreboard — structured providers, polled and cached. */}
+        {/* Live scoreboard â€” structured providers, polled and cached. */}
         <div className="glass p-5 md:p-6 border border-zinc-200 dark:border-zinc-800">
           <ArenaLiveBoard
             editorialMatches={matches}
             language={language === "en" ? "en" : "fr"}
-            title={language === "fr" ? "Scores en direct & résultats" : "Live scores & results"}
+            title={language === "fr" ? "Scores en direct & rÃ©sultats" : "Live scores & results"}
           />
         </div>
 
-        {/* Bento Grid layout for L'Arène Filters + Matches */}
+        {/* Bento Grid layout for L'ArÃ¨ne Filters + Matches */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           
           {/* Left Sidebar Filters */}
@@ -281,8 +290,8 @@ export function LArenePage() {
                 {[
                   { id: "all", label: { fr: "Tous les statuts", en: "All Matches" } },
                   { id: "live", label: { fr: "En direct (Live)", en: "Live Only" }, count: (matches ?? []).filter(m => m.status === "live").length },
-                  { id: "upcoming", label: { fr: "À venir", en: "Upcoming" } },
-                  { id: "finished", label: { fr: "Résultats passés", en: "Finished" } }
+                  { id: "upcoming", label: { fr: "Ã€ venir", en: "Upcoming" } },
+                  { id: "finished", label: { fr: "RÃ©sultats passÃ©s", en: "Finished" } }
                 ].map((stat) => {
                   const isSelected = activeStatus === stat.id;
                   return (
@@ -347,7 +356,7 @@ export function LArenePage() {
                           {isPriority && (
                             <div className="absolute -top-3 left-4 flex items-center gap-1.5 bg-[#C69B52] text-white px-2 py-0.5 text-[8px] font-black uppercase tracking-widest shadow-md">
                               <Star size={8} className="fill-white" />
-                              <span>{language === "fr" ? "Élite Locale" : "Local Elite"}</span>
+                              <span>{language === "fr" ? "Ã‰lite Locale" : "Local Elite"}</span>
                             </div>
                           )}
 
@@ -371,7 +380,7 @@ export function LArenePage() {
                               )}
                               {match.status === "upcoming" && (
                                 <span className="bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider">
-                                  {language === "fr" ? "À venir" : "UPCOMING"}
+                                  {language === "fr" ? "Ã€ venir" : "UPCOMING"}
                                 </span>
                               )}
                             </div>
@@ -430,10 +439,6 @@ export function LArenePage() {
                             </span>
                           </div>
 
-                          {/* Socio-political analytical commentary paragraph */}
-                          <div className="mt-4 p-3 bg-zinc-100/30 dark:bg-zinc-950/20 border-l-4 border-[#C69B52] text-[10px] leading-relaxed text-zinc-600 dark:text-zinc-400 font-medium italic">
-                            {language === "fr" ? match.contextInfo?.fr : match.contextInfo?.en}
-                          </div>
                         </motion.div>
                       );
                     })}
@@ -442,7 +447,7 @@ export function LArenePage() {
               ) : (
                 <div className="text-center py-12 text-zinc-400 italic text-xs">
                   {language === "fr" 
-                    ? "Aucune rencontre ne correspond à vos filtres actuels." 
+                    ? "Aucune rencontre ne correspond Ã  vos filtres actuels." 
                     : "No matches matching the selected criteria."}
                 </div>
               )}
@@ -455,7 +460,7 @@ export function LArenePage() {
               </div>
               <h3 className="text-xs font-black uppercase tracking-widest text-[#C69B52] mb-2 flex items-center gap-1">
                 <Award size={12} />
-                <span>{language === "fr" ? "CHRONIQUES DE LA LUTTE SÉNÉGALAISE" : "THE TRADITIONAL LAMB IN FOCUS"}</span>
+                <span>{language === "fr" ? "CHRONIQUES DE LA LUTTE SÃ‰NÃ‰GALAISE" : "THE TRADITIONAL LAMB IN FOCUS"}</span>
               </h3>
               <h4 className="text-lg font-serif font-black text-brand-dark dark:text-zinc-50 mb-3">
                 {language === "fr" 
@@ -464,8 +469,8 @@ export function LArenePage() {
               </h4>
               <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed font-medium">
                 {language === "fr"
-                  ? "Au Sénégal, la lutte avec frappe unifie des quartiers entiers de Dakar, de Thiaroye à Guédiawaye. Au-delà de l'affrontement athlétique, elle représente un ascenseur social puissant pour la jeunesse de la banlieue, mobilisant des capitaux importants issus de sponsors locaux et se connectant étroitement aux rituels mystiques traditionnels sénégalais."
-                  : "In Senegal, traditional wrestling with strikes unites entire neighborhoods of Dakar, from Thiaroye to Guédiawaye. Beyond the athletic contest, it is a powerful vehicle of social climbing for suburban youth, pooling massive local sponsorship budgets and closely weaving into mystical ancestral rites."}
+                  ? "Au SÃ©nÃ©gal, la lutte avec frappe unifie des quartiers entiers de Dakar, de Thiaroye Ã  GuÃ©diawaye. Au-delÃ  de l'affrontement athlÃ©tique, elle reprÃ©sente un ascenseur social puissant pour la jeunesse de la banlieue, mobilisant des capitaux importants issus de sponsors locaux et se connectant Ã©troitement aux rituels mystiques traditionnels sÃ©nÃ©galais."
+                  : "In Senegal, traditional wrestling with strikes unites entire neighborhoods of Dakar, from Thiaroye to GuÃ©diawaye. Beyond the athletic contest, it is a powerful vehicle of social climbing for suburban youth, pooling massive local sponsorship budgets and closely weaving into mystical ancestral rites."}
               </p>
             </div>
 
