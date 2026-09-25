@@ -506,7 +506,7 @@ export function Header() {
       <div
         className={`transition-all duration-500 ease-out ${
           isScrolled
-            ? "py-2.5 bg-white/50 dark:bg-black/50 backdrop-blur-xl backdrop-saturate-180 border-b border-black/5 dark:border-white/10 text-zinc-900 dark:text-zinc-100 shadow-xs"
+            ? "header-glass py-2.5 text-zinc-900 dark:text-zinc-100"
             : `${currentSettings.headerStyle === "editorial" 
                 ? "bg-white/70 dark:bg-zinc-950/80 backdrop-blur-md border-b border-brand-border/10 text-brand-dark dark:text-brand-white" 
                 : currentSettings.headerStyle === "dark-imm" 

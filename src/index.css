@@ -226,23 +226,10 @@
                 inset 1px 1px 0px 0px rgba(255, 255, 255, 0.06) !important;
   }
 
-  /* Solid premium glass-orange for header and visual cards */
-  .glass-orange {
-    background: linear-gradient(135deg, #e85d42, #c9432f) !important;
-    backdrop-filter: blur(36px) saturate(190%) !important;
-    -webkit-backdrop-filter: blur(36px) saturate(190%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
-    box-shadow: 0 12px 30px -5px rgba(232, 93, 66, 0.3) !important;
-  }
-
-  .dark .glass-orange {
-    background: linear-gradient(135deg, #f06a50, #d24b37) !important;
-    backdrop-filter: blur(36px) saturate(190%) !important;
-    -webkit-backdrop-filter: blur(36px) saturate(190%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    box-shadow: 0 12px 30px -5px rgba(240, 106, 80, 0.2) !important;
-  }
+  /* NOTE: the branded header glass (`.glass-orange`) and the scrolled sticky
+     header glass (`.header-glass`) are defined at the end of this file. They
+     must live OUTSIDE @layer so their `!important` tint wins over the
+     Tailwind `bg-*` utilities applied inline. */
 
   /* Micro glassy accents for tags, badges, buttons and floating cards */
   .glass-accent {
@@ -302,8 +289,14 @@
 @keyframes syncbar { from { transform: translateX(-100%); } to { transform: translateX(400%); } }
 @keyframes page-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes soft-in { from { opacity: 0; } to { opacity: 1; } }
-.app-page-enter { animation: page-enter 360ms ease-out both; }
-.content-soft-in { animation: soft-in 260ms ease-out both; }
+.app-page-enter { animation: page-enter 360ms ease-out backwards; }
+.content-soft-in { animation: soft-in 260ms ease-out backwards; }
+/* IMPORTANT: `page-enter` must NOT use `fill-mode: both`. A retained
+   `transform: translateY(0)` on this wrapper turns it into the containing block
+   for every `position: fixed` descendant (drawers, modals, the sync bar), so
+   those overlays anchor to the document instead of the viewport and the page
+   appears torn/re-offset when one opens. `backwards` only paints the first
+   keyframe before the animation starts, leaving no transform afterwards. */
 .smooth-transition { transition-property: color, background-color, border-color, box-shadow, opacity, transform; transition-timing-function: cubic-bezier(.2,.8,.2,1); transition-duration: 220ms; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 1ms !important; }
@@ -627,32 +620,101 @@
 /* ============================================================================
    FROSTED GLASS INTENSITY
    ----------------------------------------------------------------------------
-   The design uses Tailwind's `backdrop-blur-*` utilities for modals, menus and
-   floating panels. The default values are intentionally subtle, so every
-   frosted surface is amplified here to give the interface a consistent,
-   strongly blurred glass look without touching each component.
+   Tailwind's `backdrop-blur-*` utilities are amplified here for a consistent
+   frosted look. Radii stay in the 14-40px band on purpose: browsers back the
+   backdrop with a snapshot of the page, and very large radii on FULL-SCREEN
+   surfaces (drawer backdrops, modals) exhaust that budget and make the
+   composited page visibly tear/smear. Big radii belong on small panels only.
    ========================================================================== */
 .backdrop-blur-xs {
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  backdrop-filter: blur(14px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
 }
 .backdrop-blur-sm {
-  backdrop-filter: blur(32px) saturate(185%) !important;
-  -webkit-backdrop-filter: blur(32px) saturate(185%) !important;
+  backdrop-filter: blur(18px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(165%) !important;
 }
 .backdrop-blur-md {
-  backdrop-filter: blur(44px) saturate(190%) !important;
-  -webkit-backdrop-filter: blur(44px) saturate(190%) !important;
+  backdrop-filter: blur(22px) saturate(170%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(170%) !important;
 }
 .backdrop-blur-lg {
-  backdrop-filter: blur(56px) saturate(195%) !important;
-  -webkit-backdrop-filter: blur(56px) saturate(195%) !important;
+  backdrop-filter: blur(28px) saturate(175%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(175%) !important;
 }
 .backdrop-blur-xl,
 .backdrop-blur-2xl,
 .backdrop-blur-3xl {
-  backdrop-filter: blur(72px) saturate(200%) !important;
-  -webkit-backdrop-filter: blur(72px) saturate(200%) !important;
+  backdrop-filter: blur(36px) saturate(185%) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(185%) !important;
+}
+
+/* ============================================================================
+   STICKY HEADER - MAMMOUTH-STYLE FROSTED GLASS
+   ----------------------------------------------------------------------------
+   The header must carry its own `backdrop-filter` so the page scrolling
+   underneath is refracted, and its tint must be translucent. An opaque tint
+   (the old .glass-orange) makes the blur invisible no matter how large the
+   radius is. Radius is the largest in the app but the surface is a thin strip,
+   so it stays well inside the compositor budget.
+   ========================================================================== */
+.header-glass {
+  background: rgba(255, 255, 255, 0.55) !important;
+  backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  box-shadow: 0 10px 30px -18px rgba(15, 23, 42, 0.35),
+              inset 0 -1px 0px 0px rgba(255, 255, 255, 0.6) !important;
+}
+.dark .header-glass {
+  background: rgba(9, 13, 20, 0.55) !important;
+  backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(190%) contrast(105%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8),
+              inset 0 -1px 0px 0px rgba(255, 255, 255, 0.07) !important;
+}
+
+/* The unscrolled branded header: same trick, tinted instead of neutral. */
+.glass-orange {
+  background: linear-gradient(135deg, rgba(232, 93, 66, 0.82), rgba(201, 67, 47, 0.78)) !important;
+  backdrop-filter: blur(40px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 12px 30px -8px rgba(232, 93, 66, 0.28) !important;
+}
+.dark .glass-orange {
+  background: linear-gradient(135deg, rgba(240, 106, 80, 0.8), rgba(210, 75, 55, 0.76)) !important;
+  backdrop-filter: blur(40px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 12px 30px -8px rgba(240, 106, 80, 0.2) !important;
+}
+
+/* Full-screen scrim behind drawers/modals. Deliberately cheap: a huge radius
+   here is what smears the page. A soft tint + a modest radius reads as glass. */
+.overlay-scrim {
+  background: rgba(4, 7, 12, 0.55) !important;
+  backdrop-filter: blur(10px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(120%) !important;
+}
+
+/* Reserve the scrollbar gutter permanently so locking scroll (drawer open)
+   can never reflow the page sideways. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* Scroll lock used by the account drawer. `position: fixed` on the body plus
+   a negative `top` offset freezes the page at its current scroll position
+   without the jump that `overflow: hidden` alone causes. */
+body.drawer-scroll-lock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  width: 100%;
+  overflow: hidden;
 }
 
 /* Reduced Motion Support */

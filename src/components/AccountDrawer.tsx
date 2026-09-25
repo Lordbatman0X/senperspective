@@ -307,6 +307,47 @@ export function AccountDrawer({
     }
   }, [showProfileModal, activeSubMenu, readerProfile?.email, clearNotifications]);
 
+  // Freeze the page behind the drawer WITHOUT letting it jump.
+  //
+  // `overflow: hidden` on <body> alone is not enough: the browser keeps the
+  // scroll offset but the document loses its scrollbar, so the page visibly
+  // shifts and re-lays out while the fixed overlay is on screen. We instead
+  // pin the body with `position: fixed` and compensate the lost scrollbar
+  // width, then restore the exact scroll position on close.
+  useEffect(() => {
+    if (!showProfileModal) return;
+
+    const scrollY = window.scrollY;
+    const scrollX = window.scrollX;
+    const body = document.body;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      width: body.style.width,
+      paddingRight: body.style.paddingRight,
+      overflow: body.style.overflow,
+    };
+
+    body.classList.add('drawer-scroll-lock');
+    if (scrollbarWidth > 0) body.style.paddingRight = `${scrollbarWidth}px`;
+    body.style.top = `${-scrollY}px`;
+    body.style.left = `${-scrollX}px`;
+
+    return () => {
+      body.classList.remove('drawer-scroll-lock');
+      body.style.position = previous.position;
+      body.style.top = previous.top;
+      body.style.left = previous.left;
+      body.style.width = previous.width;
+      body.style.paddingRight = previous.paddingRight;
+      body.style.overflow = previous.overflow;
+      window.scrollTo(scrollX, scrollY);
+    };
+  }, [showProfileModal]);
+
   // Real-time Firestore listener for friends
   const [friendRequests, setFriendRequests] = useState<string[]>([]);
   const [sentRequests, setSentRequests] = useState<string[]>([]);
@@ -592,15 +633,17 @@ export function AccountDrawer({
           key="account-drawer-modal"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="account-drawer-overlay fixed inset-x-0 top-0 bottom-0 z-50 flex justify-end overflow-hidden overscroll-contain"
+          className="account-drawer-overlay fixed inset-0 z-[200] flex justify-end overflow-hidden overscroll-contain"
         >
-          {/* Backdrop Blur Overlay */}
+          {/* Backdrop Blur Overlay — cheap radius on purpose; a full-screen
+              backdrop-filter with a large radius re-rasterizes the whole page
+              and visibly tears it while the drawer animates. */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowProfileModal(false)}
-            className="absolute inset-0 bg-black/45 backdrop-blur-md"
+            className="overlay-scrim absolute inset-0"
           />
 
           {/* Sliding Panel with Pure Brand Aesthetics & Translucent Glass backdrop */}
