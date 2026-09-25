@@ -4,11 +4,18 @@ import { ChevronLeft, ChevronRight, Trophy, Calendar, Activity, MessageSquare, A
 import { motion, AnimatePresence } from "motion/react";
 import { useStore } from "../store";
 import { Match } from "../types";
+import { withoutDemoMatches } from "../lib/sports/demoMatches";
 
 export function SportsSlider() {
-  const { language, matches = [] } = useStore();
+  const { language, matches: rawMatches = [] } = useStore();
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [currentIndex, setCurrentIndex] = useState<number>(0);
+
+  // Every league this carousel can filter by (Champions League, World Cup, BAL,
+  // D1, Lutte, Navétanes) exists only in the store's INVENTED demo fixtures. The
+  // demo rows are stripped so a fabricated scoreline can never be rendered; with
+  // them gone this slider has nothing to show and callers should omit it.
+  const matches = withoutDemoMatches(rawMatches);
 
   // Category filter configurations
   const categories = [
