@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { SlidersHorizontal, Filter, Bookmark, Coffee, Zap, Quote, TrendingUp, Hash, Globe, Mail, Send, FolderKanban, FileText, X, CheckCircle, Trophy, Megaphone } from 'lucide-react';
 import { SportsSlider } from '../components/SportsSlider';
 import { SportsQuadrant } from '../components/SportsQuadrant';
+import { ArenaSidebarLive } from '../components/arena/ArenaSidebarLive';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { NewsletterSignup } from '../components/NewsletterSignup';
@@ -336,6 +337,11 @@ export function HomePage() {
     canonical: "https://senperspective.com/",
     type: 'website'
   });
+
+  // Editor/seeded matches (the Senegalese competitions: Lutte, Navétanes, D1,
+  // BAL). These are passed to the sidebar so editorial rows always outrank
+  // provider rows, and so the newsroom keeps control of the local fixtures.
+  const arenaMatches = useStore((s) => s.matches) || [];
 
   const currentSettings: any = useStore((s) => s.siteSettings) || {
     siteName: 'Perspective',
@@ -834,65 +840,15 @@ export function HomePage() {
             </div>
           </div>
 
-          {/* L'Arène (Sports & Lamb) Sidebar Widget */}
-          <div className="glass p-5 bg-white/95 dark:bg-zinc-900/80 border-t-4 border-t-[#E85D42] text-left" style={{ borderTopColor: currentSettings.accentColor }}>
-            <div className="flex items-center justify-between mb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
-              <div className="flex items-center gap-1.5">
-                <Trophy size={14} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
-                <span className="text-xs font-serif font-black uppercase tracking-widest text-[#E85D42]">
-                  {language === 'fr' ? "L'ARÈNE - SPORTS & COMBATS" : "THE ARENA - SPORTS & FIGHTS"}
-                </span>
-              </div>
-              <Link to="/larene" className="text-[9px] font-mono font-black uppercase tracking-widest text-[#E85D42] hover:underline">
-                {language === 'fr' ? "ENTRER →" : "ENTER →"}
-              </Link>
-            </div>
-
-            <div className="space-y-3 font-sans">
-              {arenaArticles.length > 0 ? (
-                arenaArticles.slice(0, 3).map((art, idx) => (
-                  <Link
-                    key={`${art.id}-${idx}`}
-                    to={`/article/${art.slug || art.id}`}
-                    className="group flex gap-3 pb-3 border-b border-zinc-200/60 dark:border-zinc-800/30 last:border-0 last:pb-0"
-                  >
-                    <span className="text-sm font-mono font-black text-[#E85D42] shrink-0" style={{ color: currentSettings.accentColor }}>
-                      0{idx + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-[8px] font-mono font-black uppercase tracking-widest text-[#E85D42] block mb-0.5">
-                        L'ARÈNE
-                      </span>
-                      <h4 className="font-black text-xs leading-tight dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors line-clamp-2">
-                        {art.title?.[language] || art.title?.fr}
-                      </h4>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="space-y-2.5">
-                  <Link to="/larene" className="group block p-2.5 bg-zinc-50/80 dark:bg-zinc-950/40 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-[#E85D42] transition-all">
-                    <div className="flex justify-between items-center text-[8px] font-mono font-bold text-[#E85D42] uppercase tracking-wider mb-1">
-                      <span>ARÈNE NATIONALE • PIKINE</span>
-                      <span className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-black">DIRECT</span>
-                    </div>
-                    <h4 className="font-black text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors">
-                      {language === 'fr' ? 'Grand Combat de Lutte avec Frappe : Modou Lô vs Siteu' : 'Grand Lamb Championship Match: Modou Lô vs Siteu'}
-                    </h4>
-                  </Link>
-                  <Link to="/larene" className="group block p-2.5 bg-zinc-50/80 dark:bg-zinc-950/40 border border-zinc-200/60 dark:border-zinc-800/60 hover:border-[#E85D42] transition-all">
-                    <div className="flex justify-between items-center text-[8px] font-mono font-bold text-zinc-500 uppercase tracking-wider mb-1">
-                      <span>LIGUE 1 SÉNÉGAL</span>
-                      <span>18:00 DKR</span>
-                    </div>
-                    <h4 className="font-black text-xs text-zinc-900 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors">
-                      {language === 'fr' ? 'Jaraaf de Dakar vs Teungueth FC : Choc au Sommet' : 'Jaraaf Dakar vs Teungueth FC: Top Table Clash'}
-                    </h4>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
+          {/* L'Arène Sidebar Widget — LIVE verified scores.
+              Replaces the previous hardcoded box, which rendered invented
+              fixtures ("Modou Lô vs Siteu", "Jaraaf vs Teungueth") that could
+              never reflect a real result. */}
+          <ArenaSidebarLive
+            editorialMatches={arenaMatches}
+            language={language === 'en' ? 'en' : 'fr'}
+            accentColor={currentSettings.accentColor}
+          />
 
           {/* Announcements / Annonces Sidebar Widget */}
           <div className="glass p-5 bg-white/95 dark:bg-zinc-900/80 border-t-4 border-t-[#E85D42] text-left mt-6" style={{ borderTopColor: currentSettings.accentColor }}>

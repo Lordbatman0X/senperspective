@@ -15,11 +15,14 @@ const LIVE_RE = /\b(\d{1,2}['’]\b|in[- ]progress|half\s*time|ht|live|en cours|
 const POSTPONED_RE = /\b(postponed|postpon|suspend|reporte|annulé|annulee|cancelled)\b/i;
 const LIVE_WINDOW_MS = 3.5 * 60 * 60 * 1000;
 
+const NOT_STARTED_RE = /^(ns|none|scheduled|not\s*started)$/i;
+
 function deriveStatus(providerStatus, kickoff, now = Date.now()) {
   const raw = (providerStatus || "").trim();
   if (POSTPONED_RE.test(raw)) return "finished";
   if (FINISHED_RE.test(raw)) return "finished";
   if (LIVE_RE.test(raw)) return "live";
+  if (NOT_STARTED_RE.test(raw)) return "upcoming";
   if (kickoff) {
     const diff = now - kickoff.getTime();
     if (diff > LIVE_WINDOW_MS) return "finished";
@@ -34,6 +37,18 @@ function parseKickoff(raw) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/** strTimestamp (real kickoff time) must win over dateEvent (date only). */
+function parseSportsDBKickoff(e) {
+  const withTime = parseKickoff(e?.strTimestamp);
+  if (withTime) return withTime;
+  const dateOnly = String(e?.dateEvent ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    const d = new Date(`${dateOnly}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return parseKickoff(dateOnly);
+}
+
 function toNumber(v) {
   if (v === null || v === undefined || v === "") return undefined;
   const n = Number(String(v).replace(/[^\d-]/g, ""));
@@ -44,16 +59,18 @@ function normalizeSportsDBEvent(e, league) {
   const home = (e?.strHomeTeam || "").trim();
   const away = (e?.strAwayTeam || "").trim();
   if (!home || !away) return null;
-  const kickoff = parseKickoff(e.dateEvent || e.strTimestamp || e.strTimeLocal);
+  const kickoff = parseSportsDBKickoff(e);
   const status = deriveStatus(e.strStatus || e.strPostponed, kickoff);
   const externalId = String(e.idEvent || "").trim();
+  // An unplayed fixture must never display a 0-0 scoreline.
+  const played = status !== "upcoming";
   return {
     id: `tsdb-${league.id}-${externalId}`,
     status,
     home,
     away,
-    scoreA: toNumber(e.intHomeScore),
-    scoreB: toNumber(e.intAwayScore),
+    scoreA: played ? toNumber(e.intHomeScore) : undefined,
+    scoreB: played ? toNumber(e.intAwayScore) : undefined,
     date: kickoff ? kickoff.toISOString() : undefined,
     verification: status === "upcoming" ? "unverified" : "verified",
   };
@@ -140,6 +157,71 @@ async function testMmaCoverage() {
   check("confirmed absent, so the UI badges MMA as news-sourced", n === 0, `got ${n}`);
 }
 
+/**
+ * Regression tests for the accuracy bugs found in production review.
+ * These are pure-function checks, so they are deterministic and offline.
+ */
+function testAccuracyRegressions() {
+  console.log("\nAccuracy regressions");
+
+  // BUG 1: `dateEvent` is date-only ("2026-09-20") but was preferred over
+  // `strTimestamp` ("2026-09-20T19:30:00"), so kickoffs parsed as UTC midnight
+  // and rendered up to 8 hours early.
+  const e1 = { strTimestamp: "2026-09-20T19:30:00", dateEvent: "2026-09-20" };
+  const k1 = parseSportsDBKickoff(e1);
+  const hhmm = k1 ? k1.toISOString().slice(11, 16) : "";
+  check(
+    "kickoff uses the real clock time, not midnight",
+    hhmm === "19:30",
+    `got ${hhmm || "null"} from ${k1?.toISOString()}`
+  );
+
+  // Date-only payload with no timestamp must not resolve to midnight either.
+  const k2 = parseSportsDBKickoff({ dateEvent: "2026-09-20" });
+  check(
+    "date-only fallback avoids 00:00 (would misclassify as live)",
+    k2 ? k2.getHours() !== 0 : false,
+    `got ${k2?.toISOString()}`
+  );
+
+  // BUG 2: TheSportsDB returns "NS" for a not-yet-kicked-off fixture. It was
+  // not recognised, so it fell through to the kickoff-window heuristic.
+  const now = Date.parse("2026-09-20T09:00:00Z");
+  check(
+    'status "NS" is upcoming even 1h before kickoff',
+    deriveStatus("NS", new Date("2026-09-20T10:00:00Z"), now) === "upcoming"
+  );
+  check(
+    'status "NS" is upcoming even just before kickoff',
+    deriveStatus("NS", new Date("2026-09-20T09:05:00Z"), now) === "upcoming"
+  );
+  check('status "FT" stays finished', deriveStatus("FT", null, now) === "finished");
+
+  // BUG 3: an unplayed fixture rendered "0 - 0", implying a result that
+  // does not exist.
+  const future = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString().slice(0, 19);
+  const upcoming = normalizeSportsDBEvent(
+    { strHomeTeam: "A", strAwayTeam: "B", strStatus: "NS", strTimestamp: future, intHomeScore: null, intAwayScore: null },
+    { id: "x" }
+  );
+  check(
+    "upcoming fixture shows no score",
+    upcoming?.scoreA === undefined && upcoming?.scoreB === undefined,
+    `got ${upcoming?.scoreA}/${upcoming?.scoreB}`
+  );
+
+  // A played match must still carry its real scoreline.
+  const playedRow = normalizeSportsDBEvent(
+    { strHomeTeam: "A", strAwayTeam: "B", strStatus: "FT", strTimestamp: "2026-09-20T19:30:00", intHomeScore: "2", intAwayScore: "1" },
+    { id: "x" }
+  );
+  check(
+    "finished match keeps its scoreline",
+    playedRow?.scoreA === 2 && playedRow?.scoreB === 1,
+    `got ${playedRow?.scoreA}/${playedRow?.scoreB}`
+  );
+}
+
 function testSorting() {
   console.log("\nBoard ordering");
   const RANK = { live: 0, upcoming: 1, finished: 2 };
@@ -167,6 +249,7 @@ function testSorting() {
   await testSportsDB(4328);
   await testSportsDB(4387);
   await testMmaCoverage();
+  testAccuracyRegressions();
   testSorting();
   console.log(`\n=== ${failures === 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED"} ===`);
   process.exit(failures === 0 ? 0 : 1);

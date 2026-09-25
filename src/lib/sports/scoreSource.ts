@@ -107,6 +107,9 @@ async function fetchJson(url: string, source: string, timeoutMs = 9000): Promise
 const FINISHED_RE = /\b(ft|aet|pen|full\s*time|finished|final|terminé|terminée)\b/i;
 const LIVE_RE = /\b(\d{1,2}['’]\b|in[- ]progress|half\s*time|ht|live|en cours|2e\s*mi[- ]temps|1re\s*mi[- ]temps)/i;
 const POSTPONED_RE = /\b(postponed|postpon|suspend|reporte|annulé|annulee|cancelled)\b/i;
+/** TheSportsDB's "not started" code. Without this it fell through to the
+ *  kickoff-window heuristic, so a fixture hours away could show as live. */
+const NOT_STARTED_RE = /^(ns|none|scheduled|not\s*started)$/i;
 
 function deriveStatus(
   providerStatus: string | undefined,
@@ -121,11 +124,19 @@ function deriveStatus(
   // Trust an explicit live signal from the provider.
   if (LIVE_RE.test(raw)) return "live";
 
+  // An explicit "not started" from the provider always wins over our
+  // heuristic. This is the difference between showing a 19:00 kickoff as a
+  // fixture at 09:00 and showing it as live.
+  if (NOT_STARTED_RE.test(raw)) return "upcoming";
+
   if (kickoff) {
     const diff = now - kickoff.getTime();
     // Long past kickoff with no final signal: treat as done rather than
     // showing a match as live forever.
     if (diff > LIVE_WINDOW_MS) return "finished";
+    // Only claim live in the window that begins just before kickoff. The
+    // 15 minute pre-kickoff grace is what stops a fixture later today from
+    // flipping to live the moment the page loads.
     if (diff > -15 * 60_000) return "live";
   }
   return "upcoming";
@@ -141,6 +152,39 @@ function parseKickoff(raw: any): Date | null {
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) return d;
   return null;
+}
+
+/**
+ * Resolves a kickoff instant from a TheSportsDB event.
+ *
+ * Field order matters and was previously wrong. TheSportsDB returns:
+ *   - `dateEvent`    "2026-09-20"          -> DATE ONLY, no time, no zone
+ *   - `strTimestamp` "2026-10-03T23:00:00" -> full local kickoff, real time
+ *   - `strTimeLocal` "19:00:00"           -> time only
+ *
+ * `dateEvent` used to be checked first, so every kickoff was parsed as
+ * "2026-09-20T00:00:00Z" — UTC midnight. In Dakar (UTC+0) that rendered as
+ * 00:00 instead of the actual evening kickoff, which is up to an 8 hour
+ * error in the US/Europe leagues and mislabelled fixtures as live/finished.
+ *
+ * `strTimestamp` is the only field carrying both a date and a real kickoff
+ * time, so it wins. `dateEvent` is used only as a last resort, and when it is
+ * the fallback we anchor it to 00:00 local rather than UTC so a date-only
+ * value can never shift a fixture across a day boundary.
+ */
+function parseSportsDBKickoff(e: any): Date | null {
+  const withTime = parseKickoff(e?.strTimestamp);
+  if (withTime) return withTime;
+
+  const dateOnly = String(e?.dateEvent ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+    // No clock time available: treat as a noon placeholder so the row sorts
+    // and renders as a fixture, never as something happening right now.
+    const d = new Date(`${dateOnly}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+
+  return parseKickoff(dateOnly) || null;
 }
 
 function toNumber(v: any): number | undefined {
@@ -167,18 +211,25 @@ export function normalizeSportsDBEvent(e: any, league: ArenaLeague): Match | nul
   const away = (e?.strAwayTeam || "").trim();
   if (!home || !away) return null;
 
-  const kickoff = parseKickoff(e.dateEvent || e.strTimestamp || e.strTimeLocal);
+  const kickoff = parseSportsDBKickoff(e);
   const status = deriveStatus(e.strStatus || e.strPostponed, kickoff);
 
   const postponed = POSTPONED_RE.test(String(e.strPostponed || e.strStatus || ""));
   const externalId = String(e.idEvent || "").trim();
 
+  // A score only exists once the match has actually been played. Rendering
+  // "0 - 0" for a fixture two days out is the single most misleading thing
+  // this board can do, so an unplayed row carries no score at all.
+  const played = status !== "upcoming";
+  const homeScore = played ? toNumber(e.intHomeScore) : undefined;
+  const awayScore = played ? toNumber(e.intAwayScore) : undefined;
+
   return {
     id: `tsdb-${league.id}-${externalId || `${home}-${away}`.toLowerCase().replace(/\s+/g, "-")}`,
     league: league.id,
     leagueLabel: league.label,
-    teamA: { name: home, score: toNumber(e.intHomeScore), color: CARD_GRADIENT },
-    teamB: { name: away, score: toNumber(e.intAwayScore), color: CARD_GRADIENT },
+    teamA: { name: home, score: homeScore, color: CARD_GRADIENT },
+    teamB: { name: away, score: awayScore, color: CARD_GRADIENT },
     status,
     date: kickoff ? kickoff.toISOString() : undefined,
     time: e.strTimeLocal || e.strTime || undefined,

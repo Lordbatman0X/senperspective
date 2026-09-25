@@ -499,16 +499,21 @@ export function Header() {
         style={{
           transition: 'all 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
         }}
-        className="header-frost sticky top-0 z-40"
+        className="sticky top-0 z-40"
       >
 
-      {/* Main logo row */}
+      {/* Main logo row.
+          NOTE: the frost class MUST live on THIS div, not on the parent
+          <header>. This div carries the background colour, so it paints on top
+          of anything its parent renders. A backdrop-filter on the parent is
+          therefore completely hidden behind it — which is exactly what made
+          the header look like plain transparent paint with no frost at all. */}
       <div
-        className={`transition-all duration-500 ease-out ${
+        className={`header-frost transition-all duration-500 ease-out ${
           isScrolled
             ? "header-glass py-2.5 text-zinc-900 dark:text-zinc-100"
             : `${currentSettings.headerStyle === "editorial" 
-                ? "bg-white/70 dark:bg-zinc-950/80 backdrop-blur-md border-b border-brand-border/10 text-brand-dark dark:text-brand-white" 
+                ? "bg-white/70 dark:bg-zinc-950/80 border-b border-brand-border/10 text-brand-dark dark:text-brand-white" 
                 : currentSettings.headerStyle === "dark-imm" 
                   ? "bg-zinc-950 border-b border-zinc-900 text-white" 
                   : "glass-orange text-white"} py-3 md:py-6 relative z-10`
