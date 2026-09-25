@@ -638,28 +638,33 @@
 /* ============================================================================
    STICKY HEADER - MAMMOUTH-STYLE FROSTED GLASS
    ----------------------------------------------------------------------------
-   The header must carry its own `backdrop-filter` so the page scrolling
-   underneath is refracted, and its tint must be translucent. An opaque tint
-   (the old .glass-orange) makes the blur invisible no matter how large the
-   radius is.
+   The header carries its own `backdrop-filter` so the page scrolling underneath
+   is refracted, and its tint is translucent. An opaque tint (the old
+   .glass-orange) makes the blur invisible no matter how large the radius is,
+   which is why this looked flat before.
 
-   The radius is deliberately modest: this is a thin strip, so even a large
-   value is safe here, but there is no need to push it. The visible "glassy"
-   character comes mostly from the translucent tint plus saturation, not from
-   an extreme radius.
+   Why a large radius is safe HERE but was not safe globally: the earlier
+   tearing came from `backdrop-filter` on FULL-SCREEN surfaces (the drawer
+   scrim, modals), where the browser's backdrop snapshot exceeds the
+   compositor budget and the page visibly smears. The header is a thin strip
+   (roughly 56-80px tall), so the snapshot it needs is tiny and a strong radius
+   costs almost nothing. That is why `.overlay-scrim` has no blur at all while
+   this can safely be pushed hard.
+
+   The frosted character comes from radius + saturation + a translucent tint.
    ========================================================================== */
 .header-glass {
-  background: rgba(255, 255, 255, 0.55) !important;
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
   box-shadow: 0 10px 30px -18px rgba(15, 23, 42, 0.35),
               inset 0 -1px 0px 0px rgba(255, 255, 255, 0.6) !important;
 }
 .dark .header-glass {
-  background: rgba(9, 13, 20, 0.55) !important;
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  background: rgba(9, 13, 20, 0.5) !important;
+  backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) contrast(105%) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
   box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8),
               inset 0 -1px 0px 0px rgba(255, 255, 255, 0.07) !important;
@@ -667,17 +672,17 @@
 
 /* The unscrolled branded header: same trick, tinted instead of neutral. */
 .glass-orange {
-  background: linear-gradient(135deg, rgba(232, 93, 66, 0.82), rgba(201, 67, 47, 0.78)) !important;
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  background: linear-gradient(135deg, rgba(232, 93, 66, 0.78), rgba(201, 67, 47, 0.74)) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
   border: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
   box-shadow: 0 12px 30px -8px rgba(232, 93, 66, 0.28) !important;
 }
 .dark .glass-orange {
-  background: linear-gradient(135deg, rgba(240, 106, 80, 0.8), rgba(210, 75, 55, 0.76)) !important;
-  backdrop-filter: blur(16px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  background: linear-gradient(135deg, rgba(240, 106, 80, 0.76), rgba(210, 75, 55, 0.72)) !important;
+  backdrop-filter: blur(32px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(190%) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   box-shadow: 0 12px 30px -8px rgba(240, 106, 80, 0.2) !important;
 }
