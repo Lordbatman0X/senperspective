@@ -18,9 +18,17 @@ export function CategoryPage() {
     window.scrollTo(0, 0);
   }, [categoryId]);
 
-  if (normalizedId === "sports" || normalizedId === "sport" || normalizedId === "larene" || normalizedId === "arene") {
-    return <LArenePage />;
-  }
+  // Sports routes render L'Arene instead of the article grid. This used to be an
+  // early `return <LArenePage />` placed ABOVE the useSEO() call below, which
+  // meant sports rendered 3 hooks while every other category rendered 4.
+  // Navigating from /category/politique to /category/sports in the SPA
+  // re-used this component instance, so React saw fewer hooks than the previous
+  // render and threw:
+  //     Error #310 — Rendered more hooks than during the previous render
+  // The branch now happens after every hook has run. See the flag below.
+  const isArenaRoute =
+    normalizedId === "sports" || normalizedId === "sport" ||
+    normalizedId === "larene" || normalizedId === "arene";
 
   const categoriesList = (siteSettings?.categories && siteSettings.categories.length > 0) ? siteSettings.categories : ARTICLE_CATEGORIES;
   const targetCategory = categoriesList.find(c => c.id === normalizedId);
@@ -98,7 +106,12 @@ export function CategoryPage() {
   let catName = '';
   let subTitle = '';
 
-  if (isDecryptages) {
+  if (isArenaRoute) {
+    catName = language === 'fr' ? "L'Arène — Sports" : "The Arena — Sports";
+    subTitle = language === 'fr'
+      ? "Scores en direct et résultats : football, basket, MMA et lutte, avec les compétitions sénégalaises et les grands championnats internationaux."
+      : 'Live scores and results: football, basketball, MMA and wrestling, with Senegalese competitions and the major international leagues.';
+  } else if (isDecryptages) {
     catName = language === 'fr' ? 'Décryptages & Grand Angles' : 'Decryptions & Deep Dives';
     subTitle = language === 'fr' 
       ? 'Nos grandes analyses, enquêtes et décryptages stratégiques en profondeur sur les enjeux majeurs.' 
@@ -131,7 +144,11 @@ export function CategoryPage() {
     subTitle = language === 'fr' ? `Tous les articles de la catégorie ${catName}` : `All articles in ${catName}`;
   }
 
-  const seoTitle = isDecryptages
+  const seoTitle = isArenaRoute
+    ? (language === 'fr'
+        ? "L'Arène — Scores en direct & résultats | SenPerspective"
+        : 'The Arena — Live scores & results | SenPerspective')
+    : isDecryptages
     ? 'Décryptages & Grand Angles — Analyses | SenPerspective'
     : isDossiers
     ? 'Dossiers & Enquêtes — Grands Formats | SenPerspective'
@@ -150,6 +167,12 @@ export function CategoryPage() {
       { name: catName, url: canonicalUrl }
     ]
   });
+
+  // Every hook has now run, so switching to L'Arene here is safe. Returning
+  // BEFORE useSEO is what produced React error #310.
+  if (isArenaRoute) {
+    return <LArenePage />;
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">

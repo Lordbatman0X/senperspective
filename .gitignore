@@ -37,3 +37,5 @@ build-log.txt
 .chrome-tmp/
 probe-*.mjs
 shot_*.png
+# Headless-Chrome CDP profiles from local probes
+.chrome-cdp*/
