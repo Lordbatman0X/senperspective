@@ -103,6 +103,16 @@ export interface Article {
   };
 }
 
+/**
+ * Where a match row came from. Surfaced in the UI so readers can judge
+ * confidence: an API scoreline is authoritative, while news/AI rows are
+ * editorial signals that still need confirmation.
+ */
+export type MatchProvenance = "manual" | "api" | "news" | "ai";
+
+/** Whether a scoreline has cleared the editorial confidence bar. */
+export type MatchVerification = "verified" | "unverified";
+
 export interface Match {
   id: string;
   league: "world-cup" | "nba-bal" | "d1-basket" | "wrestling" | "navetane" | string;
@@ -114,5 +124,33 @@ export interface Match {
   date?: string;
   arena?: string;
   contextInfo?: { fr: string; en: string };
+
+  // ---------------------------------------------------------------------
+  // Live-score fields (Phase 1). All optional so existing seeded/editor
+  // matches — which have none of them — keep rendering unchanged.
+  // ---------------------------------------------------------------------
+
+  /** Upstream provider key, e.g. "thesportsdb", "openligadb", "gnews". */
+  source?: string;
+  /** Human-readable page the row was derived from. */
+  sourceUrl?: string;
+  /** Stable id at the provider, used to de-duplicate across polls. */
+  externalId?: string;
+  /** Period / round label, e.g. "Q3", "2e mi-temps", "Round 5". */
+  period?: string;
+  /** Live clock, e.g. "67'", "4:32 Q3". */
+  clock?: string;
+  /** How this row was produced. Defaults to "manual" when absent. */
+  provenance?: MatchProvenance;
+  /** Verification state. A scoreline is only "verified" when it came from a
+   *  structured API or when two independent sources agreed. */
+  verification?: MatchVerification;
+  /** ISO timestamp of the last successful provider refresh. */
+  updatedAt?: string;
+  /** Team crest URLs when the provider exposes them. */
+  teamALogo?: string;
+  teamBLogo?: string;
+  /** Set when the provider flags the fixture as postponed/suspended. */
+  postponed?: boolean;
 }
 

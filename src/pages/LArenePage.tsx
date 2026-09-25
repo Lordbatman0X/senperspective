@@ -7,6 +7,7 @@ import { Match, Article } from "../types";
 import { useSEO } from "../hooks/useSEO";
 import { formatRelativeDate, formatCategory } from "../lib/utils";
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from "../lib/imageUtils";
+import { ArenaLiveBoard } from "../components/arena/ArenaLiveBoard";
 
 export function LArenePage() {
   const { language, articles = [], matches = [] } = useStore();
@@ -225,6 +226,15 @@ export function LArenePage() {
                 : "Live scores, official results, and socio-political analysis of key clashes (Wrestling, BAL, Senegal D1, Navetanes)."}
             </p>
           </div>
+        </div>
+
+        {/* Live scoreboard — structured providers, polled and cached. */}
+        <div className="glass p-5 md:p-6 border border-zinc-200 dark:border-zinc-800">
+          <ArenaLiveBoard
+            editorialMatches={matches}
+            language={language === "en" ? "en" : "fr"}
+            title={language === "fr" ? "Scores en direct & résultats" : "Live scores & results"}
+          />
         </div>
 
         {/* Bento Grid layout for L'Arène Filters + Matches */}
