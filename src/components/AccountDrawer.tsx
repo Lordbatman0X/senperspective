@@ -600,7 +600,7 @@ export function AccountDrawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowProfileModal(false)}
-            className="absolute inset-0 bg-black/40 backdrop-blur-xs"
+            className="absolute inset-0 bg-black/45 backdrop-blur-md"
           />
 
           {/* Sliding Panel with Pure Brand Aesthetics & Translucent Glass backdrop */}
