@@ -21,15 +21,15 @@ export function LArenePage() {
   
   useSEO({
     title: language === 'fr' 
-      ? "L'ArÃ¨ne â€” Sports & Lutte SÃ©nÃ©galaise | SenPerspective" 
-      : "L'ArÃ¨ne â€” Sports & Senegalese Wrestling | SenPerspective",
+      ? "L'Arène â€” Sports & Lutte Sénégalaise | SenPerspective" 
+      : "L'Arène â€” Sports & Senegalese Wrestling | SenPerspective",
     description: language === 'fr'
-      ? "Toutes les actualitÃ©s et analyses sportives au SÃ©nÃ©gal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et NavÃ©tanes sur SenPerspective."
+      ? "Toutes les actualités et analyses sportives au Sénégal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et Navétanes sur SenPerspective."
       : "All sports news, wrestling lamb analysis and live match scores on SenPerspective.",
     canonical: "https://senperspective.com/larene",
     breadcrumbs: [
       { name: "Accueil", url: "https://senperspective.com/" },
-      { name: "L'ArÃ¨ne â€” Sports", url: "https://senperspective.com/larene" }
+      { name: "L'Arène â€” Sports", url: "https://senperspective.com/larene" }
     ]
   });
 
@@ -58,7 +58,7 @@ export function LArenePage() {
           Sports
         </h1>
         <p className="mt-4 text-brand-muted font-semibold text-base md:text-lg max-w-3xl">
-          {language === 'fr' ? 'Scores en direct et rÃ©sultats, par sport et par ligue.' : 'Live scores and results, by sport and by league.'}
+          {language === 'fr' ? 'Scores en direct et résultats, par sport et par ligue.' : 'Live scores and results, by sport and by league.'}
         </p>
       </header>
 
@@ -74,7 +74,7 @@ export function LArenePage() {
           <div className="flex items-center gap-2">
             <Newspaper className="text-[#E85D42]" size={20} />
             <h2 className="text-xl md:text-2xl font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-50">
-              {language === "fr" ? "ActualitÃ©s" : "News"}
+              {language === "fr" ? "Actualités" : "News"}
             </h2>
           </div>
           <span className="text-xs font-mono font-bold text-zinc-500 uppercase tracking-widest">
