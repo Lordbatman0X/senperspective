@@ -4,6 +4,7 @@ import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCh
 import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db';
 import { safeJsonParse } from '../../lib/apiUtils';
 import { buildNewsletterHtml } from '../../lib/newsletterTemplate';
+import type { InlineImage } from '../../lib/newsletterTemplate';
 import { 
   connectGoogleGmail, 
   getCachedGoogleToken, 
@@ -181,6 +182,12 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
     }
   };
 
+  // INLINE IMAGES: placed at a chosen line inside the article body, not just
+  // as a banner above it. `afterLine` is 0-based: 0 = above the first line.
+  const [inlineImages, setInlineImages] = useState<InlineImage[]>([]);
+  const [pendingImage, setPendingImage] = useState<{ afterLine: number; url: string } | null>(null);
+  const [pendingCaption, setPendingCaption] = useState('');
+
   // Single source of truth for the rendered email, at component scope so both
   // the live preview and the real send use it. Previously the HTML was inlined
   // inside the send handler, which made a faithful preview impossible.
@@ -189,9 +196,25 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
     body: body.trim(),
     imageUrl: heroImageUrl,
     imageWidth: heroImageWidth,
+    inlineImages,
     viaGmail: !!googleToken,
     lang: isFr ? 'fr' : 'en',
   });
+
+  const addInlineImage = (afterLine: number, url: string, caption?: string) => {
+    setInlineImages(prev => [
+      ...prev,
+      {
+        afterLine,
+        url,
+        caption: (caption || '').trim(),
+        width: 520,
+      },
+    ]);
+    setPendingCaption('');
+  };
+
+  const bodyLineCount = body.split('\n').length;
 
   // BULK IMPORT handler. Every parsed address goes through the same
   // `addSubscriber` action the public signup form uses, so a bulk import and a
@@ -282,6 +305,13 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
     setGmailProgress({ current: 0, total: recipients.length });
 
     let successfulSends = 0;
+    // Failures are collected per recipient. Previously a failed send was
+    // silently counted as a non-send and the only feedback was a
+    // "0/N sent" total, so a permission or quota problem looked identical to a
+    // bad address and the admin had no idea what to fix.
+    const failures: Array<{ email: string; error: string }> = [];
+    let firstHardFailure = '';
+
     for (let i = 0; i < recipients.length; i++) {
       const sub = recipients[i];
       setGmailProgress({ current: i + 1, total: recipients.length });
@@ -294,6 +324,10 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
       });
       if (res.success) {
         successfulSends++;
+      } else {
+        const reason = res.error || (isFr ? 'échec' : 'failed');
+        failures.push({ email: sub.email, error: reason });
+        if (!firstHardFailure) firstHardFailure = reason;
       }
     }
 
@@ -318,8 +352,8 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
     if (successfulSends === 0) {
       setBroadcastError(
         isFr
-          ? `Aucun envoi réussi sur ${recipients.length} destinataire(s). Connexion Gmail requise.`
-          : `No successful sends out of ${recipients.length} recipient(s). A Gmail connection is required.`
+          ? `Aucun envoi réussi sur ${recipients.length} destinataire(s). Cause : ${firstHardFailure}`
+          : `No successful sends out of ${recipients.length} recipient(s). Cause: ${firstHardFailure}`
       );
       return;
     }
@@ -585,10 +619,129 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
                 className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 p-3 text-xs leading-relaxed focus:outline-none focus:border-[#E85D42] placeholder-zinc-400 dark:placeholder-zinc-500 rounded-md"
               />
             </div>
-            {/* Image insertion: media library or device upload, plus width. */}
+            {/* INLINE IMAGES INSIDE THE ARTICLE.
+                The hero image below can only sit above the text. This lets an
+                image be placed at a chosen line of the body, so the newsletter
+                reads like an article rather than a banner with a wall of text. */}
+            <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 space-y-3 bg-zinc-50/60 dark:bg-zinc-950/40">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <ImageIcon size={13} className="text-[#E85D42]" />
+                  {language === 'fr' ? 'Images dans l\'article' : 'Images in the article'}
+                </label>
+                <span className="text-[10px] font-mono text-zinc-500">{inlineImages.length}</span>
+              </div>
+
+              {inlineImages.map((img, idx) => (
+                <div key={idx} className="flex items-start gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md">
+                  <img src={img.url} alt="" className="w-16 h-12 object-cover rounded-sm shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-mono text-zinc-500">
+                      {isFr ? `après la ligne ${img.afterLine}` : `after line ${img.afterLine}`}
+                    </p>
+                    {img.caption && (
+                      <p className="text-[11px] text-zinc-600 dark:text-zinc-300 truncate">{img.caption}</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInlineImages(prev => prev.filter((_, i) => i !== idx))}
+                    className="p-1 text-zinc-400 hover:text-red-400 cursor-pointer shrink-0"
+                    title={language === 'fr' ? 'Retirer' : 'Remove'}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+
+              {/* Position picker + source, revealed together. */}
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-zinc-500 block mb-1">
+                    {language === 'fr' ? 'Position' : 'Position'}
+                  </label>
+                  <select
+                    value={pendingImage?.afterLine ?? 0}
+                    onChange={e => setPendingImage({ afterLine: Number(e.target.value), url: '' })}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 px-2.5 py-2 text-xs focus:outline-none focus:border-[#E85D42] rounded-md"
+                  >
+                    <option value={0}>{isFr ? 'Avant le texte' : 'Before the text'}</option>
+                    {Array.from({ length: bodyLineCount }, (_, i) => i + 1).map(n => (
+                      <option key={n} value={n}>
+                        {isFr ? `Après la ligne ${n}` : `After line ${n}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-1.5">
+                  {openMediaSelector && (
+                    <button
+                      type="button"
+                      onClick={() => openMediaSelector((url) => setPendingImage({ afterLine: pendingImage?.afterLine ?? 0, url }))}
+                      className="flex items-center gap-1.5 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-[10px] font-bold uppercase tracking-wider py-2 px-3 rounded-md transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      <ImageIcon size={12} className="text-[#E85D42]" />
+                      {language === 'fr' ? 'Médiathèque' : 'Library'}
+                    </button>
+                  )}
+                  <label className="flex items-center gap-1.5 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-[10px] font-bold uppercase tracking-wider py-2 px-3 rounded-md transition-colors cursor-pointer whitespace-nowrap">
+                    <Upload size={12} className="text-[#E85D42]" />
+                    {language === 'fr' ? 'Appareil' : 'Device'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const { compressImageFile } = await import('../../lib/imageUtils');
+                          const dataUrl = await compressImageFile(file, 1400, 4000, 0.82);
+                          setPendingImage({ afterLine: pendingImage?.afterLine ?? 0, url: dataUrl });
+                        } catch (err) {
+                          console.error('Inline image upload failed:', err);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {pendingImage?.url && (
+                <div className="space-y-2 p-2 bg-white dark:bg-zinc-900 border border-[#E85D42]/40 rounded-md">
+                  <img src={pendingImage.url} alt="" className="w-full max-h-40 object-contain rounded-sm" />
+                  <input
+                    type="text"
+                    value={pendingCaption}
+                    onChange={e => setPendingCaption(e.target.value)}
+                    placeholder={isFr ? 'Légende (optionnelle)' : 'Caption (optional)'}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-[#E85D42] rounded-md"
+                  />
+                  <div className="flex gap-1.5 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => { setPendingImage(null); setPendingCaption(''); }}
+                      className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                    >
+                      {language === 'fr' ? 'Annuler' : 'Cancel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addInlineImage(pendingImage.afterLine, pendingImage.url, pendingCaption)}
+                      className="px-3 py-1.5 bg-[#E85D42] hover:bg-[#c94931] text-white text-[10px] font-bold uppercase tracking-wider rounded-md cursor-pointer"
+                    >
+                      {language === 'fr' ? 'Insérer' : 'Insert'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Hero/banner image, which sits ABOVE the article text. */}
             <div>
               <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider block mb-1">
-                {language === 'fr' ? 'Image (optionnelle)' : 'Image (optional)'}
+                {language === 'fr' ? 'Image de couverture (optionnelle)' : 'Cover image (optional)'}
               </label>
 
               {heroImageUrl ? (

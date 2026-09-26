@@ -15,6 +15,7 @@ import {
   addComment as firestoreAddComment,
   deleteComment as firestoreDeleteComment,
   saveFirestoreDoc,
+  mergeFirestoreDoc,
   deleteFirestoreDoc,
   fetchFirestoreCollection,
   fetchAllComments,
@@ -63,7 +64,12 @@ const cloudDelete = (col: string, id: string) => {
 // pulled on page load / login stays silent to avoid toast spam).
 let remoteNotifFirstSyncDone = false;
 const cloudSaveUserProfile = (email: string, data: any) => {
-  saveFirestoreDoc('users', email, data).catch(() => {});
+  // MUST be a merge, not a replace. This writes PARTIAL profile data (e.g.
+  // `{ preferences }` on every theme/language/saved-article change). Using
+  // saveFirestoreDoc -> set() here wiped avatarUrl, name, bio and role from the
+  // stored profile, which is exactly why readers kept having to re-upload the
+  // same profile picture after any update.
+  mergeFirestoreDoc('users', email, data).catch(() => {});
 };
 const LOCAL_ARTICLES_KEY = "senperspective-local-articles-v1";
 /** Max length of an inline `data:` URL we are willing to persist locally (~12 KB). */
@@ -2753,10 +2759,39 @@ export const useStore = create<AppState>()(
         ]
       },
       updateSiteSettings: async (settings) => {
-        const newSettings = { ...get().siteSettings, ...settings, databaseProvider: 'firebase' };
+        const current = get().siteSettings || {};
+        const newSettings = { ...current, ...settings, databaseProvider: 'firebase' };
         set({ siteSettings: newSettings });
         try {
-          const clean = await sanitizeFirestorePayload(newSettings as any);
+          // PROTECT CATEGORIES AND OTHER STORED DATA.
+          //
+          // This wrote the WHOLE merged local object back to the database. On a
+          // device whose local settings were empty or stale — a fresh browser,
+          // a cleared cache, an admin editing before hydration finished — that
+          // object carried `categories: []` or seed defaults, and pushing it
+          // up WIPED the real categories from the database for everyone.
+          // That is the "my categories reset after an update" report.
+          //
+          // Only the keys this call actually changed are written, and empty
+          // values for a key are skipped so a blank form field can never erase
+          // a configured value. A key is only cleared if the caller explicitly
+          // passes null.
+          const patch: Record<string, any> = { databaseProvider: 'firebase' };
+          Object.keys(settings || {}).forEach(key => {
+            const nextVal = (settings as any)[key];
+            if (nextVal === undefined) return;
+            if (nextVal === null) { patch[key] = null; return; }
+            if (typeof nextVal === 'string' && nextVal.trim() === '') return;
+            if (Array.isArray(nextVal) && nextVal.length === 0) return;
+            patch[key] = nextVal;
+          });
+          // Carry the current local value for any structured key the caller did
+          // not mention, so a first save from a fresh device cannot blank it.
+          if (!('categories' in patch) && Array.isArray(current.categories) && current.categories.length > 0) {
+            patch.categories = current.categories;
+          }
+
+          const clean = await sanitizeFirestorePayload(patch as any);
           await firestoreUpdateSiteSettings(clean);
         } catch (err) {
           console.error("[Firebase notice] Error updating siteSettings:", err);

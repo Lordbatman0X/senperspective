@@ -13,7 +13,7 @@ let cachedUserEmail: string | null = typeof window !== 'undefined' ? localStorag
 // POST a message, and the other three made the consent screen far worse:
 // because they are sensitive scopes, Google flags a new client as
 // "unverified" and shows a red "Google hasn't verified this app" warning page
-// that every reader has to click through — for permissions this app never
+// that every reader has to click through â€” for permissions this app never
 // uses. Dropping them removes that warning.
 //
 // The Sheets scope in particular was dead weight: `appendSubscriberToGoogleSheet`
@@ -100,7 +100,7 @@ function loadGoogleIdentityServices(): Promise<void> {
  * Resolves the connected account's real address.
  *
  * A granted OAuth token carries no identity of its own, so the UI used to
- * display — and the newsletter "From" used — the literal string
+ * display â€” and the newsletter "From" used â€” the literal string
  * "connected-user@google.com". Reading the real address from the OpenID
  * userinfo endpoint makes the connected badge trustworthy, and keeps a
  * genuinely unknown identity visibly unknown instead of invented.
@@ -117,7 +117,7 @@ async function fetchGoogleUserEmail(token: string): Promise<string> {
   } catch {
     /* fall through to the token-free path */
   }
-  return 'Compte Google connecté';
+  return 'Compte Google connectÃ©';
 }
 
 /**
@@ -134,27 +134,27 @@ function explainGoogleOAuthError(error: string, description: string): string {
   const combined = `${error} ${description}`.toLowerCase();
 
   if (combined.includes('invalid_client')) {
-    return "Identifiant client Google introuvable (invalid_client). Copiez à nouveau l'ID client OAuth depuis Google Cloud Console → APIs & Services → Credentials, en vérifiant chaque caractère, puis reconstruisez le site.";
+    return "Identifiant client Google introuvable (invalid_client). Copiez Ã  nouveau l'ID client OAuth depuis Google Cloud Console â†’ APIs & Services â†’ Credentials, en vÃ©rifiant chaque caractÃ¨re, puis reconstruisez le site.";
   }
   if (combined.includes('redirect_uri_mismatch') || combined.includes('redirect_uri')) {
-    return "Domaine non autorisé (redirect_uri_mismatch). Ajoutez le domaine exact dans « Authorized JavaScript origins » de la console Google, puis sauvegardez.";
+    return "Domaine non autorisÃ© (redirect_uri_mismatch). Ajoutez le domaine exact dans Â« Authorized JavaScript origins Â» de la console Google, puis sauvegardez.";
   }
   if (combined.includes('access_denied')) {
-    return 'Connexion annulée ou autorisations refusées.';
+    return 'Connexion annulÃ©e ou autorisations refusÃ©es.';
   }
   if (combined.includes('unverified') || combined.includes('developer_verification')) {
-    return "Application Google non vérifiée : consent screen → Publish app pour passer en Production.";
+    return "Application Google non vÃ©rifiÃ©e : consent screen â†’ Publish app pour passer en Production.";
   }
   if (combined.includes('popup') || combined.includes('closed') || combined.includes('canceled') || combined.includes('cancelled')) {
-    return 'Fenêtre de connexion bloquée ou fermée. Autorisez les fenêtres contextuelles pour ce site, puis réessayez.';
+    return 'FenÃªtre de connexion bloquÃ©e ou fermÃ©e. Autorisez les fenÃªtres contextuelles pour ce site, puis rÃ©essayez.';
   }
 
-  return description || error || 'Connexion Google refusée.';
+  return description || error || 'Connexion Google refusÃ©e.';
 }
 
 /**
  * Sign in with Google to grant permission to send mail from your account.
- * Uses Google Identity Services (GIS) — Supabase OAuth fallback removed (audit).
+ * Uses Google Identity Services (GIS) â€” Supabase OAuth fallback removed (audit).
  */
 export async function connectGoogleGmail(): Promise<{ user: User; accessToken: string }> {
   const clientId = getGoogleClientId();
@@ -167,7 +167,7 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
   // letting Google answer `invalid_client` from its own error page.
   if (!looksLikeGoogleClientId(clientId)) {
     return Promise.reject(
-      new Error("Identifiant client Google mal formé. Copiez-le intégralement depuis Google Cloud Console (il doit se terminer par .apps.googleusercontent.com), sans guillemets ni espaces.")
+      new Error("Identifiant client Google mal formÃ©. Copiez-le intÃ©gralement depuis Google Cloud Console (il doit se terminer par .apps.googleusercontent.com), sans guillemets ni espaces.")
     );
   }
 
@@ -186,7 +186,7 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
         scope: WORKSPACE_SCOPES.join(' '),
         callback: async (tokenResponse: any) => {
           if (tokenResponse.error) {
-            // Surface Google's own reason (access_denied, invalid_client, …)
+            // Surface Google's own reason (access_denied, invalid_client, â€¦)
             // instead of rejecting with a bare object, which is why this failure
             // was impossible to diagnose from the UI.
             reject(new Error(explainGoogleOAuthError(
@@ -211,7 +211,7 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
         },
         error_callback: (err: any) => {
           reject(new Error(
-            `Connexion Google impossible : ${err?.message || 'la fenêtre de connexion a été bloquée ou fermée'}. Si un bloqueur est actif, autorisez les fenêtres contextuelles pour ce site.`
+            `Connexion Google impossible : ${err?.message || 'la fenÃªtre de connexion a Ã©tÃ© bloquÃ©e ou fermÃ©e'}. Si un bloqueur est actif, autorisez les fenÃªtres contextuelles pour ce site.`
           ));
         },
       });
@@ -249,6 +249,7 @@ export async function disconnectGoogleGmail(): Promise<void> {
     localStorage.removeItem('pg_google_user_email');
   }
 }
+
 
 /**
  * Helper to encode UTF-8 string to base64url format for Gmail API
@@ -308,55 +309,73 @@ export async function sendEmailViaGmailApi({
         body: JSON.stringify({ raw: rawMessage })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         return { success: true, id: data.id };
       }
+
+      // FIX (send failed with no usable message): every non-OK response used to
+      // fall through to the server-relay branch below, which threw away Google's
+      // actual error and then reported a misleading "relay unavailable / static
+      // hosting" message. The admin was told the server was the problem while
+      // the real cause â€” an expired token, a missing gmail.send scope, a
+      // malformed message â€” was discarded, leaving no way to act on it.
+      // The Gmail error is now returned verbatim and translated below.
       if (res.status === 401 || res.status === 403) {
-        disconnectGoogleGmail();
+        await disconnectGoogleGmail();
       }
-    } catch (err: any) {
-      // Direct call failed, fall back to server relay service
-    }
-  }
-
-  // Server proxy route fallback.
-  //
-  // NOTE: this route does not exist on static Firebase Hosting — an unknown
-  // path returns index.html, not JSON. The check below turns that confusing
-  // "Unexpected token <" parse crash into an actionable message. Gmail OAuth
-  // is the supported send path; see connectGoogleGmail().
-  try {
-    const res = await fetch(resolveApiUrl('/api/gmail/send'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to,
-        subject,
-        htmlBody,
-        fromName,
-        fromEmail,
-        accessToken: token || null
-      })
-    });
-
-    const contentType = res.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
       return {
         success: false,
-        error: 'Relay unavailable: /api/gmail/send did not return JSON (static hosting). Connect Gmail to send.'
+        error: describeGmailSendFailure(res.status, data),
+      };
+    } catch (err: any) {
+      // A thrown error here is a transport problem (offline, blocked by an
+      // extension), not a Gmail rejection. Report it as such rather than
+      // silently retrying a relay that does not exist on static hosting.
+      return {
+        success: false,
+        error: `Connexion Ã  Gmail impossible : ${err?.message || 'erreur rÃ©seau'}`,
       };
     }
-
-    const data = await res.json();
-    if (res.ok && data.success) {
-      return { success: true, id: data.id || 'msg-' + Date.now() };
-    }
-    return { success: false, error: data.error || 'Server mail dispatch failed' };
-  } catch (err: any) {
-    console.error(`Gmail API send error to ${to}:`, err);
-    return { success: false, error: err.message || 'Unknown Gmail API error' };
   }
+
+  // No token at all. The server relay is NOT a real fallback on static hosting,
+  // so say that plainly instead of attempting a request that can only return
+  // the SPA index.html.
+  return {
+    success: false,
+    error: "Aucun compte Gmail connectÃ©. Cliquez sur Â« Connecter Google Â» puis rÃ©essayez.",
+  };
+}
+
+/**
+ * Turns a Gmail API rejection into an instruction the admin can follow.
+ */
+function describeGmailSendFailure(status: number, data: any): string {
+  const reason = data?.error?.message || data?.error_description || data?.error || '';
+
+  if (status === 401) {
+    return 'Jeton expirÃ© ou rÃ©voquÃ© (401). Le compte a Ã©tÃ© dÃ©connectÃ© â€” reconnectez Gmail, puis renvoyez.';
+  }
+  if (status === 403) {
+    if (/insufficient|scope|permission/i.test(reason)) {
+      return "PortÃ©e insuffisante (403) : le compte connectÃ© n'a pas l'autorisation gmail.send. Reconnectez le compte et acceptez la permission d'envoi.";
+    }
+    if (/quota|daily limit|rate/i.test(reason)) {
+      return `Quota d'envoi Gmail atteint (403). ${reason}`;
+    }
+    return `Envoi refusÃ© par Gmail (403) : ${reason || 'permission insuffisante'}`;
+  }
+  if (status === 400) {
+    return `Message refusÃ© par Gmail (400) : ${reason || 'format invalide'}`;
+  }
+  if (status === 404) {
+    return "Compte Gmail introuvable (404). Reconnectez le compte.";
+  }
+  if (status >= 500) {
+    return `Erreur temporaire du service Gmail (${status}). RÃ©essayez dans quelques instants.`;
+  }
+  return `Ã‰chec de l'envoi Gmail (${status})${reason ? ` : ${reason}` : ''}`;
 }
 
 /**

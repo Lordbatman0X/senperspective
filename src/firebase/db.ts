@@ -656,6 +656,42 @@ export async function removeSubscriberEmail(email: string): Promise<void> {
  * relation was saved while RTDB never received it (offline, expired auth,
  * permission-denied), which is exactly the "relations not persistent" bug.
  */
+/**
+ * Merges fields into an existing record instead of replacing it.
+ *
+ * `saveFirestoreDoc` uses `set()`, which REPLACES the whole document. That is
+ * right for a full record but catastrophic for a partial write: saving only
+ * `{ preferences }` deleted `avatarUrl`, `name`, `bio`, `role` and everything
+ * else on that user. That is why readers had to re-upload the same profile
+ * picture after ordinary actions like switching theme or language — any
+ * preference save silently erased their avatar.
+ *
+ * Use this for any write that carries only SOME fields of an existing record.
+ */
+export async function mergeFirestoreDoc(coll: string, id: string, data: any): Promise<boolean> {
+  try {
+    const pathId = safeKey(id);
+    const patch: any = {};
+    // Strip undefined/null so a partial write can never blank a stored value.
+    Object.entries(cleanForRtdb(data) || {}).forEach(([k, v]) => {
+      if (v === undefined || v === null) return;
+      patch[k] = v;
+    });
+    if (Object.keys(patch).length === 0) return true;
+
+    await withFirestoreTimeout(
+      update(ref(rtdb, `${coll}/${pathId}`), {
+        ...patch,
+        updatedAtServer: Date.now(),
+      })
+    );
+    return true;
+  } catch (error) {
+    console.warn(`[Firebase] mergeFirestoreDoc ${coll}/${id} error:`, error);
+    return false;
+  }
+}
+
 export async function saveFirestoreDoc(coll: string, id: string, data: any): Promise<boolean> {
   try {
     const pathId = safeKey(id);

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Cookie, Settings2, X, Check, Lock, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 import { sendConsentTelemetry, withdrawAudienceProfile } from '../lib/telemetry';
+import { initGa4, disableGa4 } from '../lib/ga4';
 import { safeJsonParse } from '../lib/apiUtils';
 
 export interface CookiePreferences {
@@ -105,6 +106,14 @@ export function CookieConsentBanner() {
       const hasProfiling = Boolean(payload.analytics && payload.marketing);
       if (hadProfiling && !hasProfiling) {
         await withdrawAudienceProfile();
+      }
+      // Tear the GA4 tag down on withdrawal, and bring it up on acceptance.
+      // Without this, accepting after the fact would never start measurement
+      // and withdrawing would leave the tag running for the rest of the visit.
+      if (payload.analytics) {
+        initGa4(useStore.getState().siteSettings?.ga4MeasurementId);
+      } else {
+        disableGa4();
       }
     } catch (err) {
       console.warn('Consent withdrawal notice:', err);

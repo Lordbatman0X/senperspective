@@ -8,6 +8,7 @@ import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { MaintenancePage } from '../pages/MaintenancePage';
 import { trackPageView, syncAudienceProfile } from '../lib/telemetry';
+import { initGa4, trackGa4PageView } from '../lib/ga4';
 import { isAdPubliclyVisible } from '../lib/adCampaign';
 import { useAdImpression, trackAdClick } from '../lib/adTracking';
 
@@ -77,6 +78,12 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
         ? contextArticle?.title
         : (contextArticle?.title?.fr || contextArticle?.title?.en || '');
       trackPageView(location.pathname, contextArticle?.id, artTitle, contextArticle?.category);
+
+      // GA4. `initGa4` is itself consent-gated, so this is a no-op until the
+      // reader accepts analytics. The panel used to claim the tag was injected
+      // when nothing ever loaded it.
+      initGa4(siteSettings?.ga4MeasurementId);
+      trackGa4PageView(location.pathname);
 
       // Consent-gated audience profile. This is a no-op unless the reader
       // accepted BOTH analytics and marketing, so an undecided or declining

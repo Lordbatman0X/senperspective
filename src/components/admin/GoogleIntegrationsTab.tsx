@@ -28,7 +28,11 @@ export function GoogleIntegrationsTab() {
   const [chatStatus, setChatStatus] = useState<string | null>(null);
 
   // GA4 Measurement ID
-  const [ga4MeasurementId, setGa4MeasurementId] = useState(siteSettings?.ga4MeasurementId || 'G-[#PERSP-2026]');
+  // GA4 id starts EMPTY. It previously defaulted to the literal string
+  // 'G-[#PERSP-2026]', which is not a valid measurement id: the panel then
+  // claimed "tag injecté" for a tag that could never report. Empty is honest
+  // — the admin pastes a real id from GA4 → Admin → Data streams.
+  const [ga4MeasurementId, setGa4MeasurementId] = useState(siteSettings?.ga4MeasurementId || '');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Cloud SQL config info
@@ -402,10 +406,15 @@ export function GoogleIntegrationsTab() {
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500">{language === 'fr' ? 'Statut Synchronisation :' : 'Sync Status:'}</span>
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <CheckCircle2 size={12} /> {language === 'fr' ? 'Prêt pour export SQL' : 'Ready for SQL export'}
+                <span className="text-zinc-500 font-bold flex items-center gap-1">
+                  <AlertCircle size={12} /> {language === 'fr' ? 'Non configuré' : 'Not configured'}
                 </span>
               </div>
+              <p className="text-[10px] text-zinc-500 leading-relaxed pt-1 border-t border-zinc-200 dark:border-zinc-800">
+                {language === 'fr'
+                  ? "Ce site n'utilise pas Cloud SQL : les données vivent dans Firebase (Realtime Database + Firestore). Aucune synchronisation SQL n'est active."
+                  : 'This site does not use Cloud SQL. Data lives in Firebase (Realtime Database + Firestore). No SQL mirroring is active.'}
+              </p>
             </div>
           </div>
 
@@ -468,7 +477,9 @@ export function GoogleIntegrationsTab() {
 
           <div className="mt-5 pt-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
             <span className="text-[11px] text-zinc-500 font-mono">
-              Google Analytics tag injecté
+              {/^G-[A-Z0-9]{4,}$/i.test(ga4MeasurementId.trim())
+                ? (language === 'fr' ? 'Tag actif après consentement' : 'Tag active after consent')
+                : (language === 'fr' ? 'Aucun identifiant configuré' : 'No measurement id set')}
             </span>
             <button
               onClick={handleSaveSettings}

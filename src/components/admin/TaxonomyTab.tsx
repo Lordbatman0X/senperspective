@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
-import { Tag, Plus, Edit2, Trash2, Check, X, FolderPlus, Hash, Globe, Search, Layers, Sparkles } from 'lucide-react';
+import { Tag, Plus, Edit2, Trash2, Check, X, FolderPlus, Hash, Globe, Search, Layers, Sparkles, ChevronUp, ChevronDown, RefreshCw } from 'lucide-react';
 
 interface CategoryItem {
   id: string;
@@ -47,7 +47,84 @@ export function TaxonomyTab() {
     'Sénégal', 'Dakar', 'Perspective Group', 'L\'Arène', 'politique', 'géopolitique', 'économie', 'afrique', 'investigation', 'décryptage'
   ];
 
-  const [activeSection, setActiveSection] = useState<'categories' | 'tags' | 'keywords'>('categories');
+  const [activeSection, setActiveSection] = useState<'categories' | 'tags' | 'keywords' | 'navigation'>('categories');
+
+  // HEADER NAVIGATION — the same `siteSettings.headerNavItems` the header reads
+  // and the Customizer tab edits. It now lives here, beside the categories it
+  // points at, so the menu and the category list can be maintained together.
+  interface NavItem {
+    id: string;
+    labelFr: string;
+    labelEn: string;
+    url: string;
+    enabled: boolean;
+  }
+  const [navItems, setNavItems] = useState<NavItem[]>(
+    (siteSettings as any)?.headerNavItems && (siteSettings as any).headerNavItems.length > 0
+      ? (siteSettings as any).headerNavItems
+      : []
+  );
+
+  const handleUpdateNavItem = (index: number, field: string, value: any) => {
+    setNavItems(prev => prev.map((it, i) => (i === index ? { ...it, [field]: value } : it)));
+  };
+  const handleToggleNavItem = (index: number) => {
+    setNavItems(prev => prev.map((it, i) => (i === index ? { ...it, enabled: !it.enabled } : it)));
+  };
+  const handleMoveNavItem = (index: number, dir: -1 | 1) => {
+    setNavItems(prev => {
+      const target = index + dir;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      const tmp = next[target];
+      next[target] = next[index];
+      next[index] = tmp;
+      return next;
+    });
+  };
+  const handleRemoveNavItem = (index: number) => {
+    setNavItems(prev => prev.filter((_, i) => i !== index));
+  };
+  const handleAddNavItem = () => {
+    setNavItems(prev => [
+      ...prev,
+      { id: 'nav-' + Date.now(), labelFr: 'Nouveau Lien', labelEn: 'New Link', url: '/category/politique', enabled: true },
+    ]);
+  };
+
+  /**
+   * Rebuilds the menu from the category list, preserving any manual
+   * arrangement (order, custom labels, hidden entries) for categories that are
+   * still present, and appending only genuinely new ones.
+   *
+   * A full rebuild would silently discard the admin's custom order and labels
+   * every time a category was added, so this is additive.
+   */
+  const handleSyncNavFromCategories = () => {
+    const existing = new Map(navItems.map(n => [n.id, n]));
+    const next: NavItem[] = [];
+    categories.forEach(c => {
+      const prev = existing.get(c.id);
+      if (prev) {
+        next.push({ ...prev, labelFr: prev.labelFr || c.fr, labelEn: prev.labelEn || c.en });
+      } else {
+        next.push({ id: c.id, labelFr: c.fr, labelEn: c.en, url: `/category/${c.id}`, enabled: true });
+      }
+    });
+    // Keep any custom links that are not categories (e.g. /larene).
+    navItems.forEach(n => {
+      if (!categories.some(c => c.id === n.id)) next.push(n);
+    });
+    setNavItems(next);
+    showToast(language === 'fr' ? 'Menu synchronisé avec les catégories' : 'Menu synced with categories');
+  };
+
+  const handleSaveNav = () => {
+    // Only the nav key is written, so saving the menu can never disturb
+    // categories, tags or any other stored setting.
+    updateSiteSettings({ headerNavItems: navItems });
+    showToast(language === 'fr' ? 'Menu de navigation enregistré' : 'Navigation menu saved');
+  };
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -262,6 +339,20 @@ export function TaxonomyTab() {
             <Hash size={14} />
             {language === 'fr' ? `Mots-clés (${keywords.length})` : `Keywords (${keywords.length})`}
           </button>
+
+          {/* Navigation lives here now. The header menu is built from the same
+              category ids, so editing one and the other in different admin
+              sections was the source of most "my menu/categories drifted apart"
+              reports. */}
+          <button
+            onClick={() => setActiveSection('navigation')}
+            className={`px-4 py-2 text-xs font-bold uppercase tracking-wider transition-all rounded-md flex items-center gap-2 cursor-pointer ${
+              activeSection === 'navigation' ? 'bg-[#E85D42] text-white shadow' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Globe size={14} />
+            {language === 'fr' ? 'Menu de navigation' : 'Navigation menu'}
+          </button>
         </div>
       </div>
 
@@ -419,7 +510,90 @@ export function TaxonomyTab() {
         </div>
       )}
 
-      {/* SECTION 3: KEYWORDS */}
+      {/* SECTION 4: NAVIGATION MENU. Edited here, next to the categories it
+          points at — the two used to live in separate admin sections, which is
+          how the header menu and the category list drifted apart. */}
+      {activeSection === 'navigation' && (
+        <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-zinc-100">
+                {language === 'fr' ? 'Menu de navigation principal' : 'Main navigation menu'}
+              </h3>
+              <p className="text-[11px] text-zinc-400 mt-1">
+                {language === 'fr'
+                  ? 'Réordonnez, renommez, masquez ou ajoutez un lien.'
+                  : 'Reorder, rename, hide or add a link.'}
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={handleSyncNavFromCategories}
+                className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-md cursor-pointer flex items-center gap-1.5"
+                title={language === 'fr' ? 'Reconstruire depuis les catégories' : 'Rebuild from categories'}
+              >
+                <RefreshCw size={12} className="text-[#E85D42]" />
+                {language === 'fr' ? 'Sync' : 'Sync'}
+              </button>
+              <button
+                onClick={handleAddNavItem}
+                className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider bg-[#E85D42] hover:bg-[#c94931] text-white rounded-md cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus size={12} />
+                {language === 'fr' ? 'Ajouter' : 'Add'}
+              </button>
+            </div>
+          </div>
+
+          {navItems.length === 0 ? (
+            <p className="text-xs text-zinc-500 italic py-6 text-center">
+              {language === 'fr' ? 'Aucun lien. Utilisez « Sync » pour construire le menu.' : 'No links. Use "Sync" to build the menu.'}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {navItems.map((item, index) => (
+                <div key={item.id} className="flex flex-col lg:flex-row lg:items-center gap-2 p-3 bg-zinc-950/60 border border-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button onClick={() => handleMoveNavItem(index, -1)} disabled={index === 0}
+                      className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                      title={language === 'fr' ? 'Monter' : 'Move up'}>
+                      <ChevronUp size={14} />
+                    </button>
+                    <button onClick={() => handleMoveNavItem(index, 1)} disabled={index === navItems.length - 1}
+                      className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                      title={language === 'fr' ? 'Descendre' : 'Move down'}>
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+                  <input type="text" value={item.labelFr || ''} onChange={e => handleUpdateNavItem(index, 'labelFr', e.target.value)}
+                    placeholder="FR" className="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 text-zinc-100 px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-[#E85D42] rounded" />
+                  <input type="text" value={item.labelEn || ''} onChange={e => handleUpdateNavItem(index, 'labelEn', e.target.value)}
+                    placeholder="EN" className="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 text-zinc-100 px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-[#E85D42] rounded" />
+                  <input type="text" value={item.url || ''} onChange={e => handleUpdateNavItem(index, 'url', e.target.value)}
+                    placeholder="/category/..." className="flex-1 min-w-0 bg-zinc-950 border border-zinc-800 text-zinc-100 px-2.5 py-1.5 text-[11px] font-mono focus:outline-none focus:border-[#E85D42] rounded" />
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => handleToggleNavItem(index)}
+                      className={`px-2 py-1 text-[9px] font-black uppercase tracking-wider rounded cursor-pointer border ${item.enabled !== false ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400' : 'bg-zinc-800 border-zinc-700 text-zinc-500'}`}>
+                      {item.enabled !== false ? 'ON' : 'OFF'}
+                    </button>
+                    <button onClick={() => handleRemoveNavItem(index)} className="p-1.5 text-zinc-400 hover:text-red-400 cursor-pointer" title={language === 'fr' ? 'Supprimer' : 'Remove'}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-2 border-t border-zinc-800">
+            <button onClick={handleSaveNav}
+              className="px-5 py-2 text-[10px] font-black uppercase tracking-wider bg-[#E85D42] hover:bg-[#c94931] text-white rounded-md cursor-pointer">
+              {language === 'fr' ? 'Enregistrer le menu' : 'Save menu'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeSection === 'keywords' && (
         <div className="space-y-6">
           <div className="bg-zinc-900 p-6 border border-zinc-800 rounded-lg space-y-4">
