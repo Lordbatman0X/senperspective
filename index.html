@@ -63,6 +63,23 @@
       }
     }
     </script>
+
+    <!-- Google AdSense (Auto ads) --------------------------------------------
+         Loaded ONCE, here, in the real document <head>. It is deliberately not
+         added by any React component: Auto ads has to be present before first
+         paint on every public page, and a component-injected copy would be
+         loaded after render, duplicated by remounts, and absent from the
+         prerendered article pages (scripts/prerender.mjs reuses this exact
+         shell, so the tag is inherited automatically).
+
+         This is Auto ads only. Google decides placement; no manual ad units
+         are created anywhere in this codebase. The Perspective Group
+         direct-advertising system under /ads is separate and unaffected. -->
+    <script
+      async
+      src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4506276456281253"
+      crossorigin="anonymous"
+    ></script>
   </head>
   <body>
     <div id="root"></div>
