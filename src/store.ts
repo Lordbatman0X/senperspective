@@ -214,7 +214,41 @@ export interface AdItem {
   textColor?: string;
   icon?: string;
   isAnnouncement?: boolean;
+
+  // -------------------------------------------------------------------------
+  // Campaign layer (added by the inventory/campaign upgrade).
+  //
+  // EVERY field below is OPTIONAL. A pre-existing record that only has
+  // { id, name, imageUrl, targetUrl, position, active } stays valid and keeps
+  // behaving exactly as before — see `getCampaignStatus()` in
+  // lib/adCampaign.ts, which resolves `active: true` with no dates to
+  // 'active'. No migration of /ads data is required or performed.
+  // -------------------------------------------------------------------------
+
+  /** Stable campaign reference. Defaults to the ad id. */
+  campaignId?: string;
+  /** Display name of the campaign; `name` is used when absent. */
+  campaignName?: string;
+  /** Who is paying. Stored inline to avoid a second database. */
+  advertiserName?: string;
+  advertiserLogo?: string;
+  advertiserContact?: string;
+  advertiserEmail?: string;
+  advertiserPhone?: string;
+  advertiserWebsite?: string;
+  /** 'display' | 'sponsored'. Undefined is treated as 'display'. */
+  campaignType?: 'display' | 'sponsored' | string;
+  /** ISO date (YYYY-MM-DD), interpreted in Africa/Dakar. */
+  startDate?: string;
+  endDate?: string;
+  /** Explicit status. 'active' is inferred from `active` + dates when absent. */
+  status?: 'draft' | 'scheduled' | 'active' | 'paused' | 'expired' | 'archived' | string;
+  /** Internal commercial tracking only — there is no online payment. */
+  price?: number;
+  currency?: string;
+  paymentStatus?: 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled' | string;
 }
+
 
 export interface NotificationPreferences {
   messages: boolean;

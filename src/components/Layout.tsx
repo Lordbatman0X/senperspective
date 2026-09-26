@@ -8,9 +8,12 @@ import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { MaintenancePage } from '../pages/MaintenancePage';
 import { trackPageView } from '../lib/telemetry';
+import { isAdPubliclyVisible } from '../lib/adCampaign';
+import { useAdImpression, trackAdClick } from '../lib/adTracking';
 
 export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const location = useLocation();
+  const language = useStore(state => state.language);
   const isAdmin = location.pathname.startsWith('/admin');
   const isArticle = location.pathname.startsWith('/article/');
   const loadArticles = useStore(state => state.loadArticles);
@@ -77,18 +80,44 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
     return <MaintenancePage />;
   }
   
-  const headerAds = ads?.filter(a => a.active && a.position === 'header' && a.imageUrl && a.imageUrl.trim() !== '') || [];
+  // Campaign-aware: a header ad is shown only when its campaign is genuinely
+  // live (enabled, not paused, not expired, inside its schedule). Legacy ads
+  // carrying only `active: true` behave exactly as before.
+  const headerAds = (ads ?? []).filter(
+    a => a.position === 'header' && a.imageUrl && a.imageUrl.trim() !== '' && isAdPubliclyVisible(a)
+  );
+  const headerAd = headerAds[0] ?? null;
+
+  // One impression per header ad per session, counted only once it is on screen.
+  const headerImpressionRef = useAdImpression(headerAd?.id, !!headerAd);
+
   
   return (
     <div className="min-h-screen flex flex-col bg-transparent font-sans text-brand-dark">
       {!isAdmin && <Header />}
       
-      {!isAdmin && headerAds.length > 0 && headerAds[0]?.imageUrl && (
+      {!isAdmin && headerAd && (
         <div className="w-full bg-brand-soft/40 border-b border-brand-border/10 dark:border-zinc-800 flex justify-center py-2 relative group overflow-hidden">
-           <a href={headerAds[0].targetUrl} target="_blank" rel="noopener noreferrer" className="block max-w-4xl w-full mx-auto relative hover:opacity-95 transition-opacity">
-              <span className="absolute top-0 right-0 bg-brand-white/80 backdrop-blur-sm text-[8px] uppercase tracking-widest px-1 font-bold text-brand-muted z-10 border-b border-l border-brand-border/20">Publicité</span>
-              <img src={headerAds[0].imageUrl} className="w-full h-auto max-h-[120px] object-cover border border-brand-border/10 dark:border-zinc-800/40" alt="Ad" />
-           </a>
+          <div ref={headerImpressionRef} className="block max-w-4xl w-full mx-auto relative">
+            <a
+              href={headerAd.targetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => { void trackAdClick(headerAd.id); }}
+              className="block hover:opacity-95 transition-opacity"
+            >
+              <span className="absolute top-0 right-0 bg-brand-white/80 backdrop-blur-sm text-[8px] uppercase tracking-widest px-1 font-bold text-brand-muted z-10 border-b border-l border-brand-border/20">
+                {headerAd.campaignType === 'sponsored'
+                  ? (language === 'fr' ? 'Contenu sponsorisé' : 'Sponsored content')
+                  : (language === 'fr' ? 'Publicité' : 'Advertisement')}
+              </span>
+              <img
+                src={headerAd.imageUrl}
+                className="w-full h-auto max-h-[120px] object-cover border border-brand-border/10 dark:border-zinc-800/40"
+                alt={headerAd.campaignName || headerAd.name || (language === 'fr' ? 'Publicité' : 'Advertisement')}
+              />
+            </a>
+          </div>
         </div>
       )}
 

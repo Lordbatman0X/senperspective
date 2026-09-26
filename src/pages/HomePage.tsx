@@ -10,6 +10,7 @@ import { SportsQuadrant } from '../components/SportsQuadrant';
 import { ArenaSidebarLive } from '../components/arena/ArenaSidebarLive';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
+import { visibleAds, isAdPubliclyVisible } from '../lib/adCampaign';
 import { NewsletterSignup } from '../components/NewsletterSignup';
 import { NowBar } from '../components/home/NowBar';
 import { DecryptagesSection } from '../components/home/DecryptagesSection';
@@ -367,8 +368,13 @@ export function HomePage() {
   const largeSet = [...articles, ...articles, ...articles]; // Mock more articles for layout
   const allMixedSet = [...largeSet].sort(() => Math.random() - 0.5);
 
-  const sidebarAds = ads?.filter(a => a.active && a.position === 'sidebar' && a.imageUrl && a.imageUrl.trim() !== '') || [];
-  const activeBetweenAds = ads?.filter(a => a.active && a.position === 'homepage-between') || [];
+  // Campaign-aware filtering. `visibleAds` replaces the old `a.active` test so
+  // paused, expired and not-yet-started campaigns are hidden while legacy ads
+  // with only `active: true` keep showing exactly as before.
+  const visibleCampaignAds = visibleAds(ads);
+
+  const sidebarAds = visibleCampaignAds.filter(a => a.position === 'sidebar' && a.imageUrl && a.imageUrl.trim() !== '');
+  const activeBetweenAds = visibleCampaignAds.filter(a => a.position === 'homepage-between');
 
   const categoriesConfig = [
     { main: "Politique", sub: language === 'fr' ? "Politique" : "Politics" },
@@ -433,8 +439,8 @@ export function HomePage() {
     }
   ];
 
-  const farLeftAd = ads?.find(a => a.active && a.position === 'far-left');
-  const farRightAd = ads?.find(a => a.active && a.position === 'far-right');
+  const farLeftAd = visibleCampaignAds.find(a => a.position === 'far-left');
+  const farRightAd = visibleCampaignAds.find(a => a.position === 'far-right');
   const hasLeftAd = !!farLeftAd;
   const hasRightAd = !!(farRightAd || (sidebarAds && sidebarAds.length > 0));
 
@@ -730,7 +736,11 @@ export function HomePage() {
 
           {/* Ad Banner 1 (Café Dakar Touba - Dynamic Ad) */}
           {(() => {
-            const cafeAd = ads?.find(a => a.active && (a.position === 'sidebar-cafe' || a.id === 'ad-cafe-touba'));
+            // The id fallback is retained so the existing seeded banners keep
+            // rendering, but the campaign gate is applied either way.
+            const cafeAd = ads?.find(a =>
+              isAdPubliclyVisible(a) && (a.position === 'sidebar-cafe' || a.id === 'ad-cafe-touba')
+            );
             if (!cafeAd) return null;
             return (
               <div 
@@ -770,7 +780,9 @@ export function HomePage() {
 
           {/* Ad Banner 2 (TER - Trans-Dakar - Dynamic Ad) */}
           {(() => {
-            const terAd = ads?.find(a => a.active && (a.position === 'sidebar-ter' || a.id === 'ad-ter-trans-dakar'));
+            const terAd = ads?.find(a =>
+              isAdPubliclyVisible(a) && (a.position === 'sidebar-ter' || a.id === 'ad-ter-trans-dakar')
+            );
             if (!terAd) return null;
             return (
               <div 

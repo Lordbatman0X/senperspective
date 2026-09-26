@@ -3,11 +3,24 @@ import { AdItem, useStore } from '../../store';
 import { 
   Plus, Edit2, Trash2, ImageIcon, Activity, X, BarChart, 
   Megaphone, RotateCcw, Sparkles, Upload, MonitorPlay, Settings,
-  Eye, MousePointerClick, TrendingUp, CheckCircle2, AlertCircle, Play, Pause
+  Eye, MousePointerClick, TrendingUp, CheckCircle2, AlertCircle, Play, Pause,
+  LayoutGrid, Archive, Building2, CalendarDays, CircleDollarSign
 } from 'lucide-react';
 import { getSafeText } from '../../lib/utils';
 import { ImageCropModal } from './ImageCropModal';
 import { compressImageFile } from '../../lib/imageUtils';
+import {
+  buildInventory, ctr, campaignStatusLabel, campaignTypeLabel,
+  paymentStatusLabel, formatCampaignWindow, getCampaignStatus, placementDimensions,
+  type CampaignStatus,
+} from '../../lib/adCampaign';
+
+/**
+ * Shared form-control class, lifted from the existing editor so the new
+ * campaign fields are visually identical to the current inputs.
+ */
+const INPUT_CLS =
+  'w-full bg-zinc-900 border border-zinc-700/80 text-white p-3 text-sm focus:outline-none focus:border-[#E85D42] focus:ring-1 focus:ring-[#E85D42] rounded-lg shadow-inner';
 
 interface AdManagerTabProps {
   ads: AdItem[];
@@ -20,7 +33,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
   const language = useStore(s => s.language);
   const isFr = language === 'fr';
   
-  const [activeSubTab, setActiveSubTab] = useState<'monitor' | 'editor'>('monitor');
+  const [activeSubTab, setActiveSubTab] = useState<'monitor' | 'inventory' | 'editor'>('monitor');
   const [editingAd, setEditingAd] = useState<AdItem | null>(null);
   const [previewTab, setPreviewTab] = useState<string>('in-article');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -43,10 +56,30 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
   };
 
 
-  // Global Stats
+  // Global Stats — read from the real database, never fabricated.
   const totalImpressions = (ads ?? []).reduce((acc, ad) => acc + (ad.impressions || 0), 0);
   const totalClicks = (ads ?? []).reduce((acc, ad) => acc + (ad.clicks || 0), 0);
-  const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  const avgCtr = ctr(totalImpressions, totalClicks);
+
+  // Inventory: which placements are free to sell right now.
+  const inventory = buildInventory(ads ?? []);
+  const availableCount = inventory.filter(r => r.state === 'available').length;
+
+  // Admin-side colour tokens, kept inside the existing dark identity.
+  const statusStyles: Record<CampaignStatus, string> = {
+    active:    'bg-emerald-950/40 text-emerald-400 border-emerald-800/40',
+    scheduled: 'bg-sky-950/40 text-sky-400 border-sky-800/40',
+    paused:    'bg-zinc-900 text-zinc-500 border-zinc-700',
+    expired:   'bg-amber-950/30 text-amber-500 border-amber-900/40',
+    draft:     'bg-zinc-900 text-zinc-500 border-zinc-700',
+    archived:  'bg-zinc-900 text-zinc-600 border-zinc-800',
+  };
+
+  const StatusPill = ({ status }: { status: CampaignStatus }) => (
+    <span className={`inline-flex items-center text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm border ${statusStyles[status]}`}>
+      {campaignStatusLabel(status, isFr)}
+    </span>
+  );
 
   const handleEdit = (ad: AdItem) => {
     setEditingAd(ad);
@@ -71,8 +104,24 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
     setActiveSubTab('editor');
   };
 
+  /**
+   * Pause / resume. Uses the explicit `status` field when the campaign has
+   * been upgraded, and falls back to the legacy `active` boolean otherwise, so
+   * an untouched legacy ad keeps toggling exactly as it did before.
+   */
   const handleToggleStatus = (ad: AdItem) => {
-    saveAd({ ...ad, active: !ad.active });
+    const isCurrentlyLive = getCampaignStatus(ad) === 'active';
+    saveAd({ ...ad, status: isCurrentlyLive ? 'paused' : 'active', active: !isCurrentlyLive });
+  };
+
+  /**
+   * Archive is preferred over delete for finished campaigns: the record and
+   * its impression/click history stay in the database, but the placement
+   * returns to the mockup state because archived campaigns are never shown
+   * publicly. Hard delete remains available in the action column.
+   */
+  const handleArchive = (ad: AdItem) => {
+    saveAd({ ...ad, status: 'archived', active: false });
   };
 
   const placementLabels: Record<string, string> = {
@@ -102,6 +151,21 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
           <span>{isFr ? 'Régie & Monitor Publicitaire' : 'Ad Monitor'}</span>
           <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-mono text-[9px]">
             {(ads ?? []).length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => { setActiveSubTab('inventory'); setEditingAd(null); }}
+          className={`pb-4 px-6 font-extrabold uppercase tracking-widest text-xs flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+            activeSubTab === 'inventory'
+              ? 'border-[#E85D42] text-white'
+              : 'border-transparent text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <LayoutGrid size={14} />
+          <span>{isFr ? 'Inventaire' : 'Inventory'}</span>
+          <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-mono text-[9px]">
+            {availableCount}
           </span>
         </button>
 
@@ -163,6 +227,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                   <tr>
                     <th className="px-6 py-4">{isFr ? 'Campagne' : 'Campaign'}</th>
                     <th className="px-6 py-4">{isFr ? 'Emplacement' : 'Placement'}</th>
+                    <th className="px-6 py-4">{isFr ? 'Période' : 'Dates'}</th>
                     <th className="px-6 py-4">{isFr ? 'Performances' : 'Performance'}</th>
                     <th className="px-6 py-4 text-right">{isFr ? 'Actions' : 'Actions'}</th>
                   </tr>
@@ -170,7 +235,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                 <tbody className="divide-y divide-zinc-800/80">
                   {(ads ?? []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center">
+                      <td colSpan={5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-zinc-500">
                           <Megaphone size={32} className="mb-4 opacity-50" />
                           <p className="text-sm font-medium">{isFr ? 'Aucune campagne active.' : 'No active campaigns.'}</p>
@@ -198,16 +263,24 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                               )}
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-extrabold text-white text-sm truncate max-w-[200px]">{ad.name}</h4>
-                              <p className="text-[10px] text-zinc-500 font-mono truncate max-w-[200px] mt-0.5 hover:text-orange-400">
+                              <h4 className="font-extrabold text-white text-sm truncate max-w-[200px]">
+                                {getSafeText(ad.campaignName, language) || ad.name || '—'}
+                              </h4>
+                              <p className="text-[10px] text-zinc-500 font-mono truncate max-w-[200px] mt-0.5">
                                 <a href={ad.targetUrl} target="_blank" rel="noopener noreferrer">{ad.targetUrl}</a>
                               </p>
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className={`flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm border ${
-                                  ad.active ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/40' : 'bg-zinc-900 text-zinc-500 border-zinc-700'
-                                }`}>
-                                  {ad.active ? (isFr ? 'EN LIGNE' : 'ACTIVE') : (isFr ? 'SUSPENDU' : 'PAUSED')}
-                                </span>
+                              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                <StatusPill status={getCampaignStatus(ad)} />
+                                {ad.campaignType === 'sponsored' && (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-purple-800/40 bg-purple-950/40 text-purple-400">
+                                    {campaignTypeLabel(ad.campaignType as any, isFr)}
+                                  </span>
+                                )}
+                                {ad.advertiserName && (
+                                  <span className="text-[9px] text-zinc-400 truncate max-w-[120px]" title={ad.advertiserName}>
+                                    {ad.advertiserName}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -216,6 +289,9 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                           <span className="px-2 py-1 text-[9px] font-black font-mono border border-zinc-700 bg-zinc-950 text-zinc-300 uppercase rounded-md shadow-sm">
                             {placementLabels[ad.position] || ad.position}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 font-mono text-[10px] text-zinc-400">
+                          {formatCampaignWindow(ad, isFr)}
                         </td>
                         <td className="px-6 py-4 font-mono text-xs">
                           <div className="flex flex-col gap-1">
@@ -232,26 +308,44 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                             <div className="flex items-center gap-1">
                               <span className="text-[9px] text-emerald-400 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded-sm border border-emerald-800/40 inline-flex items-center gap-1">
                                 <TrendingUp size={10} />
-                                CTR: {adCtr.toFixed(2)}%
+                                CTR: {ctr(ad.impressions, ad.clicks).toFixed(2)}%
                               </span>
                             </div>
+                            {ad.price !== undefined && ad.price !== null && (
+                              <div className="text-[9px] text-zinc-500 font-mono">
+                                {ad.price.toLocaleString()} {ad.currency || 'XOF'} — {paymentStatusLabel(ad.paymentStatus as any, isFr)}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex justify-end gap-1.5">
-                            <button 
-                              onClick={() => handleToggleStatus(ad)}
-                              className={`p-2 transition-colors cursor-pointer rounded-full ${
-                                ad.active 
-                                  ? 'text-emerald-500 hover:bg-emerald-500/10' 
-                                  : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
-                              }`}
-                              title={ad.active ? (isFr ? "Suspendre la campagne" : "Pause campaign") : (isFr ? "Activer la campagne" : "Activate campaign")}
+                            {(() => {
+                              const live = getCampaignStatus(ad) === 'active';
+                              return (
+                                <button
+                                  onClick={() => handleToggleStatus(ad)}
+                                  className={`p-2 transition-colors cursor-pointer rounded-full ${
+                                    live
+                                      ? 'text-emerald-500 hover:bg-emerald-500/10'
+                                      : 'text-zinc-500 hover:bg-zinc-800 hover:text-white'
+                                  }`}
+                                  title={live ? (isFr ? 'Suspendre la campagne' : 'Pause campaign') : (isFr ? 'Activer la campagne' : 'Activate campaign')}
+                                >
+                                  {live ? <Pause size={14} /> : <Play size={14} />}
+                                </button>
+                              );
+                            })()}
+                            <button
+                              onClick={() => handleArchive(ad)}
+                              disabled={ad.status === 'archived'}
+                              className="p-2 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors cursor-pointer rounded-full disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={isFr ? 'Archiver (conserver l’historique)' : 'Archive (keep history)'}
                             >
-                              {ad.active ? <Pause size={14} /> : <Play size={14} />}
+                              <Archive size={14} />
                             </button>
-                            <button 
-                              onClick={() => handleEdit(ad)} 
+                            <button
+                              onClick={() => handleEdit(ad)}
                               className="p-2 text-zinc-500 hover:text-[#E85D42] hover:bg-[#E85D42]/10 transition-colors cursor-pointer rounded-full"
                               title={isFr ? "Modifier" : "Edit"}
                             >
@@ -289,6 +383,71 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'inventory' && (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
+            <div className="px-6 py-4 bg-zinc-950/80 border-b border-zinc-800">
+              <h3 className="font-extrabold uppercase tracking-widest text-sm text-white flex items-center gap-2">
+                <LayoutGrid size={16} className="text-[#E85D42]" />
+                {isFr ? 'Espaces Publicitaires Disponibles' : 'Available Advertising Spaces'}
+              </h3>
+              <p className="text-[10px] text-zinc-500 mt-1">
+                {isFr
+                  ? 'Chaque emplacement n’affiche sa campagne que si elle est en cours. Un espace libre conserve son mockup.'
+                  : 'Each placement only serves a live campaign. A free placement keeps its mockup.'}
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-sans text-sm whitespace-nowrap">
+                <thead className="bg-zinc-950/50 border-b border-zinc-800 text-[10px] uppercase tracking-widest text-[#E85D42] font-black">
+                  <tr>
+                    <th className="px-6 py-4">{isFr ? 'Emplacement' : 'Placement'}</th>
+                    <th className="px-6 py-4">{isFr ? 'Campagne' : 'Campaign'}</th>
+                    <th className="px-6 py-4">{isFr ? 'Annonceur' : 'Advertiser'}</th>
+                    <th className="px-6 py-4">{isFr ? 'Statut' : 'Status'}</th>
+                    <th className="px-6 py-4">{isFr ? 'Période' : 'Dates'}</th>
+                    <th className="px-6 py-4">{isFr ? 'Dimensions' : 'Dimensions'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800/80">
+                  {inventory.map(row => (
+                    <tr key={row.placement.id} className="hover:bg-zinc-800/40 transition-colors">
+                      <td className="px-6 py-4 font-bold text-zinc-100 text-xs">{row.placement.label[isFr ? 'fr' : 'en']}</td>
+                      <td className="px-6 py-4 text-xs text-zinc-300">
+                        {row.campaign
+                          ? (getSafeText((row.campaign as AdItem).campaignName, language) || getSafeText((row.campaign as AdItem).name, language) || '—')
+                          : <span className="text-zinc-600 font-mono text-[10px]">{isFr ? 'MOCKUP' : 'MOCKUP'}</span>}
+                        {row.campaigns.length > 1 && (
+                          <span className="ml-2 text-[9px] text-amber-500 font-mono">
+                            +{row.campaigns.length - 1}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-zinc-400">
+                        {(row.campaign as AdItem)?.advertiserName || <span className="text-zinc-600">—</span>}
+                      </td>
+                      <td className="px-6 py-4">
+                        {row.status
+                          ? <StatusPill status={row.status} />
+                          : <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm border border-emerald-800/40 bg-emerald-950/40 text-emerald-400">
+                              {isFr ? 'Disponible' : 'Available'}
+                            </span>}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-[10px] text-zinc-400">
+                        {row.campaign ? formatCampaignWindow(row.campaign as AdItem, isFr) : '—'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-[10px] text-zinc-500">
+                        {placementDimensions(row.placement.id, isFr)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -389,6 +548,213 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+
+                <div className="space-y-4 bg-zinc-950/50 p-5 rounded-xl border border-zinc-800/80">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-2 mb-3 flex items-center gap-2">
+                    <Building2 size={12} className="text-[#E85D42]" />
+                    {isFr ? 'Annonceur' : 'Advertiser'}
+                  </h4>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                      {isFr ? "Nom de l'annonceur" : 'Advertiser name'}
+                    </label>
+                    <input
+                      type="text"
+                      value={editingAd.advertiserName || ''}
+                      onChange={e => setEditingAd({ ...editingAd, advertiserName: e.target.value })}
+                      placeholder={isFr ? 'Ex. ABC Company' : 'e.g. ABC Company'}
+                      className={INPUT_CLS}
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      {isFr ? 'Qui paie pour cette campagne ?' : 'Who is paying for this campaign?'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">Contact</label>
+                      <input
+                        type="text"
+                        value={editingAd.advertiserContact || ''}
+                        onChange={e => setEditingAd({ ...editingAd, advertiserContact: e.target.value })}
+                        className={INPUT_CLS}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                        {isFr ? 'Téléphone' : 'Phone'}
+                      </label>
+                      <input
+                        type="tel"
+                        value={editingAd.advertiserPhone || ''}
+                        onChange={e => setEditingAd({ ...editingAd, advertiserPhone: e.target.value })}
+                        className={INPUT_CLS}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">E-mail</label>
+                      <input
+                        type="email"
+                        value={editingAd.advertiserEmail || ''}
+                        onChange={e => setEditingAd({ ...editingAd, advertiserEmail: e.target.value })}
+                        className={INPUT_CLS}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                        {isFr ? 'Site web' : 'Website'}
+                      </label>
+                      <input
+                        type="url"
+                        value={editingAd.advertiserWebsite || ''}
+                        onChange={e => setEditingAd({ ...editingAd, advertiserWebsite: e.target.value })}
+                        placeholder="https://..."
+                        className={`${INPUT_CLS} font-mono`}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                      {isFr ? 'Type de campagne' : 'Campaign type'}
+                    </label>
+                    <select
+                      value={editingAd.campaignType || 'display'}
+                      onChange={e => setEditingAd({ ...editingAd, campaignType: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      <option value="display">{isFr ? 'Affichage' : 'Display'}</option>
+                      <option value="sponsored">{isFr ? 'Contenu sponsorisé' : 'Sponsored content'}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-4 bg-zinc-950/50 p-5 rounded-xl border border-zinc-800/80">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-2 mb-3 flex items-center gap-2">
+                    <CalendarDays size={12} className="text-[#E85D42]" />
+                    {isFr ? 'Programmation & Statut' : 'Schedule & Status'}
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                        {isFr ? 'Début' : 'Start date'}
+                      </label>
+                      <input
+                        type="date"
+                        value={editingAd.startDate || ''}
+                        onChange={e => setEditingAd({ ...editingAd, startDate: e.target.value })}
+                        className={`${INPUT_CLS} [color-scheme:dark]`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                        {isFr ? 'Fin' : 'End date'}
+                      </label>
+                      <input
+                        type="date"
+                        value={editingAd.endDate || ''}
+                        onChange={e => setEditingAd({ ...editingAd, endDate: e.target.value })}
+                        className={`${INPUT_CLS} [color-scheme:dark]`}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500">
+                    {isFr
+                      ? "Heures Africa/Dakar. Laissez vide pour conserver le comportement actuel."
+                      : 'Africa/Dakar dates. Leave empty to keep current behaviour.'}
+                  </p>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                      {isFr ? 'Statut' : 'Status'}
+                    </label>
+                    <select
+                      value={editingAd.status || (editingAd.active === false ? 'paused' : 'active')}
+                      onChange={e => {
+                        const v = e.target.value;
+                        // Keep the legacy `active` boolean in step with the new
+                        // status so older readers and exports stay correct.
+                        setEditingAd({
+                          ...editingAd,
+                          status: v,
+                          active: v !== 'paused' && v !== 'draft' && v !== 'archived',
+                        });
+                      }}
+                      className={INPUT_CLS}
+                    >
+                      {(['draft', 'scheduled', 'active', 'paused', 'expired', 'archived'] as const).map(s => (
+                        <option key={s} value={s}>{campaignStatusLabel(s, isFr)}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-start gap-2 p-3 bg-zinc-900/60 border border-zinc-800 rounded-lg">
+                    <StatusPill status={getCampaignStatus(editingAd)} />
+                    <span className="text-[10px] text-zinc-400 leading-relaxed">
+                      {isFr ? "Statut effectif aujourd'hui (Dakar) : " : "Effective status today (Dakar): "}
+                      <span className="font-mono text-zinc-200">{formatCampaignWindow(editingAd, isFr)}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4 bg-zinc-950/50 p-5 rounded-xl border border-zinc-800/80">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-2 mb-3 flex items-center gap-2">
+                    <CircleDollarSign size={12} className="text-[#E85D42]" />
+                    {isFr ? 'Informations Commerciales' : 'Commercial Information'}
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                        {isFr ? 'Prix' : 'Price'}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={editingAd.price ?? ''}
+                        onChange={e => setEditingAd({
+                          ...editingAd,
+                          price: e.target.value === '' ? undefined : Number(e.target.value),
+                        })}
+                        placeholder="0"
+                        className={`${INPUT_CLS} font-mono`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                        {isFr ? 'Devise' : 'Currency'}
+                      </label>
+                      <select
+                        value={editingAd.currency || 'XOF'}
+                        onChange={e => setEditingAd({ ...editingAd, currency: e.target.value })}
+                        className={INPUT_CLS}
+                      >
+                        {['XOF', 'EUR', 'USD', 'MAD'].map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider block mb-1.5">
+                      {isFr ? 'Statut du paiement' : 'Payment status'}
+                    </label>
+                    <select
+                      value={editingAd.paymentStatus || 'pending'}
+                      onChange={e => setEditingAd({ ...editingAd, paymentStatus: e.target.value })}
+                      className={INPUT_CLS}
+                    >
+                      {(['pending', 'partial', 'paid', 'overdue', 'cancelled'] as const).map(p => (
+                        <option key={p} value={p}>{paymentStatusLabel(p, isFr)}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      {isFr ? 'Suivi interne uniquement — aucun paiement en ligne.' : 'Internal tracking only — no online payment.'}
+                    </p>
                   </div>
                 </div>
 
@@ -624,6 +990,15 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                 onClick={() => {
                   saveAd({
                     ...editingAd,
+                    // Backfill the campaign identity on save so upgraded records have it.
+                    // Records the admin never opens stay untouched, so no migration
+                    // of the existing /ads data is required.
+                    campaignId: editingAd.campaignId || editingAd.id,
+                    campaignName: editingAd.campaignName || editingAd.name,
+                    // Keep the legacy 'active' boolean coherent with the new status.
+                    active: editingAd.status
+                      ? !['paused', 'draft', 'archived'].includes(editingAd.status)
+                      : editingAd.active,
                     impressions: editingAd.impressions || 0,
                     clicks: editingAd.clicks || 0
                   });

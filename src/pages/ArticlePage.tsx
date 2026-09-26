@@ -9,6 +9,7 @@ import { Article } from '../types';
 import { Bookmark, MessageSquare, Send, User, LogOut, Globe, ShieldCheck, Check, ThumbsUp, ThumbsDown, Edit2, Trash2, Share2, Copy, Play, Pause, Square, Volume2, Mail, Film, ExternalLink, ChevronDown, Landmark, TrendingUp, Users } from 'lucide-react';
 import { calculateReadingTime, formatRelativeDate, extractYoutubeId, getSafeText, formatCategory } from '../lib/utils';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
+import { visibleAds } from '../lib/adCampaign';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSEO } from '../hooks/useSEO';
 
@@ -473,7 +474,8 @@ export function ArticlePage() {
   const related = (articles ?? []).filter(a => article.relatedArticleIds?.includes(a.id));
   const carouselRelated = related.length >= 3 ? related : (articles ?? []).filter(a => a.category === article.category && a.id !== article.id).slice(0, 5);
 
-  const articleAds = ads?.filter(a => a.active && a.position === 'in-article') || [];
+  // Campaign-aware: only genuinely live in-article campaigns are eligible.
+  const articleAds = visibleAds(ads).filter(a => a.position === 'in-article');
   const globalAd = articleAds.length > 0 ? articleAds[Math.floor(Math.random() * articleAds.length)] : null;
   const adImage = article.adImageUrl || globalAd?.imageUrl;
   const adLink = article.adLink || globalAd?.targetUrl;

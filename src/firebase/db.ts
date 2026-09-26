@@ -6,6 +6,7 @@ import {
   push,
   remove,
   onValue,
+  increment,
   Unsubscribe,
 } from 'firebase/database';
 import { rtdb } from './config';
@@ -801,6 +802,34 @@ export async function deleteAdFromFirestore(id: string): Promise<boolean> {
     return true;
   } catch (error) {
     console.warn(`[Firebase] deleteAdFromFirestore ${id} failed:`, error);
+    return false;
+  }
+}
+
+/**
+ * Atomic impression counter.
+ *
+ * Uses RTDB `increment()` at the leaf path rather than rewriting the whole ad.
+ * That matters: a full `set()` would clobber whatever the admin is editing at
+ * the same moment, and could reset an existing non-zero count. `increment()`
+ * is server-side atomic, so concurrent views cannot lose counts, and the
+ * existing /ads record is never overwritten or restructured.
+ */
+export async function incrementAdMetric(
+  id: string,
+  field: 'impressions' | 'clicks',
+  by = 1
+): Promise<boolean> {
+  if (!id) return false;
+  try {
+    await withFirestoreTimeout(
+      update(ref(rtdb, `ads/${safeKey(id)}`), { [field]: increment(by) })
+    );
+    return true;
+  } catch (error) {
+    // Tracking must never break the reader's page: a failed counter write is
+    // logged and swallowed.
+    console.warn(`[Firebase] incrementAdMetric ${id}.${field} failed:`, error);
     return false;
   }
 }
