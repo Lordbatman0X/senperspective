@@ -49,6 +49,18 @@ export function getGoogleClientId(): string {
 }
 
 /**
+ * Shape check for an OAuth web client id, run before the network call.
+ *
+ * A real one is `<digits>-<43 base64url chars>.apps.googleusercontent.com`.
+ * This catches a stray quote, a truncated paste, or whitespace, which are
+ * otherwise indistinguishable from a deleted client and surface as the very
+ * unhelpful `invalid_client` from Google's own error page.
+ */
+function looksLikeGoogleClientId(id: string): boolean {
+  return /^[0-9]+-[a-zA-Z0-9_-]{20,}\.apps\.googleusercontent\.com$/.test(id);
+}
+
+/**
  * Loads the Google Identity Services script on demand.
  *
  * It was never loaded anywhere before, so `window.google.accounts.oauth2` did
@@ -109,6 +121,38 @@ async function fetchGoogleUserEmail(token: string): Promise<string> {
 }
 
 /**
+ * Turns Google's OAuth failure into something actionable.
+ *
+ * `invalid_client` is the one that wastes the most time: it does NOT mean the
+ * user's account or consent screen is wrong, it means Google could not find
+ * the client id we sent. In practice that is a mistyped or truncated client id
+ * (often a character dropped when copying a 70+ character string), or a client
+ * that was deleted in the Cloud console. Spelling that out saves re-checking
+ * the authorized origins, which are not the cause.
+ */
+function explainGoogleOAuthError(error: string, description: string): string {
+  const combined = `${error} ${description}`.toLowerCase();
+
+  if (combined.includes('invalid_client')) {
+    return "Identifiant client Google introuvable (invalid_client). Copiez à nouveau l'ID client OAuth depuis Google Cloud Console → APIs & Services → Credentials, en vérifiant chaque caractère, puis reconstruisez le site.";
+  }
+  if (combined.includes('redirect_uri_mismatch') || combined.includes('redirect_uri')) {
+    return "Domaine non autorisé (redirect_uri_mismatch). Ajoutez le domaine exact dans « Authorized JavaScript origins » de la console Google, puis sauvegardez.";
+  }
+  if (combined.includes('access_denied')) {
+    return 'Connexion annulée ou autorisations refusées.';
+  }
+  if (combined.includes('unverified') || combined.includes('developer_verification')) {
+    return "Application Google non vérifiée : consent screen → Publish app pour passer en Production.";
+  }
+  if (combined.includes('popup') || combined.includes('closed') || combined.includes('canceled') || combined.includes('cancelled')) {
+    return 'Fenêtre de connexion bloquée ou fermée. Autorisez les fenêtres contextuelles pour ce site, puis réessayez.';
+  }
+
+  return description || error || 'Connexion Google refusée.';
+}
+
+/**
  * Sign in with Google to grant permission to send mail from your account.
  * Uses Google Identity Services (GIS) — Supabase OAuth fallback removed (audit).
  */
@@ -117,6 +161,13 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
   if (!clientId) {
     return Promise.reject(
       new Error("Identifiant client Google manquant : ajoutez VITE_GOOGLE_CLIENT_ID dans .env, puis recompilez.")
+    );
+  }
+  // Catch a malformed value here, where the cause is obvious, instead of
+  // letting Google answer `invalid_client` from its own error page.
+  if (!looksLikeGoogleClientId(clientId)) {
+    return Promise.reject(
+      new Error("Identifiant client Google mal formé. Copiez-le intégralement depuis Google Cloud Console (il doit se terminer par .apps.googleusercontent.com), sans guillemets ni espaces.")
     );
   }
 
@@ -138,11 +189,10 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
             // Surface Google's own reason (access_denied, invalid_client, …)
             // instead of rejecting with a bare object, which is why this failure
             // was impossible to diagnose from the UI.
-            reject(new Error(
-              tokenResponse.error === 'access_denied'
-                ? 'Connexion annulée ou autorisations refusées.'
-                : `Connexion Google refusée : ${tokenResponse.error_description || tokenResponse.error}`
-            ));
+            reject(new Error(explainGoogleOAuthError(
+              tokenResponse.error || '',
+              tokenResponse.error_description || ''
+            )));
             return;
           }
           const accessToken = tokenResponse.access_token;
