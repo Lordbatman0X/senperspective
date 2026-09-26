@@ -21,10 +21,8 @@ import { SubscriberTab } from '../components/admin/SubscriberTab';
 import { AdManagerTab } from '../components/admin/AdManagerTab';
 import { ArticleEditorTab } from '../components/admin/ArticleEditorTab';
 import { MediaSelector } from '../components/admin/components/MediaSelector';
-import { ModerationTab } from '../components/admin/ModerationTab';
 import { CustomizerTab } from '../components/admin/CustomizerTab';
 import { GoogleIntegrationsTab } from '../components/admin/GoogleIntegrationsTab';
-import { CloudSqlTab } from '../components/admin/CloudSqlTab';
 import { TaxonomyTab } from '../components/admin/TaxonomyTab';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { RssFeedManagementTab } from '../components/admin/RssFeedManagementTab';
@@ -35,6 +33,21 @@ import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
 import AccountsTab from '../components/admin/AccountsTab';
 import { UserCog } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+/**
+ * One admin section in the sidebar. Declared here (not inline) so the grouped
+ * nav and the filter share one shape and TypeScript catches a section that is
+ * rendered but never listed, or listed but never rendered.
+ */
+interface AdminSection {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  badge: number;
+  /** Hidden from every admin except the bootstrap super-admin. */
+  superAdminOnly?: boolean;
+}
 import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab';
 import { signInEmail, signOutUser } from '../firebase/auth';
 
@@ -362,7 +375,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     media = [], addMedia, deleteMedia, updateMediaName,
     ads = [], saveAd, deleteAd,
     comments = [], approveComment, deleteComment,
-    subscribers = [], deleteSubscriber, language, setLanguage, theme, toggleTheme,
+    subscribers = [], addSubscriber, deleteSubscriber, language, setLanguage, theme, toggleTheme,
     siteSettings, updateSiteSettings,
     matches = [], addMatch, updateMatch, deleteMatch,
     interactions = [],
@@ -405,24 +418,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'api_diagnostic' | 'make_webhook' | 'rss_automation' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'cloud_sql' | 'ads' | 'security' | 'accounts' | 'moderation' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'ads' | 'security' | 'accounts' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
+  // Sidebar filter. 21 flat sections used to be an undifferentiated wall, so
+  // the ones an admin actually used sat far below the fold on a laptop.
+  const [navFilter, setNavFilter] = useState('');
 
   const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics') => {
-    if (tabId === 'make_webhook') {
-      setActiveTab('list');
-      setContentSubTab('rss_automation');
-    } else if (tabId === 'rss_automation') {
-      setActiveTab('list');
-      setContentSubTab('rss_drafts');
-    } else if (tabId === 'api_diagnostic') {
-      setActiveTab('list');
-      setContentSubTab('ai_diagnostics');
-    } else {
-      setActiveTab(tabId as any);
-      if (subTab) {
-        setContentSubTab(subTab);
-      }
+    setActiveTab(tabId as any);
+    if (subTab) {
+      setContentSubTab(subTab);
     }
     setMobileMenuOpen(false);
   };
@@ -760,32 +765,80 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     (sessionStorage.getItem("perspective_admin_email") || '').toLowerCase().trim() === 'kadersdiaz3@gmail.com' ||
     (useStore.getState().readerProfile?.email || '').toLowerCase().trim() === 'kadersdiaz3@gmail.com';
 
-  const menuItems = [
-    { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
-    { id: 'list', label: language === 'fr' ? 'Gestion des Contenus' : 'Content & RSS Suite', icon: FileText, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
-    { id: 'taxonomy', label: language === 'fr' ? 'Catégories & Taxonomie' : 'Categories & Taxonomy', icon: Tag, badge: 0 },
-    { id: 'flashes_curation', label: language === 'fr' ? 'Flashes, International & Sagesse' : 'Flashes, News & Wisdom', icon: Bell, badge: 0 },
-    { id: 'homepage_curation', label: language === 'fr' ? 'Curation Page d’accueil' : 'Homepage Curation', icon: Home, badge: 0 },
-    { id: 'media', label: language === 'fr' ? 'Bibliothèque Média' : 'Media Library', icon: ImageIcon, badge: 0 },
-    { id: 'matches', label: language === 'fr' ? 'L’Arène (Sports)' : 'L’Arène (Sports)', icon: Trophy, badge: 0 },
-    { id: 'comments', label: language === 'fr' ? 'Communauté & Modération' : 'Community & Comments', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
-    { id: 'audience', label: language === 'fr' ? 'Analyses d’Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
-    { id: 'subscribers', label: language === 'fr' ? 'Newsletters & Abonnés' : 'Newsletters & Subscribers', icon: Mail, badge: subscribers?.length || 0 },
-    { id: 'google_integrations', label: language === 'fr' ? 'Intégrations Google' : 'Google Hub', icon: Zap, badge: 0 },
-    { id: 'ads', label: language === 'fr' ? 'Monétisation & Publicité' : 'Monetization & Ads', icon: DollarSign, badge: 0 },
-    { id: 'customizer', label: language === 'fr' ? 'Apparence & Style' : 'Appearance & Style', icon: Palette, badge: 0 },
-    { id: 'navigation', label: language === 'fr' ? 'Navigation & Menus' : 'Menu Navigation', icon: Compass, badge: 0 },
-    { id: 'seo_distribution', label: language === 'fr' ? 'SEO & Distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
-    { id: 'abdel_chat_config', label: language === 'fr' ? 'Assistant Abdel & Chat' : 'Abdel & Chat Config', icon: Bot, badge: 0 },
-    { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Access', icon: ShieldCheck, badge: 0 },
-    { id: 'accounts', label: language === 'fr' ? 'Gestion des Comptes' : 'Account Management', icon: UserCog, badge: 0 },
-    { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données (MongoDB)' : 'Database Manager', icon: Database, badge: 0 },
-    { id: 'settings', label: language === 'fr' ? 'Paramètres Globaux' : 'Global Settings', icon: Settings, badge: 0 },
-    { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
-  ] as const;
+  // Grouped instead of a flat 21-item wall. `sections` is the single source of
+  // truth: the sidebar renders it and the filter narrows it, so a section can
+  // never exist in the menu without a render branch (or vice-versa).
+  const navGroups: Array<{ id: string; label: string; sections: AdminSection[] }> = [
+    {
+      id: 'editorial',
+      label: language === 'fr' ? 'Éditorial' : 'Editorial',
+      sections: [
+        { id: 'overview', label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: LayoutDashboard, badge: 0 },
+        { id: 'list', label: language === 'fr' ? 'Contenus & RSS' : 'Content & RSS', icon: FileText, badge: articles?.filter(a => !a.isPublished)?.length || 0 },
+        { id: 'flashes_curation', label: language === 'fr' ? 'Flashes & Actualité' : 'Flashes & News', icon: Bell, badge: 0 },
+        { id: 'taxonomy', label: language === 'fr' ? 'Catégories' : 'Categories', icon: Tag, badge: 0 },
+        { id: 'homepage_curation', label: language === 'fr' ? 'Page d’accueil' : 'Homepage', icon: Home, badge: 0 },
+        { id: 'media', label: language === 'fr' ? 'Médiathèque' : 'Media Library', icon: ImageIcon, badge: 0 },
+      ],
+    },
+    {
+      id: 'audience',
+      label: language === 'fr' ? 'Audience' : 'Audience',
+      sections: [
+        { id: 'comments', label: language === 'fr' ? 'Communauté' : 'Community', icon: MessageSquare, badge: comments?.filter(c => !c.isApproved).length || 0 },
+        { id: 'subscribers', label: language === 'fr' ? 'Newsletters' : 'Newsletters', icon: Mail, badge: subscribers?.length || 0 },
+        { id: 'audience', label: language === 'fr' ? 'Analyses d’Audience' : 'Audience Analytics', icon: BarChart2, badge: 0 },
+        { id: 'matches', label: language === 'fr' ? 'L’Arène (Sports)' : 'L’Arène (Sports)', icon: Trophy, badge: 0 },
+        { id: 'ads', label: language === 'fr' ? 'Publicité' : 'Advertising', icon: DollarSign, badge: 0 },
+      ],
+    },
+    {
+      id: 'appearance',
+      label: language === 'fr' ? 'Apparence & Diffusion' : 'Appearance & Reach',
+      sections: [
+        { id: 'customizer', label: language === 'fr' ? 'Style & Thème' : 'Style & Theme', icon: Palette, badge: 0 },
+        { id: 'navigation', label: language === 'fr' ? 'Navigation & Menus' : 'Menus & Navigation', icon: Compass, badge: 0 },
+        { id: 'seo_distribution', label: language === 'fr' ? 'SEO & Distribution' : 'SEO & Distribution', icon: Globe, badge: 0 },
+        { id: 'google_integrations', label: language === 'fr' ? 'Intégrations Google' : 'Google Hub', icon: Zap, badge: 0 },
+      ],
+    },
+    {
+      id: 'system',
+      label: language === 'fr' ? 'Système' : 'System',
+      sections: [
+        { id: 'abdel_chat_config', label: language === 'fr' ? 'Assistant Abdel & Chat' : 'Abdel & Chat', icon: Bot, badge: 0 },
+        { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Access', icon: ShieldCheck, badge: 0 },
+        { id: 'accounts', label: language === 'fr' ? 'Comptes' : 'Accounts', icon: UserCog, badge: 0, superAdminOnly: true },
+        { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données' : 'Database', icon: Database, badge: 0 },
+        { id: 'settings', label: language === 'fr' ? 'Paramètres Globaux' : 'Global Settings', icon: Settings, badge: 0 },
+        { id: 'activity_log', label: language === 'fr' ? 'Journal d’activité' : 'Activity Logs', icon: History, badge: 0 },
+      ],
+    },
+  ];
+
+  const menuItems: AdminSection[] = navGroups.flatMap(g => g.sections);
+
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.superAdminOnly && !isSuperAdmin) return false;
+    if (!navFilter.trim()) return true;
+    return item.label.toLowerCase().includes(navFilter.trim().toLowerCase());
+  });
+
+  const visibleItemsFor = (groupId: string) => {
+    const group = navGroups.find(g => g.id === groupId);
+    if (!group) return [];
+    return group.sections.filter(item => visibleMenuItems.some(v => v.id === item.id));
+  };
 
   return (
-    <div className="dark min-h-screen text-zinc-100 flex flex-col md:flex-row font-sans relative bg-zinc-950">
+    // ERGONOMICS: the shell is a fixed-viewport app frame, not a page.
+    // `h-[100dvh] + overflow-hidden` on the root, a dedicated scroll column in
+    // the sidebar and another in <main> is what stops admin handles (tabs,
+    // toggles, scrollbars) from being cut in half: previously the root grew to
+    // `min-h-screen` while <main> was also `min-h-screen`, so the sidebar's
+    // `sticky h-screen` nav fought the page scroll and the bottom rows of every
+    // panel ended up underneath the viewport edge on both phone and desktop.
+    <div className="dark h-[100dvh] overflow-hidden text-zinc-100 flex flex-col md:flex-row font-sans relative bg-zinc-950">
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 bg-orange-600 text-white px-5 py-3 shadow-2xl font-mono text-xs font-black uppercase tracking-widest border border-white/20 transition-all duration-300 ease-in-out">
@@ -794,7 +847,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       )}
 
       {/* Mobile Top Navigation bar */}
-      <header className="md:hidden bg-zinc-900/90 backdrop-blur-md text-zinc-100 p-4 flex justify-between items-center border-b border-zinc-800 z-40">
+      <header className="md:hidden shrink-0 bg-zinc-900/90 backdrop-blur-md text-zinc-100 p-3 flex justify-between items-center border-b border-zinc-800 z-40">
         <div className="flex flex-col leading-none">
           <span className="font-extrabold text-base tracking-tight text-orange-500">{currentSettings.siteName}</span>
           <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">
@@ -824,8 +877,22 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         </div>
       </header>
 
-      {/* Sidebar navigation */}
-      <aside className={`w-full md:w-64 bg-zinc-900/95 backdrop-blur-md flex flex-col h-auto md:h-screen sticky top-0 z-40 border-r border-zinc-800 ${mobileMenuOpen ? 'flex' : 'hidden md:flex'}`}>
+      {/* Sidebar navigation.
+          Phone: a real overlay drawer (fixed, own scroll, backdrop) instead of a
+          block that pushed the whole page down and was impossible to reach past.
+          Desktop: a full-height independent scroll column. */}
+      {mobileMenuOpen && (
+        <button
+          type="button"
+          aria-label={language === 'fr' ? 'Fermer le menu' : 'Close menu'}
+          onClick={() => setMobileMenuOpen(false)}
+          className="md:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm cursor-default"
+        />
+      )}
+
+      <aside className={`w-[84vw] max-w-[320px] md:w-64 md:max-w-none shrink-0 bg-zinc-900/95 backdrop-blur-md flex flex-col h-full overflow-hidden border-r border-zinc-800 z-50 md:z-40 ${
+        mobileMenuOpen ? 'fixed inset-y-0 left-0 shadow-2xl' : 'hidden md:flex'
+      }`}>
         <div className="p-6 border-b border-zinc-800 hidden md:block">
           <div className="flex flex-col items-center select-none text-center">
             <h1 className="font-sans font-extrabold tracking-[-0.045em] leading-[0.8] text-2xl text-orange-500">
@@ -837,9 +904,43 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           </div>
         </div>
 
-        {/* Sidebar Nav anchors */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {menuItems.filter(item => item.id !== 'accounts' || isSuperAdmin).map(item => {
+        {/* Sidebar Nav anchors. One scroll column with the filter pinned on top,
+            so the last sections are always reachable instead of being clipped. */}
+        <div className="shrink-0 px-3 pt-3 pb-1 border-b border-zinc-800/70">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+            <input
+              type="search"
+              value={navFilter}
+              onChange={(e) => setNavFilter(e.target.value)}
+              placeholder={language === 'fr' ? 'Filtrer les sections…' : 'Filter sections…'}
+              aria-label={language === 'fr' ? 'Filtrer les sections' : 'Filter sections'}
+              className="w-full pl-8 pr-7 py-1.5 bg-zinc-950/80 border border-zinc-800 text-zinc-200 text-[11px] placeholder-zinc-600 focus:outline-none focus:border-orange-500/70 rounded-md"
+            />
+            {navFilter && (
+              <button
+                type="button"
+                onClick={() => setNavFilter('')}
+                aria-label={language === 'fr' ? 'Effacer le filtre' : 'Clear filter'}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-zinc-200 cursor-pointer"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 space-y-1">
+          {navGroups.map(group => {
+            const groupItems = visibleItemsFor(group.id);
+            if (groupItems.length === 0) return null;
+            return (
+              <div key={group.id} className="mb-3 last:mb-0">
+                <p className="px-3.5 pb-1.5 text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                {groupItems.map(item => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -848,22 +949,32 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 onClick={() => {
                   handleTabChange(item.id);
                 }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-bold uppercase tracking-wider transition-all select-none rounded-lg cursor-pointer ${
+                className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all select-none rounded-lg cursor-pointer text-left ${
                   isActive ? 'bg-orange-600 text-white font-extrabold shadow-md' : 'text-zinc-300 hover:bg-zinc-800/80 hover:text-white'
                 }`}
               >
-                <span className="flex items-center gap-3">
-                  <Icon size={16} />
-                  {item.label}
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Icon size={15} className="shrink-0" />
+                  <span className="truncate">{item.label}</span>
                 </span>
                 {item.badge > 0 && (
-                  <span className={`text-[9px] font-sans font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-white text-orange-600' : 'bg-orange-600 text-white'}`}>
-                    {item.badge}
+                  <span className={`shrink-0 text-[9px] font-sans font-bold px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white text-orange-600' : 'bg-orange-600 text-white'}`}>
+                    {item.badge > 99 ? '99+' : item.badge}
                   </span>
                 )}
               </button>
             );
           })}
+                </div>
+              </div>
+            );
+          })}
+
+          {visibleMenuItems.length === 0 && (
+            <p className="px-3 py-6 text-[11px] text-zinc-500 text-center">
+              {language === 'fr' ? 'Aucune section.' : 'No sections match.'}
+            </p>
+          )}
         </nav>
 
         {/* Language selector */}
@@ -902,8 +1013,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         </div>
       </aside>
 
-      {/* Main Administrative dashboard Stage */}
-      <main className="flex-1 p-6 md:p-10 overflow-x-hidden min-h-[calc(100vh-60px)] md:min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+      {/* Main Administrative dashboard Stage.
+          Own scroll column: this, plus the sidebar, is the whole scrolling
+          surface of the portal. `min-w-0` stops wide panels (tables, the RSS
+          grid) from forcing a horizontal page scroll that used to push the
+          right-hand controls out of reach. */}
+      <main className="flex-1 min-w-0 min-h-0 h-full overflow-y-auto overflow-x-hidden overscroll-contain p-3 sm:p-5 md:p-8 bg-zinc-950 text-zinc-100 font-sans">
         {/* Always visible Maintenance Mode status bar at top of Admin Portal */}
         <div className={`mb-8 p-4 rounded-lg border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl transition-all ${
           siteSettings?.isMaintenanceMode === true 
@@ -998,16 +1113,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           <SubscriberTab 
             subscribers={subscribers}
             deleteSubscriber={deleteSubscriber}
+            addSubscriber={addSubscriber}
             openMediaSelector={openImgSelector}
           />
         )}
 
         {activeTab === 'google_integrations' && (
           <GoogleIntegrationsTab />
-        )}
-
-        {activeTab === 'cloud_sql' && (
-          <CloudSqlTab />
         )}
 
         {activeTab === 'ads' && (
@@ -1030,14 +1142,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           />
         )}
 
-
-        {activeTab === 'api_diagnostic' && (
-          <ApiDiagnosticTab />
-        )}
-
-        {activeTab === 'moderation' && (
-          <ModerationTab />
-        )}
 
         {activeTab === 'customizer' && (
           <CustomizerTab />

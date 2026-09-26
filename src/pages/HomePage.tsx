@@ -585,11 +585,6 @@ export function HomePage() {
         {/* Right Sidebar Rubrics (Stays lg:col-span-3 when ad disappears, so articles widen) */}
         <div className="lg:col-span-3 min-w-0 space-y-8">
 
-          {/* Newsletter box sits at the very top of the sidebar. It is compact
-              and low-contrast on purpose: present for the reader who wants it,
-              not competing with the news for attention. */}
-          <NewsletterInline />
-
           {/* Widget 1: Trendings - Sourced from our actual journal articles */}
           <div className="glass p-5 border-t-4 border-t-[#E85D42] bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: currentSettings.accentColor }}>
             <div className="flex items-center gap-1.5 mb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
@@ -905,6 +900,13 @@ export function HomePage() {
               ))}
             </div>
           </div>
+
+          {/* NEWSLETTER CTA — last item in the sidebar.
+              Placed at the bottom deliberately: a reader has scrolled past the
+              trending list, the wisdom quote, live scores and the announcements
+              by this point, so the ask arrives once the page has earned some
+              attention instead of competing with the news at the top. */}
+          <NewsletterInline className="mt-6" />
 
         </div>
 

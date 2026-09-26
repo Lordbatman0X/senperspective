@@ -56,42 +56,61 @@ export const NewsletterInline: React.FC<{ className?: string }> = ({ className =
   }
 
   return (
-    <div className={`border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 bg-zinc-50 dark:bg-zinc-900/40 ${className}`}>
-      <div className="flex items-center gap-2 mb-1.5">
-        <Mail size={13} style={{ color: accentColor }} className="shrink-0" />
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-700 dark:text-zinc-200">
-          {language === 'fr' ? 'Newsletter' : 'Newsletter'}
-        </h3>
+    <div className={`overflow-hidden ${className}`}>
+      <div className="glass border border-zinc-200 dark:border-zinc-800 border-t-4 bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: accentColor }}>
+        <div className="p-5">
+          <div className="flex items-center gap-1.5 mb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
+            <Mail size={14} style={{ color: accentColor }} className="shrink-0" />
+            <span
+              className="font-serif text-xs font-black uppercase tracking-widest"
+              style={{ color: accentColor }}
+            >
+              {language === 'fr' ? 'Newsletter' : 'Newsletter'}
+            </span>
+          </div>
+
+          <h3 className="font-sans text-sm font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100 mb-1.5">
+            {language === 'fr' ? 'Le Briefing du matin' : 'The Morning Briefing'}
+          </h3>
+          <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
+            {language === 'fr'
+              ? 'Le décryptage de la rédaction, chaque matin, dans votre boîte mail.'
+              : 'The newsroom briefing, every morning, straight to your inbox.'}
+          </p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-1.5">
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={language === 'fr' ? 'votre@email.com' : 'you@email.com'}
+              aria-label={language === 'fr' ? 'Adresse e-mail' : 'Email address'}
+              className="flex-1 min-w-0 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 px-3 py-2 text-[11px] focus:outline-none focus:border-[#E85D42] placeholder-zinc-400 dark:placeholder-zinc-600 rounded-sm"
+            />
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{ backgroundColor: accentColor }}
+              className="shrink-0 px-4 py-2 text-white text-[10px] font-black uppercase tracking-widest rounded-sm transition-opacity hover:opacity-90 disabled:opacity-50 cursor-pointer"
+            >
+              {isSubmitting ? '…' : 'OK'}
+            </button>
+          </form>
+
+          {error && (
+            <p role="alert" className="mt-2 text-[10px] text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+
+          <p className="mt-2.5 text-[9px] text-zinc-500 leading-relaxed">
+            {language === 'fr'
+              ? 'Pas de spam. Désinscription en un clic.'
+              : 'No spam. Unsubscribe in one click.'}
+          </p>
+        </div>
       </div>
-      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-3">
-        {language === 'fr'
-          ? 'Le briefing de la rédaction, chaque matin.'
-          : 'The newsroom briefing, every morning.'}
-      </p>
-      <form onSubmit={handleSubmit} className="flex gap-1.5">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder={language === 'fr' ? 'votre@email.com' : 'you@email.com'}
-          aria-label={language === 'fr' ? 'Adresse e-mail' : 'Email address'}
-          className="flex-1 min-w-0 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-[#E85D42] rounded"
-        />
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          style={{ backgroundColor: accentColor }}
-          className="px-3 py-1.5 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
-        >
-          {language === 'fr' ? 'OK' : 'OK'}
-        </button>
-      </form>
-      {error && (
-        <p role="alert" className="mt-1.5 text-[10px] text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      )}
     </div>
   );
 };

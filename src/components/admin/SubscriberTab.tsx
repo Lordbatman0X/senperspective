@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SubscriberItem, useStore } from '../../store';
-import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck, Image as ImageIcon, Upload, X, Eye } from 'lucide-react';
+import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck, Plus, Image as ImageIcon, Upload, X, Eye } from 'lucide-react';
 import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db';
 import { safeJsonParse } from '../../lib/apiUtils';
 import { buildNewsletterHtml } from '../../lib/newsletterTemplate';
@@ -15,11 +15,68 @@ import {
 interface SubscriberTabProps {
   subscribers: SubscriberItem[];
   deleteSubscriber: (email: string) => void;
+  addSubscriber: (email: string) => void;
   /** Existing media-library picker, reused rather than reimplemented. */
   openMediaSelector?: (onSelect: (url: string) => void) => void;
 }
 
-export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector }: SubscriberTabProps) {
+/**
+ * Splits a free-form paste into unique, valid addresses.
+ *
+ * Accepts commas, semicolons, spaces and newlines, and the `Name <a@b.c>` form
+ * people get from a mail client, so an admin can paste straight out of Gmail or
+ * a spreadsheet without pre-cleaning anything. Anything that is not a valid
+ * address is returned as `invalid` instead of being silently dropped, which is
+ * what made a bad paste look like a no-op before.
+ */
+function parseBulkEmails(raw: string): { valid: string[]; invalid: string[] } {
+  const valid: string[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+
+  raw
+    .split(/[\s,;]+/)
+    .map(tok => tok.trim())
+    // `Display Name <addr@host>` -> `addr@host`
+    .map(tok => (tok.match(/<([^>]+)>/)?.[1] || tok).trim())
+    .filter(Boolean)
+    .forEach(addr => {
+      const clean = addr.toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean)) {
+        invalid.push(addr);
+        return;
+      }
+      if (seen.has(clean)) return;
+      seen.add(clean);
+      valid.push(clean);
+    });
+
+  return { valid, invalid };
+}
+
+/**
+ * Resolves who a broadcast actually goes to.
+ *
+ * `custom` is the list pasted into the "one-off list" field; those recipients
+ * are NOT written to the subscriber directory, so a rented or partner list can
+ * be mailed once without silently becoming permanent subscribers who then
+ * receive every later campaign.
+ */
+function subscriberListFor(
+  scope: 'all' | 'custom',
+  customText: string,
+  subscribers: SubscriberItem[]
+): SubscriberItem[] {
+  if (scope === 'custom') {
+    return parseBulkEmails(customText).valid.map(email => ({
+      email,
+      date: new Date().toISOString().split('T')[0],
+    }));
+  }
+  return subscribers || [];
+}
+
+export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, openMediaSelector }: SubscriberTabProps) {
   const language = useStore(s => s.language);
   const isFr = language === 'fr';
   const addNotification = useStore(s => s.addNotification);
@@ -34,6 +91,15 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
   const [campaignSuccess, setCampaignSuccess] = useState<string | null>(null);
   const [confirmDeleteEmail, setConfirmDeleteEmail] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
+
+  // BULK IMPORT: paste any list of addresses, get them all into the directory.
+  const [bulkText, setBulkText] = useState('');
+  const [bulkResult, setBulkResult] = useState<{ added: number; skipped: number; invalid: string[] } | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [recipientScope, setRecipientScope] = useState<'all' | 'custom'>('all');
+  /** Ad-hoc recipients for a one-off send, kept separate from the directory. */
+  const [customRecipients, setCustomRecipients] = useState('');
   
   // Gmail API state
   const [googleUser, setGoogleUser] = useState(getCachedGoogleUser());
@@ -117,6 +183,40 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
     lang: isFr ? 'fr' : 'en',
   });
 
+  // BULK IMPORT handler. Every parsed address goes through the same
+  // `addSubscriber` action the public signup form uses, so a bulk import and a
+  // reader subscribing land in the exact same store and the same persistence —
+  // no second list to keep in sync.
+  const handleBulkAdd = () => {
+    setBulkError(null);
+    setBulkResult(null);
+
+    const { valid, invalid } = parseBulkEmails(bulkText);
+    if (valid.length === 0) {
+      setBulkError(
+        invalid.length > 0
+          ? (isFr
+              ? `Aucune adresse valide. ${invalid.length} entrée(s) ignorée(s) : ${invalid.slice(0, 3).join(', ')}`
+              : `No valid address. Ignored ${invalid.length} entr(ies): ${invalid.slice(0, 3).join(', ')}`)
+          : (isFr ? 'Collez au moins une adresse e-mail.' : 'Paste at least one email address.')
+      );
+      return;
+    }
+
+    // Report addresses already in the directory instead of pretending they were
+    // added, so the count always matches reality.
+    const existing = new Set((subscribers || []).map(s => (s.email || '').toLowerCase()));
+    const fresh = valid.filter(a => !existing.has(a));
+    const skipped = valid.length - fresh.length;
+
+    fresh.forEach(addSubscriber);
+
+    setBulkResult({ added: fresh.length, skipped, invalid });
+    if (fresh.length > 0) {
+      setBulkText('');
+    }
+  };
+
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     setBroadcastError(null);
@@ -132,12 +232,13 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
     // A failed or slow directory load therefore looked identical to a normal
     // send: it emailed internal addresses and still logged a success.
     // There is now no fallback — an empty list blocks the broadcast.
-    const targetRecipients = subscribers || [];
-    if (targetRecipients.length === 0) {
+    const selectedScope = subscriberListFor(recipientScope, customRecipients, subscribers);
+
+    if (selectedScope.length === 0) {
       setBroadcastError(
         isFr
-          ? 'Aucun abonné. Envoi bloqué — vérifiez la liste des abonnés avant de diffuser.'
-          : 'No subscribers. Broadcast blocked — check the subscriber list before sending.'
+          ? 'Aucun destinataire. Ajoutez des abonnés ou saisissez une liste de diffusion avant d’envoyer.'
+          : 'No recipients. Add subscribers or paste a one-off list before sending.'
       );
       return;
     }
@@ -145,7 +246,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
     // Deduplicate by address: the same reader can appear twice after a
     // re-subscribe, and would otherwise receive two copies.
     const seenEmails = new Set<string>();
-    const recipients = targetRecipients.filter((s) => {
+    const recipients = selectedScope.filter((s) => {
       const addr = String(s.email || '').trim().toLowerCase();
       if (!addr || seenEmails.has(addr)) return false;
       seenEmails.add(addr);
@@ -280,9 +381,9 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 lg:gap-8">
         {/* Left 2 Columns: Publisher broadcast form */}
-        <div className="lg:col-span-2 border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/90 backdrop-blur-md p-6 shadow-xl rounded-xl">
+        <div className="xl:col-span-2 min-w-0 border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/90 backdrop-blur-md p-4 sm:p-6 shadow-xl rounded-xl">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 border-b border-zinc-200 dark:border-zinc-800 pb-3">
             <h3 className="text-base font-bold uppercase tracking-wider flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
               <Megaphone size={18} className="text-[#E85D42]" /> 
@@ -369,6 +470,65 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
           )}
 
           <form onSubmit={handleBroadcast} className="space-y-4">
+            {/* WHO receives this campaign. Kept above the content fields because
+                choosing the wrong audience is the expensive mistake here, and it
+                used to be an invisible, fixed "everyone in the directory". */}
+            <div className="p-3.5 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-3">
+              <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider block">
+                {language === 'fr' ? 'Destinataires' : 'Recipients'}
+              </label>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRecipientScope('all')}
+                  className={`flex-1 min-w-[150px] text-left px-3 py-2 rounded-md border text-[11px] font-bold transition-colors cursor-pointer ${
+                    recipientScope === 'all'
+                      ? 'border-[#E85D42] bg-[#E85D42]/10 text-[#E85D42]'
+                      : 'border-zinc-300 dark:border-zinc-800 text-zinc-500 hover:border-zinc-500'
+                  }`}
+                >
+                  {language === 'fr' ? 'Tous les abonnés' : 'All subscribers'}
+                  <span className="block text-[10px] font-mono opacity-70 mt-0.5">
+                    {subscribers.length} {language === 'fr' ? 'adresse(s)' : 'address(es)'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecipientScope('custom')}
+                  className={`flex-1 min-w-[150px] text-left px-3 py-2 rounded-md border text-[11px] font-bold transition-colors cursor-pointer ${
+                    recipientScope === 'custom'
+                      ? 'border-[#E85D42] bg-[#E85D42]/10 text-[#E85D42]'
+                      : 'border-zinc-300 dark:border-zinc-800 text-zinc-500 hover:border-zinc-500'
+                  }`}
+                >
+                  {language === 'fr' ? 'Liste personnalisée' : 'One-off list'}
+                  <span className="block text-[10px] font-mono opacity-70 mt-0.5">
+                    {parseBulkEmails(customRecipients).valid.length} {language === 'fr' ? 'détectée(s)' : 'detected'}
+                  </span>
+                </button>
+              </div>
+
+              {recipientScope === 'custom' && (
+                <div className="space-y-1.5">
+                  <textarea
+                    rows={3}
+                    value={customRecipients}
+                    onChange={e => setCustomRecipients(e.target.value)}
+                    placeholder={language === 'fr'
+                      ? 'Collez les adresses (une par ligne, ou séparées par des virgules)…'
+                      : 'Paste addresses (one per line, or comma-separated)…'}
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 p-2.5 text-xs font-mono focus:outline-none focus:border-[#E85D42] placeholder-zinc-400 rounded-md"
+                  />
+                  <p className="text-[10px] text-zinc-500">
+                    {language === 'fr'
+                      ? 'Ces adresses ne sont pas ajoutées aux abonnés : cet envoi est ponctuel.'
+                      : 'These addresses are not added to your subscribers — this send is one-off.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider block mb-1">
                 {language === 'fr' ? 'Objet de l\'email' : 'Subject Line'}
@@ -512,7 +672,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
             <div className="flex justify-end pt-2">
               <button
                 type="submit"
-                disabled={subscribers.length === 0}
+                disabled={subscriberListFor(recipientScope, customRecipients, subscribers).length === 0}
                 className="flex items-center gap-2 bg-[#E85D42] hover:bg-[#c94931] disabled:bg-zinc-400 dark:disabled:bg-zinc-800 text-white font-bold text-xs uppercase tracking-wider px-6 py-2.5 shadow-md transition-all cursor-pointer rounded-xs"
               >
                 <Send size={14} /> {language === 'fr' ? 'Diffuser la campagne' : 'Send Broadcast'}
@@ -558,6 +718,72 @@ export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-8 pr-3 py-2 bg-zinc-950 border border-zinc-700/80 text-zinc-100 text-xs focus:outline-none focus:border-[#E85D42] focus:ring-1 focus:ring-[#E85D42] placeholder-zinc-500 rounded-md"
               />
+            </div>
+
+            {/* BULK ADD. Collapsed by default so the directory stays the focus;
+                expanding reveals a single paste box, one button, one result line. */}
+            <div className="border border-zinc-800 rounded-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setBulkOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-zinc-950/60 hover:bg-zinc-800/60 text-[11px] font-bold uppercase tracking-wider text-zinc-300 transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <UserCheck size={14} className="text-[#E85D42]" />
+                  {language === 'fr' ? 'Ajouter en masse' : 'Bulk add emails'}
+                </span>
+                <span className="text-zinc-500">{bulkOpen ? '−' : '+'}</span>
+              </button>
+
+              {bulkOpen && (
+                <div className="p-3 space-y-2.5 bg-zinc-950/40">
+                  <textarea
+                    rows={5}
+                    value={bulkText}
+                    onChange={e => { setBulkText(e.target.value); setBulkResult(null); setBulkError(null); }}
+                    placeholder={language === 'fr'
+                      ? 'Collez vos adresses ici — une par ligne, ou séparées par des virgules, points-virgules ou espaces.'
+                      : 'Paste your addresses — one per line, or separated by commas, semicolons or spaces.'}
+                    className="w-full bg-zinc-950 border border-zinc-700 text-zinc-100 p-2.5 text-[11px] font-mono focus:outline-none focus:border-[#E85D42] placeholder-zinc-600 rounded-md"
+                  />
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleBulkAdd}
+                      disabled={!bulkText.trim()}
+                      className="flex items-center gap-1.5 bg-[#E85D42] hover:bg-[#c94931] disabled:bg-zinc-800 disabled:text-zinc-600 text-white font-bold text-[10px] uppercase tracking-wider px-4 py-2 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      <Plus size={13} /> {language === 'fr' ? 'Ajouter' : 'Add'}
+                    </button>
+                    {bulkText.trim() && (
+                      <span className="text-[10px] font-mono text-zinc-500">
+                        {parseBulkEmails(bulkText).valid.length} {language === 'fr' ? 'valide(s)' : 'valid'}
+                      </span>
+                    )}
+                  </div>
+
+                  {bulkError && (
+                    <p role="alert" className="text-[10px] text-red-400 leading-relaxed">{bulkError}</p>
+                  )}
+
+                  {bulkResult && (
+                    <p className="text-[10px] text-emerald-400 leading-relaxed">
+                      ✓ {bulkResult.added} {language === 'fr' ? 'abonné(s) ajouté(s)' : 'subscriber(s) added'}
+                      {bulkResult.skipped > 0 && (
+                        <span className="text-zinc-500">
+                          {' '}· {bulkResult.skipped} {language === 'fr' ? 'déjà présent(s)' : 'already present'}
+                        </span>
+                      )}
+                      {bulkResult.invalid.length > 0 && (
+                        <span className="text-amber-400">
+                          {' '}· {bulkResult.invalid.length} {language === 'fr' ? 'ignoré(s)' : 'ignored'}
+                        </span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
