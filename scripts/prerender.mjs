@@ -27,7 +27,7 @@
  * Run automatically via `npm run build` (see package.json).
  */
 import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORY_HUBS } from './categoryHubs.mjs';
@@ -94,6 +94,25 @@ function t(field, lang = 'fr') {
 }
 
 /**
+ * Appends the brand name to the browser <title> only.
+ *
+ * WHY: the SERP already shows the site name next to the URL, and social cards
+ * carry og:site_name. Repeating "Perspective Group" inside the headline made
+ * every result read "… | Perspective Group | Perspective Group" and pushed the
+ * distinctive keywords out of the ~60-character title budget Google truncates
+ * at. The suffix is applied once, and never to the JSON-LD headline, which must
+ * stay the verbatim article title or the structured data mismatches the page.
+ */
+const BRAND = 'Perspective Group';
+function appendBrandSuffix(headline, lang = 'fr') {
+  const h = stripTags(headline);
+  if (!h) return BRAND;
+  if (h.includes(BRAND) || h.includes('SenPerspective')) return h;
+  // EN reads more naturally with an em dash, FR with a pipe.
+  return lang === 'en' ? `${h} — ${BRAND}` : `${h} | ${BRAND}`;
+}
+
+/**
  * Article bodies are stored as Markdown, not HTML (they contain `###` and
  * `##` headings). It must be escaped and converted to real tags, because
  * leaving raw Markdown would put `###` in the crawler's view of the page.
@@ -135,6 +154,119 @@ const stripTags = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g
 /** The URL the SPA already uses: /article/{slug || id}. Must stay in sync. */
 const articlePath = (a) => `/article/${a.slug || a.id}`;
 
+/**
+ * Maps an article's `category` value to the slug of a section page that the
+ * prerender actually writes, or null when there is no safe target.
+ *
+ * WHY AN ALIAS TABLE IS NEEDED
+ * ----------------------------
+ * The database tags articles with fine-grained editorial labels ("Afrique",
+ * "Monde", "Diplomatie", "Justice", "People", "Météo"…) that are NOT the same set
+ * as the section hubs. Matching by string equality therefore linked only 195 of
+ * 360 articles to a section page and left the rest as orphaned nodes: valuable
+ * pages, invisible to a crawler navigating the site.
+ *
+ * Every entry points at a URL present in the generated sitemap, so a link can
+ * never 404. Sports resolves to /category/sports — a real section page that is
+ * absent from the editorial hub registry, which is exactly why a pure equality
+ * check could not find it.
+ *
+ * Returns null rather than guessing: trading orphaned pages for broken internal
+ * links would be worse, because a crawler follows every one of them.
+ */
+const CATEGORY_ALIASES = {
+  politique: 'politique',
+  diplomatie: 'international',
+  diplomacy: 'international',
+  international: 'international',
+  monde: 'international',
+  afrique: 'international',
+  europe: 'international',
+  asie: 'international',
+  economie: 'economie',
+  business: 'economie',
+  finances: 'economie',
+  entreprises: 'economie',
+  marche: 'economie',
+  energie: 'economie',
+  investissements: 'economie',
+  // Misspelling actually present in the data, mapped so those rows are not orphaned.
+  busines: 'economie',
+  societe: 'societe',
+  people: 'societe',
+  meteo: 'societe',
+  education: 'societe',
+  religion: 'societe',
+  justice: 'societe',
+  sante: 'sante',
+  culture: 'culture',
+  tech: 'tech-innovation',
+  technologie: 'tech-innovation',
+  innovation: 'tech-innovation',
+  sports: 'sports',
+  sport: 'sports',
+  football: 'sports',
+  basket: 'sports',
+  lutte: 'sports',
+  dossiers: 'decryptages',
+  decryptage: 'decryptages',
+  enquete: 'decryptages',
+};
+
+const HUB_SLUGS = CATEGORY_HUBS.map((c) => c.slug);
+function categorySlug(category) {
+  if (!category || typeof category !== 'string') return null;
+  const norm = (s) =>
+    s
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  const target = norm(category);
+  if (HUB_SLUGS.includes(target)) return target;
+  // "Tech & Innovation" -> "tech-innovation".
+  const dashed = target.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  if (HUB_SLUGS.includes(dashed)) return dashed;
+  if (CATEGORY_ALIASES[dashed]) return CATEGORY_ALIASES[dashed];
+  return null;
+}
+
+/**
+ * Picks real sibling articles to link from an article.
+ *
+ * Prefers the same category, then falls back to shared tags, and always returns
+ * only articles that are themselves published and prerendered. Never returns the
+ * article itself, and never invents a URL.
+ */
+function relatedArticles(a, all, limit = 5) {
+  const cat = typeof a.category === 'string' ? a.category : '';
+  const tags = new Set(
+    (Array.isArray(a.tags) ? a.tags : []).filter((x) => typeof x === 'string').map((x) => x.toLowerCase())
+  );
+  const selfSlug = a.slug || a.id;
+
+  const scored = [];
+  for (const b of all) {
+    if (!b || b.id === a.id) continue;
+    const bSlug = b.slug || b.id;
+    if (!bSlug || bSlug === selfSlug) continue;
+
+    const bCat = typeof b.category === 'string' ? b.category : '';
+    const bTags = (Array.isArray(b.tags) ? b.tags : []).filter((x) => typeof x === 'string');
+    let shared = 0;
+    for (const tg of bTags) if (tags.has(tg.toLowerCase())) shared++;
+
+    // Same section is the strongest signal; shared tags are the fallback.
+    let score = 0;
+    if (cat && bCat === cat) score += 10;
+    score += Math.min(shared, 5);
+    if (score > 0) scored.push({ b, score });
+  }
+
+  scored.sort((x, y) => y.score - x.score);
+  return scored.slice(0, limit).map((s) => s.b);
+}
+
 const isoDate = (a) => {
   const raw = a.date || a.updatedAtServer || a.publishedAt;
   if (!raw) return null;
@@ -167,7 +299,7 @@ const isoDate = (a) => {
  * equivalence is what keeps this within Google's dynamic-rendering guidance
  * rather than becoming cloaking.
  */
-function articleBody(a, lang = 'fr') {
+function articleBody(a, lang = 'fr', related = []) {
   const title = t(a.title, lang) || t(a.title, 'en') || 'SenPerspective';
   const desc =
     t(a.seoMetaDescription, lang) || stripTags(t(a.excerpt, lang)) || stripTags(t(a.body, lang)).slice(0, 158);
@@ -176,11 +308,39 @@ function articleBody(a, lang = 'fr') {
   const bodyHtml = markdownToHtml(t(a.body, lang) || t(a.body, 'en'));
   const author = t(a.author, lang) || 'Perspective Newsroom';
   const category = typeof a.category === 'string' ? a.category : '';
+  const catSlug = categorySlug(category);
+
+  // INTERNAL LINKS
+  // A prerendered article with no outgoing link is a dead end for a crawler:
+  // it ranks the page but passes none of that authority on, and Google cannot
+  // discover any other article from it except through the sitemap. Linking the
+  // article to its category hub plus a few real siblings is the cheapest way to
+  // make the archive crawlable and topical signals flow between related stories.
+  // Every link here points at a page the prerender itself writes, so no link can
+  // 404.
+  const navBits = [`<a href="${SITE}/" style="color:#E85D42;text-decoration:none">SenPerspective</a>`];
+  if (catSlug) {
+    navBits.push(` &middot; <a href="${SITE}/category/${esc(catSlug)}" style="color:#E85D42;text-decoration:none">${esc(category)}</a>`);
+  } else if (category) {
+    navBits.push(` &middot; ${esc(category)}`);
+  }
+
+  const relatedBlock = related.length
+    ? `<nav aria-label="${lang === 'en' ? 'Related articles' : 'Articles liés'}" style="margin:2.5rem 0 0;padding:1.5rem 0 0;border-top:1px solid #e2e8f0">
+        <h2 style="font-family:Inter,system-ui,sans-serif;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b;margin:0 0 .75rem">${lang === 'en' ? 'Related' : 'À lire aussi'}</h2>
+        <ul style="list-style:none;margin:0;padding:0;display:grid;gap:.5rem">
+          ${related
+            .map(
+              (r) => `<li><a href="${SITE}${articlePath(r)}" style="font-family:Inter,system-ui,sans-serif;font-size:15px;font-weight:600;color:#172033;text-decoration:none">${esc(stripTags(t(r.title, lang) || t(r.title, 'en')))}</a></li>`
+            )
+            .join('\n          ')}
+        </ul>
+      </nav>`
+    : '';
 
   return `<div id="sp-prerender" style="max-width:48rem;margin:0 auto;padding:2.5rem 1.25rem 4rem;font-family:Lora,Georgia,serif;color:#172033">
       <p style="font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#E85D42;margin:0 0 1rem">
-        <a href="${SITE}/" style="color:#E85D42;text-decoration:none">SenPerspective</a>
-        ${category ? ` &middot; ${esc(category)}` : ''}
+        ${navBits.join('')}
       </p>
       <h1 style="font-family:Inter,system-ui,sans-serif;font-size:clamp(1.75rem,4vw,2.75rem);line-height:1.1;font-weight:900;margin:0 0 1rem">${esc(stripTags(title))}</h1>
       <p style="font-family:Inter,system-ui,sans-serif;font-size:13px;color:#334155;margin:0 0 1.5rem">
@@ -189,6 +349,7 @@ function articleBody(a, lang = 'fr') {
       ${image ? `<figure style="margin:0 0 1.5rem"><img src="${esc(image)}" alt="${esc(stripTags(title).slice(0, 120))}" style="width:100%;height:auto;border-radius:8px" /></figure>` : ''}
       ${desc ? `<p style="font-size:1.05rem;font-weight:600;line-height:1.6;margin:0 0 1.5rem">${esc(stripTags(desc))}</p>` : ''}
       <div style="font-size:1.05rem;line-height:1.75">${bodyHtml}</div>
+      ${relatedBlock}
     </div>`;
 }
 
@@ -214,8 +375,11 @@ function articleBody(a, lang = 'fr') {
  * JS still reads the full article text. Nothing here is styled, so there is no
  * second visual implementation to drift out of sync.
  */
-function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd, bodyOverride }) {
+function applyHead(shell, { a, lang, title, ogTitle, desc, url, image, published, author, category, keywordsList, jsonLd, related = [], bodyOverride }) {
   let head = shell;
+  // og:title / twitter:title / name="title" use the clean headline so social
+  // cards and SERP text never repeat the brand suffix that <title> carries.
+  const socialTitle = esc(stripTags(ogTitle || title));
 
   // Each replacement is attempted independently: a tag that is absent from the
   // shell simply stays absent, rather than aborting the whole prerender.
@@ -224,7 +388,7 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd,
   };
 
   set(/<title>[\s\S]*?<\/title>/i, `<title>${esc(title)}</title>`);
-  set(/<meta\s+name="title"\s+content="[^"]*"\s*\/?>/i, `<meta name="title" content="${esc(title)}" />`);
+  set(/<meta\s+name="title"\s+content="[^"]*"\s*\/?>/i, `<meta name="title" content="${socialTitle}" />`);
   set(
     /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
     `<meta name="description" content="${esc(desc.slice(0, 300))}" />`
@@ -232,7 +396,7 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd,
   set(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i, `<link rel="canonical" href="${esc(url)}" />`);
   set(/<meta\s+property="og:type"\s+content="[^"]*"\s*\/?>/i, '<meta property="og:type" content="article" />');
   set(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${esc(url)}" />`);
-  set(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${esc(title)}" />`);
+  set(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${socialTitle}" />`);
   set(
     /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
     `<meta property="og:description" content="${esc(desc.slice(0, 300))}" />`
@@ -240,7 +404,7 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd,
   set(/<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:image" content="${esc(image)}" />`);
   set(/<meta\s+property="og:locale"\s+content="[^"]*"\s*\/?>/i, '<meta property="og:locale" content="fr_SN" />');
   set(/<meta\s+name="twitter:url"\s+content="[^"]*"\s*\/?>/i, `<meta name="twitter:url" content="${esc(url)}" />`);
-  set(/<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i, `<meta name="twitter:title" content="${esc(title)}" />`);
+  set(/<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i, `<meta name="twitter:title" content="${socialTitle}" />`);
   set(
     /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/i,
     `<meta name="twitter:description" content="${esc(desc.slice(0, 300))}" />`
@@ -249,6 +413,19 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd,
 
   const extra = [
     published ? `<meta property="article:published_time" content="${esc(published)}" />` : '',
+    author ? `<meta property="article:author" content="${esc(stripTags(author))}" />` : '',
+    category ? `<meta property="article:section" content="${esc(category)}" />` : '',
+    // article:tag is what Google uses for topical grouping of a news story.
+    ...(Array.isArray(keywordsList) && keywordsList.length
+      ? keywordsList.slice(0, 6).map((k) => `<meta property="article:tag" content="${esc(k)}" />`)
+      : []),
+    // Dimensions + alt let Facebook/WhatsApp/X choose a large card and give the
+    // image a real description instead of a blank one.
+    image ? `<meta property="og:image:width" content="1200" />` : '',
+    image ? `<meta property="og:image:height" content="630" />` : '',
+    image ? `<meta property="og:image:alt" content="${esc(stripTags(ogTitle || title).slice(0, 120))}" />` : '',
+    image ? `<meta name="twitter:image:alt" content="${esc(stripTags(ogTitle || title).slice(0, 120))}" />` : '',
+    `<meta name="twitter:card" content="summary_large_image" />`,
     `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
   ]
     .filter(Boolean)
@@ -261,7 +438,7 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd,
   // `bodyOverride` lets non-article pages (league hubs) reuse this exact shell
   // handling instead of re-implementing it, which is what keeps a single
   // template.
-  const body = bodyOverride || articleBody(a, lang);
+  const body = bodyOverride || articleBody(a, lang, related);
   if (head.includes('<div id="root"></div>')) {
     head = head.replace('<div id="root"></div>', `<div id="root">${body}</div>`);
   } else {
@@ -273,40 +450,72 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd,
   return head;
 }
 
-function renderArticle(a, shell, lang = 'fr') {
+function renderArticle(a, shell, lang = 'fr', all = []) {
   const url = `${SITE}${articlePath(a)}`;
-  const title = t(a.title, lang) || t(a.title, 'en') || 'SenPerspective';
+  const headline = t(a.title, lang) || t(a.title, 'en') || 'SenPerspective';
+  // The browser <title> carries the brand suffix for click-through branding,
+  // while og:title stays clean so social cards don't read
+  // "… | Perspective Group | Perspective Group".
+  const title = appendBrandSuffix(headline, lang);
+  const ogTitle = stripTags(headline);
   const desc =
     t(a.seoMetaDescription, lang) || stripTags(t(a.excerpt, lang)) || stripTags(t(a.body, lang)).slice(0, 158);
   const image = a.seoOgImage || a.featuredImage || a.imageUrl || `${SITE}/favicon.png`;
   const published = isoDate(a);
   const author = t(a.author, lang) || 'Perspective Newsroom';
-  const keywords = Array.isArray(a.tags) ? a.tags.slice(0, 12).join(', ') : '';
+  const category = typeof a.category === 'string' ? a.category : '';
+  const catSlug = categorySlug(category);
+  const keywordsList = Array.isArray(a.tags) ? a.tags.filter((t2) => typeof t2 === 'string' && t2) : [];
 
-  const jsonLd = {
+  // BreadcrumbList mirrors the visible Home > Category > headline trail. Google
+  // uses it to understand the hierarchy and to build a nicer SERP breadcrumb,
+  // and it only uses positions that genuinely exist, so the category entry is
+  // emitted only when its hub was actually prerendered.
+  const breadcrumbItems = [
+    { name: 'Accueil', url: `${SITE}/` },
+    ...(catSlug ? [{ name: category, url: `${SITE}/category/${catSlug}` }] : []),
+    { name: stripTags(headline).slice(0, 90), url },
+  ];
+  const breadcrumbJsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'NewsArticle',
-    headline: stripTags(title).slice(0, 110),
-    description: stripTags(desc).slice(0, 300),
-    image: [image],
-    datePublished: published,
-    dateModified: a.updatedAtServer ? new Date(a.updatedAtServer).toISOString() : published,
-    author: { '@type': 'Organization', name: stripTags(author) },
-    publisher: {
-      '@type': 'NewsMediaOrganization',
-      name: 'SenPerspective',
-      logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` },
-    },
-    mainEntityOfPage: { '@type': 'WebPage', '@id': url },
-    articleSection: typeof a.category === 'string' ? a.category : undefined,
-    keywords: keywords || undefined,
-    inLanguage: lang === 'fr' ? 'fr-SN' : 'en',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbItems.map((c, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: c.name,
+      item: c.url,
+    })),
   };
 
-  return applyHead(
-    shell,
-    { a, lang, title, desc, url, image, published, keywords, jsonLd }
-  );
+  const jsonLd = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'NewsArticle',
+      headline: stripTags(headline).slice(0, 110),
+      description: stripTags(desc).slice(0, 300),
+      image: [image],
+      datePublished: published,
+      dateModified: a.updatedAtServer ? new Date(a.updatedAtServer).toISOString() : published,
+      author: { '@type': 'Organization', name: stripTags(author) },
+      publisher: {
+        '@type': 'NewsMediaOrganization',
+        name: 'SenPerspective',
+        logo: { '@type': 'ImageObject', url: `${SITE}/favicon.png` },
+      },
+      mainEntityOfPage: { '@type': 'WebPage', '@id': url },
+      articleSection: category || undefined,
+      keywords: keywordsList.slice(0, 12).join(', ') || undefined,
+      inLanguage: lang === 'fr' ? 'fr-SN' : 'en',
+    },
+    breadcrumbJsonLd,
+  ];
+
+  const related = relatedArticles(a, all);
+
+  return applyHead(shell, {
+    a, lang, title, ogTitle, desc, url, image, published, author, category,
+    keywordsList, jsonLd, related,
+  });
 }
 
 /**
@@ -631,7 +840,10 @@ function buildSitemap(articles) {
       priority: '0.8',
       freq: 'hourly',
     })),
-    { loc: `${SITE}/category/sports`, priority: '0.8', freq: 'hourly' },
+    // Sports used to be hand-listed here, immediately after the comment above
+    // promised the sitemap could not list a page the build does not produce — and
+    // no HTML was ever written for it, so the sitemap advertised a 404. The
+    // sports hub is now a real CATEGORY_HUBS entry and this line is gone.
     { loc: `${SITE}/larene`, priority: '0.7', freq: 'hourly' },
     // League hubs: the durable, indexable sports surface. The live scores on
     // /larene are deliberately absent from the sitemap because they change too
@@ -707,7 +919,7 @@ async function main() {
     }
     const dir = path.join(articleDir, slug);
     await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, 'index.html'), renderArticle(a, shell, 'fr'), 'utf8');
+    await writeFile(path.join(dir, 'index.html'), renderArticle(a, shell, 'fr', articles), 'utf8');
     written++;
   }
   console.log(`[prerender] wrote ${written} article pages to dist/article/`);
@@ -754,7 +966,60 @@ async function main() {
   console.log(`[prerender] wrote ${catsWritten} category hub pages to dist/category/`);
 
   await writeFile(path.join(DIST, 'sitemap.xml'), buildSitemap(articles), 'utf8');
-  console.log(`[prerender] wrote sitemap.xml (${articles.length} article urls + 13 static)`);
+  const staticCount =
+    1 + CATEGORY_HUBS.length + 1 + LEAGUE_HUBS.length + 2; // home + hubs + /larene + league hubs + about/contact
+  console.log(`[prerender] wrote sitemap.xml (${articles.length} article urls + ${staticCount} static)`);
+
+  // INTERNAL LINK INTEGRITY GATE
+  // ---------------------------
+  // This build now emits thousands of internal links (section pages + related
+  // articles on every article page). A crawler follows every one of them, so a
+  // single link to a page this build did not write is a 404 discovered from a
+  // page we just asked Google to rank. That is a self-inflicted penalty, and it
+  // is exactly the class of bug that already existed here: /category/sports was
+  // advertised in the sitemap while no HTML was ever generated for it.
+  //
+  // Rather than trust the alias table to stay correct as categories are edited,
+  // every emitted internal link is resolved against the generated files and the
+  // build FAILS if any target is missing. A broken link can no longer be
+  // deployed.
+  const linkTargets = new Set();
+  const collect = (base, prefix) => {
+    if (!existsSync(base)) return;
+    for (const entry of readdirSync(base, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      linkTargets.add(`${prefix}/${entry.name}`);
+      collect(path.join(base, entry.name), `${prefix}/${entry.name}`);
+    }
+  };
+  collect(path.join(DIST, 'article'), '/article');
+  collect(path.join(DIST, 'category'), '/category');
+  collect(path.join(DIST, 'arena'), '/arena');
+
+  let checked = 0;
+  const broken = new Set();
+  const checkFile = (file) => {
+    const html = readFileSync(file, 'utf8');
+    for (const m of html.matchAll(new RegExp(`href="${SITE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(/[^"#?]*)"`, 'g'))) {
+      const target = m[1];
+      // Only the directories this build writes are gated; the SPA routes
+      // (/about, /contact, /larene) are served by the catch-all rewrite.
+      if (!/^\/(article|category|arena)\//.test(target)) continue;
+      checked++;
+      if (!linkTargets.has(target.replace(/\/$/, ''))) broken.add(target);
+    }
+  };
+  for (const entry of readdirSync(path.join(DIST, 'article'), { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      checkFile(path.join(DIST, 'article', entry.name, 'index.html'));
+    }
+  }
+  if (broken.size) {
+    console.error(`[prerender] FAILED: ${broken.size} internal link(s) point at pages this build did not write:`);
+    for (const b of [...broken].slice(0, 10)) console.error(`  - ${b}`);
+    throw new Error('internal link integrity check failed');
+  }
+  console.log(`[prerender] link integrity OK: ${checked} internal links, 0 broken.`);
 
   // Feeds. Written from the same records, so they can never advertise an
   // article the sitemap does not also list.

@@ -19,6 +19,7 @@ import {
   getEditorialFallbackImage
 } from '../../lib/clientAiEngine';
 import { ALL_RELIABLE_RSS_FEEDS, ensureValidUrl, normalizeRssFeedUrl } from './RssAutomationTab';
+import { uniqueArticleSlug } from '../../lib/slugify';
 
 interface RssFeedManagementTabProps {
   onRefreshArticles?: () => void;
@@ -33,7 +34,7 @@ interface FeedHealthRecord {
 }
 
 export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFeedManagementTabProps) {
-  const { language, addArticle } = useStore();
+  const { language, addArticle, articles } = useStore();
   const isFr = language === 'fr';
 
   // State for Feeds list
@@ -276,7 +277,17 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
           const newArt = {
             ...clientRes.article,
             id: 'art-wire-' + Date.now(),
-            slug: 'wire-' + (item.title || 'article').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) + '-' + Date.now(),
+            // Clean, keyword-bearing slug built from the real headline. The old
+            // expression produced URLs like
+            // "wire--activit-s-p-troli-res-et-gazi-res-woods-1789997729096":
+            // accents deleted rather than transliterated, cut mid-word, a
+            // meaningless "wire-" prefix, and a 14-digit timestamp. Uniqueness
+            // is checked against the slugs already in use, so a numeric suffix
+            // is added only on a genuine collision.
+            slug: uniqueArticleSlug(
+              item.title || clientRes.article?.title?.fr || 'article',
+              (articles ?? []).map((a) => a.slug).filter(Boolean) as string[]
+            ),
             publishedAt: new Date().toISOString(),
             isPublished: false,
             sourceFeed: inspectFeed?.url,

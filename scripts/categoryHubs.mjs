@@ -167,4 +167,27 @@ export const CATEGORY_HUBS = [
       },
     ],
   },
+  {
+    slug: 'sports',
+    heading: 'Sports',
+    title: 'Sports au Sénégal : football, LNBA,_navétanes et luches | SenPerspective',
+    description:
+      "L'actualité sportive sénégalse et africaine : football, LNBA, navétanes, lutte, résultats, analyses et coulisses.",
+    intro:
+      "Suivi complet du sport sénégalais : LNBA, football, navétanes et lutte, avec les résultats, les analyses et le détail des compétitions.",
+    sections: [
+      {
+        h: 'Ce que couvre cette rubrique',
+        p: "Les grands clubs sénégais et leur atualité, le football international et africain, la LNBA, les navétanes et la lutte, ainsi que les sports individuels et les compétitions régionales.",
+      },
+      {
+        h: 'L\'Arène',
+        p: "Les scores en direct et les résultats sont servicés par L'Arène, notre espace dédié au sport : classements, calendriers et suivi des compétitions.",
+      },
+      {
+        h: 'Notre approche',
+        p: "Nous distinguons le résultat vérifié de la rumeur, et nous expliquons les enjeux sportifs et économiques derrière les décisions des clubs, des fédérations et des sélecteurs.",
+      },
+    ],
+  },
 ];
