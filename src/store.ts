@@ -21,8 +21,8 @@ import {
   saveCommentToFirestore,
   fetchAllAds,
   subscribeToAds,
-  saveAdToFirestore,
-  deleteAdFromFirestore
+  saveAdToRTDB,
+  deleteAdFromRTDB
 } from './firebase/db';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
@@ -1361,7 +1361,7 @@ export const useStore = create<AppState>()(
         // FIX (ads disappearing on reload): persist to Firebase RTDB so changes
         // survive across sessions/devices and are synced in real time.
         try {
-          await saveAdToFirestore(ad);
+          await saveAdToRTDB(ad);
         } catch (err) {
           console.error("[Firebase] Error saving ad:", err);
         }
@@ -1376,7 +1376,7 @@ export const useStore = create<AppState>()(
         set({ ads: (get().ads || []).filter(a => a.id !== id) });
         // FIX: persist deletion to RTDB so the ad doesn't reappear on reload.
         try {
-          deleteAdFromFirestore(id);
+          deleteAdFromRTDB(id);
         } catch (err) {
           console.error("[Firebase] Error deleting ad:", err);
         }

@@ -779,7 +779,14 @@ export function subscribeToNotifications(
   );
 }
 
-export async function saveAdToFirestore(ad: any): Promise<boolean> {
+/**
+ * Persist an ad to the Firebase Realtime Database under `/ads/{id}`.
+ *
+ * Named for what it actually does: this writes to RTDB via
+ * `set(ref(rtdb, 'ads/...'))`, not to Firestore. (It was previously called
+ * `saveAdToFirestore`, which misdescribed the backend.)
+ */
+export async function saveAdToRTDB(ad: any): Promise<boolean> {
   try {
     const adId = ad.id || `ad-${Date.now()}`;
     await withFirestoreTimeout(
@@ -791,17 +798,22 @@ export async function saveAdToFirestore(ad: any): Promise<boolean> {
     );
     return true;
   } catch (error) {
-    console.warn('[Firebase] saveAdToFirestore failed:', error);
+    console.warn('[Firebase] saveAdToRTDB failed:', error);
     return false;
   }
 }
 
-export async function deleteAdFromFirestore(id: string): Promise<boolean> {
+/**
+ * Remove an ad from the Firebase Realtime Database under `/ads/{id}`.
+ *
+ * RTDB, not Firestore — see `saveAdToRTDB`.
+ */
+export async function deleteAdFromRTDB(id: string): Promise<boolean> {
   try {
     await withFirestoreTimeout(remove(ref(rtdb, `ads/${safeKey(id)}`)));
     return true;
   } catch (error) {
-    console.warn(`[Firebase] deleteAdFromFirestore ${id} failed:`, error);
+    console.warn(`[Firebase] deleteAdFromRTDB ${id} failed:`, error);
     return false;
   }
 }
