@@ -19,6 +19,7 @@ import { subscribeToArticles } from './firebase/db';
 import { subscribeToAllComments } from './firebase/db';
 import { subscribeToAds } from './firebase/db';
 import { subscribeToNotifications } from './firebase/db';
+import { useRouteScroll } from './lib/navigation';
 
 // Injected by Vite at build time — changes on every deploy. A device that
 // kept an OLD cached bundle (webviews / add-to-homescreen tabs can ignore
@@ -37,6 +38,16 @@ function ensureFreshBundle() {
     }
     localStorage.setItem('__APP_BUILD_ID__', __BUILD_ID__);
   } catch { /* private mode — ignore */ }
+}
+
+/**
+ * Applies the app-wide scroll rule. It has to be a child of <Router> because
+ * it reads the location, so it is defined here and mounted just inside
+ * <AuthProvider>.
+ */
+function RouteScrollManager() {
+  useRouteScroll();
+  return null;
 }
 
 function App() {
@@ -244,6 +255,12 @@ function App() {
     <Router>
       <div className="app-page-enter min-h-screen">
       <AuthProvider>
+        {/* One scroll behaviour for the whole app: top of page on a normal
+            navigation, or the specific `#target` when a link asked for a
+            particular item. Previously each page owned its own
+            `window.scrollTo(0, 0)`, which both missed hash deep links and
+            fought the browser's own anchor handling. */}
+        <RouteScrollManager />
         {/* Glassy sync indicator - top edge only (no full-screen overlay) */}
         {isLoadingArticles && (
           <div className="fixed top-0 left-0 right-0 z-[100] h-0.5 overflow-hidden pointer-events-none" role="status" aria-label="Syncing articles">

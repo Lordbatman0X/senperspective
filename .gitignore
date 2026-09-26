@@ -39,3 +39,7 @@ probe-*.mjs
 shot_*.png
 # Headless-Chrome CDP profiles from local probes
 .chrome-cdp*/
+
+.chrome-cdp/
+.chrome-nav/
+shot_*.png

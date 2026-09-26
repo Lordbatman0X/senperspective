@@ -14,9 +14,11 @@ export function CategoryPage() {
   const normalizedId = (categoryId || "").toLowerCase().trim();
   const accentColor = siteSettings?.accentColor || '#E85D42';
   
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [categoryId]);
+  // NOTE: scrolling on navigation is handled app-wide by `useRouteScroll`
+  // (see lib/navigation.ts). The previous local `window.scrollTo(0, 0)` here
+  // ran AFTER the browser had resolved a `#match-...` deep link, so clicking a
+  // fixture in the homepage quadrant landed at the top of a long board instead
+  // of on that fixture. Removing it lets the hash win.
 
   // Sports routes render L'Arene instead of the article grid. This used to be an
   // early `return <LArenePage />` placed ABOVE the useSEO() call below, which

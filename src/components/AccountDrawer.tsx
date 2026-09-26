@@ -228,6 +228,34 @@ export function AccountDrawer({
   const [showInternalShareModal, setShowInternalShareModal] = useState<boolean>(false);
   const [settingsSuccessMsg, setSettingsSuccessMsg] = useState("");
   const [chatSearchTerm, setChatSearchTerm] = useState("");
+
+  /**
+   * Deep link straight to one conversation.
+   *
+   * The sub-menu and the selected contact are local state, so "open this chat"
+   * used to have no route to travel — a reader tapping a conversation anywhere
+   * outside the drawer landed on the drawer's MAIN panel and had to find it
+   * again. This listens for `open-account-chat` and applies the target in one
+   * commit, so the drawer opens already showing the right thread.
+   *
+   * Uses the same window-event approach the existing
+   * "open-floating-chat" button already relies on, so no new global state.
+   */
+  useEffect(() => {
+    const handle = (e: Event) => {
+      const email = (e as CustomEvent).detail?.email;
+      if (!email) return;
+      setActiveSubMenu("messages");
+      setSelectedChatUser(email);
+      setChatSearchTerm("");
+      setAttachedMaterialType("none");
+      setAttachedMaterialId("");
+      useStore.getState().setActiveMessengerContact(email);
+      setShowProfileModal(true);
+    };
+    window.addEventListener("open-account-chat", handle);
+    return () => window.removeEventListener("open-account-chat", handle);
+  }, [setSelectedChatUser, setAttachedMaterialType, setAttachedMaterialId, setShowProfileModal]);
   
   // Friends list state with real-time Firestore sync
   const [friendsList, setFriendsList] = useState<string[]>([]);

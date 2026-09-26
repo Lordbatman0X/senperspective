@@ -9,9 +9,7 @@ export function SavedPage() {
   
   const saved = (articles ?? []).filter(a => savedArticles?.includes(a.id));
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, []);
+  // Navigation scroll is handled app-wide by `useRouteScroll`.
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">

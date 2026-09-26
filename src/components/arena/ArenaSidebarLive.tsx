@@ -5,6 +5,7 @@ import type { Match } from "../../types";
 import { useArenaScores } from "../../lib/sports/useArenaScores";
 import { apiLeagues } from "../../lib/sports/leagues";
 import { ArenaMatchTile } from "./ArenaMatchTile";
+import { matchAnchor } from "../../lib/navigation";
 
 interface ArenaSidebarLiveProps {
   /** Editor/seeded matches (the Senegalese competitions) always outrank rows. */
@@ -95,7 +96,12 @@ export function ArenaSidebarLive({
           rows.map((m) => (
             <Link
               key={m.id}
-              to="/larene"
+              to={`/category/sports#${matchAnchor(m.id)}`}
+              aria-label={
+                isFr
+                  ? `${m.teamA.name} contre ${m.teamB.name}`
+                  : `${m.teamA.name} versus ${m.teamB.name}`
+              }
               className="block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-current"
             >
               <ArenaMatchTile

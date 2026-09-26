@@ -26,8 +26,8 @@ export function SearchPage() {
     }
   }, []);
 
+  // Navigation scroll is handled app-wide by `useRouteScroll`.
   useEffect(() => {
-    window.scrollTo(0, 0);
     const lowerQ = query.trim().toLowerCase();
     
     // Add to recent searches if not empty

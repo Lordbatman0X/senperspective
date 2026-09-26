@@ -443,9 +443,7 @@ export function ArticlePage() {
     setActiveReplyId(null);
   };
   
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [id]);
+  // Navigation scroll is handled app-wide by `useRouteScroll`.
 
   if (!article && (isArticleLoading || (articles ?? []).length === 0)) {
     return (

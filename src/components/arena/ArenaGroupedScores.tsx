@@ -10,6 +10,7 @@ import {
   type ArenaSport,
 } from "../../lib/sports/leagues";
 import { withoutDemoMatches } from "../../lib/sports/demoMatches";
+import { matchAnchor } from "../../lib/navigation";
 import { ArenaMatchTile } from "./ArenaMatchTile";
 
 /** Brand accent, matching the site-wide default in siteSettings. */
@@ -179,7 +180,7 @@ export function ArenaGroupedScores({ editorialMatches, language }: ArenaGroupedS
 
                     <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
                       {lg.rows.map((m) => (
-                        <li key={m.id}>
+                        <li key={m.id} id={matchAnchor(m.id)} className="scroll-mt-24">
                           <ArenaMatchTile
                             match={m}
                             language={language}

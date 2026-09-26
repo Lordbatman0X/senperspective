@@ -1,10 +1,11 @@
 import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { Trophy, ArrowRight, Radio } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Trophy, ArrowRight, Radio, ChevronRight } from "lucide-react";
 import { useStore } from "../store";
 import { useArenaScores } from "../lib/sports/useArenaScores";
 import { apiLeagues } from "../lib/sports/leagues";
 import { withoutDemoMatches } from "../lib/sports/demoMatches";
+import { matchAnchor } from "../lib/navigation";
 
 /**
  * L'Arene - a single, simple live scoreboard for the sports category.
@@ -27,6 +28,7 @@ import { withoutDemoMatches } from "../lib/sports/demoMatches";
  */
 export function SportsQuadrant() {
   const { language, matches = [], siteSettings } = useStore();
+  const { hash } = useLocation();
 
   const accentColor = siteSettings?.accentColor || "#E85D42";
 
@@ -144,33 +146,79 @@ export function SportsQuadrant() {
                   <span className="text-[8px] font-black text-red-600 dark:text-red-400">LIVE</span>
                 )}
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {g.leagues.map((l) => (
                   <div key={l.name}>
-                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">{l.name}</p>
-                    <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 flex items-center gap-2">
+                      {l.name}
+                      {l.live > 0 && (
+                        <span className="text-[8px] font-black text-red-600 dark:text-red-400">
+                          {l.live}
+                        </span>
+                      )}
+                    </p>
+                    <ul className="space-y-1.5">
                       {l.rows.map((m) => {
                         const sa = scoreOf(m, "A");
                         const sb = scoreOf(m, "B");
                         // An unplayed fixture has no score. Showing "0" would invent one.
                         const played = sa !== null || sb !== null;
                         const isLive = String(m.status) === "live";
+                        const whenText = when(m);
+                        // Highlight the row the reader arrived from, so the jump
+                        // back from the category page is reversible.
+                        const isTarget = hash === `#${matchAnchor(m.id)}`;
                         return (
-                          <li key={m.id} className="py-2 flex items-center gap-3">
-                            <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{m.teamA.name}</span>
-                              <span className="shrink-0 font-mono font-black text-sm tabular-nums text-zinc-900 dark:text-zinc-50">
-                                {played ? `${sa ?? 0} - ${sb ?? 0}` : "vs"}
+                          <li key={m.id}>
+                            <Link
+                              to={`/category/sports#${matchAnchor(m.id)}`}
+                              aria-label={
+                                language === "fr"
+                                  ? `${m.teamA.name} contre ${m.teamB.name}`
+                                  : `${m.teamA.name} versus ${m.teamB.name}`
+                              }
+                              className={[
+                                "group flex items-center gap-3 rounded-lg border px-2.5 py-2 transition-all duration-200 ease-out",
+                                "hover:-translate-y-px hover:shadow-md focus-visible:-translate-y-px focus-visible:shadow-md",
+                                "motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                                isTarget
+                                  ? "border-transparent ring-2"
+                                  : "border-zinc-200 dark:border-zinc-800",
+                                "bg-white dark:bg-zinc-900/50",
+                                isLive ? "ring-1 ring-red-500/30" : "",
+                              ].join(" ")}
+                              style={
+                                isTarget
+                                  ? ({ ["--tw-ring-color" as string]: accentColor } as React.CSSProperties)
+                                  : undefined
+                              }
+                            >
+                              <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                                  {m.teamA.name}
+                                </span>
+                                <span className="shrink-0 font-mono font-black text-sm tabular-nums text-zinc-900 dark:text-zinc-50">
+                                  {played ? `${sa ?? 0} - ${sb ?? 0}` : "vs"}
+                                </span>
+                                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate text-right">
+                                  {m.teamB.name}
+                                </span>
                               </span>
-                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate text-right">{m.teamB.name}</span>
-                            </span>
-                            <span className="w-20 sm:w-28 shrink-0 text-right text-[9px] font-mono uppercase tracking-wider">
-                              {isLive ? (
-                                <span className="text-red-600 dark:text-red-400 font-black">LIVE</span>
-                              ) : when(m) ? (
-                                <span className="text-zinc-500 dark:text-zinc-400">{when(m)}</span>
-                              ) : null}
-                            </span>
+                              <span className="w-20 sm:w-28 shrink-0 flex items-center justify-end gap-1 text-[9px] font-mono uppercase tracking-wider">
+                                {isLive ? (
+                                  <span className="text-red-600 dark:text-red-400 font-black flex items-center gap-1">
+                                    <Radio size={9} className="animate-pulse" />
+                                    LIVE
+                                  </span>
+                                ) : whenText ? (
+                                  <span className="text-zinc-500 dark:text-zinc-400">{whenText}</span>
+                                ) : null}
+                                <ChevronRight
+                                  size={11}
+                                  className="text-zinc-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity shrink-0"
+                                />
+                              </span>
+                            </Link>
                           </li>
                         );
                       })}
