@@ -59,18 +59,15 @@ export const NewsletterInline: React.FC<{ className?: string }> = ({ className =
     <div className={`overflow-hidden ${className}`}>
       <div className="glass border border-zinc-200 dark:border-zinc-800 border-t-4 bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: accentColor }}>
         <div className="p-5">
-          <div className="flex items-center gap-1.5 mb-3 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">
-            <Mail size={14} style={{ color: accentColor }} className="shrink-0" />
-            <span
-              className="font-serif text-xs font-black uppercase tracking-widest"
-              style={{ color: accentColor }}
-            >
-              {language === 'fr' ? 'Newsletter' : 'Newsletter'}
-            </span>
-          </div>
-
-          <h3 className="font-sans text-sm font-black uppercase tracking-tight text-zinc-900 dark:text-zinc-100 mb-1.5">
-            {language === 'fr' ? 'Le Briefing du matin' : 'The Morning Briefing'}
+          {/* Single accent label: the eyebrow used to read "Newsletter" while the
+              title right below read "Le Briefing du matin", which was two labels
+              for the same thing. The title is now the one label. */}
+          <h3
+            className="font-sans text-sm font-black uppercase tracking-tight mb-1.5 flex items-center gap-1.5"
+            style={{ color: accentColor }}
+          >
+            <Mail size={14} className="shrink-0" />
+            Briefing
           </h3>
           <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed mb-4">
             {language === 'fr'
