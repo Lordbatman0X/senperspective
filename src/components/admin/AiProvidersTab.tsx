@@ -10,6 +10,7 @@ import {
 import {
   getClientApiKey, saveClientApiKey, revokeClientApiKey, clientTestProvider,
 } from '../../lib/clientAiEngine';
+import { getApiBaseUrl, setApiBaseUrl } from '../../lib/apiUtils';
 
 /**
  * Admin → APIs & IA
@@ -47,6 +48,12 @@ export function AiProvidersTab() {
     siteSettings?.aiModelOverrides || {}
   );
   const [savingPrefs, setSavingPrefs] = useState(false);
+
+  // Backend proxy URL. Moved here from the former Diagnostics tab so that every
+  // AI-related setting lives in exactly one place.
+  const [backendUrl, setBackendUrl] = useState(() => getApiBaseUrl());
+  const [savingBackend, setSavingBackend] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Which providers currently hold a key in this browser.
   const [configured, setConfigured] = useState<Record<string, boolean>>({});
@@ -114,17 +121,40 @@ export function AiProvidersTab() {
 
   const configuredCount = AI_PROVIDER_IDS.filter((id) => configured[id]).length;
 
+  const handleSaveBackend = () => {
+    setSavingBackend(true);
+    setApiBaseUrl(backendUrl);
+    const saved = getApiBaseUrl();
+    setBackendStatus(
+      saved
+        ? { ok: true, msg: isFr ? 'Proxy enregistré.' : 'Proxy saved.' }
+        : {
+            ok: false,
+            msg: isFr
+              ? 'URL invalide. Elle doit commencer par https://'
+              : 'Invalid URL. It must start with https://',
+          }
+    );
+    setSavingBackend(false);
+  };
+
+  const handleClearBackend = () => {
+    setApiBaseUrl(null);
+    setBackendUrl('');
+    setBackendStatus({ ok: true, msg: isFr ? 'Proxy effacé.' : 'Proxy cleared.' });
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-lg bg-[#E85D42]/10 p-2 text-[#E85D42]">
+        <div className="mt-0.5 rounded-lg bg-orange-500/15 p-2 text-orange-400">
           <Cpu size={18} />
         </div>
         <div>
-          <h3 className="text-base font-extrabold text-slate-900">
+          <h3 className="text-base font-extrabold text-zinc-100">
             {isFr ? 'APIs & intelligences artificielles' : 'APIs & artificial intelligence'}
           </h3>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-zinc-400">
             {isFr
               ? 'Gérez les clés de chaque fournisseur, choisissez le moteur d’Abdel, et testez la connexion réelle.'
               : 'Manage every provider key, choose Abdel’s engine, and test the real connection.'}
@@ -133,7 +163,7 @@ export function AiProvidersTab() {
       </header>
 
       {notice && (
-        <div className="flex items-center gap-2 rounded-lg border border-[#E85D42]/30 bg-[#E85D42]/5 px-3 py-2 text-xs font-semibold text-[#E85D42]">
+        <div className="flex items-center gap-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs font-semibold text-orange-400">
           <CheckCircle2 size={14} />
           {notice}
         </div>
@@ -149,7 +179,7 @@ export function AiProvidersTab() {
       <button
         onClick={handleSavePrefs}
         disabled={savingPrefs}
-        className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-orange-500 disabled:opacity-50"
       >
         {savingPrefs ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
         {isFr ? 'Enregistrer le moteur' : 'Save engine'}
@@ -157,17 +187,17 @@ export function AiProvidersTab() {
 
       <section className="space-y-3">
         <div className="flex items-baseline justify-between">
-          <h4 className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
-            <Key size={15} className="text-[#E85D42]" />
+          <h4 className="flex items-center gap-2 text-sm font-extrabold text-zinc-100">
+            <Key size={15} className="text-orange-400" />
             {isFr ? 'Clés API' : 'API keys'}
           </h4>
-          <span className="text-[11px] font-semibold text-slate-500">
+          <span className="text-[11px] font-semibold text-zinc-400">
             {configuredCount}/{AI_PROVIDER_IDS.length} {isFr ? 'configurés' : 'configured'}
           </span>
         </div>
 
-        <p className="flex items-start gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-          <Info size={13} className="mt-px shrink-0 text-slate-400" />
+        <p className="flex items-start gap-1.5 rounded-lg bg-zinc-950/60 px-3 py-2 text-[11px] text-zinc-300">
+          <Info size={13} className="mt-px shrink-0 text-zinc-500" />
           {isFr
             ? 'Les clés sont stockées dans ce navigateur et ne sont jamais écrites dans la base publique. Elles ne sont donc pas partagées avec les autres administrateurs : chacun colle sa propre clé sur sa machine.'
             : 'Keys are stored in this browser and never written to the public database, so they are not shared with other admins: each person pastes their own key on their own machine.'}
@@ -195,16 +225,52 @@ export function AiProvidersTab() {
         ))}
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h4 className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
-          <Server size={15} className="text-[#E85D42]" />
+      <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
+        <h4 className="flex items-center gap-2 text-sm font-extrabold text-zinc-100">
+          <Server size={15} className="text-orange-400" />
           {isFr ? 'Proxy backend (optionnel)' : 'Backend proxy (optional)'}
         </h4>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-zinc-400">
           {isFr
-            ? 'Obligatoire pour Anthropic, qui bloque les appels navigateur. Recommandé si vous préférez garder les clés côté serveur. L’URL se configure dans l’onglet Diagnostic ; les blocs d’API d’Abdel se gèrent dans « Assistant Abdel & Chat ».'
-            : 'Required for Anthropic, which blocks browser calls. Recommended if you prefer keeping keys server-side. The URL is set in the Diagnostics tab; Abdel’s API blocks live in “Assistant Abdel & Chat”.'}
+            ? 'Obligatoire pour Anthropic, qui bloque les appels navigateur. Recommandé si vous préférez garder les clés côté serveur. Saisissez ici l’URL de votre backend ; il recevra les en-têtes x-*-key. Les blocs d’API d’Abdel se gèrent dans « Assistant Abdel & Chat ».'
+            : 'Required for Anthropic, which blocks browser calls. Recommended if you prefer keeping keys server-side. Enter your backend URL here; it receives the x-*-key headers. Abdel’s API blocks live in “Assistant Abdel & Chat”.'}
         </p>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <input
+            value={backendUrl}
+            onChange={(e) => setBackendUrl(e.target.value)}
+            placeholder="https://votre-backend.onrender.com"
+            className="min-w-[240px] flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 outline-none transition focus:border-orange-500"
+          />
+          <button
+            onClick={handleSaveBackend}
+            disabled={savingBackend}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-orange-500 disabled:opacity-40"
+          >
+            {savingBackend ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+            {isFr ? 'Enregistrer' : 'Save'}
+          </button>
+          {backendUrl && (
+            <button
+              onClick={handleClearBackend}
+              className="rounded-lg border border-zinc-800 p-2 text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-100"
+              aria-label={isFr ? 'Effacer' : 'Clear'}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+
+        {backendStatus && (
+          <p
+            className={`mt-2 text-[11px] font-semibold ${
+              backendStatus.ok ? 'text-emerald-400' : 'text-amber-300'
+            }`}
+          >
+            {backendStatus.msg}
+          </p>
+        )}
       </section>
     </div>
   );
@@ -223,12 +289,12 @@ function AbdelEnginePicker({
   configured: Record<string, boolean>;
 }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4">
-      <h4 className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
-        <Sparkles size={15} className="text-[#E85D42]" />
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
+      <h4 className="flex items-center gap-2 text-sm font-extrabold text-zinc-100">
+        <Sparkles size={15} className="text-orange-400" />
         {isFr ? 'Moteur d’Abdel' : 'Abdel’s engine'}
       </h4>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-zinc-400">
         {isFr
           ? 'Utilisé quand aucun bloc API configuré ne répond, et pour la génération d’articles lorsque le choix est sur « automatique ».'
           : 'Used when no configured API block answers, and for article generation when the choice is “auto”.'}
@@ -239,8 +305,8 @@ function AbdelEnginePicker({
           onClick={() => setPreferred('auto')}
           className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
             preferred === 'auto'
-              ? 'border-[#E85D42] bg-[#E85D42]/5 font-bold text-[#E85D42]'
-              : 'border-slate-200 text-slate-600 hover:border-slate-300'
+              ? 'border-[#E85D42] bg-orange-500/10 font-bold text-orange-400'
+              : 'border-zinc-800 text-zinc-300 hover:border-zinc-600'
           }`}
         >
           {isFr ? 'Automatique' : 'Automatic'}
@@ -261,8 +327,8 @@ function AbdelEnginePicker({
               onClick={() => setPreferred(id)}
               className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
                 on
-                  ? 'border-[#E85D42] bg-[#E85D42]/5 font-bold text-[#E85D42]'
-                  : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                  ? 'border-[#E85D42] bg-orange-500/10 font-bold text-orange-400'
+                  : 'border-zinc-800 text-zinc-300 hover:border-zinc-600'
               }`}
             >
               {p.label}
@@ -281,7 +347,7 @@ function AbdelEnginePicker({
       </div>
 
       {preferred !== 'auto' && !configured[preferred] && (
-        <p className="mt-2 flex items-start gap-1.5 text-[11px] font-semibold text-amber-700">
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] font-semibold text-amber-300">
           <AlertTriangle size={13} className="mt-px shrink-0" />
           {isFr
             ? 'Ce moteur est sélectionné mais aucune clé n’est enregistrée. Ajoutez-la ci-dessous, sinon Abdel basculera sur un autre fournisseur.'
@@ -317,13 +383,13 @@ function ProviderCard({
   const canDirect = supportsDirectBrowserCall(id);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-extrabold text-slate-900">{p.label}</span>
+          <span className="text-sm font-extrabold text-zinc-100">{p.label}</span>
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-              isSet ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+              isSet ? 'bg-emerald-500/100/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
             }`}
           >
             {isSet ? (isFr ? 'Clé présente' : 'Key present') : isFr ? 'Aucune clé' : 'No key'}
@@ -331,7 +397,7 @@ function ProviderCard({
           {!canDirect && (
             <span
               title={p.directBlockedReason}
-              className="cursor-help rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700"
+              className="cursor-help rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300"
             >
               {isFr ? 'Proxy requis' : 'Proxy required'}
             </span>
@@ -341,14 +407,14 @@ function ProviderCard({
           href={p.docsUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-[11px] font-semibold text-slate-400 underline hover:text-slate-600"
+          className="text-[11px] font-semibold text-zinc-500 underline hover:text-zinc-300"
         >
           {isFr ? 'Obtenir une clé' : 'Get a key'}
         </a>
       </div>
 
-      <p className="mt-1.5 text-[11px] text-slate-500">
-        <span className="font-semibold text-slate-600">{p.header}</span>
+      <p className="mt-1.5 text-[11px] text-zinc-400">
+        <span className="font-semibold text-zinc-300">{p.header}</span>
         {p.directBlockedReason ? ` — ${p.directBlockedReason}` : ''}
       </p>
 
@@ -359,12 +425,12 @@ function ProviderCard({
             value={value}
             onChange={(e) => onValue(e.target.value)}
             placeholder={isSet ? '••••••••••••••••' : isFr ? 'collez la clé API' : 'paste the API key'}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-9 text-xs outline-none transition focus:border-[#E85D42]"
+            className="w-full rounded-lg border border-zinc-800 px-3 py-2 pr-9 text-xs outline-none transition focus:border-orange-500"
           />
           <button
             onClick={onToggleReveal}
             aria-label={revealed ? 'Hide key' : 'Show key'}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
           >
             {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
@@ -373,7 +439,7 @@ function ProviderCard({
         <button
           onClick={onSave}
           disabled={busy || !value.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-orange-500 disabled:opacity-40"
         >
           {busy ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
           {isFr ? 'Enregistrer' : 'Save'}
@@ -382,7 +448,7 @@ function ProviderCard({
         <button
           onClick={onTest}
           disabled={testing || !isSet}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-slate-300 disabled:opacity-40"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-3 py-2 text-xs font-bold text-zinc-200 transition hover:border-zinc-600 disabled:opacity-40"
         >
           {testing ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
           {isFr ? 'Tester' : 'Test'}
@@ -393,7 +459,7 @@ function ProviderCard({
             onClick={onRevoke}
             disabled={busy}
             aria-label="Remove key"
-            className="rounded-lg border border-red-200 p-2 text-red-500 transition hover:bg-red-50 disabled:opacity-40"
+            className="rounded-lg border border-red-500/40 p-2 text-red-500 transition hover:bg-red-500/15 disabled:opacity-40"
           >
             <Trash2 size={13} />
           </button>
@@ -401,21 +467,21 @@ function ProviderCard({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="text-[11px] font-semibold text-slate-500">
+        <label className="text-[11px] font-semibold text-zinc-400">
           {isFr ? 'Modèle' : 'Model'}
         </label>
         <input
           value={model}
           onChange={(e) => onModel(e.target.value)}
           placeholder={p.defaultModel}
-          className="min-w-[200px] flex-1 rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] outline-none focus:border-[#E85D42]"
+          className="min-w-[200px] flex-1 rounded-lg border border-zinc-800 px-3 py-1.5 text-[11px] outline-none focus:border-orange-500"
         />
       </div>
 
       {result && (
         <div
           className={`mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-[11px] ${
-            result.success ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'
+            result.success ? 'bg-emerald-500/100/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'
           }`}
         >
           {result.success ? (

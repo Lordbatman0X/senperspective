@@ -2100,6 +2100,11 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                 </div>
 
                 <div className="relative">
+                  <p className="mb-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-[11px] leading-relaxed text-orange-200">
+                    {isFr
+                      ? 'Les clés API se gèrent désormais au même endroit pour toute la plateforme : Admin → Système → APIs & IA. Ce raccourci reste utile pour déverrouiller une génération en cours.'
+                      : 'API keys are now managed in one place platform-wide: Admin → System → APIs & AI. This shortcut stays useful for unblocking an in-flight generation.'}
+                  </p>
                   <input
                     type={showKeySecret ? 'text' : 'password'}
                     value={quickKeyValue}

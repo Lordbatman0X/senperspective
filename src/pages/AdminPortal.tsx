@@ -27,7 +27,6 @@ import { TaxonomyTab } from '../components/admin/TaxonomyTab';
 import { AdminDashboard } from '../components/admin/AdminDashboard';
 import { RssFeedManagementTab } from '../components/admin/RssFeedManagementTab';
 import { DraftGenerationTab } from '../components/admin/DraftGenerationTab';
-import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AbdelApiSlotsTab } from '../components/admin/AbdelApiSlotsTab';
 import { AiProvidersTab } from '../components/admin/AiProvidersTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
@@ -420,12 +419,15 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'ads' | 'security' | 'accounts' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config' | 'ai_providers'>('overview');
-  const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
+  // The AI Diagnostics sub-tab was removed: every key, engine and proxy setting
+  // it held now lives in the single "APIs & IA" section, which renders from the
+  // provider registry instead of a hardcoded copy of the list.
+  const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation'>('articles');
   // Sidebar filter. 21 flat sections used to be an undifferentiated wall, so
   // the ones an admin actually used sat far below the fold on a laptop.
   const [navFilter, setNavFilter] = useState('');
 
-  const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics') => {
+  const handleTabChange = (tabId: string, subTab?: 'articles' | 'rss_drafts' | 'rss_automation') => {
     setActiveTab(tabId as any);
     if (subTab) {
       setContentSubTab(subTab);
@@ -3208,21 +3210,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                 <span className="text-[10px] text-zinc-500 block font-mono">Presse Ouest-Africaine</span>
               </div>
 
-              <div 
-                onClick={() => setContentSubTab('ai_diagnostics')}
-                className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-                  contentSubTab === 'ai_diagnostics' 
-                    ? 'bg-zinc-900 border-[#E85D42] shadow-md' 
-                    : 'bg-zinc-900/50 border-zinc-800 hover:border-zinc-700'
-                }`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-mono uppercase font-bold text-[#E85D42]">Moteurs IA & Statuts</span>
-                  <span className="text-[9px] font-mono font-black text-emerald-400 bg-emerald-950 px-1.5 py-0.5 border border-emerald-800 rounded">READY</span>
-                </div>
-                <span className="text-xl font-black text-zinc-100">Diagnostics</span>
-                <span className="text-[10px] text-zinc-500 block font-mono">Statuts des clés & API</span>
-              </div>
             </div>
 
             {/* Sub-navigation Tabs */}
@@ -3269,18 +3256,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               >
                 <Zap size={15} />
                 <span>{language === 'fr' ? '3. Régie de Flux RSS' : '3. RSS Feed Management'}</span>
-              </button>
-
-              <button
-                onClick={() => setContentSubTab('ai_diagnostics')}
-                className={`flex-1 py-2.5 px-4 font-extrabold uppercase tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                  contentSubTab === 'ai_diagnostics'
-                    ? 'bg-[#E85D42] text-white shadow-lg'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                <Wrench size={15} />
-                <span>{language === 'fr' ? '4. Diagnostics IA & API' : '4. AI Diagnostics'}</span>
               </button>
             </div>
 
@@ -3402,10 +3377,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
               />
             )}
 
-            {/* Sub-tab 4: Decoupled AI Diagnostics */}
-            {contentSubTab === 'ai_diagnostics' && (
-              <ApiDiagnosticTab />
-            )}
           </div>
         )}
       </main>
