@@ -81,13 +81,16 @@ export function SecurityTab() {
     loadUsers();
   }, []);
 
-  // Default seed admin accounts to ensure administrators are always present and manageable
-  const seedAdmins = [
-    { email: 'admin@senperspective.com', name: 'Admin Direction', role: 'Admin', authType: 'password' },
-    { email: 'kadersdiaz3@gmail.com', name: 'Kader Diaz (Super Admin)', role: 'Admin', authType: 'password' },
-    { email: 'contact@senperspective.com', name: 'Rédaction Perspective', role: 'Admin', authType: 'password' },
-    { email: 'editor@senperspective.com', name: 'Éditeur en Chef', role: 'Éditeur', authType: 'password' }
-  ];
+  // PRODUCTION: the admin list comes from the accounts that actually exist.
+  //
+  // It previously seeded four hardcoded rows (admin@, kadersdiaz3@,
+  // contact@, editor@senperspective.com) into a Map that real users were then
+  // merged over. Any of those that was never registered still appeared in the
+  // list as a real, manageable administrator — and could be acted on, which
+  // made a fabricated account look like a live one. A bootstrap list may still
+  // be useful, but it must be labelled as configuration, not presented as
+  // accounts; until then, show only what the database returns.
+  const seedAdmins: Array<{ email: string; name: string; role: string; authType: string }> = [];
 
   // Merge admin users
   const adminMap = new Map<string, any>();

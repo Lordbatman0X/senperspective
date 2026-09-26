@@ -2284,11 +2284,18 @@ export const useStore = create<AppState>()(
         });
         cloudSave('notification_responses', notifId, { id: notifId, response });
       },
-      subscribers: [
-        { email: 'sylla.editor@gmail.com', date: '2026-06-15' },
-        { email: 'mariama.sow@orange.sn', date: '2026-06-17' },
-        { email: 'diop.consulting@gmail.com', date: '2026-06-19' }
-      ],
+      // PRODUCTION: the directory starts EMPTY and is filled only by
+      // (a) real reader signups and (b) rows the admin adds or bulk-imports.
+      //
+      // It previously shipped with three hardcoded demo addresses
+      // (sylla.editor@gmail.com, mariama.sow@orange.sn,
+      // diop.consulting@gmail.com). Those were real-looking addresses that
+      // nobody subscribed with: they appeared in the admin list on every fresh
+      // load, and because the analytics tab folds subscribers into the audience
+      // and conversion figures, they silently inflated the commercial numbers
+      // too. `loadSubscribers()` re-reads the database on mount, so the real
+      // list replaces this immediately.
+      subscribers: [],
       addSubscriber: async (email) => {
         const clean = email.trim().toLowerCase();
         if (!clean || !clean.includes('@')) return;
@@ -2371,15 +2378,14 @@ export const useStore = create<AppState>()(
       pendingShareArticleId: '',
       setPendingShareArticleId: (id) => set({ pendingShareArticleId: id }),
       users: [],
-      interactions: [
-        {
-          id: 'int-1',
-          email: 'admin@senperspective.com',
-          type: 'read',
-          date: '2026-06-25',
-          detail: { fr: 'A ouvert le tableau de bord administrateur.', en: 'Opened the administrator control panel.' }
-        }
-      ],
+      // PRODUCTION: real activity only.
+      //
+      // This shipped with a hardcoded "admin opened the control panel" event
+      // dated 2026-06-25. The analytics tab folds `interactions` into its
+      // event list as pageviews and lead conversions, so this single invented
+      // row was contributing to the traffic and conversion figures as if a real
+      // reader had generated it. Real interactions are recorded at runtime.
+      interactions: [],
       
       updatePrivacy: (email, isPrivate) => {
         const users = get().users || [];

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   BarChart2, Users, Download, ShieldCheck, CheckCircle2, TrendingUp, 
-  Globe, Smartphone, Mail, Sparkles, RefreshCw, Zap, DollarSign, Filter, Target, ArrowUpRight, PlusCircle, Activity
+  Globe, Smartphone, Mail, Sparkles, RefreshCw, Zap, DollarSign, Filter, Target, ArrowUpRight, Activity
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { trackPageView } from '../../lib/telemetry';
-import { fetchFirestoreCollection, saveFirestoreDoc } from '../../firebase/db';
+import { fetchFirestoreCollection } from '../../firebase/db';
 
 export function AudienceAnalyticsTab() {
   const { language, articles, subscribers, friends, interactions, comments, ads } = useStore();
@@ -380,31 +379,6 @@ export function AudienceAnalyticsTab() {
     document.body.removeChild(link);
   };
 
-  const handleSimulatePageview = async () => {
-    trackPageView('/admin/analytics', 'simulated', 'Test Analytics Pageview', 'Analytics');
-
-    // Sync subscribers to Firestore user_consents as well
-    try {
-      for (const sub of (subscribers || [])) {
-        const subDocId = (sub.email ?? '').replace(/[^a-zA-Z0-9]/g, '_');
-        await saveFirestoreDoc('user_consents', subDocId, {
-          id: subDocId,
-          sessionId: `sess_${subDocId}`,
-          userEmail: sub.email,
-          essential: true,
-          analytics: true,
-          marketing: true,
-          personalization: true,
-          deviceType: (sub.email ?? '').includes('gmail') ? 'Mobile' : 'Desktop',
-          country: (sub.email ?? '').endsWith('.sn') || (sub.email ?? '').includes('orange.sn') ? 'Sénégal (Dakar, Thiès, Saint-Louis)' : 'Diaspora (France, États-Unis, Canada, Italie)',
-          updatedAt: sub.date ? new Date(sub.date).toISOString() : new Date().toISOString()
-        });
-      }
-    } catch (e) {
-      console.warn('Error syncing subscribers to Firestore:', e);
-    }
-  };
-
   const displayLeads = data?.leads
     ? (filterOptIn ? data.leads.filter(l => l.marketingConsented) : data.leads)
     : [];
@@ -521,22 +495,20 @@ export function AudienceAnalyticsTab() {
             {isFr ? 'Analyse d’Audience & Trafic Réel' : 'Audience Analytics & Real Traffic'}
           </h2>
           <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
-            {isFr 
-              ? 'Toutes les données ci-dessous proviennent exclusivement d’événements de trafic réels archivés dans la base de données cloud. Aucun chiffre simulé.'
-              : 'All metrics below derive strictly from real user events stored in Cloud Database.'}
+            {isFr
+              ? 'Chiffres calculés uniquement à partir des événements réellement enregistrés par les lecteurs ayant consenti. Aucun chiffre simulé, aucun compte de démonstration.'
+              : 'Figures are computed only from events actually recorded by readers who consented. No simulated metrics, no demo accounts.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            onClick={handleSimulatePageview}
-            className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 font-bold px-3 py-2 rounded-xl text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer"
-            title={isFr ? "Enregistrer un clic réel de test" : "Register a test view"}
-          >
-            <PlusCircle size={14} className="text-emerald-400" />
-            <span>{isFr ? '+ Tester Visite' : '+ Test View'}</span>
-          </button>
-
+          {/* REMOVED: a "+ Tester Visite" button. It wrote a fabricated pageview
+              event AND, worse, generated `user_consents` records for every
+              subscriber with `analytics/marketing/personalization: true` —
+              inferring device from whether the address contained "gmail" and
+              country from whether it ended ".sn". That manufactured consent
+              nobody gave and geography that was never measured, directly
+              inflating the opt-in rates and the audience map. */}
           <button
             onClick={fetchDashboardData}
             disabled={loading}
