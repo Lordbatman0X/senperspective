@@ -155,14 +155,127 @@ const isoDate = (a) => {
  * That equivalence is what keeps this within Google's dynamic-rendering
  * guidance rather than becoming cloaking.
  */
-function renderArticle(a, lang = 'fr') {
+/**
+ * The prerendered article body: real, semantic markup from the real RTDB
+ * record. No CSS is invented here beyond a few inline styles for legibility,
+ * because this markup is injected into the genuine index.html shell and so
+ * inherits the site's real stylesheet.
+ *
+ * CRITICAL: this text is taken verbatim from the same record the article page
+ * renders from. It is not rewritten, summarised or embellished. That
+ * equivalence is what keeps this within Google's dynamic-rendering guidance
+ * rather than becoming cloaking.
+ */
+function articleBody(a, lang = 'fr') {
+  const title = t(a.title, lang) || t(a.title, 'en') || 'SenPerspective';
+  const desc =
+    t(a.seoMetaDescription, lang) || stripTags(t(a.excerpt, lang)) || stripTags(t(a.body, lang)).slice(0, 158);
+  const image = a.seoOgImage || a.featuredImage || a.imageUrl || '';
+  const published = isoDate(a);
+  const bodyHtml = markdownToHtml(t(a.body, lang) || t(a.body, 'en'));
+  const author = t(a.author, lang) || 'Perspective Newsroom';
+  const category = typeof a.category === 'string' ? a.category : '';
+
+  return `<div id="sp-prerender" style="max-width:48rem;margin:0 auto;padding:2.5rem 1.25rem 4rem;font-family:Lora,Georgia,serif;color:#172033">
+      <p style="font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#E85D42;margin:0 0 1rem">
+        <a href="${SITE}/" style="color:#E85D42;text-decoration:none">SenPerspective</a>
+        ${category ? ` &middot; ${esc(category)}` : ''}
+      </p>
+      <h1 style="font-family:Inter,system-ui,sans-serif;font-size:clamp(1.75rem,4vw,2.75rem);line-height:1.1;font-weight:900;margin:0 0 1rem">${esc(stripTags(title))}</h1>
+      <p style="font-family:Inter,system-ui,sans-serif;font-size:13px;color:#334155;margin:0 0 1.5rem">
+        ${esc(stripTags(author))}${published ? ` &middot; <time datetime="${esc(published)}">${esc(published.slice(0, 10))}</time>` : ''}
+      </p>
+      ${image ? `<figure style="margin:0 0 1.5rem"><img src="${esc(image)}" alt="${esc(stripTags(title).slice(0, 120))}" style="width:100%;height:auto;border-radius:8px" /></figure>` : ''}
+      ${desc ? `<p style="font-size:1.05rem;font-weight:600;line-height:1.6;margin:0 0 1.5rem">${esc(stripTags(desc))}</p>` : ''}
+      <div style="font-size:1.05rem;line-height:1.75">${bodyHtml}</div>
+    </div>`;
+}
+
+/**
+ * Wraps the prerendered article body in a complete standalone document.
+ *
+ * The article markup lives inside a real <div id="root"> so that if a bundle
+ * ever fails to load, a reader still gets the article text rather than a blank
+ * page. React's createRoot() replaces that content on mount, so a human
+ * visitor ends up on exactly the page they always saw.
+ */
+/**
+ * Injects the article into the REAL index.html shell.
+ *
+ * The genuine shell is reused rather than re-created, so the prerendered page
+ * keeps the actual <div id="root">, the hashed bundle scripts, the module
+ * preloads, the polyfills and the white-screen watchdog. Only the document
+ * <head> is swapped, to carry this article's own title, description,
+ * canonical and NewsArticle JSON-LD.
+ *
+ * Because #root already has children, React's createRoot() replaces them on
+ * mount and the visitor ends up on the normal page. A crawler that never runs
+ * JS still reads the full article text. Nothing here is styled, so there is no
+ * second visual implementation to drift out of sync.
+ */
+function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd }) {
+  let head = shell;
+
+  // Each replacement is attempted independently: a tag that is absent from the
+  // shell simply stays absent, rather than aborting the whole prerender.
+  const set = (pattern, replacement) => {
+    if (pattern.test(head)) head = head.replace(pattern, replacement);
+  };
+
+  set(/<title>[\s\S]*?<\/title>/i, `<title>${esc(title)}</title>`);
+  set(/<meta\s+name="title"\s+content="[^"]*"\s*\/?>/i, `<meta name="title" content="${esc(title)}" />`);
+  set(
+    /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+    `<meta name="description" content="${esc(desc.slice(0, 300))}" />`
+  );
+  set(/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i, `<link rel="canonical" href="${esc(url)}" />`);
+  set(/<meta\s+property="og:type"\s+content="[^"]*"\s*\/?>/i, '<meta property="og:type" content="article" />');
+  set(/<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:url" content="${esc(url)}" />`);
+  set(/<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:title" content="${esc(title)}" />`);
+  set(
+    /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
+    `<meta property="og:description" content="${esc(desc.slice(0, 300))}" />`
+  );
+  set(/<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/i, `<meta property="og:image" content="${esc(image)}" />`);
+  set(/<meta\s+property="og:locale"\s+content="[^"]*"\s*\/?>/i, '<meta property="og:locale" content="fr_SN" />');
+  set(/<meta\s+name="twitter:url"\s+content="[^"]*"\s*\/?>/i, `<meta name="twitter:url" content="${esc(url)}" />`);
+  set(/<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i, `<meta name="twitter:title" content="${esc(title)}" />`);
+  set(
+    /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/i,
+    `<meta name="twitter:description" content="${esc(desc.slice(0, 300))}" />`
+  );
+  set(/<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/i, `<meta name="twitter:image" content="${esc(image)}" />`);
+
+  const extra = [
+    published ? `<meta property="article:published_time" content="${esc(published)}" />` : '',
+    `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`,
+  ]
+    .filter(Boolean)
+    .join('\n    ');
+
+  set(/<\/head>/i, `    ${extra}\n  </head>`);
+
+  // The article goes inside the genuine #root so React replaces it on mount,
+  // and so a reader whose bundle fails still sees the article text.
+  const body = articleBody(a, lang);
+  if (head.includes('<div id="root"></div>')) {
+    head = head.replace('<div id="root"></div>', `<div id="root">${body}</div>`);
+  } else {
+    // Defensive fallback: if the shell ever changes shape, still put the
+    // content in the document rather than silently shipping an empty page.
+    head = head.replace(/<body[^>]*>/i, (m) => `${m}\n    ${body}`);
+  }
+
+  return head;
+}
+
+function renderArticle(a, shell, lang = 'fr') {
   const url = `${SITE}${articlePath(a)}`;
   const title = t(a.title, lang) || t(a.title, 'en') || 'SenPerspective';
   const desc =
     t(a.seoMetaDescription, lang) || stripTags(t(a.excerpt, lang)) || stripTags(t(a.body, lang)).slice(0, 158);
   const image = a.seoOgImage || a.featuredImage || a.imageUrl || `${SITE}/favicon.png`;
   const published = isoDate(a);
-  const bodyHtml = markdownToHtml(t(a.body, lang) || t(a.body, 'en'));
   const author = t(a.author, lang) || 'Perspective Newsroom';
   const keywords = Array.isArray(a.tags) ? a.tags.slice(0, 12).join(', ') : '';
 
@@ -186,49 +299,10 @@ function renderArticle(a, lang = 'fr') {
     inLanguage: lang === 'fr' ? 'fr-SN' : 'en',
   };
 
-  return `<!doctype html>
-<html lang="${lang === 'fr' ? 'fr' : 'en'}">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${esc(title)}</title>
-    <meta name="description" content="${esc(desc.slice(0, 300))}" />
-    <link rel="canonical" href="${esc(url)}" />
-    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
-    <meta property="og:type" content="article" />
-    <meta property="og:url" content="${esc(url)}" />
-    <meta property="og:title" content="${esc(title)}" />
-    <meta property="og:description" content="${esc(desc.slice(0, 300))}" />
-    <meta property="og:image" content="${esc(image)}" />
-    <meta property="og:site_name" content="SenPerspective" />
-    <meta property="og:locale" content="fr_SN" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${esc(title)}" />
-    <meta name="twitter:description" content="${esc(desc.slice(0, 300))}" />
-    <meta name="twitter:image" content="${esc(image)}" />
-    ${published ? `<meta property="article:published_time" content="${esc(published)}" />` : ''}
-    <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
-  </head>
-  <body>
-    <header>
-      <p><a href="${SITE}/">SenPerspective</a></p>
-    </header>
-    <main>
-      <article>
-        <h1>${esc(stripTags(title))}</h1>
-        <p>
-          ${a.category ? `<span>${esc(typeof a.category === 'string' ? a.category : '')}</span> &middot; ` : ''}
-          <span>${esc(stripTags(author))}</span>
-          ${published ? ` &middot; <time datetime="${esc(published)}">${esc(published.slice(0, 10))}</time>` : ''}
-        </p>
-        ${image ? `<figure><img src="${esc(image)}" alt="${esc(stripTags(title).slice(0, 120))}" /></figure>` : ''}
-        ${desc ? `<p><strong>${esc(stripTags(desc))}</strong></p>` : ''}
-        <div>${bodyHtml}</div>
-      </article>
-    </main>
-  </body>
-</html>
-`;
+  return applyHead(
+    shell,
+    { a, lang, title, desc, url, image, published, keywords, jsonLd }
+  );
 }
 
 /**
@@ -301,6 +375,13 @@ async function main() {
   const articleDir = path.join(DIST, 'article');
   if (existsSync(articleDir)) await rm(articleDir, { recursive: true, force: true });
 
+  // The real index.html is the template, so prerendered pages keep the site's
+  // genuine #root, bundle, polyfills and watchdog.
+  const shell = await readFile(path.join(DIST, 'index.html'), 'utf8');
+  if (!shell.includes('id="root"')) {
+    console.warn('[prerender] WARNING: dist/index.html has no #root; using body fallback.');
+  }
+
   let written = 0;
   for (const a of articles) {
     const slug = a.slug || a.id;
@@ -310,7 +391,7 @@ async function main() {
     }
     const dir = path.join(articleDir, slug);
     await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, 'index.html'), renderArticle(a, 'fr'), 'utf8');
+    await writeFile(path.join(dir, 'index.html'), renderArticle(a, shell, 'fr'), 'utf8');
     written++;
   }
   console.log(`[prerender] wrote ${written} article pages to dist/article/`);
