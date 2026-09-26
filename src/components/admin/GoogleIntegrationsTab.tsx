@@ -197,7 +197,7 @@ export function GoogleIntegrationsTab() {
                 </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-zinc-500 font-mono">{language === 'fr' ? 'Portée API :' : 'API Scope:'}</span>
-                  <span className="text-[11px] font-mono text-emerald-400">gmail.send + gmail.compose + spreadsheets</span>
+                  <span className="text-[11px] font-mono text-emerald-400">gmail.send</span>
                 </div>
                 <div className="pt-1 flex justify-end">
                   <button

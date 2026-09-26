@@ -6,11 +6,23 @@ let cachedAccessToken: string | null = typeof window !== 'undefined' ? localStor
 let cachedUser: User | null = null;
 let cachedUserEmail: string | null = typeof window !== 'undefined' ? localStorage.getItem('pg_google_user_email') : null;
 
+// ONLY the scope newsletter sending actually needs.
+//
+// This previously requested four scopes: `spreadsheets`, `gmail.send`,
+// `gmail.readonly` and `gmail.compose`. `gmail.send` alone is sufficient to
+// POST a message, and the other three made the consent screen far worse:
+// because they are sensitive scopes, Google flags a new client as
+// "unverified" and shows a red "Google hasn't verified this app" warning page
+// that every reader has to click through — for permissions this app never
+// uses. Dropping them removes that warning.
+//
+// The Sheets scope in particular was dead weight: `appendSubscriberToGoogleSheet`
+// is never called anywhere in the app, and its own guard skips its default
+// placeholder spreadsheet id, so the subscriber-sheet sync was unreachable
+// code. If it is ever revived it should request its own scope separately, not
+// piggyback on the newsletter connection.
 const WORKSPACE_SCOPES = [
-  'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.compose'
 ];
 
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
@@ -97,7 +109,7 @@ async function fetchGoogleUserEmail(token: string): Promise<string> {
 }
 
 /**
- * Sign in with Google to grant Gmail + Sheets permissions.
+ * Sign in with Google to grant permission to send mail from your account.
  * Uses Google Identity Services (GIS) — Supabase OAuth fallback removed (audit).
  */
 export async function connectGoogleGmail(): Promise<{ user: User; accessToken: string }> {
@@ -211,75 +223,6 @@ function encodeMimeMessage(to: string, subject: string, bodyHtml: string, fromNa
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/, '');
-}
-
-/**
- * Append subscriber row to a Google Sheet via Google Sheets API (or server proxy)
- */
-export async function appendSubscriberToGoogleSheet({
-  email,
-  date,
-  topics,
-  language,
-  spreadsheetId = '1PerspectiveSubscribers_Default',
-  accessToken
-}: {
-  email: string;
-  date: string;
-  topics: string;
-  language: string;
-  spreadsheetId?: string;
-  accessToken?: string;
-}): Promise<{ success: boolean; updatedRange?: string; error?: string }> {
-  const token = accessToken || cachedAccessToken;
-
-  // First try direct Google Sheets REST API if token is available
-  if (token && spreadsheetId && !spreadsheetId.includes('Default')) {
-    try {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/A1:append?valueInputOption=USER_ENTERED`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          values: [
-            [email, date, topics, language, 'Active Subscriber', new Date().toISOString()]
-          ]
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        return { success: true, updatedRange: data.updates?.updatedRange };
-      }
-    } catch (e) {
-      console.warn('Direct Google Sheets REST API call failed, trying server proxy:', e);
-    }
-  }
-
-  // Fallback to server proxy route `/api/sheets/append`
-  try {
-    const res = await fetch(resolveApiUrl('/api/sheets/append'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        date,
-        topics,
-        language,
-        spreadsheetId,
-        accessToken: token || null
-      })
-    });
-
-    const data = await res.json();
-    return { success: !!data.success, updatedRange: data.updatedRange, error: data.error };
-  } catch (err: any) {
-    console.error('Failed to append subscriber to Google Sheets:', err);
-    return { success: false, error: err.message || 'Sheets append error' };
-  }
 }
 
 /**
