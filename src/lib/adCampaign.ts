@@ -177,14 +177,23 @@ export function getCampaignStatus(ad: CampaignLike, now: Date = new Date()): Cam
 
 export type InventoryState = 'available' | 'scheduled' | 'active' | 'occupied';
 
-export interface InventoryRow {
+/**
+ * One row per placement.
+ *
+ * Generic in `T` so the concrete ad type survives: when the caller passes
+ * `AdItem[]`, `row.campaign` is an `AdItem`, not a bare `CampaignLike`. That is
+ * what lets the admin table read `campaignName`, `advertiserName`, `imageUrl`
+ * and friends without casting, while `CampaignLike` stays the minimal
+ * structural contract this module actually needs.
+ */
+export interface InventoryRow<T extends CampaignLike = CampaignLike> {
   placement: PlacementMeta;
   /** The campaign holding the slot, if any. Active campaigns win. */
-  campaign: CampaignLike | null;
+  campaign: T | null;
   status: CampaignStatus | null;
   state: InventoryState;
   /** Everything assigned to the placement, so conflicts stay visible. */
-  campaigns: CampaignLike[];
+  campaigns: T[];
 }
 
 /** Lower weight wins the slot. */
@@ -200,10 +209,10 @@ function statusWeight(s: CampaignStatus): number {
  * marks the slot reserved-but-not-yet-live so the admin does not double-sell
  * inventory they have already promised.
  */
-export function buildInventory(
-  ads: CampaignLike[] | null | undefined,
+export function buildInventory<T extends CampaignLike>(
+  ads: T[] | null | undefined,
   now?: Date
-): InventoryRow[] {
+): InventoryRow<T>[] {
   const list = ads ?? [];
   return AD_PLACEMENTS.map((placement) => {
     const campaigns = list.filter((a) => a.position === placement.id);

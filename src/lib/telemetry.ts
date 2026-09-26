@@ -26,14 +26,41 @@ export function getDeviceType(): string {
   return 'Desktop';
 }
 
+/**
+ * Reads the stored consent choice.
+ *
+ * IMPORTANT: when nothing has been stored, this reports analytics and
+ * personalization as FALSE, not true. A visitor who has not yet chosen must be
+ * treated as un-consented; assuming consent would start pageview tracking
+ * before the reader has been asked, which is the opposite of what the banner
+ * promises. "Essential" stays true because the site cannot function without it.
+ *
+ * Once a choice IS stored, it is returned verbatim — including an explicit
+ * rejection — so a user who says "essentials only" keeps that choice on every
+ * later page view.
+ */
 export function getUserConsent(): { essential: boolean; analytics: boolean; personalization: boolean; marketing: boolean } {
-  if (typeof window === 'undefined') return { essential: true, analytics: true, personalization: true, marketing: false };
+  const undecided: { essential: boolean; analytics: boolean; personalization: boolean; marketing: boolean } = {
+    essential: true,
+    analytics: false,
+    personalization: false,
+    marketing: false,
+  };
+  if (typeof window === 'undefined') return undecided;
   const stored = localStorage.getItem(STORAGE_CONSENT_KEY);
-  if (!stored) return { essential: true, analytics: true, personalization: true, marketing: false };
+  if (!stored) return undecided;
   try {
-    return JSON.parse(stored);
+    const parsed = JSON.parse(stored);
+    // Merge onto the undecided defaults so a partially-written or older record
+    // still yields a complete, correctly-typed object.
+    return {
+      essential: true,
+      analytics: parsed.analytics === true,
+      personalization: parsed.personalization === true,
+      marketing: parsed.marketing === true,
+    };
   } catch (e) {
-    return { essential: true, analytics: true, personalization: true, marketing: false };
+    return undecided;
   }
 }
 

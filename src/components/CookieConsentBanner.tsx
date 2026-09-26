@@ -14,6 +14,20 @@ export interface CookiePreferences {
 
 const STORAGE_KEY = 'perspective_cookie_consent';
 
+/**
+ * The state shown before a choice exists.
+ *
+ * Optional categories start OFF. Presenting them as already-enabled would
+ * imply consent the reader never gave, and would make the banner's promise
+ * ("analytics" controls pageview tracking) untrue. "Accept all" turns them on.
+ */
+const UNDECIDED: Omit<CookiePreferences, 'updatedAt'> = {
+  essential: true,
+  analytics: false,
+  personalization: false,
+  marketing: false,
+};
+
 export function CookieConsentBanner() {
   const language = useStore((s) => s.language);
   const isFr = language === 'fr';
@@ -22,10 +36,7 @@ export function CookieConsentBanner() {
   const [showModal, setShowModal] = useState(false);
 
   const [preferences, setPreferences] = useState<CookiePreferences>({
-    essential: true,
-    analytics: true,
-    personalization: true,
-    marketing: false,
+    ...UNDECIDED,
     updatedAt: new Date().toISOString()
   });
 
@@ -39,10 +50,7 @@ export function CookieConsentBanner() {
     } else {
       try {
         setPreferences(safeJsonParse<CookiePreferences>(stored, {
-          essential: true,
-          analytics: true,
-          personalization: true,
-          marketing: false,
+          ...UNDECIDED,
           updatedAt: new Date().toISOString()
         }));
       } catch (e) {

@@ -422,7 +422,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                       <td className="px-6 py-4 font-bold text-zinc-100 text-xs">{row.placement.label[isFr ? 'fr' : 'en']}</td>
                       <td className="px-6 py-4 text-xs text-zinc-300">
                         {row.campaign
-                          ? (getSafeText((row.campaign as AdItem).campaignName, language) || getSafeText((row.campaign as AdItem).name, language) || '—')
+                          ? (getSafeText(row.campaign.campaignName, language) || getSafeText(row.campaign.name, language) || '—')
                           : <span className="text-zinc-600 font-mono text-[10px]">{isFr ? 'MOCKUP' : 'MOCKUP'}</span>}
                         {row.campaigns.length > 1 && (
                           <span className="ml-2 text-[9px] text-amber-500 font-mono">
@@ -431,7 +431,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                         )}
                       </td>
                       <td className="px-6 py-4 text-xs text-zinc-400">
-                        {(row.campaign as AdItem)?.advertiserName || <span className="text-zinc-600">—</span>}
+                        {row.campaign?.advertiserName || <span className="text-zinc-600">—</span>}
                       </td>
                       <td className="px-6 py-4">
                         {row.status
@@ -441,7 +441,7 @@ export function AdManagerTab({ ads, saveAd, deleteAd, openMediaSelector }: AdMan
                             </span>}
                       </td>
                       <td className="px-6 py-4 font-mono text-[10px] text-zinc-400">
-                        {row.campaign ? formatCampaignWindow(row.campaign as AdItem, isFr) : '—'}
+                        {row.campaign ? formatCampaignWindow(row.campaign, isFr) : '—'}
                       </td>
                       <td className="px-6 py-4 font-mono text-[10px] text-zinc-500">
                         {placementDimensions(row.placement.id, isFr)}
