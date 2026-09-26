@@ -160,14 +160,24 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
     }
   };
 
+  // Errors are shown in the panel, not just logged. The catch used to be a bare
+  // console.error, so a failed connection looked exactly like a dead button.
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
   const handleConnectGmail = async () => {
+    setConnectError(null);
+    setIsConnecting(true);
     try {
       const res = await connectGoogleGmail();
       setGoogleUser(res.user);
       setGoogleToken(res.accessToken);
       setConnectedEmail(res.user.email);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Gmail connect error:", e);
+      setConnectError(e?.message || (isFr ? 'Connexion impossible.' : 'Could not connect.'));
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -421,17 +431,32 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-1.5">
+            <div className="flex flex-col items-start sm:items-end gap-1.5 w-full sm:w-auto shrink-0">
               <button
                 type="button"
                 onClick={handleConnectGmail}
-                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs rounded-md transition-all flex items-center gap-1.5 cursor-pointer border border-zinc-700"
+                disabled={isConnecting}
+                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs rounded-md transition-all flex items-center gap-1.5 cursor-pointer border border-zinc-700 disabled:opacity-60 disabled:cursor-wait whitespace-nowrap"
               >
-                <UserCheck size={13} className="text-[#E85D42]" /> 
-                {googleToken 
-                  ? (language === 'fr' ? 'Changer de compte' : 'Switch Account') 
-                  : (language === 'fr' ? 'Connecter Google' : 'Connect Google')}
+                {isConnecting ? (
+                  <RefreshCw size={13} className="animate-spin text-[#E85D42]" />
+                ) : (
+                  <UserCheck size={13} className="text-[#E85D42]" />
+                )}
+                {isConnecting
+                  ? (isFr ? 'Connexion…' : 'Connecting…')
+                  : googleToken
+                    ? (isFr ? 'Changer de compte' : 'Switch Account')
+                    : (isFr ? 'Connecter Google' : 'Connect Google')}
               </button>
+
+              {/* A failed connection used to be logged to the console only, so the
+                  button just looked dead. The reason is now shown here. */}
+              {connectError && (
+                <p role="alert" className="text-[10px] text-red-400 leading-relaxed max-w-[280px] sm:text-right">
+                  {connectError}
+                </p>
+              )}
             </div>
           </div>
 

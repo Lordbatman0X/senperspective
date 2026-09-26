@@ -13,12 +13,105 @@ const WORKSPACE_SCOPES = [
   'https://www.googleapis.com/auth/gmail.compose'
 ];
 
+const GIS_SRC = 'https://accounts.google.com/gsi/client';
+
+let gisLoadPromise: Promise<void> | null = null;
+
 /**
- * Sign in with Google to grant Google Workspace (Gmail + Sheets) permissions.
+ * The OAuth client id.
+ *
+ * Read from the build-time env so it works on any deploy, with the legacy
+ * `window.__GOOGLE_CLIENT_ID__` kept as a fallback for anyone still injecting
+ * it by hand. It used to read ONLY that global, which nothing in this codebase
+ * ever set, so every "Connect Google" click died with "Google Identity
+ * Services not loaded" before the account picker could appear.
+ */
+export function getGoogleClientId(): string {
+  const fromEnv = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
+  if (typeof fromEnv === 'string' && fromEnv.trim()) return fromEnv.trim();
+  if (typeof window !== 'undefined') {
+    const injected = (window as any).__GOOGLE_CLIENT_ID__;
+    if (typeof injected === 'string' && injected.trim()) return injected.trim();
+  }
+  return '';
+}
+
+/**
+ * Loads the Google Identity Services script on demand.
+ *
+ * It was never loaded anywhere before, so `window.google.accounts.oauth2` did
+ * not exist and the token client could not be constructed. Injecting it here
+ * (rather than a blocking <script> in index.html) means the admin suite only
+ * pays for it when someone actually connects an account, and a failure becomes
+ * a catchable error instead of a permanently dead button.
+ */
+function loadGoogleIdentityServices(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('Connexion Google indisponible hors navigateur.'));
+  }
+  if ((window as any).google?.accounts?.oauth2) return Promise.resolve();
+  if (gisLoadPromise) return gisLoadPromise;
+
+  gisLoadPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${GIS_SRC}"]`) as HTMLScriptElement | null;
+    const script = existing || document.createElement('script');
+    const fail = () => {
+      gisLoadPromise = null;
+      reject(new Error('Le module Google Identity Services n\u2019a pas pu \u00eatre charg\u00e9. V\u00e9rifiez votre connexion.'));
+    };
+    const timer = window.setTimeout(fail, 15000);
+
+    script.addEventListener('load', () => { window.clearTimeout(timer); resolve(); }, { once: true });
+    script.addEventListener('error', () => { window.clearTimeout(timer); fail(); }, { once: true });
+    script.src = GIS_SRC;
+    script.async = true;
+    script.defer = true;
+    if (!existing) document.head.appendChild(script);
+  });
+
+  return gisLoadPromise;
+}
+
+/**
+ * Resolves the connected account's real address.
+ *
+ * A granted OAuth token carries no identity of its own, so the UI used to
+ * display — and the newsletter "From" used — the literal string
+ * "connected-user@google.com". Reading the real address from the OpenID
+ * userinfo endpoint makes the connected badge trustworthy, and keeps a
+ * genuinely unknown identity visibly unknown instead of invented.
+ */
+async function fetchGoogleUserEmail(token: string): Promise<string> {
+  try {
+    const res = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data: any = await res.json();
+      if (data?.email) return String(data.email);
+    }
+  } catch {
+    /* fall through to the token-free path */
+  }
+  return 'Compte Google connecté';
+}
+
+/**
+ * Sign in with Google to grant Gmail + Sheets permissions.
  * Uses Google Identity Services (GIS) — Supabase OAuth fallback removed (audit).
  */
 export async function connectGoogleGmail(): Promise<{ user: User; accessToken: string }> {
-  const g = typeof window !== 'undefined' ? (window as any).google?.accounts?.oauth2 : null;
+  const clientId = getGoogleClientId();
+  if (!clientId) {
+    return Promise.reject(
+      new Error("Identifiant client Google manquant : ajoutez VITE_GOOGLE_CLIENT_ID dans .env, puis recompilez.")
+    );
+  }
+
+  // The script must exist before initTokenClient can be called.
+  await loadGoogleIdentityServices();
+
+  const g = (window as any).google?.accounts?.oauth2;
   if (!g) {
     return Promise.reject(new Error('Google Identity Services not loaded'));
   }
@@ -26,22 +119,39 @@ export async function connectGoogleGmail(): Promise<{ user: User; accessToken: s
   return new Promise((resolve, reject) => {
     try {
       const client = g.initTokenClient({
-        client_id: (window as any).__GOOGLE_CLIENT_ID__ || '',
+        client_id: clientId,
         scope: WORKSPACE_SCOPES.join(' '),
-        callback: (tokenResponse: any) => {
+        callback: async (tokenResponse: any) => {
           if (tokenResponse.error) {
-            reject(tokenResponse);
+            // Surface Google's own reason (access_denied, invalid_client, …)
+            // instead of rejecting with a bare object, which is why this failure
+            // was impossible to diagnose from the UI.
+            reject(new Error(
+              tokenResponse.error === 'access_denied'
+                ? 'Connexion annulée ou autorisations refusées.'
+                : `Connexion Google refusée : ${tokenResponse.error_description || tokenResponse.error}`
+            ));
             return;
           }
-          cachedAccessToken = tokenResponse.access_token;
-          cachedUser = { email: cachedUserEmail || 'connected-user@google.com' };
-          cachedUserEmail = cachedUser.email;
+          const accessToken = tokenResponse.access_token;
+          // The token response carries NO identity. It used to be stored as the
+          // literal "connected-user@google.com", so the UI showed a fake address
+          // and the newsletter "From" used it. Ask Google who the token is for.
+          const email = await fetchGoogleUserEmail(accessToken);
+          cachedAccessToken = accessToken;
+          cachedUser = { email };
+          cachedUserEmail = email;
           if (typeof window !== 'undefined') {
-            localStorage.setItem('pg_google_access_token', tokenResponse.access_token);
-            localStorage.setItem('pg_google_user_email', cachedUserEmail || '');
+            localStorage.setItem('pg_google_access_token', accessToken);
+            localStorage.setItem('pg_google_user_email', email);
           }
-          resolve({ user: cachedUser, accessToken: tokenResponse.access_token });
-        }
+          resolve({ user: cachedUser, accessToken });
+        },
+        error_callback: (err: any) => {
+          reject(new Error(
+            `Connexion Google impossible : ${err?.message || 'la fenêtre de connexion a été bloquée ou fermée'}. Si un bloqueur est actif, autorisez les fenêtres contextuelles pour ce site.`
+          ));
+        },
       });
       client.requestAccessToken({ prompt: 'select_account' });
     } catch (err) {
