@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useStore } from "../store";
 import { Newspaper, ArrowRight, Hourglass } from "lucide-react";
 import { useSEO } from "../hooks/useSEO";
@@ -7,6 +7,7 @@ import { formatRelativeDate, formatCategory } from "../lib/utils";
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from "../lib/imageUtils";
 import { ArenaGroupedScores } from "../components/arena/ArenaGroupedScores";
 import { withoutDemoMatches } from "../lib/sports/demoMatches";
+import { ARENA_LEAGUES } from "../lib/sports/leagues";
 
 export function LArenePage() {
   const { language, articles = [], matches: rawMatches = [] } = useStore();
@@ -19,18 +20,35 @@ export function LArenePage() {
   // unaffected.
   const matches = withoutDemoMatches(rawMatches);
   
+  // On /arena/:leagueId the page is a league hub. Its metadata must match the
+  // prerendered HTML for the same path, or the page would change its own title
+  // and canonical after hydration — which search engines treat as inconsistent.
+  // The copy therefore comes from the same registry the prerenderer uses.
+  const { leagueId } = useParams<{ leagueId: string }>();
+  const hub = leagueId ? ARENA_LEAGUES.find((l) => l.id === leagueId) : undefined;
+  const lang = language === "fr" ? "fr" : "en";
+
   useSEO({
-    title: language === 'fr' 
-      ? "L'Arène â€” Sports & Lutte Sénégalaise | SenPerspective" 
-      : "L'Arène â€” Sports & Senegalese Wrestling | SenPerspective",
-    description: language === 'fr'
-      ? "Toutes les actualités et analyses sportives au Sénégal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et Navétanes sur SenPerspective."
-      : "All sports news, wrestling lamb analysis and live match scores on SenPerspective.",
-    canonical: "https://senperspective.com/larene",
+    title: hub
+      ? `${hub.label[lang]} — résultats et actualités`
+      : language === 'fr'
+        ? "L'Arène — Sports & Lutte Sénégalaise | SenPerspective"
+        : "L'Arène — Sports & Senegalese Wrestling | SenPerspective",
+    description: hub
+      ? hub.blurb[lang]
+      : language === 'fr'
+        ? "Toutes les actualités et analyses sportives au Sénégal, ainsi que les directs de la Lutte avec Frappe (Lamb), BAL, D1 Basket et Navétanes sur SenPerspective."
+        : "All sports news, wrestling lamb analysis and live match scores on SenPerspective.",
+    canonical: hub
+      ? `https://senperspective.com/arena/${hub.id}`
+      : "https://senperspective.com/larene",
     breadcrumbs: [
       { name: "Accueil", url: "https://senperspective.com/" },
-      { name: "L'Arène â€” Sports", url: "https://senperspective.com/larene" }
-    ]
+      { name: "L'Arène — Sports", url: "https://senperspective.com/larene" },
+      ...(hub
+        ? [{ name: hub.label[lang], url: `https://senperspective.com/arena/${hub.id}` }]
+        : []),
+    ],
   });
 
   // Sports reporting only. Strictly no non-sports fallback: a mis-tagged

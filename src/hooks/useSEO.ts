@@ -25,6 +25,20 @@ export interface SEOProps {
   type?: 'website' | 'article';
   articleData?: SEOArticleData;
   breadcrumbs?: SEOBreadcrumbItem[];
+  /** Optional SportsEvent structured data for league/fixture pages. */
+  sportsEvent?: {
+    name: string;
+    /** ISO 8601 start time. */
+    startDate: string;
+    /** schema.org sport name, e.g. "Football", "Basketball". */
+    sport: string;
+    competition?: string;
+    homeTeam?: string;
+    awayTeam?: string;
+    venue?: string;
+    description?: string;
+    eventStatus?: string;
+  };
 }
 
 export function useSEO({ 
@@ -35,7 +49,8 @@ export function useSEO({
   ogImage,
   type = 'website',
   articleData,
-  breadcrumbs 
+  breadcrumbs,
+  sportsEvent
 }: SEOProps) {
   const siteSettings = useStore(s => s.siteSettings);
   const language = useStore(s => s.language) || 'fr';
@@ -172,6 +187,44 @@ export function useSEO({
       });
     }
 
+    if (sportsEvent) {
+      // SportsEvent is the schema type that makes a fixture eligible for the
+      // live-score / result carousel in Google. It describes a scheduled or
+      // completed event — the page itself, not the ticking score, is what
+      // should be indexed. Feeding it the live clock would make the structured
+      // data disagree with the rendered page.
+      const ev: any = {
+        "@type": "SportsEvent",
+        name: sportsEvent.name,
+        startDate: sportsEvent.startDate,
+        sport: sportsEvent.sport,
+        url: effectiveCanonical,
+        inLanguage: language === 'en' ? 'en' : 'fr',
+      };
+      if (sportsEvent.competition) {
+        ev.competition = {
+          "@type": "SportsOrganization",
+          name: sportsEvent.competition,
+        };
+      }
+      if (sportsEvent.homeTeam || sportsEvent.awayTeam) {
+        // schema.org models the two sides as competitors on the event.
+        ev.competitor = [sportsEvent.homeTeam, sportsEvent.awayTeam]
+          .filter(Boolean)
+          .map((name) => ({ "@type": "SportsTeam", name }));
+      }
+      if (sportsEvent.venue) {
+        ev.location = { "@type": "Place", name: sportsEvent.venue, address: { "@type": "PostalAddress", addressLocality: "Dakar", addressCountry: "SN" } };
+      }
+      if (sportsEvent.eventStatus) {
+        ev.eventStatus = sportsEvent.eventStatus;
+      }
+      if (sportsEvent.description) {
+        ev.description = sportsEvent.description;
+      }
+      jsonLdScripts.push(ev);
+    }
+
     if (breadcrumbs && breadcrumbs.length > 0) {
       jsonLdScripts.push({
         "@context": "https://schema.org",
@@ -209,6 +262,7 @@ export function useSEO({
     language,
     JSON.stringify(articleData),
     JSON.stringify(breadcrumbs),
+    JSON.stringify(sportsEvent),
     siteSettings?.seoTitleSuffix, 
     siteSettings?.seoDefaultDesc, 
     siteSettings?.seoDefaultKeywords, 

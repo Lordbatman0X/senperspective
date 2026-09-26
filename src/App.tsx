@@ -277,6 +277,7 @@ function App() {
             <Route path="/saved" element={<SavedPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/larene" element={<LArenePage />} />
+  <Route path="/arena/:leagueId" element={<LArenePage />} />
             <Route path="/sports" element={<LArenePage />} />
             <Route path="/sport" element={<LArenePage />} />
             <Route path="/arene" element={<LArenePage />} />

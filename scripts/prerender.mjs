@@ -213,7 +213,7 @@ function articleBody(a, lang = 'fr') {
  * JS still reads the full article text. Nothing here is styled, so there is no
  * second visual implementation to drift out of sync.
  */
-function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd }) {
+function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd, bodyOverride }) {
   let head = shell;
 
   // Each replacement is attempted independently: a tag that is absent from the
@@ -257,7 +257,10 @@ function applyHead(shell, { a, lang, title, desc, url, image, published, jsonLd 
 
   // The article goes inside the genuine #root so React replaces it on mount,
   // and so a reader whose bundle fails still sees the article text.
-  const body = articleBody(a, lang);
+  // `bodyOverride` lets non-article pages (league hubs) reuse this exact shell
+  // handling instead of re-implementing it, which is what keeps a single
+  // template.
+  const body = bodyOverride || articleBody(a, lang);
   if (head.includes('<div id="root"></div>')) {
     head = head.replace('<div id="root"></div>', `<div id="root">${body}</div>`);
   } else {
@@ -306,6 +309,194 @@ function renderArticle(a, shell, lang = 'fr') {
 }
 
 /**
+ * League hub pages for SEO.
+ *
+ * WHY THESE EXIST AND WHY THE SCORES ARE NOT IN THEM
+ * -------------------------------------------------
+ * Live score rows change every few seconds. Indexing them directly would mean
+ * constant crawl churn and content that is stale the moment Google fetches it,
+ * so the score rows are deliberately NOT prerendered.
+ *
+ * What IS prerendered is the evergreen part: the competition, the local
+ * context, and the editorial framing. Those carry the search value — "lutte
+ * avec frappe Sénégal", "résultat navétanes", "D1 basket Sénégal" — and they
+ * are exactly the competitions no free sports API covers, so they are also the
+ * ones competitors cannot out-publish with automated data.
+ *
+ * The copy is written per league rather than generated from a template, so
+ * each page is genuinely distinct.
+ */
+const LEAGUE_HUBS = [
+  {
+    id: 'lutte',
+    path: '/arena/lutte',
+    priority: '0.8',
+    freq: 'daily',
+    title: 'Lutte avec Frappe Sénégal : résultats, affiches et actualités',
+    description:
+      "Suivi de la lutte avec frappe sénégalaise : résultats des assauts, affiches de la saison et actualités de l'arène nationale de Dakar.",
+    heading: 'Lutte avec Frappe au Sénégal',
+    intro:
+      "La lutte avec frappe est le sport national sénégalais. Cette page rassemble les résultats des assauts, les affiches annoncées et les actualités de la saison, tels que publiés par la presse dakaroise.",
+    sections: [
+      {
+        h: 'Comment suivre les résultats',
+        p: "Les résultats sont publiés par la presse nationale et par les commissions officielles. Cette page les rassemble au même endroit, avec la date de chaque rencontre, plutôt que de vous faire chercher information par information.",
+      },
+      {
+        h: 'Calendrier et affiches',
+        p: "La saison alter lamb démarre généralement en début d'année. Les affiches de chaque grande rencontre sont annoncées à l'avance par les commissions de zone et par la presse.",
+      },
+    ],
+  },
+  {
+    id: 'navetane',
+    path: '/arena/navetane',
+    priority: '0.8',
+    freq: 'daily',
+    title: 'Navétanes Sénégal : résultats, finales de zone et actualités',
+    description:
+      'Championnats Navétanes du Sénégal : résultats des matchs, finales de zone, état des stades de Dakar et actualités du football de quartier.',
+    heading: 'Championnats Navétanes',
+    intro:
+      "Les Navétanes sont le football de quartier qui nourrit le football professionnel sénégalais : finales de zone, licences, état des stades. Cette page suit la compétition au fil de la saison.",
+    sections: [
+      {
+        h: 'Les Navétanes en clair',
+        p: "Chaque année, des milliers de joueurs se réunissent dans les zones de la périphérie de Dakar pour disputer le championnat. C'est le vivier qui alimente les équipes professionnelles du pays.",
+      },
+      {
+        h: 'Zones et stades',
+        p: "La compétition est organisée par zones. L'état des terrains de la périphérie dakaroise reste un enjeu majeur pour le développement du championnat.",
+      },
+      {
+        h: 'Pourquoi ces résultats comptent',
+        p: "C'est à ce niveau que se repèrent les profils qui rejoindront plus tard les équipes nationales. Les statistiques de buts, de victoires et de meilleur buteur servent de base au recrutement par les clubs professionnels de Dakar et de l'intérieur du pays.",
+      },
+      {
+        h: 'Où suivre la saison',
+        p: "Les comptes rendus paraissent dans la presse nationale et sur les réseaux des supporters de zone. SenPerspective rassemble ces informations ici plutôt que de vous renvoyer d'une source à l'autre.",
+      },
+    ],
+  },
+  {
+    id: 'd1-basket',
+    path: '/arena/d1-basket',
+    priority: '0.7',
+    freq: 'daily',
+    title: 'D1 Basket Sénégal : résultats et actualités',
+    description:
+      'D1 Basket Sénégal : résultats, classements et actualités de la première division sénégalaise de basket-ball.',
+    heading: 'D1 Basket Sénégal',
+    intro:
+      "La D1 est la première division sénégalaise de basket-ball. Elle fournit régulièrement ses joueuses et joueurs aux grands clubs européens et sert de vitrine pour la formation nationale.",
+    sections: [
+      {
+        h: 'Une ligue formatrice',
+        p: "Chaque saison, des joueurs de D1 rejoignent l'Europe ou la NBA. Le niveau de la ligue progresse avec les investissements des clubs.",
+      },
+      {
+        h: 'Suivi des résultats',
+        p: "Les rencontres de D1 se jouent principalement en semaine et le week-end. Les résultats et les comptes rendus sont relayés par la presse sportive nationale.",
+      },
+      {
+        h: "Le pont vers l'international",
+        p: "La D1 est le principal observatoire du basket-ball féminin et masculin sénégalais. Les joueuses et joueurs qui s'y distinguent rejoignent les ligues européennes, la NBA ou la WNBA, ce qui en fait une compétition de référence pour le suivi de la sélection nationale.",
+      },
+      {
+        h: 'Actualité de la saison',
+        p: "Recrutements, directs des rencontres, suspensions et calendrier des phases finales : SenPerspective rassemble ici l'essentiel de la première division sénégalaise, suivi depuis Dakar.",
+      },
+    ],
+  },
+  {
+    id: 'bal',
+    path: '/arena/bal',
+    priority: '0.6',
+    freq: 'weekly',
+    title: 'Basketball Africa League : résultats et actualités',
+    description:
+      'Basketball Africa League (BAL) : résultats, qualifications et actualités de la vitrine continentale du basket africain.',
+    heading: 'Basketball Africa League',
+    intro:
+      'La Basketball Africa League est la vitrine continentale du basket africain et la porte d’entrée des clubs du continent vers la NBA.',
+    sections: [
+      {
+        h: 'La porte d’entrée vers la NBA',
+        p: "Plusieurs joueurs de BAL ont intégré la NBA. La ligue permet aux jeunes talents africains de se faire connaître auprès des recruteurs internationaux.",
+      },
+      {
+        h: 'Calendrier',
+        p: "La saison régulière de la BAL se joue en fin d'année, suivie des phases finales qui déterminent les qualifications pour les compétitions internationales.",
+      },
+      {
+        h: 'Un tremplin vers la NBA',
+        p: "La BAL a acquis une stature internationale qui attire les meilleurs jeunes joueurs du continent. Plusieurs de ses joueurs évoluent aujourd'hui en NBA, et la ligue reste pour eux la première étape de leur parcours international.",
+      },
+      {
+        h: 'Suivre la compétition',
+        p: "Calendrier des rencontres, résultats des phases finales et actualités des clubs participants : SenPerspective rassemble les informations disponibles sur la BAL dans cette page.",
+      },
+    ],
+  },
+];
+
+/**
+ * Renders a league hub into the genuine index.html shell.
+ *
+ * Mirrors the article prerender: real text inside the real #root, so React
+ * replaces it on mount and a non-JS crawler still reads the page.
+ */
+function renderLeagueHub(hub, shell) {
+  const url = `${SITE}${hub.path}`;
+
+  const sectionsHtml = hub.sections
+    .map(
+      (s) =>
+        `<h2 style="font-family:Inter,system-ui,sans-serif;font-size:1.25rem;font-weight:800;margin:1.75rem 0 .5rem">${esc(s.h)}</h2>\n      <p style="font-size:1.05rem;line-height:1.75;margin:0 0 1rem">${esc(s.p)}</p>`
+    )
+    .join('\n      ');
+
+  // CollectionPage rather than SportsEvent: this page is an editorial hub for a
+  // competition, not a single fixture. Emitting SportsEvent here (with no real
+  // startDate) would be invalid structured data and risks a manual action.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: hub.heading,
+    description: hub.description,
+    url,
+    inLanguage: 'fr-SN',
+    isPartOf: { '@type': 'WebSite', name: 'SenPerspective', url: SITE },
+  };
+
+  const body = `<div id="sp-prerender" style="max-width:46rem;margin:0 auto;padding:2.5rem 1.25rem 4rem;font-family:Inter,system-ui,sans-serif;color:#172033">
+      <p style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#E85D42;margin:0 0 1rem">
+        <a href="${SITE}/" style="color:#E85D42;text-decoration:none">SenPerspective</a>
+        &middot; Sports
+      </p>
+      <h1 style="font-size:clamp(1.75rem,4vw,2.5rem);line-height:1.15;font-weight:900;margin:0 0 1rem">${esc(hub.heading)}</h1>
+      <p style="font-size:1.1rem;font-weight:600;line-height:1.65;margin:0 0 1.5rem">${esc(hub.intro)}</p>
+      ${sectionsHtml}
+      <p style="font-size:11px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:1rem;margin-top:2rem">
+        <a href="${SITE}/larene" style="color:#E85D42;text-decoration:none">Perspective Group</a> &middot; Dakar, Sénégal
+      </p>
+    </div>`;
+
+  return applyHead(shell, {
+    a: { title: hub.heading, category: 'Sports' },
+    lang: 'fr',
+    title: hub.title,
+    desc: hub.description,
+    url,
+    image: `${SITE}/favicon.png`,
+    published: null,
+    jsonLd,
+    bodyOverride: body,
+  });
+}
+
+/**
  * Sitemap built from live data.
  *
  * The previous sitemap.xml listed only 13 URLs (homepage, categories, about,
@@ -326,6 +517,15 @@ function buildSitemap(articles) {
     { loc: `${SITE}/category/international`, priority: '0.7', freq: 'daily' },
     { loc: `${SITE}/category/decryptages`, priority: '0.8', freq: 'daily' },
     { loc: `${SITE}/larene`, priority: '0.7', freq: 'hourly' },
+    // League hubs: the durable, indexable sports surface. The live scores on
+    // /larene are deliberately absent from the sitemap because they change too
+    // often to be worth crawling.
+    ...LEAGUE_HUBS.map((h) => ({
+      loc: `${SITE}${h.path}`,
+      priority: h.priority,
+      freq: h.freq,
+    })),
+
     { loc: `${SITE}/about`, priority: '0.4', freq: 'monthly' },
     { loc: `${SITE}/contact`, priority: '0.3', freq: 'monthly' },
   ];
@@ -395,6 +595,25 @@ async function main() {
     written++;
   }
   console.log(`[prerender] wrote ${written} article pages to dist/article/`);
+
+  // League hub pages. Written the same way as articles: a directory per slug
+  // containing index.html, so Firebase Hosting serves it as a static file
+  // before the SPA rewrite would otherwise catch the path.
+  const arenaDir = path.join(DIST, 'arena');
+  if (existsSync(arenaDir)) await rm(arenaDir, { recursive: true, force: true });
+  let hubsWritten = 0;
+  for (const hub of LEAGUE_HUBS) {
+    const slug = hub.path.replace('/arena/', '');
+    if (!/^[A-Za-z0-9._-]+$/.test(slug)) {
+      console.warn(`[prerender] skipping unsafe hub slug: ${slug}`);
+      continue;
+    }
+    const dir = path.join(arenaDir, slug);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, 'index.html'), renderLeagueHub(hub, shell), 'utf8');
+    hubsWritten++;
+  }
+  console.log(`[prerender] wrote ${hubsWritten} league hub pages to dist/arena/`);
 
   await writeFile(path.join(DIST, 'sitemap.xml'), buildSitemap(articles), 'utf8');
   console.log(`[prerender] wrote sitemap.xml (${articles.length} article urls + 13 static)`);
