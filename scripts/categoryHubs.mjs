@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Editorial copy for the category hub pages.
  *
  * WHY THIS EXISTS
@@ -170,7 +170,7 @@ export const CATEGORY_HUBS = [
   {
     slug: 'sports',
     heading: 'Sports',
-    title: 'Sports au Sénégal : football, LNBA,_navétanes et luches | SenPerspective',
+    title: 'Sports au Sénégal : football, LNBA, navétanes et luches | SenPerspective',
     description:
       "L'actualité sportive sénégalse et africaine : football, LNBA, navétanes, lutte, résultats, analyses et coulisses.",
     intro:
