@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Cookie, Settings2, X, Check, Lock, ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
-import { sendConsentTelemetry } from '../lib/telemetry';
+import { sendConsentTelemetry, withdrawAudienceProfile } from '../lib/telemetry';
 import { safeJsonParse } from '../lib/apiUtils';
 
 export interface CookiePreferences {
@@ -40,6 +40,14 @@ export function CookieConsentBanner() {
     updatedAt: new Date().toISOString()
   });
 
+  // The choice in force BEFORE this save. Withdrawal is only meaningful
+  // relative to what the reader previously agreed to, so we track it in a ref
+  // rather than in state (state would be stale inside the async save).
+  const previousPreferences = React.useRef<CookiePreferences>({
+    ...UNDECIDED,
+    updatedAt: new Date().toISOString(),
+  });
+
   useEffect(() => {
     // Check existing consent
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -49,10 +57,15 @@ export function CookieConsentBanner() {
       return () => clearTimeout(timer);
     } else {
       try {
-        setPreferences(safeJsonParse<CookiePreferences>(stored, {
+        const parsed = safeJsonParse<CookiePreferences>(stored, {
           ...UNDECIDED,
           updatedAt: new Date().toISOString()
-        }));
+        });
+        setPreferences(parsed);
+        // Seed the ref with the choice already on record. Without this, a
+        // returning reader's first downgrade would look like "previously not
+        // profiling" and their stored audience profile would never be deleted.
+        previousPreferences.current = parsed;
       } catch (e) {
         setIsVisible(true);
       }
@@ -68,7 +81,7 @@ export function CookieConsentBanner() {
     return () => window.removeEventListener('open-cookie-settings', handleReopen);
   }, []);
 
-  const saveConsent = (updated: CookiePreferences) => {
+  const saveConsent = async (updated: CookiePreferences) => {
     const payload = {
       ...updated,
       essential: true,
@@ -81,6 +94,24 @@ export function CookieConsentBanner() {
 
     // Dispatch real telemetry consent record to server & Firestore
     sendConsentTelemetry(payload);
+
+    // Withdrawing consent has to actually DELETE the profile that was built
+    // under the old choice. Previously, downgrading a reader only stopped new
+    // writes: the audience record already stored for them survived, so
+    // "reject" left the commercial profile in place. Read the PREVIOUS
+    // preference, and if profiling is no longer permitted, remove the record.
+    try {
+      const hadProfiling = previousPreferences.current.analytics && previousPreferences.current.marketing;
+      const hasProfiling = Boolean(payload.analytics && payload.marketing);
+      if (hadProfiling && !hasProfiling) {
+        await withdrawAudienceProfile();
+      }
+    } catch (err) {
+      console.warn('Consent withdrawal notice:', err);
+    }
+
+    previousPreferences.current = payload;
+    setPreferences(payload);
 
     // Notify window
     window.dispatchEvent(new CustomEvent('cookie-consent-updated', { detail: payload }));

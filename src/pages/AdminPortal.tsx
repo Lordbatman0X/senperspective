@@ -375,7 +375,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     media = [], addMedia, deleteMedia, updateMediaName,
     ads = [], saveAd, deleteAd,
     comments = [], approveComment, deleteComment,
-    subscribers = [], addSubscriber, deleteSubscriber, language, setLanguage, theme, toggleTheme,
+    subscribers = [], addSubscriber, deleteSubscriber, loadSubscribers, language, setLanguage, theme, toggleTheme,
     siteSettings, updateSiteSettings,
     matches = [], addMatch, updateMatch, deleteMatch,
     interactions = [],
@@ -442,6 +442,13 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
   const [newFriendName, setNewFriendName] = useState('');
   const [newFriendEmail, setNewFriendEmail] = useState('');
   const [newFriendRole, setNewFriendRole] = useState('');
+
+  // Re-read the subscriber directory from the database on mount. The list used
+  // to live only in memory, so every reload showed the seed rows and dropped
+  // whatever had been added or bulk-imported in the previous session.
+  useEffect(() => {
+    loadSubscribers();
+  }, [loadSubscribers]);
 
   useEffect(() => {
     if (abdelPrompts) {

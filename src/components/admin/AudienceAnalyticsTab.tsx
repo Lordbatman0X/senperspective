@@ -41,6 +41,11 @@ export function AudienceAnalyticsTab() {
 
   const [filterOptIn, setFilterOptIn] = useState<boolean>(false);
 
+  // Consented audience profiles (see syncAudienceProfile in lib/telemetry).
+  // Populated only for readers who accepted BOTH analytics and marketing.
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [showProfiles, setShowProfiles] = useState(false);
+
   // Set up direct real-time listeners on Firestore collections combined with live store
   const fetchDashboardData = useCallback(() => {
     setLoading(true);
@@ -85,27 +90,42 @@ export function AudienceAnalyticsTab() {
         country: (i as any).country || ''
       }));
 
-      // 2. Convert subscribers into consents & lead conversions
+      // Subscribers are a MARKETING relationship, but subscribing to a
+      // newsletter is not consent to analytics or to profiling.
+      //
+      // This used to hardcode `marketing: true, analytics: true`, so every
+      // address in the directory was counted as a fully-consented analytics
+      // user. That inflated the opt-in rates toward 100% and manufactured
+      // "leads" the reader never agreed to. Only the marketing flag is implied
+      // by subscribing; the others stay false until a real consent record says
+      // otherwise, and the merge below only adds these rows when no genuine
+      // consent record exists for that address.
       const storeSubscriberConsents = (subscribers || []).map(s => ({
         id: `sub_${(s.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
         sessionId: `sess_${(s.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
         userEmail: s.email,
         marketing: true,
-        analytics: true,
+        analytics: false,
+        personalization: false,
         essential: true,
+        derivedFrom: 'newsletter_subscription',
         deviceType: (s as any).deviceType || '',
         country: (s as any).country || '',
         updatedAt: s.date ? new Date(s.date).toISOString() : new Date().toISOString()
       }));
 
-      // 3. Convert friends / reader profiles into consents
+      // 3. Convert friends into leads.
+      // Same correction: being someone's friend is not consent. These rows
+      // contribute a reachable audience, not a consented analytics profile.
       const friendConsents = (friends || []).map(f => ({
         id: `friend_${(f.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
         sessionId: `sess_${(f.email ?? '').replace(/[^a-zA-Z0-9]/g, '_')}`,
         userEmail: f.email,
-        marketing: true,
-        analytics: true,
+        marketing: false,
+        analytics: false,
+        personalization: false,
         essential: true,
+        derivedFrom: 'friend_relation',
         deviceType: (f as any).deviceType || '',
         country: (f as any).country || '',
         updatedAt: new Date().toISOString()
@@ -137,17 +157,36 @@ export function AudienceAnalyticsTab() {
 
       // Calculate total pageviews
       const rawPageviews = allEvents.filter(e => e.eventName === 'pageview' || !e.eventName).length;
-      const articleTotalViews = (articles || []).reduce((acc, a) => acc + (a.views || 0), 0);
-      const totalPageviews = Math.max(rawPageviews, articleTotalViews);
+      // Pageviews come from the real event log.
+      //
+      // This took `Math.max(rawPageviews, articleTotalViews)`, which silently
+      // substituted the all-time article view counter whenever it happened to
+      // be larger — so a single lifetime counter could stand in for a 14-day
+      // window and the traffic figure stopped meaning anything. `rawPageviews`
+      // is the honest number for the period actually observed.
+      const totalPageviews = rawPageviews;
 
-      const analyticsConsents = allConsents.filter(c => c.analytics !== false).length;
-      const marketingConsents = allConsents.filter(c => c.marketing !== false).length;
-      const analyticsOptInRate = totalConsents > 0 ? Math.round((analyticsConsents / totalConsents) * 100) : 0;
-      const marketingOptInRate = totalConsents > 0 ? Math.round((marketingConsents / totalConsents) * 100) : 0;
+      // Opt-in rates must be measured against people who actually answered.
+      //
+      // `c.analytics !== false` counted a record with NO analytics field as
+      // opted IN, so a subscriber row (which correctly leaves analytics unset)
+      // was scored as consent. Consent is strictly opt-in: only an explicit
+      // `true` counts, and the denominator is the number of records that
+      // actually represent a decision.
+      const decidedConsents = allConsents.filter(c => typeof c.analytics === 'boolean');
+      const analyticsConsents = decidedConsents.filter(c => c.analytics === true).length;
+      const marketingDecided = allConsents.filter(c => typeof c.marketing === 'boolean');
+      const marketingConsents = marketingDecided.filter(c => c.marketing === true).length;
+      const analyticsOptInRate = decidedConsents.length > 0 ? Math.round((analyticsConsents / decidedConsents.length) * 100) : 0;
+      const marketingOptInRate = marketingDecided.length > 0 ? Math.round((marketingConsents / marketingDecided.length) * 100) : 0;
 
+      // Conversions are counted from the event log ONLY. This previously added
+      // `subscribers.length` on top of the newsletter_subscription events those
+      // same subscribers had already generated, so the funnel counted each
+      // conversion twice.
       const conversionEventsCount = allEvents.filter(e => 
         ['newsletter_subscription', 'conversion_lead', 'premium_click', 'ad_click', 'contact_lead'].includes(e.eventName)
-      ).length + (subscribers?.length || 0);
+      ).length;
 
       // Device Breakdown (Strictly from real Firestore telemetry & session stores)
       const deviceCounts: Record<string, number> = { Mobile: 0, Desktop: 0, Tablet: 0 };
@@ -174,12 +213,19 @@ export function AudienceAnalyticsTab() {
         'Reste du monde (Europe, Maghreb, Asie)': 0
       };
       [...allEvents, ...allConsents].forEach(loc => {
-        const country = (loc.country || loc.region || '').toLowerCase();
+        // Match against `country` ONLY. This also tested `region`, which holds a
+        // descriptive grouping string like "Sénégal (Dakar, Thiès, Saint-Louis)"
+        // — so a single record could satisfy the Senegal branch and then also
+        // match on its own region text, and the Diaspora branch was matched by
+        // the word "diaspora" appearing in a Senegalese reader's region string.
+        // Country is the field that actually holds a country.
+        const country = (loc.country || '').toLowerCase();
+        if (!country) return;
         if (country.includes('senegal') || country.includes('sénégal') || country.includes('dakar') || country.includes('.sn')) {
           countryCounts['Sénégal (Dakar, Thiès, Saint-Louis)']++;
-        } else if (country.includes('france') || country.includes('diaspora') || country.includes('usa') || country.includes('canada') || country.includes('italie') || country.includes('europe') || country.includes('diaspora')) {
+        } else if (country.includes('diaspora') || country.includes('france') || country.includes('usa') || country.includes('canada') || country.includes('italie')) {
           countryCounts['Diaspora (France, États-Unis, Canada, Italie)']++;
-        } else if (country.includes('mali') || country.includes('ivoire') || country.includes('guinée') || country.includes('sous-région') || country.includes('afrique')) {
+        } else if (country.includes('ouest') || country.includes('mali') || country.includes('ivoire') || country.includes('guinée') || country.includes('afrique')) {
           countryCounts['Sous-région (Mali, Côte d’Ivoire, Guinée)']++;
         } else {
           countryCounts['Reste du monde (Europe, Maghreb, Asie)']++;
@@ -222,9 +268,13 @@ export function AudienceAnalyticsTab() {
         email: c.userEmail ? c.userEmail : `Session ${(c.sessionId || '').slice(-8)}`,
         country: c.country || 'Non spécifié',
         device: c.deviceType || 'Non spécifié',
-        marketingConsented: c.marketing !== false,
-        analyticsConsented: c.analytics !== false,
-        leadScore: c.marketing !== false ? (c.userEmail ? 95 : 75) : 50,
+        marketingConsented: c.marketing === true,
+        analyticsConsented: c.analytics === true,
+        // A lead score must mean something. It previously awarded 95 points to
+        // any record where `marketing !== false`, so unknown consent scored
+        // higher than a real opt-in. Now only an explicit marketing consent
+        // with a known address is a strong lead.
+        leadScore: c.marketing === true ? (c.userEmail ? 95 : 75) : 25,
         createdAt: c.updatedAt || new Date().toISOString()
       }));
 
@@ -287,6 +337,22 @@ export function AudienceAnalyticsTab() {
     };
     loadConsents();
 
+    // Consented audience profiles written by syncAudienceProfile(). This is the
+    // commercial segment: interests, acquisition source, device, geography and
+    // engagement, per reader. Only ever populated for readers who accepted
+    // BOTH analytics and marketing — the table below says so explicitly.
+    const loadProfiles = async () => {
+      try {
+        const data = await fetchFirestoreCollection('reader_profiles');
+        if (data) {
+          setProfiles(data.map((doc: any) => ({ id: doc.id, ...doc })));
+        }
+      } catch (err) {
+        console.warn('Reader profiles load notice:', err);
+      }
+    };
+    loadProfiles();
+
     return () => {};
   }, [subscribers, friends, interactions, articles]);
 
@@ -345,9 +411,97 @@ export function AudienceAnalyticsTab() {
 
   const maxDailyViews = Math.max(...(data?.trafficTimeSeries?.map(t => t.pageviews) || [1]), 1);
 
+  // Only profiles that genuinely carry a marketing segment are useful as a
+  // commercial audience. Sorted by engagement so the strongest readers are
+  // first, and identified by address only when one was volunteered.
+  const marketableProfiles = profiles
+    .filter(p => p?.consent?.marketing === true)
+    .sort((a, b) => (b.articlesRead || 0) - (a.articlesRead || 0));
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto font-sans text-zinc-100 animate-in fade-in duration-200">
-      
+
+      {/* CONSENTED AUDIENCE PROFILES
+          Every row here is a reader who accepted BOTH analytics and marketing.
+          Readers who declined, or never answered, are not profiled at all —
+          this is enforced in syncAudienceProfile() before the write. */}
+      <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-2xl backdrop-blur-xl overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowProfiles(s => !s)}
+          className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left hover:bg-zinc-900/40 transition-colors cursor-pointer"
+        >
+          <div className="min-w-0">
+            <h3 className="text-sm font-black uppercase tracking-wider flex items-center gap-2">
+              <Users size={16} className="text-[#E85D42]" />
+              {isFr ? 'Profils d’audience consentis' : 'Consented audience profiles'}
+            </h3>
+            <p className="text-[11px] text-zinc-400 mt-1">
+              {marketableProfiles.length} {isFr ? 'lecteur(s) ayant accepté analytique + marketing' : 'reader(s) who accepted analytics + marketing'}
+            </p>
+          </div>
+          <span className="text-zinc-500 shrink-0">{showProfiles ? '−' : '+'}</span>
+        </button>
+
+        {showProfiles && (
+          <div className="px-4 sm:px-5 pb-5">
+            {marketableProfiles.length === 0 ? (
+              <p className="text-[11px] text-zinc-500 py-6 text-center border-t border-zinc-800">
+                {isFr
+                  ? 'Aucun profil. Les profils n’existent que pour les lecteurs ayant accepté les cookies analytiques ET marketing.'
+                  : 'No profiles yet. A profile only exists for readers who accepted both analytics and marketing cookies.'}
+              </p>
+            ) : (
+              <>
+                <div className="overflow-x-auto mt-3">
+                  <table className="w-full text-[11px] min-w-[720px]">
+                    <thead>
+                      <tr className="text-zinc-500 uppercase text-[9px] tracking-wider border-b border-zinc-800">
+                        <th className="text-left py-2 pr-3 font-bold">{isFr ? 'Lecteur' : 'Reader'}</th>
+                        <th className="text-left py-2 pr-3 font-bold">{isFr ? 'Intérêts' : 'Interests'}</th>
+                        <th className="text-left py-2 pr-3 font-bold">{isFr ? 'Origine' : 'Acquisition'}</th>
+                        <th className="text-left py-2 pr-3 font-bold">{isFr ? 'Appareil' : 'Device'}</th>
+                        <th className="text-left py-2 pr-3 font-bold">{isFr ? 'Zone' : 'Location'}</th>
+                        <th className="text-left py-2 pr-3 font-bold">{isFr ? 'Articles' : 'Articles'}</th>
+                        <th className="text-left py-2 font-bold">{isFr ? 'Abonné' : 'Subscriber'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {marketableProfiles.slice(0, 100).map((p, i) => (
+                        <tr key={p.visitorId || p.id || i} className="border-b border-zinc-800/60 last:border-0">
+                          <td className="py-2 pr-3 text-zinc-300 truncate max-w-[180px]" title={p.email || p.visitorId}>
+                            {p.email || <span className="text-zinc-600 font-mono">{String(p.visitorId || '').slice(0, 14)}…</span>}
+                          </td>
+                          <td className="py-2 pr-3 text-zinc-400">
+                            {(p.topInterests || []).length > 0
+                              ? (p.topInterests || []).slice(0, 3).map((t: any) => t.category).join(', ')
+                              : '—'}
+                          </td>
+                          <td className="py-2 pr-3 text-zinc-400 capitalize">{p.acquisition || '—'}</td>
+                          <td className="py-2 pr-3 text-zinc-400">{p.deviceType || '—'}</td>
+                          <td className="py-2 pr-3 text-zinc-400">{p.country || '—'}</td>
+                          <td className="py-2 pr-3 font-mono text-zinc-300">{p.articlesRead || 0}</td>
+                          <td className="py-2">
+                            {p.isSubscribed
+                              ? <span className="text-emerald-400">✓</span>
+                              : <span className="text-zinc-600">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-3 leading-relaxed">
+                  {isFr
+                    ? 'Données collectées uniquement après consentement : centres d’intérêt, source d’arrivée, type d’appareil, zone géographique coarses et profondeur de lecture. Aucune adresse IP, aucune empreinte canvasse, aucun contenu saisi au clavier.'
+                    : 'Collected only after consent: interests, acquisition source, device type, coarse geography and reading depth. No IP address, no canvas fingerprint, no typed content.'}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-zinc-950/80 border border-zinc-800/80 p-6 rounded-2xl backdrop-blur-xl shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl -z-10 pointer-events-none" />

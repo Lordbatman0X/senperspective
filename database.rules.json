@@ -83,6 +83,10 @@
     "user_consents": {
       ".read": "auth != null",
       ".write": true
+    },
+    "reader_profiles": {
+      ".read": "auth != null",
+      ".write": true
     }
   }
 }

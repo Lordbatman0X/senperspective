@@ -628,6 +628,22 @@ export async function addSubscriberEmail(email: string): Promise<void> {
   }
 }
 
+/**
+ * Removes a subscriber.
+ *
+ * There was no delete path at all: the admin's delete button only filtered the
+ * in-memory array, so the row came straight back on the next load. This makes
+ * the removal real.
+ */
+export async function removeSubscriberEmail(email: string): Promise<void> {
+  try {
+    const key = safeKey(email.toLowerCase().trim());
+    await withFirestoreTimeout(remove(ref(rtdb, `subscribers/${key}`)));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `subscribers/${email}`);
+  }
+}
+
 // -------------------------------------------------------------
 // GENERIC HELPERS (Relations, Reports, Blocks, Analytics, etc.)
 // -------------------------------------------------------------

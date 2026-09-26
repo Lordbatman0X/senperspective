@@ -7,7 +7,7 @@ import { DraftPoliciesModal } from './DraftPoliciesModal';
 import { useLocation } from 'react-router-dom';
 import { useStore } from '../store';
 import { MaintenancePage } from '../pages/MaintenancePage';
-import { trackPageView } from '../lib/telemetry';
+import { trackPageView, syncAudienceProfile } from '../lib/telemetry';
 import { isAdPubliclyVisible } from '../lib/adCampaign';
 import { useAdImpression, trackAdClick } from '../lib/adTracking';
 
@@ -17,6 +17,11 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
   const isAdmin = location.pathname.startsWith('/admin');
   const isArticle = location.pathname.startsWith('/article/');
   const loadArticles = useStore(state => state.loadArticles);
+  // Used to attach a known address to the consented audience profile. Both are
+  // opt-in identifiers: a visitor with no account and no subscription stays
+  // pseudonymous behind a random local id.
+  const readerProfile = useStore(state => state.readerProfile);
+  const subscribers = useStore(state => state.subscribers);
   const isFirstRun = React.useRef(true);
   
   const [showDraftPoliciesModal, setShowDraftPoliciesModal] = useState(false);
@@ -72,8 +77,27 @@ export const Layout: React.FC<{children: React.ReactNode}> = ({ children }) => {
         ? contextArticle?.title
         : (contextArticle?.title?.fr || contextArticle?.title?.en || '');
       trackPageView(location.pathname, contextArticle?.id, artTitle, contextArticle?.category);
+
+      // Consent-gated audience profile. This is a no-op unless the reader
+      // accepted BOTH analytics and marketing, so an undecided or declining
+      // visitor is never profiled. It only rolls up signals the consented
+      // pageview already produced — see syncAudienceProfile for the full
+      // statement of what is and is not collected.
+      const profileEmail =
+        (readerProfile?.email && !readerProfile.email.includes('visitor@')
+          ? readerProfile.email
+          : '') || '';
+      const isSubscriber = Boolean(
+        profileEmail && (subscribers || []).some(s => (s.email || '').toLowerCase() === profileEmail.toLowerCase())
+      );
+      syncAudienceProfile({
+        userEmail: profileEmail,
+        isSubscribed: isSubscriber,
+        pagePath: location.pathname,
+        articleCategory: contextArticle?.category,
+      });
     }
-  }, [location.pathname, contextArticle?.id]);
+  }, [location.pathname, contextArticle?.id, readerProfile?.email, subscribers?.length]);
 
   // If maintenance mode is explicitly active and user is not on admin routes, display Maintenance Page
   if (siteSettings?.isMaintenanceMode === true && !isAdmin) {

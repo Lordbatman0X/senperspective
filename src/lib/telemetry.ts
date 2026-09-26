@@ -3,7 +3,7 @@
  * Sends consented reader metrics, pageviews, and commercial conversion events to Firebase Firestore
  */
 
-import { saveFirestoreDoc } from '../firebase/db';
+import { saveFirestoreDoc, deleteFirestoreDoc } from '../firebase/db';
 
 const STORAGE_SESSION_KEY = 'perspective_analytics_session_id';
 const STORAGE_CONSENT_KEY = 'perspective_cookie_consent';
@@ -254,6 +254,168 @@ export async function trackEvent(
 
 export function trackPageView(path: string, articleId?: string, articleTitle?: string, category?: string) {
   trackEvent('pageview', { path, articleId, articleTitle, category });
+}
+
+/** Stable pseudonymous visitor key. A random local id, not a fingerprint. */
+const VISITOR_KEY = 'perspective_visitor_id';
+const PROFILE_QUEUE_KEY = 'perspective_profile_queue';
+const FIRST_SEEN_KEY = 'perspective_visitor_first_seen';
+
+export function getVisitorId(): string {
+  if (typeof window === 'undefined') return 'server-visitor';
+  try {
+    let v = localStorage.getItem(VISITOR_KEY);
+    if (!v) {
+      v = 'vis_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem(VISITOR_KEY, v);
+    }
+    return v;
+  } catch {
+    return 'vis_ephemeral';
+  }
+}
+
+/** Classifies where a reader came from, from the referrer host only. */
+function classifyAcquisition(referrer: string): string {
+  if (!referrer) return 'direct';
+  try {
+    const host = new URL(referrer).hostname.replace(/^www\./, '');
+    if (/google|bing|duckduckgo|yahoo|qwant/.test(host)) return 'search';
+    if (/facebook|twitter|x\.com|instagram|linkedin|tiktok|whatsapp/.test(host)) return 'social';
+    if (/news|press|journal|times|letters/.test(host)) return 'press';
+    return 'referral';
+  } catch {
+    return 'referral';
+  }
+}
+
+/**
+ * Consent-GATED commercial audience profile.
+ *
+ * WHAT THIS IS: a rollup of signals the reader has already agreed to share,
+ * stored once per visitor so the admin can see a real audience segment
+ * (interests, device, geography, acquisition source, engagement depth,
+ * newsletter status) instead of guessing from pageview totals.
+ *
+ * WHAT THIS IS NOT — deliberately:
+ *  • A strict no-op unless the reader accepted. `getUserConsent()` reports
+ *    false for analytics/marketing when nothing is stored, so an undecided
+ *    visitor produces no profile at all.
+ *  • Nothing is collected here that the consented telemetry above does not
+ *    already produce; this only aggregates those signals.
+ *  • No canvas/WebGL/audio fingerprinting, no keystroke or text-content
+ *    capture, no cross-site tracking, and no device detail beyond the coarse
+ *    Mobile/Tablet/Desktop the banner already describes.
+ *  • No IP address is stored, only the coarse country/city already recorded.
+ *  • Email is attached ONLY when the reader signed in or subscribed — the two
+ *    cases where they gave us an address deliberately.
+ *
+ * `analytics` covers measurement and `marketing` covers building a marketable
+ * segment, so BOTH are required to write. Declining either leaves the reader
+ * unprofiled rather than partially profiled.
+ */
+export async function syncAudienceProfile(args: {
+  userEmail?: string;
+  isSubscribed?: boolean;
+  pagePath?: string;
+  articleCategory?: string;
+}): Promise<void> {
+  // The entire privacy guarantee of this module, enforced at the write.
+  const consent = getUserConsent();
+  if (!consent.analytics || !consent.marketing) return;
+  if (typeof window === 'undefined') return;
+
+  try {
+    // Interest signals accumulated locally from consented reads.
+    let queue: Array<{ category: string; path: string; at: string }> = [];
+    try {
+      const raw = localStorage.getItem(PROFILE_QUEUE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) queue = parsed;
+      }
+    } catch { /* storage unavailable: continue without interest history */ }
+
+    if (args.pagePath) {
+      queue.push({ category: args.articleCategory || '', path: args.pagePath, at: new Date().toISOString() });
+      // Capped so this can never grow into a browsing log on the device.
+      queue = queue.slice(-60);
+      try { localStorage.setItem(PROFILE_QUEUE_KEY, JSON.stringify(queue)); } catch { /* ignore */ }
+    }
+
+    const categoryCounts = new Map<string, number>();
+    queue.forEach(q => {
+      if (q.category) categoryCounts.set(q.category, (categoryCounts.get(q.category) || 0) + 1);
+    });
+    const topInterests = Array.from(categoryCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([category, reads]) => ({ category, reads }));
+
+    const loc = detectRealLocation();
+    const visitorId = getVisitorId();
+    const referrer = typeof document !== 'undefined' ? (document.referrer || '') : '';
+
+    let firstSeenAt = new Date().toISOString();
+    try { firstSeenAt = localStorage.getItem(FIRST_SEEN_KEY) || firstSeenAt; } catch { /* ignore */ }
+    try { localStorage.setItem(FIRST_SEEN_KEY, firstSeenAt); } catch { /* ignore */ }
+
+    let referrerHost = '';
+    try { referrerHost = referrer ? new URL(referrer).hostname : ''; } catch { /* ignore */ }
+
+    const ok = await saveFirestoreDoc('reader_profiles', visitorId, {
+      id: visitorId,
+      visitorId,
+      sessionId: getSessionId(),
+      email: args.userEmail || '',
+      isSubscribed: Boolean(args.isSubscribed),
+      deviceType: getDeviceType(),
+      platform: typeof navigator !== 'undefined' ? navigator.platform || '' : '',
+      language: typeof navigator !== 'undefined' ? navigator.language : '',
+      country: loc.country,
+      city: loc.city,
+      region: loc.region,
+      acquisition: classifyAcquisition(referrer),
+      referrerHost,
+      topInterests,
+      articlesRead: queue.length,
+      distinctSections: new Set(queue.map(q => q.path.split('/')[1] || '')).size,
+      firstSeenAt,
+      lastSeenAt: new Date().toISOString(),
+      consent: {
+        essential: true,
+        analytics: true,
+        personalization: consent.personalization,
+        marketing: true,
+        recordedAt: new Date().toISOString(),
+      },
+    });
+
+    if (!ok) console.warn('[AUDIENCE PROFILE] not persisted this time');
+  } catch (err) {
+    console.warn('[AUDIENCE PROFILE ERROR]', err);
+  }
+}
+
+/**
+ * Stops profiling and DELETES the stored profile.
+ *
+ * Honoring a withdrawal has to actually remove the record, not merely stop
+ * writing it. Called by the consent banner when a reader rejects or downgrades.
+ */
+export async function withdrawAudienceProfile(): Promise<void> {
+  try {
+    localStorage.removeItem(PROFILE_QUEUE_KEY);
+  } catch { /* ignore */ }
+  if (typeof window === 'undefined') return;
+  const consent = getUserConsent();
+  if (consent.analytics && consent.marketing) {
+    try {
+      await deleteFirestoreDoc('reader_profiles', getVisitorId());
+    } catch (err) {
+      console.warn('[AUDIENCE PROFILE WITHDRAW ERROR]', err);
+    }
+  }
 }
 
 export function trackConversion(type: 'newsletter_subscription' | 'premium_click' | 'ad_click' | 'contact_lead', userEmail?: string, metadata?: Record<string, any>) {

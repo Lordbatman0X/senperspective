@@ -8,7 +8,8 @@ import {
   saveArticle, 
   deleteArticle as firestoreDeleteArticle, 
   subscribeToArticles, 
-  addSubscriberEmail, 
+  addSubscriberEmail,
+  removeSubscriberEmail,
   updateSiteSettings as firestoreUpdateSiteSettings,
   fetchSiteSettings,
   addComment as firestoreAddComment,
@@ -734,6 +735,8 @@ interface AppState {
   deleteNotification: (id: string) => void;
   subscribers: SubscriberItem[];
   addSubscriber: (email: string) => void;
+  /** Re-reads the subscriber directory from the database. */
+  loadSubscribers: () => Promise<void>;
   deleteSubscriber: (email: string) => void;
   readerProfile: ReaderProfile | null;
   setReaderProfile: (profile: ReaderProfile | null) => void;
@@ -2294,13 +2297,16 @@ export const useStore = create<AppState>()(
           const newSub = { email: clean, date: new Date().toISOString().split('T')[0] };
           set({ subscribers: [newSub, ...current] });
           trackConversion('newsletter_subscription', clean, { source: 'subscription_form' });
+          // FIX (subscriber list reset on every reload): this write used to be
+          // `supabase.from('subscribers').upsert(...)`, and `supabase` is a
+          // hardcoded `null` in this store — so it was a silent no-op and the
+          // new address existed only in memory until the next reload wiped it.
+          // addSubscriberEmail is the real RTDB writer and was imported but
+          // never called. It is now the one write path.
           try {
-            const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
-            if (supabase) {
-              await supabase.from('subscribers').upsert({ id: subDocId, email: clean, date: newSub.date, active: true }).catch(() => {});
-            }
+            await addSubscriberEmail(clean);
           } catch (err) {
-            console.error("[Supabase notice] Error saving subscriber:", err);
+            console.error('Subscriber persistence notice:', err);
           }
         }
       },
@@ -2308,12 +2314,42 @@ export const useStore = create<AppState>()(
         const clean = email.trim().toLowerCase();
         set({ subscribers: (get().subscribers || []).filter(s => ((s.email ?? '').toLowerCase()) !== clean) });
         try {
-          const subDocId = clean.replace(/[^a-zA-Z0-9]/g, '_');
-          if (supabase) {
-            await supabase.from('subscribers').delete().eq('id', subDocId).catch(() => {});
-          }
+          await removeSubscriberEmail(clean);
         } catch (err) {
-          console.error("[Supabase notice] Error deleting subscriber:", err);
+          console.error('Subscriber delete notice:', err);
+        }
+      },
+      loadSubscribers: async () => {
+        // Hydrate the directory from the database so a reload shows the real
+        // list. Without this the admin only ever saw the seed rows plus
+        // whatever the current tab had typed since the page loaded.
+        try {
+          const rows = await fetchFirestoreCollection('subscribers');
+          if (!rows || rows.length === 0) return;
+          const loaded: SubscriberItem[] = rows
+            .map((r: any) => ({
+              email: String(r?.email || '').trim().toLowerCase(),
+              date: r?.date || (r?.subscribedAt ? String(r.subscribedAt).split('T')[0] : ''),
+            }))
+            .filter((r: SubscriberItem) => r.email);
+          if (loaded.length === 0) return;
+
+          // Merge by address so a row added in this tab is never dropped by the
+          // slower network read, and a row the read does not know about is kept.
+          const byEmail = new Map<string, SubscriberItem>();
+          (get().subscribers || []).forEach(s => {
+            if (s?.email) byEmail.set(s.email.toLowerCase(), s);
+          });
+          loaded.forEach(s => {
+            if (!byEmail.has(s.email)) byEmail.set(s.email, s);
+          });
+
+          const merged = Array.from(byEmail.values()).sort((a, b) =>
+            String(b.date || '').localeCompare(String(a.date || ''))
+          );
+          set({ subscribers: merged });
+        } catch (err) {
+          console.warn('Subscribers hydrate notice:', err);
         }
       },
       readerProfile: null,
