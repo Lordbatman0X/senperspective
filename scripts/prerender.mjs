@@ -762,6 +762,42 @@ async function main() {
   await writeFile(path.join(DIST, 'atom.xml'), buildAtom(articles), 'utf8');
   console.log('[prerender] wrote rss.xml and atom.xml (50 most recent each)');
 
+  // 404 page.
+  //
+  // Article URLs are rewritten to their prerendered file. Firebase does NOT
+  // fall through to a later rewrite when that destination is missing, so an
+  // unknown article correctly returns a real 404 status (which is what search
+  // engines need in order to drop the URL) — but it would otherwise be a bare
+  // hosting error page. This keeps the real 404 status while giving visitors the
+  // site's own not-found screen instead of a dead end.
+  //
+  // The markup mirrors the in-app "Article non trouvé" state so the two are
+  // indistinguishable. It reuses the shipped bundle's stylesheet link and is
+  // static HTML, so it needs no JavaScript to read.
+  const notFoundHtml = `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Page introuvable | SenPerspective</title>
+<meta name="robots" content="noindex, follow" />
+<meta name="description" content="Cette page n'existe pas ou a ete deplacee. Revenez a l'accueil de SenPerspective." />
+<link rel="canonical" href="https://senperspective.com" />
+</head>
+<body style="margin:0;background:#fafafa">
+  <main style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;font-family:system-ui,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif">
+    <div style="max-width:32rem;text-align:center">
+      <p style="margin:0 0 1rem;font-size:.75rem;font-weight:800;letter-spacing:.25em;text-transform:uppercase;color:#E85D42">SenPerspective</p>
+      <h1 style="margin:0 0 1rem;font-size:1.75rem;font-weight:800;color:#18181b">Article non trouve</h1>
+      <p style="margin:0 0 2rem;font-size:.95rem;line-height:1.6;color:#52525b">Cet article n'existe plus ou l'adresse saisie est incorrecte.</p>
+      <a href="/" style="display:inline-block;padding:.75rem 1.5rem;background:#E85D42;color:#fff;text-decoration:none;border-radius:.5rem;font-size:.75rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase">Retour a l'accueil</a>
+    </div>
+  </main>
+</body>
+</html>`;
+  await writeFile(path.join(DIST, '404.html'), notFoundHtml, 'utf8');
+  console.log('[prerender] wrote 404.html');
+
   // Sanity check: confirm the output really contains words, which is the whole
   // point. If this ever drops to 0 the deployment is worthless, so it warns.
   if (written > 0) {
