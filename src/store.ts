@@ -805,6 +805,12 @@ interface AppState {
     seoGoogleSiteVerification?: string;
     googleChatWebhook?: string;
     ga4MeasurementId?: string;
+    /** Display name subscribers see as the sender. Defaults to "Perspective Group". */
+    newsletterSenderName?: string;
+    /** Absolute https URL of the sender photo shown on every newsletter. */
+    newsletterSenderPhoto?: string;
+    /** Signature block appended to every newsletter. Plain text or HTML. */
+    newsletterSignature?: string;
     databaseProvider?: string;
     homeSections?: string[];
     writingIdentity?: {

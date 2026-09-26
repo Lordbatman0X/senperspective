@@ -252,28 +252,96 @@ export async function disconnectGoogleGmail(): Promise<void> {
 
 
 /**
- * Helper to encode UTF-8 string to base64url format for Gmail API
+ * Builds a correct RFC 5322 MIME message and returns it base64url-encoded for
+ * the Gmail `messages.send` `raw` field.
+ *
+ * FIX (email arrived with invisible/empty content): the old builder joined the
+ * headers with `.filter(Boolean)`, which DELETES the empty string that
+ * separates headers from the body. Without that blank line the first lines of
+ * the HTML were parsed as malformed header continuation, so Gmail delivered a
+ * message whose body was effectively empty. `senderHeader` being optional
+ * cannot be allowed to remove the body separator, so the two concerns are now
+ * separate.
+ *
+ * Also upgraded to a proper multipart/alternative message: a plain-text part
+ * for clients that will not render HTML, plus the HTML part, and an explicit
+ * `Content-Transfer-Encoding: base64` so accented characters survive.
  */
-function encodeMimeMessage(to: string, subject: string, bodyHtml: string, fromName?: string, fromEmail?: string): string {
-  const senderHeader = fromEmail 
-    ? `From: ${fromName ? `"${fromName}" ` : ''}<${fromEmail}>`
-    : '';
+function encodeMimeMessage(
+  to: string,
+  subject: string,
+  bodyHtml: string,
+  fromName?: string,
+  fromEmail?: string
+): string {
+  // RFC 2047 encoded-word for the subject, so accents and apostrophes survive.
+  const encodeHeader = (value: string): string => {
+    const utf8 = new TextEncoder().encode(value);
+    let binary = '';
+    utf8.forEach(b => { binary += String.fromCharCode(b); });
+    return `=?utf-8?B?${btoa(binary)}?=`;
+  };
 
-  const headers = [
+  const headers: string[] = [
     `To: ${to}`,
-    senderHeader,
-    `Subject: =?utf-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+    // Omitted entirely when absent, but it must never be what removes the
+    // header/body separator — see the note above.
+    ...(fromEmail ? [`From: ${fromName ? `${encodeHeader(fromName)} ` : ''}<${fromEmail}>`] : []),
+    `Subject: ${encodeHeader(subject)}`,
     'MIME-Version: 1.0',
+  ];
+
+  const boundary = '----=_PerspectiveNewsletter_' + Math.random().toString(36).slice(2, 12);
+  headers.push(
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    '',
+    'This is a multi-part message in MIME format.',
+    '',
+    `--${boundary}`,
+    'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: base64',
+    '',
+  );
+
+  const b64 = (value: string): string => {
+    const utf8 = new TextEncoder().encode(value);
+    let binary = '';
+    utf8.forEach(b => { binary += String.fromCharCode(b); });
+    return btoa(binary);
+  };
+
+  const plainText = bodyHtml
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h1|h2|h3|li|tr)>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '- ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const fullMessage = [
+    ...headers,
+    b64(plainText),
+    '',
+    `--${boundary}`,
     'Content-Type: text/html; charset=utf-8',
-    ''
-  ].filter(Boolean).join('\r\n');
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64(bodyHtml),
+    '',
+    `--${boundary}--`,
+  ].join('\r\n');
 
-  const fullMessage = `${headers}\r\n${bodyHtml}`;
-
-  return btoa(unescape(encodeURIComponent(fullMessage)))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  // Raw base64 -> base64url, padding stripped, as the Gmail API requires.
+  const utf8 = new TextEncoder().encode(fullMessage);
+  let raw = '';
+  utf8.forEach(b => { raw += String.fromCharCode(b); });
+  return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 /**

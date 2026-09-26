@@ -5,6 +5,7 @@ import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db';
 import { safeJsonParse } from '../../lib/apiUtils';
 import { buildNewsletterHtml } from '../../lib/newsletterTemplate';
 import type { InlineImage } from '../../lib/newsletterTemplate';
+import { RichTextEditor } from './NewsletterRichText';
 import { 
   connectGoogleGmail, 
   getCachedGoogleToken, 
@@ -81,6 +82,8 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
   const language = useStore(s => s.language);
   const isFr = language === 'fr';
   const addNotification = useStore(s => s.addNotification);
+  const siteSettings = useStore(s => s.siteSettings);
+  const updateSiteSettings = useStore(s => s.updateSiteSettings);
   const [searchTerm, setSearchTerm] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -188,6 +191,22 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
   const [pendingImage, setPendingImage] = useState<{ afterLine: number; url: string } | null>(null);
   const [pendingCaption, setPendingCaption] = useState('');
 
+  // SENDER IDENTITY & SIGNATURE.
+  // Defaults to the brand and the site favicon, so a fresh install already sends
+  // as "Perspective Group" with the right avatar — the admin only has to change
+  // them if they want something else.
+  const DEFAULT_SENDER_PHOTO = 'https://senperspective.com/favicon.png';
+  const [senderName, setSenderName] = useState('');
+  const [senderPhoto, setSenderPhoto] = useState('');
+  const [signature, setSignature] = useState('');
+  const [senderConfigSaved, setSenderConfigSaved] = useState(false);
+
+  useEffect(() => {
+    setSenderName(siteSettings?.newsletterSenderName || 'Perspective Group');
+    setSenderPhoto(siteSettings?.newsletterSenderPhoto || DEFAULT_SENDER_PHOTO);
+    setSignature(siteSettings?.newsletterSignature || '');
+  }, [siteSettings?.newsletterSenderName, siteSettings?.newsletterSenderPhoto, siteSettings?.newsletterSignature]);
+
   // Single source of truth for the rendered email, at component scope so both
   // the live preview and the real send use it. Previously the HTML was inlined
   // inside the send handler, which made a faithful preview impossible.
@@ -199,6 +218,9 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
     inlineImages,
     viaGmail: !!googleToken,
     lang: isFr ? 'fr' : 'en',
+    senderName: senderName.trim() || 'Perspective Group',
+    senderPhoto: senderPhoto.trim(),
+    signature,
   });
 
   const addInlineImage = (afterLine: number, url: string, caption?: string) => {
@@ -588,6 +610,87 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
               )}
             </div>
 
+            {/* SENDER IDENTITY + SIGNATURE.
+                Applied to every newsletter and to the preview, and saved
+                separately from the campaign so it is set once, not per send. */}
+            <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-3.5 space-y-3 bg-zinc-50/60 dark:bg-zinc-950/40">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserCheck size={13} className="text-[#E85D42]" />
+                  {language === 'fr' ? 'Expéditeur & signature' : 'Sender & signature'}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Only these three keys are written, so saving can never
+                    // disturb categories, articles or anything else.
+                    updateSiteSettings({
+                      newsletterSenderName: senderName.trim() || 'Perspective Group',
+                      newsletterSenderPhoto: senderPhoto.trim(),
+                      newsletterSignature: signature,
+                    });
+                    setSenderConfigSaved(true);
+                    setTimeout(() => setSenderConfigSaved(false), 2500);
+                  }}
+                  className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#E85D42] hover:bg-[#c94931] text-white rounded-md cursor-pointer"
+                >
+                  {senderConfigSaved
+                    ? (language === 'fr' ? '✓ Enregistré' : '✓ Saved')
+                    : (language === 'fr' ? 'Enregistrer' : 'Save')}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-zinc-500 block mb-1">
+                    {language === 'fr' ? 'Nom de l\'expéditeur' : 'Sender name'}
+                  </label>
+                  <input
+                    type="text"
+                    value={senderName}
+                    onChange={e => setSenderName(e.target.value)}
+                    placeholder="Perspective Group"
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 px-2.5 py-2 text-xs focus:outline-none focus:border-[#E85D42] rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono uppercase text-zinc-500 block mb-1">
+                    {language === 'fr' ? 'Photo (URL)' : 'Photo (URL)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={senderPhoto}
+                    onChange={e => setSenderPhoto(e.target.value)}
+                    placeholder="https://senperspective.com/favicon.png"
+                    className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 px-2.5 py-2 text-[11px] font-mono focus:outline-none focus:border-[#E85D42] rounded-md"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-mono uppercase text-zinc-500 block mb-1">
+                  {language === 'fr' ? 'Signature (apposée à chaque newsletter)' : 'Signature (appended to every newsletter)'}
+                </label>
+                <textarea
+                  rows={3}
+                  value={signature}
+                  onChange={e => setSignature(e.target.value)}
+                  placeholder={isFr
+                    ? "L'équipe de Rédaction\nPerspective Group — senperspective.com"
+                    : 'The Editorial Team\nPerspective Group — senperspective.com'}
+                  className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 p-2.5 text-[11px] leading-relaxed focus:outline-none focus:border-[#E85D42] placeholder-zinc-400 rounded-md"
+                />
+              </div>
+
+              {senderPhoto.trim() && (
+                <p className="text-[10px] text-zinc-500">
+                  {language === 'fr'
+                    ? 'Astuce : la photo doit être une URL https publique — la plupart des clients mail bloquent les images non hébergées.'
+                    : 'Tip: the photo must be a public https URL — most email clients block images that are not hosted.'}
+                </p>
+              )}
+            </div>
+
             <div>
               <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider block mb-1">
                 {language === 'fr' ? 'Objet de l\'email' : 'Subject Line'}
@@ -618,6 +721,21 @@ export function SubscriberTab({ subscribers, deleteSubscriber, addSubscriber, op
                 onChange={e => setBody(e.target.value)}
                 className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 p-3 text-xs leading-relaxed focus:outline-none focus:border-[#E85D42] placeholder-zinc-400 dark:placeholder-zinc-500 rounded-md"
               />
+
+              {/* WYSIWYG toolbar — bold, italic, headings, lists, links, quotes,
+                  dividers and images, in one row. The plain textarea above stays
+                  available for pasting long text without rich markup. */}
+              <div className="mt-2">
+                <RichTextEditor
+                  value={body}
+                  onChange={setBody}
+                  isFr={isFr}
+                  openMediaSelector={openMediaSelector}
+                  placeholder={isFr
+                    ? 'Rédigez votre newsletter… (gras, titres, listes, liens, images)'
+                    : 'Write your newsletter… (bold, headings, lists, links, images)'}
+                />
+              </div>
             </div>
             {/* INLINE IMAGES INSIDE THE ARTICLE.
                 The hero image below can only sit above the text. This lets an
