@@ -1,4 +1,11 @@
 User-agent: *
 Allow: /
 
+# Ad crawlers need ads.txt (verified) and the article pages.
+User-agent: Mediapartners-Google
+Allow: /
+
+User-agent: AdsBot-Google
+Allow: /
+
 Sitemap: https://senperspective.com/sitemap.xml
