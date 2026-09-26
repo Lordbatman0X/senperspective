@@ -8,18 +8,63 @@ import { saveFirestoreDoc } from '../firebase/db';
 const STORAGE_SESSION_KEY = 'perspective_analytics_session_id';
 const STORAGE_CONSENT_KEY = 'perspective_cookie_consent';
 
+/** A session ends after this much idle time, matching common analytics convention. */
+const SESSION_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+const STORAGE_SESSION_TS = 'perspective_analytics_session_ts';
+const STORAGE_DEVICE_KEY = 'perspective_analytics_device';
+
+/**
+ * Return a session id that expires after 30 minutes of inactivity.
+ *
+ * Previously the id was written to localStorage and never expired, so a single
+ * browser produced exactly one "session" for the lifetime of the install. Every
+ * unique-visitor and session count derived from that was wrong, and
+ * duration-per-session metrics were meaningless because no session ever ended.
+ *
+ * The timestamp is refreshed on every call, so active reading keeps the session
+ * alive and a genuine break in reading starts a new one.
+ */
 export function getSessionId(): string {
   if (typeof window === 'undefined') return 'server-session';
+  const now = Date.now();
   let sid = localStorage.getItem(STORAGE_SESSION_KEY);
-  if (!sid) {
-    sid = 'sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+  const lastSeen = Number(localStorage.getItem(STORAGE_SESSION_TS) || '0');
+
+  const expired = !sid || !lastSeen || now - lastSeen > SESSION_IDLE_MS;
+  if (expired) {
+    sid = 'sess_' + now + '_' + Math.random().toString(36).slice(2, 8);
     localStorage.setItem(STORAGE_SESSION_KEY, sid);
+  }
+  try {
+    localStorage.setItem(STORAGE_SESSION_TS, String(now));
+  } catch {
+    // Private mode: the id still works for this page view.
   }
   return sid;
 }
 
+/**
+ * Stable device type for the lifetime of the session.
+ *
+ * This used to read window.innerWidth on every call, so one reader was counted
+ * as "Desktop" and "Mobile" in the same session as soon as they rotated or
+ * resized the window. Pinning the value to the session keeps one reader
+ * classified as one device.
+ */
 export function getDeviceType(): string {
   if (typeof window === 'undefined') return 'Desktop';
+  try {
+    const pinned = sessionStorage.getItem(STORAGE_DEVICE_KEY);
+    if (pinned) return pinned;
+    const detected = detectDeviceType();
+    sessionStorage.setItem(STORAGE_DEVICE_KEY, detected);
+    return detected;
+  } catch {
+    return detectDeviceType();
+  }
+}
+
+function detectDeviceType(): string {
   const width = window.innerWidth;
   if (width < 640) return 'Mobile';
   if (width < 1024) return 'Tablet';
@@ -98,6 +143,24 @@ export function detectRealLocation(): { country: string; city: string; region: s
   }
 }
 
+/**
+ * Events that carry personal data and therefore require the marketing
+ * consent, not merely the analytics one.
+ *
+ * Previously the consent gate only covered `pageview`, so
+ * `newsletter_subscription`, `ad_click` and `contact_lead` were written to
+ * Firestore regardless of the reader's choice — while carrying `userEmail`,
+ * `path`, `referrer` and location. That is personal data leaving the site
+ * without the marketing consent the banner asked for.
+ */
+const MARKETING_GATED_EVENTS = new Set([
+  'newsletter_subscription',
+  'ad_click',
+  'contact_lead',
+  'premium_click',
+]);
+
+
 export async function sendConsentTelemetry(preferences: { essential: boolean; analytics: boolean; personalization: boolean; marketing: boolean }, userEmail?: string) {
   const sessionId = getSessionId();
   const consentDocId = `consent_${sessionId}`;
@@ -115,7 +178,10 @@ export async function sendConsentTelemetry(preferences: { essential: boolean; an
     deviceType: getDeviceType(),
     locale: typeof navigator !== 'undefined' ? navigator.language : 'fr-SN',
     referrer: typeof document !== 'undefined' ? document.referrer : 'Direct',
-    country: locInfo.region,
+    // Same correction as trackEvent: `country` holds the country, `region`
+    // keeps the descriptive grouping string.
+    country: locInfo.country,
+    region: locInfo.region,
     city: locInfo.city,
     updatedAt: new Date().toISOString(),
     userEmail: userEmail || ''
@@ -142,10 +208,13 @@ export async function trackEvent(
   } = {}
 ) {
   const consent = getUserConsent();
-  // If user declined analytics, skip non-essential tracking
-  if (!consent.analytics && eventName === 'pageview') {
-    return;
-  }
+
+  // Consent gate. `pageview` needs analytics consent; the conversion events
+  // carry a userEmail and location, so they additionally require marketing
+  // consent. Before this, only `pageview` was checked and the personal-data
+  // events were written no matter what the reader had chosen.
+  if (eventName === 'pageview' && !consent.analytics) return;
+  if (MARKETING_GATED_EVENTS.has(eventName) && !consent.marketing) return;
 
   const sessionId = getSessionId();
   // Only use real location if user granted explicit analytics/location permission
@@ -163,7 +232,12 @@ export async function trackEvent(
     durationSeconds: details.durationSeconds || 0,
     deviceType: getDeviceType(),
     referrer: typeof document !== 'undefined' ? document.referrer : 'Direct',
-    country: locInfo.region,
+    // FIX (malformed geography): this used to be `locInfo.region`, so the
+    // `country` field held values like "Sénégal (Dakar, Thiès, Saint-Louis)".
+    // Any grouping by country produced a nonsensical result. `country` is now
+    // the country, and the descriptive grouping string is kept in `region`.
+    country: locInfo.country,
+    region: locInfo.region,
     city: locInfo.city,
     timestamp: new Date().toISOString(),
     userEmail: details.userEmail || '',

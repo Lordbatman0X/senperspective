@@ -217,7 +217,12 @@ export async function sendEmailViaGmailApi({
     }
   }
 
-  // Server proxy route fallback
+  // Server proxy route fallback.
+  //
+  // NOTE: this route does not exist on static Firebase Hosting — an unknown
+  // path returns index.html, not JSON. The check below turns that confusing
+  // "Unexpected token <" parse crash into an actionable message. Gmail OAuth
+  // is the supported send path; see connectGoogleGmail().
   try {
     const res = await fetch(resolveApiUrl('/api/gmail/send'), {
       method: 'POST',
@@ -231,6 +236,14 @@ export async function sendEmailViaGmailApi({
         accessToken: token || null
       })
     });
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return {
+        success: false,
+        error: 'Relay unavailable: /api/gmail/send did not return JSON (static hosting). Connect Gmail to send.'
+      };
+    }
 
     const data = await res.json();
     if (res.ok && data.success) {

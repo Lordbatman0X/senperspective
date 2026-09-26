@@ -43,3 +43,4 @@ shot_*.png
 .chrome-cdp/
 .chrome-nav/
 shot_*.png
+.chrome-verify/

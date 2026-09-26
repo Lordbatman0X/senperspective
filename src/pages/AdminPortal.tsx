@@ -998,6 +998,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           <SubscriberTab 
             subscribers={subscribers}
             deleteSubscriber={deleteSubscriber}
+            openMediaSelector={openImgSelector}
           />
         )}
 

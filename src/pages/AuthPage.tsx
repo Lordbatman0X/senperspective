@@ -1,15 +1,37 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store';
 import { useAuth } from '../contexts/AuthContext';
+import { passwordResetErrorMessage } from '../firebase/auth';
 import { Mail, Key, ShieldCheck, User, ArrowRight, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { language, siteSettings, addSubscriber } = useStore();
-  const { login, register, loginWithGoogle, resetPassword } = useAuth();
+  const { login, register, loginWithGoogle, resetPassword, confirmPasswordReset } = useAuth();
 
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login');
+
+  // Password-reset completion state.
+  // Firebase delivers the emailed code as `oobCode` on the redirect URL. It is
+  // mirrored into sessionStorage so a reload — or opening the link in a new
+  // tab after the first one consumed the query string — still works.
+  const [resetOobCode, setResetOobCode] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [resetDone, setResetDone] = useState(false);
+
+  useEffect(() => {
+    const fromUrl = searchParams.get('oobCode');
+    if (fromUrl) {
+      try { sessionStorage.setItem('sp_pw_reset_code', fromUrl); } catch { /* private mode */ }
+      setResetOobCode(fromUrl);
+      return;
+    }
+    try { setResetOobCode(sessionStorage.getItem('sp_pw_reset_code')); } catch { /* ignore */ }
+  }, [searchParams]);
 
   // Form State
   const [email, setEmail] = useState('');
@@ -109,17 +131,151 @@ export const AuthPage: React.FC = () => {
       setErrorMessage(language === 'fr' ? 'Veuillez saisir votre adresse e-mail ci-dessus.' : 'Please enter your email address above.');
       return;
     }
+    setIsSubmitting(true);
+    setErrorMessage('');
+    setSuccessMessage('');
     try {
       await resetPassword(email);
       setSuccessMessage(
         language === 'fr'
-          ? 'Un e-mail de réinitialisation sécurisé Firebase a été envoyé à votre adresse.'
-          : 'A secure Firebase password reset email has been dispatched.'
+          ? 'Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d’être envoyé. Vérifiez vos.spams.'
+          : 'If an account exists for that address, a reset email has just been sent. Please check your spam folder.'
       );
     } catch (err: any) {
-      setErrorMessage(err.message || 'Erreur lors de la réinitialisation.');
+      // Raw Firebase codes are meaningless to a reader; translate them through
+      // the existing FR/EN mechanism.
+      setErrorMessage(
+        passwordResetErrorMessage(err?.code || '', language === 'fr', err?.message)
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetOobCode) {
+      setResetError(language === 'fr' ? 'Lien de réinitialisation introuvable.' : 'Reset link not found.');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setResetError(language === 'fr' ? 'Le mot de passe doit contenir au moins 6 caractères.' : 'Password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetError(language === 'fr' ? 'Les mots de passe ne correspondent pas.' : 'Passwords do not match.');
+      return;
+    }
+    setIsSubmitting(true);
+    setResetError('');
+    try {
+      await confirmPasswordReset(resetOobCode, newPassword);
+      setResetDone(true);
+    } catch (err: any) {
+      setResetError(
+        passwordResetErrorMessage(err?.code || '', language === 'fr', err?.message)
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // A reader arriving from the emailed link sees only the "set a new password"
+  // step — the sign-in/sign-up tabs are hidden so there is no ambiguity about
+  // what the page is asking for.
+  if (resetOobCode || resetDone) {
+    return (
+      <div className="min-h-[85vh] w-full bg-zinc-950 text-zinc-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans">
+        <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+          <div
+            className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-[#E85D42] to-rose-600"
+            style={{ backgroundColor: accentColor }}
+          />
+
+          {resetDone ? (
+            <div className="py-6 text-center">
+              <CheckCircle2 className="w-12 h-12 mx-auto mb-4" style={{ color: accentColor }} />
+              <h2 className="text-xl font-extrabold uppercase tracking-tight mb-2">
+                {language === 'fr' ? 'Mot de passe mis à jour' : 'Password updated'}
+              </h2>
+              <p className="text-sm text-zinc-400 mb-6">
+                {language === 'fr'
+                  ? 'Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.'
+                  : 'You can now sign in with your new password.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetDone(false);
+                  setResetOobCode(null);
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  try { sessionStorage.removeItem('sp_pw_reset_code'); } catch { /* ignore */ }
+                  setAuthTab('login');
+                }}
+                className="w-full py-3 font-bold uppercase tracking-widest text-white text-sm transition-colors"
+                style={{ backgroundColor: accentColor }}
+              >
+                {language === 'fr' ? 'Aller à la connexion' : 'Go to sign in'}
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSetNewPassword}>
+              <h2 className="text-xl font-extrabold uppercase tracking-tight mb-1">
+                {language === 'fr' ? 'Nouveau mot de passe' : 'Set a new password'}
+              </h2>
+              <p className="text-xs text-zinc-400 font-mono mb-6">
+                {language === 'fr' ? 'Perspective Group' : 'Perspective Group'}
+              </p>
+
+              <div className="space-y-4">
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder={language === 'fr' ? 'Nouveau mot de passe' : 'New password'}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-white pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#E85D42]/70 transition-colors"
+                  />
+                </div>
+                <div className="relative">
+                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder={language === 'fr' ? 'Confirmer le mot de passe' : 'Confirm new password'}
+                    className="w-full bg-zinc-950 border border-zinc-800 text-white pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#E85D42]/70 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {resetError && (
+                <div className="mt-4 flex items-start gap-2 border border-red-900/60 bg-red-950/30 text-red-300 text-xs px-3 py-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>{resetError}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="mt-6 w-full py-3 font-bold uppercase tracking-widest text-white text-sm transition-colors disabled:opacity-60"
+                style={{ backgroundColor: accentColor }}
+              >
+                {isSubmitting
+                  ? (language === 'fr' ? 'Enregistrement…' : 'Saving…')
+                  : (language === 'fr' ? 'Enregistrer' : 'Save password')}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[85vh] w-full bg-zinc-950 text-zinc-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans">

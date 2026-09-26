@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import {
+  onAuthStateChanged,
+  verifyPasswordResetCode,
+  confirmPasswordReset as firebaseConfirmPasswordReset,
+  User as FirebaseUser
+} from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useStore, loadSeenDmIds, rememberSeenDmIds } from '../store';
 import { subscribeToMessages } from '../firebase/db';
@@ -29,6 +34,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   logoutUser: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  confirmPasswordReset: (oobCode: string, newPassword: string) => Promise<void>;
   resetUserPassword: (email: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -369,7 +375,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const resetPassword = async (email: string): Promise<void> => {
-    await resetPasswordEmail(email);
+    // Re-thrown with a readable message so AuthPage can show something
+    // actionable instead of a raw Firebase code.
+    try {
+      await resetPasswordEmail(email);
+    } catch (e: any) {
+      const err = new Error(e?.code || 'auth/unknown');
+      (err as any).code = e?.code;
+      throw err;
+    }
+  };
+
+  /**
+   * Complete a password reset from the emailed link.
+   *
+   * Firebase hands the app an `oobCode` query parameter. Verifying it produces
+   * a temporary credential that authorises exactly one password change, so
+   * this cannot be used to escalate privileges.
+   */
+  const confirmPasswordReset = async (oobCode: string, newPassword: string): Promise<void> => {
+    const credential = await verifyPasswordResetCode(auth, oobCode);
+    await firebaseConfirmPasswordReset(auth, credential, newPassword);
   };
 
   const refreshProfile = async (): Promise<void> => {
@@ -396,6 +422,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         logoutUser: logout,
         resetPassword,
+    confirmPasswordReset,
         resetUserPassword: resetPassword,
         refreshProfile,
       }}

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SubscriberItem, useStore } from '../../store';
-import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck } from 'lucide-react';
+import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck, Image as ImageIcon, Upload, X, Eye } from 'lucide-react';
 import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db';
 import { safeJsonParse } from '../../lib/apiUtils';
+import { buildNewsletterHtml } from '../../lib/newsletterTemplate';
 import { 
   connectGoogleGmail, 
   getCachedGoogleToken, 
@@ -14,14 +15,22 @@ import {
 interface SubscriberTabProps {
   subscribers: SubscriberItem[];
   deleteSubscriber: (email: string) => void;
+  /** Existing media-library picker, reused rather than reimplemented. */
+  openMediaSelector?: (onSelect: (url: string) => void) => void;
 }
 
-export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabProps) {
+export function SubscriberTab({ subscribers, deleteSubscriber, openMediaSelector }: SubscriberTabProps) {
   const language = useStore(s => s.language);
+  const isFr = language === 'fr';
   const addNotification = useStore(s => s.addNotification);
   const [searchTerm, setSearchTerm] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  // Hero image for the newsletter: chosen from the media library or uploaded
+  // from the device, with a width the admin can adjust.
+  const [heroImageUrl, setHeroImageUrl] = useState('');
+  const [heroImageWidth, setHeroImageWidth] = useState(560);
+  const [showPreview, setShowPreview] = useState(false);
   const [campaignSuccess, setCampaignSuccess] = useState<string | null>(null);
   const [confirmDeleteEmail, setConfirmDeleteEmail] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
@@ -96,37 +105,75 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
     }
   };
 
+  // Single source of truth for the rendered email, at component scope so both
+  // the live preview and the real send use it. Previously the HTML was inlined
+  // inside the send handler, which made a faithful preview impossible.
+  const htmlContent = buildNewsletterHtml({
+    subject: subject.trim(),
+    body: body.trim(),
+    imageUrl: heroImageUrl,
+    imageWidth: heroImageWidth,
+    viaGmail: !!googleToken,
+    lang: isFr ? 'fr' : 'en',
+  });
+
   const handleBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim() || !body.trim()) return;
+    setBroadcastError(null);
 
-    // Use active subscribers directory or default fallback directory if empty
-    const targetRecipients = (subscribers && subscribers.length > 0)
-      ? subscribers
-      : [
-          { email: connectedEmail || 'kadersdiaz3@gmail.com', date: new Date().toISOString().split('T')[0] },
-          { email: 'contact@senperspective.com', date: new Date().toISOString().split('T')[0] }
-        ];
+    if (!subject.trim() || !body.trim()) {
+      setBroadcastError(isFr ? 'Le sujet et le message sont obligatoires.' : 'Subject and body are both required.');
+      return;
+    }
+
+    // FIX (newsletter sent to the wrong people): this used to fall back to a
+    // hardcoded list containing the connected Gmail address and
+    // contact@senperspective.com whenever the subscriber directory was empty.
+    // A failed or slow directory load therefore looked identical to a normal
+    // send: it emailed internal addresses and still logged a success.
+    // There is now no fallback — an empty list blocks the broadcast.
+    const targetRecipients = subscribers || [];
+    if (targetRecipients.length === 0) {
+      setBroadcastError(
+        isFr
+          ? 'Aucun abonné. Envoi bloqué — vérifiez la liste des abonnés avant de diffuser.'
+          : 'No subscribers. Broadcast blocked — check the subscriber list before sending.'
+      );
+      return;
+    }
+
+    // Deduplicate by address: the same reader can appear twice after a
+    // re-subscribe, and would otherwise receive two copies.
+    const seenEmails = new Set<string>();
+    const recipients = targetRecipients.filter((s) => {
+      const addr = String(s.email || '').trim().toLowerCase();
+      if (!addr || seenEmails.has(addr)) return false;
+      seenEmails.add(addr);
+      return true;
+    });
+
+    if (recipients.length === 0) {
+      setBroadcastError(isFr ? 'Aucun abonné valide dans la liste.' : 'No valid recipients in the list.');
+      return;
+    }
+
+    // Explicit confirmation, so a broadcast is never a one-click accident.
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm(
+          isFr
+            ? `Envoyer « ${subject.trim()} » à ${recipients.length} abonné(s) ?`
+            : `Send "${subject.trim()}" to ${recipients.length} subscriber(s)?`
+        )
+      : true;
+    if (!confirmed) return;
 
     setIsSendingGmail(true);
-    setGmailProgress({ current: 0, total: targetRecipients.length });
-
-    const htmlContent = `
-      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #18181b; line-height: 1.6; border: 1px solid #e4e4e7; padding: 24px; border-radius: 8px;">
-        <h1 style="color: #E85D42; font-size: 22px; text-transform: uppercase; margin-top: 0; font-family: Georgia, serif;">Perspective Group</h1>
-        <h2 style="font-size: 18px; color: #27272a; border-bottom: 2px solid #E85D42; padding-bottom: 8px;">${subject.trim()}</h2>
-        <div style="font-size: 14px; white-space: pre-wrap; margin: 16px 0; color: #27272a;">${body.trim()}</div>
-        <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0 12px 0;" />
-        <p style="font-size: 11px; color: #71717a; text-align: center;">
-          Perspective Group Editorial Dispatch • Dispatched via ${googleToken ? 'Gmail REST API' : 'Server Mail Relay'}
-        </p>
-      </div>
-    `;
+    setGmailProgress({ current: 0, total: recipients.length });
 
     let successfulSends = 0;
-    for (let i = 0; i < targetRecipients.length; i++) {
-      const sub = targetRecipients[i];
-      setGmailProgress({ current: i + 1, total: targetRecipients.length });
+    for (let i = 0; i < recipients.length; i++) {
+      const sub = recipients[i];
+      setGmailProgress({ current: i + 1, total: recipients.length });
       const res = await sendEmailViaGmailApi({
         to: sub.email,
         subject: subject.trim(),
@@ -142,16 +189,29 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
     setIsSendingGmail(false);
     setGmailProgress(null);
 
-    const dispatchMethod = googleToken 
-      ? `Gmail REST API (${successfulSends}/${targetRecipients.length})` 
-      : `Server Relay (${successfulSends}/${targetRecipients.length})`;
+    // The log records what was ACTUALLY delivered, not how many were
+    // attempted. A partial failure previously reported a full count.
+    const dispatchMethod = googleToken
+      ? `Gmail REST API (${successfulSends}/${recipients.length})`
+      : `Server Relay (${successfulSends}/${recipients.length})`;
 
     const newLog = {
       subject: subject.trim(),
       date: new Date().toISOString().split('T')[0],
-      count: targetRecipients.length,
+      count: successfulSends,
       method: dispatchMethod
     };
+
+    // A zero-delivery run is a failure, not a campaign. Tell the admin instead
+    // of logging an empty "sent" dispatch.
+    if (successfulSends === 0) {
+      setBroadcastError(
+        isFr
+          ? `Aucun envoi réussi sur ${recipients.length} destinataire(s). Connexion Gmail requise.`
+          : `No successful sends out of ${recipients.length} recipient(s). A Gmail connection is required.`
+      );
+      return;
+    }
 
     // Save campaign locally first
     const updatedLogs = [newLog, ...campaignLogs];
@@ -167,13 +227,15 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
         body: body.trim(),
         date: newLog.date,
         sentAt: new Date().toISOString(),
-        count: targetRecipients.length,
+        count: successfulSends,
+        attempted: recipients.length,
         method: dispatchMethod,
-        status: 'sent'
+        status: successfulSends === recipients.length ? 'sent' : 'partial'
       });
 
-      // Notify target recipients
-      targetRecipients.forEach(sub => {
+      // Notify the recipients that were actually emailed — not every address
+      // in the directory, so in-app notifications match real delivery.
+      recipients.forEach(sub => {
         addNotification({
           id: 'nl-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
           email: sub.email,
@@ -190,7 +252,10 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
       console.error("Firestore dispatch write notice:", e);
     }
 
-    setCampaignSuccess(`${subject.trim()} (${targetRecipients.length} ${language === 'fr' ? 'destinataires' : 'recipients'})`);
+    setCampaignSuccess(
+      `${subject.trim()} (${successfulSends}/${recipients.length} ${language === 'fr' ? 'destinataires' : 'recipients'})`
+    );
+
     setBroadcastError(null);
     setSubject('');
     setBody('');
@@ -239,11 +304,11 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
                   <span>Gmail REST API Dispatcher</span>
                   {googleToken ? (
                     <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                      ✓ Connecté ({connectedEmail || googleUser?.email || 'kadersdiaz3@gmail.com'})
+                      ✓ Connecté ({connectedEmail || googleUser?.email || ''})
                     </span>
                   ) : (
                     <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-                      Relais Serveur Actif ({connectedEmail || 'kadersdiaz3@gmail.com'})
+                      {language === 'fr' ? 'Connexion requise' : 'Connection required'}
                     </span>
                   )}
                 </p>
@@ -292,7 +357,7 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
           {campaignSuccess && (
             <div className="bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 border border-emerald-500/30 py-3 px-4 text-xs font-bold mb-6 rounded-md">
               <span className="flex items-center gap-2">
-                <Check size={16} /> {language === 'fr' ? `Newsletter "${campaignSuccess}" enregistrée et diffusée avec succès à ${subscribers.length} abonnés !` : `Newsletter "${campaignSuccess}" dispatched to ${subscribers.length} subscribers!`}
+                <Check size={16} /> {campaignSuccess}
               </span>
             </div>
           )}
@@ -335,6 +400,115 @@ export function SubscriberTab({ subscribers, deleteSubscriber }: SubscriberTabPr
                 className="w-full bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 p-3 text-xs leading-relaxed focus:outline-none focus:border-[#E85D42] placeholder-zinc-400 dark:placeholder-zinc-500 rounded-md"
               />
             </div>
+            {/* Image insertion: media library or device upload, plus width. */}
+            <div>
+              <label className="text-xs font-bold text-zinc-700 dark:text-zinc-200 uppercase tracking-wider block mb-1">
+                {language === 'fr' ? 'Image (optionnelle)' : 'Image (optional)'}
+              </label>
+
+              {heroImageUrl ? (
+                <div className="border border-zinc-300 dark:border-zinc-700 rounded-md p-2 space-y-2">
+                  <div className="relative bg-zinc-100 dark:bg-zinc-900 rounded overflow-hidden">
+                    <img
+                      src={heroImageUrl}
+                      alt=""
+                      style={{ width: `${Math.min(heroImageWidth, 100)}%` }}
+                      className="h-auto block mx-auto"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-mono uppercase text-zinc-500 shrink-0">
+                      {language === 'fr' ? 'Largeur' : 'Width'}
+                    </label>
+                    <input
+                      type="range"
+                      min={200}
+                      max={600}
+                      step={20}
+                      value={heroImageWidth}
+                      onChange={e => setHeroImageWidth(Number(e.target.value))}
+                      className="flex-1 accent-[#E85D42]"
+                    />
+                    <span className="text-[10px] font-mono text-zinc-400 w-10 text-right shrink-0">
+                      {heroImageWidth}px
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setHeroImageUrl('')}
+                      className="p-1.5 text-red-500 hover:bg-red-500/10 rounded transition-colors shrink-0"
+                      title={language === 'fr' ? 'Retirer l’image' : 'Remove image'}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  {openMediaSelector && (
+                    <button
+                      type="button"
+                      onClick={() => openMediaSelector((url) => setHeroImageUrl(url))}
+                      className="flex-1 flex items-center justify-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-xs font-bold uppercase tracking-wider py-2.5 rounded-md transition-colors cursor-pointer"
+                    >
+                      <ImageIcon size={14} className="text-[#E85D42]" />
+                      {language === 'fr' ? 'Médiathèque' : 'Media library'}
+                    </button>
+                  )}
+                  <label className="flex-1 flex items-center justify-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-xs font-bold uppercase tracking-wider py-2.5 rounded-md transition-colors cursor-pointer">
+                    <Upload size={14} className="text-[#E85D42]" />
+                    {language === 'fr' ? 'Appareil' : 'Device'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const { compressImageFile } = await import('../../lib/imageUtils');
+                          // Signature is (file, maxWidth, maxHeight, quality).
+                          // A newsletter is a single column, so height is left
+                          // generous and only the width is constrained.
+                          const dataUrl = await compressImageFile(file, 1400, 4000, 0.82);
+                          setHeroImageUrl(dataUrl);
+                        } catch (err) {
+                          console.error('Newsletter image upload failed:', err);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Preview toggle + live preview. */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowPreview(v => !v)}
+                className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-[#E85D42] transition-colors"
+              >
+                <Eye size={13} />
+                {showPreview
+                  ? (language === 'fr' ? 'Masquer l’aperçu' : 'Hide preview')
+                  : (language === 'fr' ? 'Aperçu de l’email' : 'Preview email')}
+              </button>
+
+              {showPreview && (
+                <div className="mt-2 border border-zinc-300 dark:border-zinc-700 rounded-md overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+                  <div className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-900 border-b border-zinc-300 dark:border-zinc-800 text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+                    {language === 'fr' ? 'Aperçu' : 'Preview'}
+                  </div>
+                  <iframe
+                    title={language === 'fr' ? 'Aperçu newsletter' : 'Newsletter preview'}
+                    srcDoc={htmlContent}
+                    className="w-full border-0 bg-white"
+                    style={{ height: 480 }}
+                  />
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end pt-2">
               <button
                 type="submit"

@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   signOut,
   sendPasswordResetEmail,
+  ActionCodeSettings,
   updateProfile,
   User as FirebaseUser,
 } from 'firebase/auth';
@@ -427,8 +428,85 @@ export async function signOutUser(): Promise<void> {
 }
 
 /**
- * Send password reset email
+ * Send a password reset email.
+ *
+ * Previously this was a bare wrapper: no ActionCodeSettings, so the reset link
+ * went wherever the Firebase console default points (often the bare project
+ * domain, landing the reader outside the app), and raw Firebase error codes
+ * such as `auth/invalid-email` surfaced verbatim in the UI.
+ *
+ * `handleCodeInApp` is set because the app reads the oobCode itself; without
+ * it Firebase forces a redirect to the console-configured continue URL.
+ * The code survives page reloads in sessionStorage so a reader who opens the
+ * emailed link in a new tab can still complete the reset.
  */
-export async function resetPasswordEmail(email: string): Promise<void> {
-  await sendPasswordResetEmail(auth, email.trim());
+export async function resetPasswordEmail(
+  email: string,
+  continueUrl?: string
+): Promise<void> {
+  const actionCodeSettings: ActionCodeSettings = {
+    url: continueUrl || getPasswordResetRedirectUrl(),
+    handleCodeInApp: true,
+  };
+
+  return sendPasswordResetEmail(auth, email.trim(), actionCodeSettings);
+}
+
+/**
+ * The URL the emailed link should return to. Uses the current origin so the
+ * same build works on localhost and on the production domain.
+ */
+export function getPasswordResetRedirectUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}/auth?mode=reset`;
+  }
+  return 'https://senperspective.com/auth?mode=reset';
+}
+
+/**
+ * Translate Firebase auth error codes into a message the reader can act on.
+ *
+ * The language is passed in explicitly so the existing FR/EN store mechanism
+ * stays the single source of truth for locale, rather than sniffing the
+ * navigator and showing a language the site is not currently using.
+ *
+ * Unknown codes fall back to the original message rather than being swallowed.
+ */
+export function passwordResetErrorMessage(
+  code: string,
+  isFr = false,
+  fallback?: string
+): string {
+  const en: Record<string, string> = {
+    'auth/invalid-email': 'That email address is not valid.',
+    'auth/missing-email': 'Enter the email address for your account.',
+    'auth/user-not-found': 'No account exists with that email address.',
+    'auth/too-many-requests': 'Too many reset requests. Please wait a few minutes and try again.',
+    'auth/network-request-failed': 'Network error. Check your connection and try again.',
+    'auth/unauthorized-domain': 'This domain is not authorised for password reset.',
+    'auth/operation-not-allowed': 'Password reset is disabled for this project.',
+    'auth/invalid-action-code': 'This reset link is invalid or has already been used.',
+    'auth/expired-action-code': 'This reset link has expired. Please request a new one.',
+    'auth/weak-password': 'Choose a stronger password (at least 6 characters).',
+    'auth/missing-password': 'Enter a new password.',
+  };
+  const fr: Record<string, string> = {
+    'auth/invalid-email': 'Cette adresse e-mail n’est pas valide.',
+    'auth/missing-email': 'Saisissez l’adresse e-mail de votre compte.',
+    'auth/user-not-found': 'Aucun compte n’existe avec cette adresse e-mail.',
+    'auth/too-many-requests': 'Trop de demandes. Patientez quelques minutes puis réessayez.',
+    'auth/network-request-failed': 'Erreur réseau. Vérifiez votre connexion et réessayez.',
+    'auth/unauthorized-domain': 'Ce domaine n’est pas autorisé pour la réinitialisation.',
+    'auth/operation-not-allowed': 'La réinitialisation est désactivée pour ce projet.',
+    'auth/invalid-action-code': 'Ce lien de réinitialisation est invalide ou a déjà été utilisé.',
+    'auth/expired-action-code': 'Ce lien a expiré. Veuillez en demander un nouveau.',
+    'auth/weak-password': 'Choisissez un mot de passe plus fort (6 caractères minimum).',
+    'auth/missing-password': 'Saisissez un nouveau mot de passe.',
+  };
+  const map = isFr ? fr : en;
+  return (
+    map[code] ||
+    fallback ||
+    (isFr ? 'Échec de la réinitialisation.' : 'Password reset failed. Please try again.')
+  );
 }
