@@ -2,6 +2,124 @@ import { resolveApiUrl, safeFetchJson, safeJsonParse } from './apiUtils';
 import { ref, get, update } from 'firebase/database';
 import { rtdb } from '../firebase/config';
 import { withFirestoreTimeout } from '../firebase/db';
+import {
+  AI_PROVIDERS,
+  AI_PROVIDER_IDS,
+  supportsDirectBrowserCall,
+  type AiProviderId,
+} from './aiProviders';
+
+/**
+ * Calls ANY provider directly from the browser and returns the text.
+ *
+ * This replaces a chain of near-duplicate per-provider fetch blocks, which had
+ * drifted apart: Anthropic and DeepSeek were missing entirely, so choosing them
+ * in the engine selector always failed. Adding a provider now means adding one
+ * entry to aiProviders.ts and nothing else.
+ *
+ * Every provider is asked for strict JSON, because the article pipeline parses
+ * the reply and cannot recover from prose.
+ */
+/**
+ * Result of a direct provider call.
+ *
+ * A single shape with optional fields rather than a discriminated union: this
+ * project does not enable strictNullChecks, and without it TypeScript cannot
+ * narrow a union on a boolean literal, so a discriminated version reports
+ * "Property 'error' does not exist" on the failure branch.
+ */
+export interface ProviderCallResult {
+  ok: boolean;
+  text: string;
+  model: string;
+  error: string;
+}
+
+export async function callProviderDirect(
+  providerId: string,
+  prompt: string,
+  opts: { model?: string; maxTokens?: number; timeoutMs?: number } = {}
+): Promise<ProviderCallResult> {
+  const fail = (error: string): ProviderCallResult => ({ ok: false, text: '', model: '', error });
+  const meta = AI_PROVIDERS[providerId as AiProviderId];
+  if (!meta) return fail(`Fournisseur inconnu : ${providerId}`);
+
+  const key = getClientApiKey(meta.id);
+  if (!key) return fail(`Clé API ${meta.label} non configurée.`);
+
+  if (!supportsDirectBrowserCall(meta.id)) {
+    return fail(`${meta.label} : ${meta.directBlockedReason}`);
+  }
+
+  const model = opts.model || meta.defaultModel;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs || 90_000);
+
+  try {
+    let url = meta.directEndpoint.replace('{model}', model);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    if (meta.authStyle === 'query' && meta.keyParam) {
+      url += `${url.includes('?') ? '&' : '?'}${meta.keyParam}=${encodeURIComponent(key)}`;
+    } else {
+      headers['Authorization'] = `Bearer ${key}`;
+    }
+
+    let body: Record<string, any>;
+    if (meta.id === 'gemini') {
+      body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: 'application/json' },
+      };
+    } else {
+      body = {
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
+        response_format: { type: 'json_object' },
+      };
+    }
+
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      const detail =
+        errJson?.error?.message ||
+        errJson?.message ||
+        (typeof errJson?.error === 'string' ? errJson.error : '') ||
+        `HTTP ${res.status}`;
+      return fail(`${meta.label} : ${detail}`);
+    }
+
+    const data: any = await res.json().catch(() => null);
+
+    // One response reader for all OpenAI-compatible providers plus Gemini.
+    const text =
+      data?.choices?.[0]?.message?.content ||
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      data?.content?.[0]?.text ||
+      data?.output_text ||
+      '';
+
+    if (!text || !String(text).trim()) {
+      return fail(`${meta.label} a renvoyé une réponse vide.`);
+    }
+    return { ok: true, text: String(text).trim(), model, error: '' };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return fail(`${meta.label} : délai dépassé (${Math.round((opts.timeoutMs || 90_000) / 1000)}s).`);
+    }
+    // A CORS rejection surfaces as an opaque TypeError, which is by far the most
+    // common failure here and otherwise reports nothing useful at all.
+    const msg = err?.message === 'Failed to fetch' || err?.name === 'TypeError'
+      ? `${meta.label} : requête bloquée par le navigateur (CORS ou réseau). Vérifiez la clé et l'accès réseau.`
+      : `${meta.label} : ${err?.message || String(err)}`;
+    return fail(msg);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Client-Side AI and RSS Engine
@@ -430,11 +548,15 @@ export async function clientTestProvider(provider: string): Promise<{
     if (p === 'ANTHROPIC') {
       const key = getClientApiKey('anthropic');
       if (!key) throw new Error('Clé API Anthropic non configurée.');
+      // This used to return success: true WITHOUT making any network call, so
+      // the diagnostics panel reported Anthropic as healthy while generation
+      // could not use it. An unverifiable provider must not report success.
       return {
-        success: true,
+        success: false,
         latencyMs: Date.now() - startTime,
-        message: 'Clé Anthropic enregistrée (Nécessite backend ou proxy CORS pour les requêtes de messages directs)',
-        modelUsed: 'claude-3-5-sonnet'
+        message:
+          "Anthropic n'autorise pas les appels directs depuis un navigateur (aucun en-tête CORS). La clé est enregistrée et sera utilisée dès qu'un endpoint proxy est configuré dans l'onglet Assistant Abdel.",
+        modelUsed: AI_PROVIDERS.anthropic.defaultModel,
       };
     }
 
@@ -458,20 +580,17 @@ export async function clientRewriteArticle(options: ClientRewriteOptions): Promi
     await loadClientApiKeysFromFirestore();
   }
 
-  const geminiKey = getClientApiKey('gemini');
-  const groqKey = getClientApiKey('groq');
-  const openaiKey = getClientApiKey('openai');
-  const openrouterKey = getClientApiKey('openrouter');
-  const deepseekKey = getClientApiKey('deepseek');
-
-  let engine = preferredEngine.toLowerCase();
-  if (engine === 'auto') {
-    if (geminiKey) engine = 'gemini';
-    else if (groqKey) engine = 'groq';
-    else if (openaiKey) engine = 'openai';
-    else if (openrouterKey) engine = 'openrouter';
-    else if (deepseekKey) engine = 'deepseek';
-    else throw new Error('Aucune clé API IA disponible dans le navigateur. Rendez-vous dans l\'onglet Diagnostics pour renseigner votre clé Gemini, Groq ou OpenAI.');
+  const engine = preferredEngine.toLowerCase();
+  // `auto` stays 'auto' here and is expanded to the provider order at execution
+  // time. It used to be collapsed to a single provider name immediately, which
+  // made every later `engine === 'auto'` failover check unreachable dead code.
+  if (engine !== 'auto' && !getClientApiKey(engine)) {
+    const known = AI_PROVIDERS[engine as AiProviderId];
+    throw new Error(
+      known
+        ? `Clé API ${known.label} non configurée. Ajoutez-la dans Admin → APIs & IA.`
+        : `Moteur IA inconnu : ${preferredEngine}.`
+    );
   }
 
   const articleContext = typeof article === 'object' ? JSON.stringify(article) : String(article);
@@ -520,143 +639,50 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
   let modelUsed = '';
   let lastError = '';
 
-  // Helper to query Gemini with model fallback
-  const callGeminiDirect = async (apiKey: string) => {
-    const r = await callGeminiGenerative(
-      GEMINI_MODEL_FALLBACKS,
-      apiKey,
-      {
-        contents: [{ parts: [{ text: promptText }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      }
+  // EXECUTION
+  // ---------
+  // Previously this was a long if/else chain with one branch per provider.
+  // Two engines were selectable in the UI (Anthropic, DeepSeek) but had no
+  // branch at all, so they always threw "Moteur IA non disponible". The
+  // Groq/OpenAI failovers were also unreachable: they tested `engine === 'auto'`,
+  // but `engine` had already been resolved from 'auto' to a concrete name
+  // above. Every provider now goes through callProviderDirect, so the selector
+  // and the implementation cannot drift apart again.
+  const order: string[] =
+    engine === 'auto'
+      ? AI_PROVIDER_IDS
+      : [engine, ...AI_PROVIDER_IDS.filter((p) => p !== engine)];
+
+  const attempted: string[] = [];
+  for (const candidate of order) {
+    // Skip a provider that was never selected and has no key: calling it would
+    // only produce a confusing "clé non configurée" error. An explicitly chosen
+    // engine is always attempted, so the user gets a precise "key missing"
+    // message instead of a silent fall-through to a different model.
+    if (candidate !== engine && !getClientApiKey(candidate)) continue;
+    attempted.push(candidate);
+    const res = await callProviderDirect(candidate, promptText, { maxTokens: 8192 });
+    if (res.ok) {
+      rawContent = res.text;
+      const first = attempted[0];
+      modelUsed =
+        first === candidate
+          ? `${AI_PROVIDERS[candidate as AiProviderId]?.label || candidate} · ${res.model} (Client Direct)`
+          : `${AI_PROVIDERS[candidate as AiProviderId]?.label || candidate} · ${res.model} (repli depuis ${AI_PROVIDERS[first as AiProviderId]?.label || first})`;
+      break;
+    } else {
+      lastError = res.error;
+    }
+    if (engine !== 'auto' && attempted.length >= 3) break;
+  }
+
+  if (!rawContent) {
+    const detail = lastError || 'Aucune clé API configurée.';
+    throw new Error(
+      `Échec de la génération. ${detail} Engines tentés : ${attempted
+        .map((p) => AI_PROVIDERS[p as AiProviderId]?.label || p)
+        .join(', ') || 'aucun'}.`
     );
-    if (!r.ok) {
-      throw new Error('Les modèles Gemini sont temporairement saturés ou la clé API est restreinte. ' + r.lastError);
-    }
-    return { content: r.text, model: `Gemini (Client Direct)` };
-  };
-
-  // Helper to query Groq
-  const callGroqDirect = async (apiKey: string) => {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: promptText }],
-        response_format: { type: 'json_object' }
-      })
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error?.message || `Erreur Groq HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content || '';
-    return { content, model: 'Groq Llama 3.3 70B (Client Direct)' };
-  };
-
-  // Helper to query OpenAI
-  const callOpenAIDirect = async (apiKey: string) => {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: promptText }],
-        response_format: { type: 'json_object' }
-      })
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error?.message || `Erreur OpenAI HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content || '';
-    return { content, model: 'OpenAI GPT-4o Mini (Client Direct)' };
-  };
-
-  // Execution flow with intelligent auto-failover
-  if (engine === 'gemini' || (engine === 'auto' && geminiKey)) {
-    try {
-      if (!geminiKey) throw new Error('Clé Gemini non configurée.');
-      const res = await callGeminiDirect(geminiKey);
-      rawContent = res.content;
-      modelUsed = res.model;
-    } catch (e: any) {
-      lastError = e.message;
-      if (engine === 'auto' && groqKey) {
-        console.warn('[Client AI Failover] Gemini failed, failing over to Groq Llama 3.3...');
-        try {
-          const res = await callGroqDirect(groqKey);
-          rawContent = res.content;
-          modelUsed = `${res.model} (Failover Gemini -> Groq)`;
-        } catch (groqErr: any) {
-          lastError = groqErr.message;
-        }
-      } else if (engine === 'auto' && openaiKey) {
-        console.warn('[Client AI Failover] Gemini failed, failing over to OpenAI...');
-        try {
-          const res = await callOpenAIDirect(openaiKey);
-          rawContent = res.content;
-          modelUsed = `${res.model} (Failover Gemini -> OpenAI)`;
-        } catch (oErr: any) {
-          lastError = oErr.message;
-        }
-      } else {
-        throw new Error(lastError);
-      }
-    }
-  } else if (engine === 'groq' || (engine === 'auto' && groqKey)) {
-    try {
-      if (!groqKey) throw new Error('Clé Groq non configurée.');
-      const res = await callGroqDirect(groqKey);
-      rawContent = res.content;
-      modelUsed = res.model;
-    } catch (e: any) {
-      lastError = e.message;
-      if (engine === 'auto' && openaiKey) {
-        const res = await callOpenAIDirect(openaiKey);
-        rawContent = res.content;
-        modelUsed = `${res.model} (Failover Groq -> OpenAI)`;
-      } else {
-        throw new Error(lastError);
-      }
-    }
-  } else if (engine === 'openai' || (engine === 'auto' && openaiKey)) {
-    if (!openaiKey) throw new Error('Clé OpenAI non configurée.');
-    const res = await callOpenAIDirect(openaiKey);
-    rawContent = res.content;
-    modelUsed = res.model;
-  } else if (engine === 'openrouter') {
-    if (!openrouterKey) throw new Error('Clé OpenRouter non configurée.');
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openrouterKey}`
-      },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct',
-        messages: [{ role: 'user', content: promptText }],
-        response_format: { type: 'json_object' }
-      })
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error?.message || `Erreur OpenRouter HTTP ${res.status}`);
-    }
-    const data = await res.json();
-    rawContent = data?.choices?.[0]?.message?.content || '';
-    modelUsed = 'OpenRouter Llama 3.3 (Client Direct)';
-  } else {
-    throw new Error(`Moteur IA ${engine} non disponible pour la réécriture directe.`);
   }
 
   // Parse JSON response safely with resilient multi-pass recovery
@@ -1154,14 +1180,13 @@ export async function clientAbdelChat(params: {
   history?: Array<{ role: string; text: string }>;
   contextArticle?: any;
   locationInfo?: any;
+  /** Pins Abdel to one engine, from Admin → APIs & IA. Empty means "first
+   *  configured provider that answers". */
+  preferredProvider?: string;
 }): Promise<string> {
   const { message, language = 'fr', history = [], contextArticle } = params;
 
   await loadClientApiKeysFromFirestore();
-
-  const geminiKey = getClientApiKey('gemini');
-  const groqKey = getClientApiKey('groq');
-  const openrouterKey = getClientApiKey('openrouter');
 
   const isFrench = language === 'fr';
 
@@ -1178,107 +1203,88 @@ RÈGLES D'EXPRESSION STRICTES :
     userContext = `[ARTICLE EN CONTEXTE: "${contextArticle.title?.[language] || contextArticle.title?.fr || 'Sans titre'}" | Catégorie: ${contextArticle.category || 'Général'}]\nExtrait: ${(contextArticle.excerpt?.[language] || contextArticle.excerpt?.fr || '').slice(0, 300)}\n\n` + userContext;
   }
 
-  // 1. Try Gemini
-  if (geminiKey) {
-    try {
-      const contents: any[] = [];
-      for (const h of history.slice(-6)) {
-        contents.push({
-          role: h.role === 'abdel' ? 'model' : 'user',
-          parts: [{ text: h.text }]
-        });
-      }
-      contents.push({
-        role: 'user',
-        parts: [{ text: userContext }]
-      });
+  // PROVIDER SELECTION
+  // ------------------
+  // Previously Abdel's in-browser fallback hardcoded exactly three branches:
+  // Gemini, Groq and OpenRouter. OpenAI, Anthropic and DeepSeek were never
+  // tried, so a reader with only an OpenAI key (or a Claude key) got the canned
+  // offline reply even though a working key was sitting in the browser. Every
+  // configured provider is now attempted, in registry order, and the first
+  // answer wins.
+  //
+  // `params.preferredProvider` lets the admin pin Abdel to one engine, so the
+  // "choose an AI for Abdel" setting is honoured here and not only on the
+  // backend path.
+  const preferred = (params.preferredProvider || '').toLowerCase();
+  const order: string[] =
+    preferred && preferred !== 'auto' && AI_PROVIDERS[preferred as AiProviderId]
+      ? [preferred, ...AI_PROVIDER_IDS.filter((p) => p !== preferred)]
+      : AI_PROVIDER_IDS;
 
-      const resp = await callGeminiGenerative(
-        GEMINI_MODEL_FALLBACKS,
-        geminiKey,
-        {
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents,
-          generationConfig: { temperature: 0.7, maxOutputTokens: 600 }
+  const historyMessages = history.slice(-6);
+  const errors: string[] = [];
+
+  for (const pid of order) {
+    if (!getClientApiKey(pid)) continue;
+    const label = AI_PROVIDERS[pid as AiProviderId]?.label || pid;
+
+    if (pid === 'gemini') {
+      // Gemini carries the system instruction and multi-turn contents natively,
+      // so it keeps its own request shape rather than the shared text prompt.
+      try {
+        const contents: any[] = [];
+        for (const h of historyMessages) {
+          contents.push({
+            role: h.role === 'abdel' ? 'model' : 'user',
+            parts: [{ text: h.text }],
+          });
         }
-      );
-      if (resp.ok && resp.text) {
-        return resp.text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        contents.push({ role: 'user', parts: [{ text: userContext }] });
+
+        const resp = await callGeminiGenerative(
+          GEMINI_MODEL_FALLBACKS,
+          getClientApiKey('gemini')!,
+          {
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            generationConfig: { temperature: 0.7, maxOutputTokens: 600 },
+          }
+        );
+        if (resp.ok && resp.text) return resp.text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+        errors.push(`${label}: ${resp.lastError || 'réponse vide'}`);
+      } catch (e: any) {
+        errors.push(`${label}: ${e?.message || String(e)}`);
       }
-    } catch (_) {}
+      continue;
+    }
+
+    // Every remaining provider speaks the OpenAI chat-completions shape, so one
+    // call covers OpenAI, DeepSeek, Groq and OpenRouter together.
+    //
+    // The shared caller sends a single user message, so Abdel's system rules and
+    // recent turns are folded into that one text. They are prepended as
+    // instructions rather than appended and stripped back off afterwards, which
+    // would be fragile: any reformatting by the model would defeat the match.
+    const transcript = historyMessages
+      .map((h) => `${h.role === 'abdel' ? 'Abdel' : 'Lecteur'} : ${h.text}`)
+      .join('\n');
+    const singlePrompt = [
+      systemPrompt,
+      transcript ? `\nCONTEXTE DE LA CONVERSATION :\n${transcript}` : '',
+      `\n${userContext}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const res = await callProviderDirect(pid, singlePrompt, { maxTokens: 600, timeoutMs: 45_000 });
+    if (res.ok) {
+      return res.text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+    } else {
+      errors.push(res.error);
+    }
   }
 
-  // 2. Try Groq
-  if (groqKey) {
-    try {
-      const messages: any[] = [{ role: 'system', content: systemPrompt }];
-      for (const h of history.slice(-6)) {
-        messages.push({
-          role: h.role === 'abdel' ? 'assistant' : 'user',
-          content: h.text
-        });
-      }
-      messages.push({ role: 'user', content: userContext });
-
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqKey}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages,
-          temperature: 0.7,
-          max_tokens: 600
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.choices?.[0]?.message?.content;
-        if (text) {
-          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
-        }
-      }
-    } catch (_) {}
-  }
-
-  // 3. Try OpenRouter
-  if (openrouterKey) {
-    try {
-      const messages: any[] = [{ role: 'system', content: systemPrompt }];
-      for (const h of history.slice(-6)) {
-        messages.push({
-          role: h.role === 'abdel' ? 'assistant' : 'user',
-          content: h.text
-        });
-      }
-      messages.push({ role: 'user', content: userContext });
-
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openrouterKey}`
-        },
-        body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-70b-instruct',
-          messages,
-          temperature: 0.7,
-          max_tokens: 600
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.choices?.[0]?.message?.content;
-        if (text) {
-          return text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
-        }
-      }
-    } catch (_) {}
-  }
+  console.warn('[Abdel] all configured providers failed:', errors);
 
   // Graceful contextual response if keys are not ready
   if (contextArticle) {

@@ -796,6 +796,15 @@ interface AppState {
     headerStyle?: string;
     aiModelMode?: string;
     abdelAiProvider?: string;
+    /**
+     * Engine used when Abdel (and article generation) falls back to the
+     * in-browser engine, i.e. when no configured API slot answers.
+     * Empty or 'auto' = try every configured provider in registry order.
+     * Set in Admin → APIs & IA.
+     */
+    abdelPreferredProvider?: string;
+    /** Model override per provider, keyed by provider id. Empty = registry default. */
+    aiModelOverrides?: Record<string, string>;
     seoTitleSuffix?: string;
     seoCanonicalBase?: string;
     seoDefaultDesc?: string;

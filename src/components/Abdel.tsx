@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+﻿import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore } from "../store";
 import { Compass, X, Send, Bot, RefreshCw, Sun, Moon, Sparkles, RotateCcw } from "lucide-react";
@@ -210,7 +210,10 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
             category: contextArticle?.category || null
           }
         },
-        normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots)
+        normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots),
+        // Engine chosen in Admin → APIs & IA. Honoured by the in-browser
+        // fallback, which previously had no way to be told which AI to use.
+        { preferredProvider: (siteSettings as any)?.abdelPreferredProvider || '' }
       );
 
       setMessages((prev) => [

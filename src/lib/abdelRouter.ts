@@ -327,7 +327,7 @@ export async function callAbdelSlot(
 export async function askAbdel(
   params: AbdelAskParams,
   slots?: AbdelApiSlot[] | null,
-  options?: AbdelAskOptions
+  options?: AbdelAskOptions & { preferredProvider?: string }
 ): Promise<AbdelAskResult> {
   const normalized = normalizeAbdelSlots(slots);
   const usable = normalized.filter(s => s.enabled && String(s.endpoint || '').trim());
@@ -360,6 +360,11 @@ export async function askAbdel(
       history: params.history,
       contextArticle: params.contextArticle,
       locationInfo: params.locationInfo,
+      // The engine chosen in Admin → APIs & IA. Previously the in-browser
+      // fallback had no choice at all: it hardcoded Gemini, then Groq, then
+      // OpenRouter, so an admin pinning Abdel to Claude or GPT had no effect
+      // whenever the API blocks were unreachable.
+      preferredProvider: options?.preferredProvider || '',
     } as any);
     if (text && typeof text === 'string' && text.trim()) {
       return { text: text.trim(), source: 'client' };

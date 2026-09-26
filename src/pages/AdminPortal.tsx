@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useStore } from '../store';
 import { Article } from '../types';
 import { fetchUserProfile } from '../firebase/auth';
@@ -29,10 +29,11 @@ import { RssFeedManagementTab } from '../components/admin/RssFeedManagementTab';
 import { DraftGenerationTab } from '../components/admin/DraftGenerationTab';
 import { ApiDiagnosticTab } from '../components/admin/ApiDiagnosticTab';
 import { AbdelApiSlotsTab } from '../components/admin/AbdelApiSlotsTab';
+import { AiProvidersTab } from '../components/admin/AiProvidersTab';
 import { AudienceAnalyticsTab } from '../components/admin/AudienceAnalyticsTab';
 import { SecurityTab } from '../components/admin/SecurityTab';
 import AccountsTab from '../components/admin/AccountsTab';
-import { UserCog } from 'lucide-react';
+import { UserCog, Cpu } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 /**
@@ -418,7 +419,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'ads' | 'security' | 'accounts' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'ads' | 'security' | 'accounts' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config' | 'ai_providers'>('overview');
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'rss_drafts' | 'rss_automation' | 'ai_diagnostics'>('articles');
   // Sidebar filter. 21 flat sections used to be an undifferentiated wall, so
   // the ones an admin actually used sat far below the fold on a laptop.
@@ -814,6 +815,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       label: language === 'fr' ? 'Système' : 'System',
       sections: [
         { id: 'abdel_chat_config', label: language === 'fr' ? 'Assistant Abdel & Chat' : 'Abdel & Chat', icon: Bot, badge: 0 },
+        { id: 'ai_providers', label: language === 'fr' ? 'APIs & IA' : 'APIs & AI', icon: Cpu, badge: 0 },
         { id: 'security', label: language === 'fr' ? 'Sécurité & Accès' : 'Security & Access', icon: ShieldCheck, badge: 0 },
         { id: 'accounts', label: language === 'fr' ? 'Comptes' : 'Accounts', icon: UserCog, badge: 0, superAdminOnly: true },
         { id: 'admin_dashboard', label: language === 'fr' ? 'Base de Données' : 'Database', icon: Database, badge: 0 },
@@ -1140,6 +1142,14 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
 
         {activeTab === 'security' && (
           <SecurityTab />
+        )}
+
+        {/* APIs & IA: one registry-driven place for provider keys, Abdel's
+            engine, model overrides and a real connection test. */}
+        {activeTab === 'ai_providers' && (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <AiProvidersTab />
+          </div>
         )}
 
         {activeTab === 'accounts' && isSuperAdmin && (

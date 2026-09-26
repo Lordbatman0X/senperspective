@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+﻿import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useStore, unreadByContact, normalizeEmail, unreadMessagesForEmail } from "../store";
 import { fetchUserProfile } from '../firebase/auth';
@@ -346,7 +346,10 @@ export function FloatingHub({ contextArticle }: { contextArticle?: Article }) {
             category: contextArticle?.category || null
           }
         },
-        normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots)
+        normalizeAbdelSlots((siteSettings as any)?.abdelApiSlots),
+        // Engine chosen in Admin → APIs & IA. Honoured by the in-browser
+        // fallback, which previously had no way to be told which AI to use.
+        { preferredProvider: (siteSettings as any)?.abdelPreferredProvider || '' }
       );
 
       const cleanedReply = String(result?.text || "").replace(/\*\*/g, "").replace(/\*/g, "").trim();
