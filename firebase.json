@@ -8,6 +8,30 @@
     ],
     "rewrites": [
       {
+        "source": "/article/**",
+        "destination": "/article/$1/index.html"
+      },
+      {
+        "source": "/category/**",
+        "destination": "/category/$1/index.html"
+      },
+      {
+        "source": "/arena/**",
+        "destination": "/arena/$1/index.html"
+      },
+      {
+        "source": "/article/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/category/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "/arena/**",
+        "destination": "/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

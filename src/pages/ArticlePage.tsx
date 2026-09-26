@@ -446,7 +446,24 @@ export function ArticlePage() {
   
   // Navigation scroll is handled app-wide by `useRouteScroll`.
 
-  if (!article && (isArticleLoading || (articles ?? []).length === 0)) {
+  // FIX (article pages stuck on "Chargement de l'article..." forever).
+  //
+  // The gate used to be:
+  //     if (!article && (isArticleLoading || (articles ?? []).length === 0))
+  // `articles.length === 0` is NOT a transient condition. When the catalog is
+  // empty — a failed fetch, a first paint before data, or simply a URL whose
+  // article does not exist — that term stays true forever, so the page showed
+  // the spinner indefinitely and NEVER reached the "Article non trouvé" branch
+  // below. Crawlers that execute JS therefore saw a permanent loading shell.
+  //
+  // `isLoadingArticles` is the real data-ready signal: every exit path of
+  // loadArticles sets it to false, so the spinner is only shown while the first
+  // load is genuinely in flight, and the request then resolves to a proper
+  // not-found state. The 800ms grace period is kept purely to avoid a flash of
+  // "not found" during hydration, not to decide when loading is done.
+  const isCatalogLoading = useStore(s => s.isLoadingArticles);
+
+  if (!article && (isArticleLoading || isCatalogLoading)) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-center space-y-4">
         <div className="w-8 h-8 border-2 border-[#E85D42] border-t-transparent rounded-full animate-spin"></div>

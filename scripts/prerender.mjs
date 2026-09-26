@@ -775,6 +775,30 @@ async function main() {
       console.warn(`[prerender] WARNING: sample page has only ${words} words.`);
     }
   }
+
+  // HARD GATE.
+  //
+  // The failure this guards against is a build that runs `vite build` WITHOUT
+  // this script: the bundle is produced, dist has no dist/article/, and the
+  // deployment ships a bare SPA shell. Every article URL then falls through to
+  // the rewrite, serves index.html, and crawlers see "Chargement de
+  // l'article..." with a homepage canonical — which is exactly what happened.
+  //
+  // A prerender that fetches zero articles is therefore treated as a build
+  // failure rather than a silent success, so a broken/renamed data source
+  // cannot quietly ship a de-indexable site.
+  if (articles.length === 0) {
+    throw new Error(
+      '[prerender] 0 published articles fetched from the database — refusing to finish. ' +
+        'A build without prerendered article HTML ships an empty shell to crawlers.'
+    );
+  }
+  if (written !== articles.length) {
+    throw new Error(
+      `[prerender] wrote ${written} article pages for ${articles.length} published articles.`
+    );
+  }
+  console.log(`[prerender] OK: ${written} prerendered article pages verified.`);
 }
 
 main().catch((err) => {
