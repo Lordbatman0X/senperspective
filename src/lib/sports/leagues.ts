@@ -240,6 +240,33 @@ export function apiLeagues(): ArenaLeague[] {
   );
 }
 
+/**
+ * The sidebar subset, FOOTBALL FIRST.
+ *
+ * Football dominates the Senegalese audience, so the narrow homepage column
+ * must not fill itself with NBA/WNBA rows just because they were fetched in the
+ * same batch. This returns the major football leagues in a deliberate order —
+ * the competitions a Senegalese reader is most likely to care about — followed
+ * by the other structured sports, so the top of the sidebar is always football.
+ *
+ * Senegalese competitions (Ligue 1, Navétanes, lutte) are `source: "news"` and
+ * so are not here: they are supplied by `editorialMatches`, which always
+ * outranks provider rows and is merged in by `useArenaScores`.
+ */
+export function sidebarLeagues(): ArenaLeague[] {
+  const FOOTBALL_FIRST = ["premier-league", "ligue1", "bundesliga"];
+  const api = apiLeagues();
+  const ranked = new Map(FOOTBALL_FIRST.map((id, i) => [id, i]));
+
+  return [...api].sort((a, b) => {
+    const ra = ranked.has(a.id) ? (ranked.get(a.id) as number) : Number.MAX_SAFE_INTEGER;
+    const rb = ranked.has(b.id) ? (ranked.get(b.id) as number) : Number.MAX_SAFE_INTEGER;
+    if (ra !== rb) return ra - rb;
+    // Within a tier, keep the registry's own priority order.
+    return a.priority - b.priority;
+  });
+}
+
 /** Leagues that must be sourced from Google News RSS, in board order. */
 export function newsLeagues(): ArenaLeague[] {
   return ARENA_LEAGUES.filter((l) => l.source === "news" && !!l.newsQuery).sort(

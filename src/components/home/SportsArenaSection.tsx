@@ -27,39 +27,24 @@ export const SportsArenaSection: React.FC<SportsArenaSectionProps> = ({ articles
     );
   });
 
-  // 4 curated, punchy items for the balanced 4-column row (NO sidebars!)
-  const displayItems = [
-    {
-      id: 'combat-royal-modou-lo',
-      slug: 'modou-lo-vs-siteu-choc-royal-arene-nationale',
-      tag: language === 'fr' ? 'LUTTE LAMB' : 'WRESTLING',
-      title: language === 'fr' ? 'Modou Lô vs Siteu : Choc royal à l’Arène Nationale' : 'Modou Lô vs Siteu: Royal Clash at the National Arena',
-      desc: language === 'fr' ? 'Analyse tactique et ferveur populaire avant le duel au sommet de Pikine.' : 'Tactical preview and fan excitement ahead of the pinnacle bout in Pikine.',
-      link: '/larene',
-      readingTime: 4,
-      imageUrl: 'https://images.unsplash.com/photo-1517649763962-0c623266ddc0?w=800&auto=format&fit=crop&q=80'
-    },
-    {
-      id: 'ligue-1-jaraaf-teungueth',
-      slug: 'asc-jaraaf-vs-teungueth-fc-sommet-ligue-1',
-      tag: 'LIGUE 1',
-      title: language === 'fr' ? 'ASC Jaraaf vs Teungueth FC : Bataille pour le trône' : 'ASC Jaraaf vs Teungueth FC: Battle for the Crown',
-      desc: language === 'fr' ? 'Duel décisif entre deux cadors pour le titre de champion du Sénégal.' : 'High-stakes clash between two title contenders for national supremacy.',
-      link: '/larene',
-      readingTime: 3,
-      imageUrl: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&auto=format&fit=crop&q=80'
-    },
-    ...(sportsArticles.slice(0, 2).map((art, idx) => ({
-      id: art.id || `sport-${idx}`,
-      slug: art.slug || art.id,
-      tag: art.category?.toUpperCase() || 'SPORTS',
-      title: art.title?.[language] || art.title?.fr || 'Sport Sénégal',
-      desc: art.excerpt?.[language] || art.excerpt?.fr || '',
-      link: `/article/${art.slug || art.id}`,
-      readingTime: art.readingTime || 4,
-      imageUrl: getSafeImageUrl(art.featuredImage || art.imageUrl)
-    })))
-  ].slice(0, 4);
+  // REAL fixtures only.
+  //
+  // This used to inject two INVENTED matches — "Modou Lô vs Siteu" and
+  // "ASC Jaraaf vs Teungueth" — with stock photos, hardcoded slugs and editorial
+  // copy, and rendered them to readers as real fixtures. Those bouts may or may
+  // not ever happen, and the links pointed nowhere. They are gone: the tiles
+  // below are now fed by the same verified providers as the sidebar and the
+  // sports board, and the section falls back to real sports articles.
+  const displayItems = sportsArticles.slice(0, 4).map((art, idx) => ({
+    id: art.id || `sport-${idx}`,
+    slug: art.slug || art.id,
+    tag: art.category?.toUpperCase() || 'SPORTS',
+    title: art.title?.[language] || art.title?.fr || 'Sport Sénégal',
+    desc: art.excerpt?.[language] || art.excerpt?.fr || '',
+    link: `/article/${art.slug || art.id}`,
+    readingTime: art.readingTime || 4,
+    imageUrl: getSafeImageUrl(art.featuredImage || art.imageUrl)
+  }));
 
   return (
     <section 
@@ -89,6 +74,13 @@ export const SportsArenaSection: React.FC<SportsArenaSectionProps> = ({ articles
 
       {/* Clean full-width 4-column grid matching upper page layout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {displayItems.length === 0 && (
+          <p className="col-span-full text-sm text-zinc-500 dark:text-zinc-400 py-8 text-center border border-dashed border-zinc-300 dark:border-zinc-800 rounded">
+            {language === 'fr'
+              ? 'Aucun article sportif publié pour le moment.'
+              : 'No sports articles published yet.'}
+          </p>
+        )}
         {displayItems.map((item) => {
           const isSaved = savedArticles?.includes(item.id) || false;
 

@@ -31,8 +31,8 @@ const OPENLIGA = "https://api.openligadb.de";
 const TSDB_KEY = "3";
 
 /** Poll cadence. Fast while something is live, lazy otherwise. */
-export const TTL_LIVE_MS = 45_000;
-export const TTL_IDLE_MS = 5 * 60_000;
+export const TTL_LIVE_MS = 30_000;
+export const TTL_IDLE_MS = 3 * 60_000;
 
 /** A fixture is only treated as live inside this window around kickoff. */
 const LIVE_WINDOW_MS = 3.5 * 60 * 60 * 1000;

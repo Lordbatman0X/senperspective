@@ -1,9 +1,9 @@
 import React, { useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Trophy, ArrowRight, Radio, ChevronRight } from "lucide-react";
+import { Trophy, ArrowRight, Radio, ChevronRight, RefreshCw } from "lucide-react";
 import { useStore } from "../store";
 import { useArenaScores } from "../lib/sports/useArenaScores";
-import { apiLeagues } from "../lib/sports/leagues";
+import { sidebarLeagues } from "../lib/sports/leagues";
 import { withoutDemoMatches } from "../lib/sports/demoMatches";
 import { matchAnchor } from "../lib/navigation";
 
@@ -34,7 +34,9 @@ export function SportsQuadrant() {
 
   // Admin-created fixtures still outrank provider rows; demo seeds never do.
   const editorial = withoutDemoMatches(matches);
-  const { matches: board, loading } = useArenaScores(editorial, apiLeagues());
+  // Football first, same ordering as the sidebar, so the two surfaces can never
+  // show a different lead fixture.
+  const { matches: board, loading, refresh, updatedAt } = useArenaScores(editorial, sidebarLeagues());
 
   const liveCount = board.filter((m) => String(m.status) === "live").length;
   const rows = board.slice(0, 10);
@@ -116,12 +118,30 @@ export function SportsQuadrant() {
           <ArrowRight size={13} style={{ color: accentColor }} />
         </Link>
 
-        {liveCount > 0 && (
-          <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 tracking-wider">
-            <Radio size={11} className="animate-pulse" />
-            {liveCount} {language === "fr" ? "EN DIRECT" : "LIVE"}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {liveCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-red-600 dark:text-red-400 tracking-wider">
+              <Radio size={11} className="animate-pulse" />
+              {liveCount} {language === "fr" ? "EN DIRECT" : "LIVE"}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={refresh}
+            title={language === "fr" ? "Actualiser les scores" : "Refresh scores"}
+            className="inline-flex items-center gap-1.5 text-[9px] font-mono font-black uppercase tracking-wider text-zinc-500 hover:text-zinc-900 dark:hover:text-white transition-colors cursor-pointer"
+          >
+            <RefreshCw size={11} />
+            {updatedAt && (
+              <span className="hidden sm:inline">
+                {new Date(updatedAt).toLocaleTimeString(language === "fr" ? "fr-FR" : "en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {loading && rows.length === 0 ? (
