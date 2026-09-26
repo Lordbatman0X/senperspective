@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
   Zap, Copy, Check, Send, Sparkles, Globe, Terminal, FileCode2, 
   CheckCircle2, AlertCircle, RefreshCw, ExternalLink, ShieldCheck, 
@@ -20,6 +20,7 @@ import {
 } from '../../lib/clientAiEngine';
 import { ALL_RELIABLE_RSS_FEEDS, ensureValidUrl, normalizeRssFeedUrl } from './RssAutomationTab';
 import { uniqueArticleSlug } from '../../lib/slugify';
+import { resolveRssCategories, matchSiteCategory } from './RssAutomationTab';
 
 interface RssFeedManagementTabProps {
   onRefreshArticles?: () => void;
@@ -34,7 +35,9 @@ interface FeedHealthRecord {
 }
 
 export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFeedManagementTabProps) {
-  const { language, addArticle, articles } = useStore();
+  const { language, addArticle, articles, siteSettings } = useStore();
+  // Categories now come from the site so a draft always lands in a real section.
+  const siteCategories = resolveRssCategories(siteSettings?.categories as any);
   const isFr = language === 'fr';
 
   // State for Feeds list
@@ -233,7 +236,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
           rssItem: item,
           feedUrl: inspectFeed?.url,
           feedName: inspectFeed?.name,
-          category: cfg.category,
+          category: matchSiteCategory(cfg.category, siteCategories),
           type: cfg.type,
           preferredEngine: cfg.engine,
           customPrompt: cfg.customPrompt,
@@ -265,7 +268,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         const clientRes = await clientRewriteArticle({
           article: item,
           prompt: cfg.customPrompt || `Rédige un article d'actualité complet à partir de cette dépêche de presse : "${item.title}". Source : ${inspectFeed?.name || 'Dépêche'}.`,
-          category: cfg.category,
+          category: matchSiteCategory(cfg.category, siteCategories),
           type: cfg.type,
           preferredEngine: cfg.engine
         });
@@ -326,7 +329,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         body: JSON.stringify({
           feedUrl: feedObj.url,
           feedName: feedObj.name,
-          category: feedObj.category || 'Économie',
+          category: matchSiteCategory(feedObj.category, siteCategories),
           maxItems: 1,
           autoPublish: false,
           preferredEngine: 'auto'
@@ -348,7 +351,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
         const clientRes = await clientProcessFeedAndGenerate({
           feedUrl: feedObj.url,
           feedName: feedObj.name,
-          category: feedObj.category || 'Économie',
+          category: matchSiteCategory(feedObj.category, siteCategories),
           maxItems: 1,
           type: 'News',
           preferredEngine: 'auto'
@@ -385,7 +388,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
       id: `custom_${Date.now()}`,
       name: newFeedName.trim(),
       url: validatedUrl,
-      category: newFeedCategory,
+      category: matchSiteCategory(newFeedCategory, siteCategories),
       pack: newFeedPack,
       originCountry: newFeedPack === 'senegal' ? 'Sénégal' : newFeedPack === 'africa' ? 'Panafricain' : 'International',
       originFlag: newFeedPack === 'senegal' ? '🇸🇳' : newFeedPack === 'africa' ? '🌍' : '🌐',
@@ -638,7 +641,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
             body: JSON.stringify({ 
               feedUrl: feed.url, 
               feedName: feed.name,
-              category: feed.category || 'Économie', 
+              category: matchSiteCategory(feed.category, siteCategories), 
               maxItems: 1, 
               autoPublish: false,
               preferredEngine: 'auto'
@@ -650,7 +653,7 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
             const clientRes = await clientProcessFeedAndGenerate({
               feedUrl: feed.url,
               feedName: feed.name,
-              category: feed.category || 'Économie',
+              category: matchSiteCategory(feed.category, siteCategories),
               maxItems: 1,
               type: 'News',
               preferredEngine: 'auto'

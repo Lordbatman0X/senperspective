@@ -1,4 +1,4 @@
-import { resolveApiUrl, safeFetchJson, safeJsonParse } from './apiUtils';
+import { resolveApiUrl, safeFetchJson, safeJsonParse, getApiBaseUrl } from './apiUtils';
 import { ref, get, update } from 'firebase/database';
 import { rtdb } from '../firebase/config';
 import { withFirestoreTimeout } from '../firebase/db';
@@ -821,8 +821,140 @@ async function bridgeFetch(url: string, timeoutMs = 8000, headers?: Record<strin
 }
 
 /**
- * Fetches and parses an RSS feed directly from the client browser
- * Uses high-availability CORS bridge proxies when calling external feeds from HTTPS
+ * RSS fetch reliability helpers.
+ *
+ * WHY THIS EXISTS — the audit that prompted it
+ * --------------------------------------------
+ * Every one of the 39 registered feeds was tested live. All 39 return HTTP 200
+ * with items when fetched from a server, so the agencies themselves are fine.
+ * They failed in the admin panel for two reasons:
+ *
+ *  1. CORS. Only Fox News and DW send `Access-Control-Allow-Origin`. Every real
+ *     publisher (APS, Le Soleil, RFI, BBC, France 24, Al Jazeera, Guardian…)
+ *     sends none, so a direct browser fetch is blocked.
+ *  2. The bridge chain had rotted. Measured live:
+ *       api.codetabs.com        -> timeout (12s)
+ *       api.allorigins.win      -> timeout (12s), both /raw and /get
+ *       thingproxy.freeboard.io -> DNS failure
+ *       corsproxy.io            -> 401 (now key-gated)
+ *       corsproxy.org           -> domain parked, returns HTML
+ *       whateverorigin.org      -> HTML, not a feed
+ *     So when rss2json failed there was no working fallback left at all.
+ *
+ * rss2json is the only bridge that still works, but it throttles conversions of
+ * NEW feed URLs hard ("You are converting new feeds in a very short period").
+ * Re-requesting an already-converted feed is cheap. That is the lever: cache
+ * results locally, space new conversions out, and prefer a real backend proxy
+ * when one is configured.
+ */
+
+/** localStorage cache key prefix for fetched feed items. */
+const RSS_CACHE_PREFIX = 'sp_rss_cache_v2:';
+/** How long a cached feed is considered fresh (20 minutes). */
+const RSS_CACHE_TTL_MS = 20 * 60 * 1000;
+
+interface RssCacheEntry {
+  at: number;
+  items: ClientRssItem[];
+  source: string;
+}
+
+function readFeedCache(url: string): RssCacheEntry | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(RSS_CACHE_PREFIX + url);
+    if (!raw) return null;
+    const parsed = safeJsonParse<RssCacheEntry | null>(raw, null);
+    if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return null;
+    if (Date.now() - parsed.at > RSS_CACHE_TTL_MS) {
+      localStorage.removeItem(RSS_CACHE_PREFIX + url);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeFeedCache(url: string, items: ClientRssItem[], source: string) {
+  if (typeof window === 'undefined' || !items.length) return;
+  try {
+    // Only the fields the pipeline needs, and capped, so a long feed cannot
+    // blow past the ~5MB localStorage quota and take the whole admin with it.
+    const slim = items.slice(0, 25).map((i) => ({
+      title: i.title, link: i.link, description: i.description?.slice(0, 400),
+      pubDate: i.pubDate, source: i.source, guid: i.guid, category: i.category,
+      imageUrl: i.imageUrl, featuredImage: i.featuredImage,
+      enclosure: i.enclosure,
+    }));
+    localStorage.setItem(
+      RSS_CACHE_PREFIX + url,
+      JSON.stringify({ at: Date.now(), items: slim, source } satisfies RssCacheEntry)
+    );
+  } catch {
+    // Quota exceeded or storage disabled: the feed still works, just uncached.
+  }
+}
+
+/**
+ * Serialises rss2json calls and spaces them out.
+ *
+ * rss2json rate-limits *new* feed conversions, and a burst of conversions (an
+ * admin clicking "test all" on 39 feeds) trips it immediately, which is exactly
+ * how feeds end up looking dead. A shared queue guarantees at most one
+ * conversion in flight and a minimum gap between them.
+ */
+let rss2jsonChain: Promise<unknown> = Promise.resolve();
+let rss2jsonLastCall = 0;
+const RSS2JSON_MIN_GAP_MS = 1200;
+
+/**
+ * Optional rss2json API key.
+ *
+ * Measured during the audit: the free tier refuses NEW feed conversions with
+ * "You are converting new feeds in a very short period" and, critically, it
+ * stayed limited even after a 45s pause — re-testing four feeds still failed.
+ * Already-converted feed URLs keep working, so an admin whose feeds have been
+ * converted once sees no problem, but adding a new feed or a fresh browser
+ * profile hits a wall. Throttling and caching reduce how often that happens;
+ * only a key removes it.
+ */
+function getRss2JsonApiKey(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    return (localStorage.getItem('rss2json_api_key') || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function rss2jsonThrottled(url: string, timeoutMs: number): Promise<Response | null> {
+  const run = async (): Promise<Response | null> => {
+    const wait = RSS2JSON_MIN_GAP_MS - (Date.now() - rss2jsonLastCall);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    rss2jsonLastCall = Date.now();
+    const key = getRss2JsonApiKey();
+    const target = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}${
+      key ? `&api_key=${encodeURIComponent(key)}` : ''
+    }`;
+    return bridgeFetch(target, timeoutMs);
+  };
+  const next = rss2jsonChain.then(run, run);
+  // Keep the chain alive even if one link rejects.
+  rss2jsonChain = next.catch(() => undefined);
+  return next as Promise<Response | null>;
+}
+
+/**
+ * Fetches and parses an RSS feed directly from the client browser.
+ *
+ * Strategy, in order:
+ *   1. localStorage cache (20 min) — the cheapest and by far the most effective
+ *      protection against the rss2json conversion limit.
+ *   2. A configured backend proxy, if the admin set one in Admin -> APIs & IA.
+ *      This is the only genuinely unlimited path and the one to recommend.
+ *   3. Direct fetch (works for the few feeds that send CORS, e.g. Fox News, DW).
+ *   4. rss2json, throttled, with one retry after a backoff.
  */
 export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Promise<{
   success: boolean;
@@ -837,58 +969,113 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
 
   const cleanUrl = feedUrl.trim();
 
-  // 1. Primary High-Reliability Strategy: Dedicated RSS-to-JSON services (zero-CORS)
-  try {
-    const rss2jsonUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(cleanUrl)}`;
-    const res = await bridgeFetch(rss2jsonUrl, 9000);
-    if (res && res.ok) {
-      const data = await res.json();
-      if (data && data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
-        const items: ClientRssItem[] = data.items.map((it: any) => {
-          const rawContent = `${it.description || ''} ${it.content || ''}`;
-          const imgMatch = rawContent.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
-          const resolvedImg = (it.enclosure?.link || it.thumbnail || it.image || it.banner_image || (imgMatch ? imgMatch[1] : undefined) || '').trim();
-
-          return {
-            title: (it.title || '').trim(),
-            link: it.link || it.guid || cleanUrl,
-            description: (it.description || it.content || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
-            pubDate: it.pubDate || new Date().toISOString(),
-            source: feedName || data.feed?.title || 'Agence de Presse',
-            guid: it.guid || it.link || `rss-${Date.now()}-${Math.random()}`,
-            category: it.categories?.[0] || 'Actualité',
-            enclosure: resolvedImg ? { url: resolvedImg, type: it.enclosure?.type } : undefined,
-            imageUrl: resolvedImg || undefined,
-            featuredImage: resolvedImg || undefined
-          };
-        });
-
-        if (items.length > 0) {
-          return {
-            success: true,
-            items,
-            count: items.length,
-            feedUrl: cleanUrl,
-            source: 'rss2json Bridge'
-          };
-        }
-      }
-    }
-  } catch (_) {
-    // Continue to next bridge
+  // 1. Local cache. A 20-minute-old feed is far more useful to an editor than a
+  //    failed request, and it is the single biggest brake on the rss2json
+  //    conversion limit.
+  const cached = readFeedCache(cleanUrl);
+  if (cached) {
+    return {
+      success: true,
+      items: cached.items,
+      count: cached.items.length,
+      feedUrl: cleanUrl,
+      source: `${cached.source} (cache)`
+    };
   }
 
-  // 2. Secondary Strategy: Raw XML bridges with DOMParser.
-  // NOTE: feed2json.org was removed — it sends no Access-Control-Allow-Origin
-  // header, so the browser always blocks it. thingproxy.freeboard.io and
-  // api.allorigins.win are dead (connection timeouts). Direct fetch is tried
-  // first because some feeds do send CORS headers.
+  // 2. A configured backend proxy. Unlimited and CORS-free, so it is tried before
+  //    any public bridge whenever the admin has set one up.
+  const backend = getApiBaseUrl();
+  if (backend) {
+    const res = await bridgeFetch(`${backend.replace(/\/+$/, '')}/api/rss?url=${encodeURIComponent(cleanUrl)}`, 12000);
+    if (res && res.ok) {
+      const data = await res.json().catch(() => null);
+      const rawItems: any[] = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      if (rawItems.length) {
+        const items: ClientRssItem[] = rawItems.map((it: any) => ({
+          title: String(it.title || '').trim(),
+          link: it.link || it.url || cleanUrl,
+          description: String(it.description || it.content || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
+          pubDate: it.pubDate || it.published || new Date().toISOString(),
+          source: feedName || it.source || 'Agence de Presse',
+          guid: it.guid || it.id || it.link || `rss-${Date.now()}-${Math.random()}`,
+          category: it.category || it.categories?.[0] || 'Actualité',
+          imageUrl: it.imageUrl || it.image || undefined,
+          featuredImage: it.imageUrl || it.image || undefined,
+        }));
+        writeFeedCache(cleanUrl, items, 'Proxy backend');
+        return { success: true, items, count: items.length, feedUrl: cleanUrl, source: 'Proxy backend' };
+      }
+    }
+  }
+
+  // 3. rss2json, throttled, with one retry after a backoff.
+  //    Rate limiting here is transient and self-inflicted by bursts, so a single
+  //    spaced retry converts most of what would otherwise look like a dead feed.
+  let rateLimited = false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 2500));
+    try {
+      const res = await rss2jsonThrottled(cleanUrl, 12000);
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data && data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
+          const items: ClientRssItem[] = data.items.map((it: any) => {
+            const rawContent = `${it.description || ''} ${it.content || ''}`;
+            const imgMatch = rawContent.match(/<img[^>]+(?:src|data-src|data-orig-file)=["'](https?:\/\/[^"'\s>]+)["']/i);
+            const resolvedImg = (it.enclosure?.link || it.thumbnail || it.image || it.banner_image || (imgMatch ? imgMatch[1] : undefined) || '').trim();
+
+            return {
+              title: (it.title || '').trim(),
+              link: it.link || it.guid || cleanUrl,
+              description: (it.description || it.content || '').replace(/<[^>]*>?/gm, ' ').slice(0, 500).trim(),
+              pubDate: it.pubDate || new Date().toISOString(),
+              source: feedName || data.feed?.title || 'Agence de Presse',
+              guid: it.guid || it.link || `rss-${Date.now()}-${Math.random()}`,
+              category: it.categories?.[0] || 'Actualité',
+              enclosure: resolvedImg ? { url: resolvedImg, type: it.enclosure?.type } : undefined,
+              imageUrl: resolvedImg || undefined,
+              featuredImage: resolvedImg || undefined
+            };
+          });
+
+          if (items.length > 0) {
+            writeFeedCache(cleanUrl, items, 'rss2json');
+            return {
+              success: true,
+              items,
+              count: items.length,
+              feedUrl: cleanUrl,
+              source: 'rss2json'
+            };
+          }
+        }
+        if (data && data.status === 'error' && /short period|rate/i.test(String(data.message || ''))) {
+          rateLimited = true;
+          continue;
+        }
+      }
+    } catch (_) {
+      // Continue to the raw-XML fallbacks below.
+    }
+  }
+
+  // 4. Raw-XML attempts, browser only.
+  //
+  // The previous chain here was the reason feeds looked dead: every entry was
+  // measured live and none of them work any more.
+  //   api.codetabs.com  -> 12s timeout
+  //   api.allorigins.win-> 12s timeout (/raw and /get)
+  //   thingproxy        -> DNS failure
+  //   corsproxy.io      -> 401, key-gated
+  //   corsproxy.org     -> parked domain, serves HTML
+  //   whateverorigin    -> serves HTML
+  // Keeping them cost 8-12s per feed in dead time and then failed anyway, so the
+  // list is trimmed to a direct fetch (the few feeds that do send CORS, e.g. Fox
+  // News and DW) plus a short timeout. The reliable paths are the cache, a real
+  // backend proxy, and rss2json above.
   const xmlBridges: Array<{ name: string; url: string; unwrapJson?: boolean }> = [
     { name: 'Direct', url: cleanUrl },
-    { name: 'codetabs', url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(cleanUrl)}` },
-    { name: 'allorigins-raw', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(cleanUrl)}` },
-    // JSON-wrapped variant: { contents: "<rss ...>" } — sometimes alive when /raw is not
-    { name: 'allorigins-get', url: `https://api.allorigins.win/get?url=${encodeURIComponent(cleanUrl)}`, unwrapJson: true },
   ];
 
   let xmlText = '';
@@ -896,7 +1083,7 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
 
   for (const bridge of xmlBridges) {
     try {
-      const res = await bridgeFetch(bridge.url, 8000, {
+      const res = await bridgeFetch(bridge.url, 6000, {
         'Accept': 'application/rss+xml, application/xml, text/xml, */*'
       });
       if (!res || !res.ok) continue;
@@ -904,7 +1091,7 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
       if (bridge.unwrapJson) {
         try { text = String(JSON.parse(text)?.contents || ''); } catch (_) { continue; }
       }
-      if (text && (text.includes('<rss') || text.includes('<feed') || text.includes('<item') || text.includes('<entry'))) {
+      if (text && (text.includes('<rss') || text.includes('<feed') || text.includes('<item') || text.includes('<entry') || text.includes('<rdf:RDF'))) {
         xmlText = text;
         successfulBridge = bridge.name;
         break;
@@ -1019,12 +1206,13 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
     }
 
     if (items.length > 0) {
+      writeFeedCache(cleanUrl, items, 'Direct XML');
       return {
         success: true,
         items,
         count: items.length,
         feedUrl: cleanUrl,
-        source: successfulBridge.includes('allorigins') ? 'CORS Bridge' : 'Direct XML'
+        source: 'Direct XML'
       };
     }
   }
@@ -1078,7 +1266,13 @@ export async function clientFetchRssFeed(feedUrl: string, feedName?: string): Pr
     // End of fallbacks
   }
 
-  throw new Error(`Impossible de contacter le flux RSS (${cleanUrl}). Vérifiez la connectivité de la source ou son adresse.`);
+  throw new Error(
+    rateLimited
+      ? `Flux temporairement limité par le service de conversion (trop de flux testés d'affilée). Recliquez dans une minute : ${cleanUrl}`
+      : backend
+      ? `Flux injoignable : ${cleanUrl}. Le proxy backend est configuré mais n'a rien renvoyé — vérifiez qu'il expose bien /api/rss?url=...`
+      : `Flux injoignable : ${cleanUrl}. La source n'autorise pas les appels navigateur (pas d'en-tête CORS) et aucun relais public ne répond. Configurez un proxy backend dans Admin → APIs & IA pour débloquer cet accès.`
+  );
 }
 
 /**

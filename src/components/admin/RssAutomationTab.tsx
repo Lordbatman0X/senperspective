@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { 
-  Zap, Globe, RefreshCw, Plus, Trash2, CheckCircle2, Eye, Edit2, Sparkles, 
+  Zap, Globe, RefreshCw, Plus, Trash2, CheckCircle2, Eye, EyeOff, Edit2, Sparkles, 
   Layers, Bot, ArrowRight, ExternalLink, AlertCircle, FileText, Check, ShieldCheck, Clock,
   Activity, AlertTriangle, Server, Wifi, Cpu, Play, Link as LinkIcon,
   LayoutGrid, ListFilter, ArrowDown, ChevronRight, Share2, CheckSquare, Sliders, Info,
@@ -37,19 +37,115 @@ export interface FeedHealthRecord {
   isFallbackBridge?: boolean;
 }
 
+/**
+ * Fallback categories, used only when the site has no categories configured yet.
+ *
+ * WHY THIS IS NO LONGER THE SOURCE OF TRUTH
+ * ----------------------------------------
+ * This list used to be the category universe for the whole RSS pipeline while the
+ * site ran on a different one. The audit found three competing lists:
+ *   - this one (11 entries, including "Meteo & Maritime" and "Chaloupe & Transports")
+ *   - siteSettings.categories (10 entries, admin-editable, e.g. "Decryptages", "Sante")
+ *   - the values actually used by the 360 published articles (18, e.g. "Afrique",
+ *     "Monde", "Diplomatie", "Justice")
+ * An article dispatched as "Meteo & Maritime" therefore landed in no category page
+ * at all, and feeds could not be filtered by a category that did not exist.
+ *
+ * Categories now come from the site (see `resolveRssCategories`), so the RSS
+ * screen, the article editor and the public category pages can never disagree
+ * again. This stays only as a last-resort default.
+ */
 export const RSS_CATEGORIES = [
   'Politique',
   'Économie',
   'Société',
   'International',
+  'Tech',
+  'Santé',
   'Sports',
-  'Dossiers',
-  'Flash Info',
-  'Météo & Maritime',
-  'Chaloupe & Transports',
-  'Culture & People',
-  'Tech & Innovation'
+  'People',
+  'Gouvernance',
+  'Décryptages'
 ];
+
+/**
+ * The categories the RSS pipeline should use, derived from the site's own
+ * category list.
+ *
+ * `siteCategories` is `siteSettings.categories` (the list edited in
+ * Admin -> Categories and rendered by the public /category pages). The fallback
+ * list is merged in behind it so a category always has a home, and duplicates
+ * are removed after accent/case normalisation.
+ */
+export function resolveRssCategories(
+  siteCategories?: Array<{ fr?: string; en?: string } | string>
+): string[] {
+  const fromSite = (siteCategories || [])
+    .map((c) => (typeof c === 'string' ? c : c?.fr || ''))
+    .map((s) => String(s || '').trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const c of [...fromSite, ...RSS_CATEGORIES]) {
+    const key = c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(c);
+  }
+  return merged.length ? merged : [...RSS_CATEGORIES];
+}
+
+/**
+ * Normalises a category onto the site's list.
+ *
+ * A feed may carry a legacy or finer-grained label ("Dossiers", "Afrique",
+ * "Tech & Innovation"). Dispatching under a label the site does not use creates
+ * an article that appears in no category page, so those are mapped onto the
+ * site's own category, and anything genuinely unknown falls back to the first
+ * site category rather than inventing a new one.
+ */
+export function matchSiteCategory(
+  raw: string | undefined | null,
+  siteCategories: string[]
+): string {
+  const target = String(raw || '').trim();
+  if (!target || !siteCategories.length) return 'Politique';
+  const norm = (s: string) =>
+    String(s)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  const t = norm(target);
+  const exact = siteCategories.find((c) => norm(c) === t);
+  if (exact) return exact;
+
+  const aliases: Record<string, string> = {
+    dossiers: 'Décryptages',
+    decryptage: 'Décryptages',
+    decryptages: 'Décryptages',
+    'meteo-maritime': 'International',
+    'chaloupe-transports': 'Économie',
+    'culture-people': 'People',
+    'tech-innovation': 'Tech',
+    afrique: 'International',
+    monde: 'International',
+    diplomatie: 'International',
+    justice: 'Gouvernance',
+    business: 'Économie',
+    education: 'Société',
+    religion: 'Société',
+    flash: 'Politique',
+  };
+  const aliased = aliases[t];
+  if (aliased) {
+    const match = siteCategories.find((c) => norm(c) === norm(aliased));
+    if (match) return match;
+  }
+  const partial = siteCategories.find((c) => t.includes(norm(c)) || norm(c).includes(t));
+  return partial || siteCategories[0] || 'Politique';
+}
 
 export { safeFetchJson };
 
@@ -61,13 +157,13 @@ export const ALL_RELIABLE_RSS_FEEDS = [
   { id: 'pressafrik', name: 'PressAfrik Sénégal', url: 'https://www.pressafrik.com/xml/syndication.rss', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'seneweb', name: 'Seneweb Actualités Wire', url: 'https://news.google.com/rss/search?q=site:seneweb.com&hl=fr&gl=SN&ceid=SN:fr', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'allafrica-senegal', name: 'AllAfrica Sénégal (RDF)', url: 'https://allafrica.com/tools/headlines/rdf/senegal/headlines.rdf', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
-  { id: 'sudquotidien-gn', name: 'Sud Quotidien (Google Wire)', url: 'https://news.google.com/rss/search?q=Sud+Quotidien+Senegal', category: 'Dossiers', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
+  { id: 'sudquotidien-gn', name: 'Sud Quotidien (Google Wire)', url: 'https://news.google.com/rss/search?q=Sud+Quotidien+Senegal', category: 'Décryptages', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'lequotidien-gn', name: 'Le Quotidien Sénégal (Google Wire)', url: 'https://news.google.com/rss/search?q=Le+Quotidien+Senegal', category: 'Société', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
   { id: 'rts-gn', name: 'RTS Sénégal (Google Wire)', url: 'https://news.google.com/rss/search?q=RTS+Senegal', category: 'Politique', pack: 'senegal', originCountry: 'Sénégal', originFlag: '🇸🇳', originRegion: 'Sénégal & Ouest-Africain', active: true },
 
   // --- AFRIQUE & REGIONAL WIRE ---
   { id: 'rfiafrique', name: 'RFI Afrique', url: 'https://www.rfi.fr/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
-  { id: 'jeuneafrique', name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', category: 'Dossiers', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
+  { id: 'jeuneafrique', name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', category: 'Décryptages', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
   { id: 'bbcafrique', name: 'BBC Afrique (FR)', url: 'https://www.bbc.com/afrique/index.xml', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
   { id: 'bbcafrica-en', name: 'BBC Africa (EN)', url: 'https://feeds.bbci.co.uk/news/world/africa/rss.xml', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
   { id: 'france24-afrique-fr', name: 'France 24 Afrique (FR)', url: 'https://www.france24.com/fr/afrique/rss', category: 'International', pack: 'africa', originCountry: 'Panafricain', originFlag: '🌍', originRegion: 'Afrique & Sub-Saharienne', active: true },
@@ -217,8 +313,39 @@ export function getArticleSourceInfo(draft: any, rssFeeds: any[] = ALL_RELIABLE_
 }
 
 export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutomationTabProps) {
-  const { articles, setArticles, addArticle, updateArticle, deleteArticle, syncFromSupabase, language } = useStore();
+  const { articles, setArticles, addArticle, updateArticle, deleteArticle, syncFromSupabase, language, siteSettings } = useStore();
   const isFr = language === 'fr';
+
+  // The RSS screen used a hardcoded category list that did not match the site's
+  // own categories, so an article could be dispatched under a label with no
+  // category page behind it. Every selector below now offers the site's real
+  // categories, so what you pick here is always a section that exists.
+  const siteCategories = resolveRssCategories(siteSettings?.categories as any);
+
+  // rss2json key. The free tier refuses to convert NEW feed URLs and stays
+  // refused even after waiting, so this is the setting that actually unblocks
+  // adding a source. Stored in this browser only, like the AI provider keys.
+  const [rss2JsonKey, setRss2JsonKey] = useState(() => {
+    try { return localStorage.getItem('rss2json_api_key') || ''; } catch { return ''; }
+  });
+  const [rss2JsonKeyInput, setRss2JsonKeyInput] = useState('');
+  const [showRss2JsonKey, setShowRss2JsonKey] = useState(false);
+
+  const handleSaveRss2JsonKey = () => {
+    const v = rss2JsonKeyInput.trim();
+    if (!v) return;
+    try { localStorage.setItem('rss2json_api_key', v); } catch { /* storage blocked */ }
+    setRss2JsonKey(v);
+    setRss2JsonKeyInput('');
+    showStatus(isFr ? 'Clé rss2json enregistrée.' : 'rss2json key saved.');
+  };
+
+  const handleClearRss2JsonKey = () => {
+    try { localStorage.removeItem('rss2json_api_key'); } catch { /* storage blocked */ }
+    setRss2JsonKey('');
+    setRss2JsonKeyInput('');
+    showStatus(isFr ? 'Clé rss2json supprimée.' : 'rss2json key removed.');
+  };
 
   // Active Newsroom Tab
   const [activeNewsroomTab, setActiveNewsroomTab] = useState<'drafts' | 'feeds' | 'writer' | 'scheduler' | 'guidelines'>('drafts');
@@ -463,7 +590,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       const draftArt: any = {
         id: testArt.id || ('art-test-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6)),
         slug: testArt.slug || ((testArt.title?.fr || testArt.title?.en || 'article-test').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString().slice(-4)),
-        category: testArt.category || 'Économie',
+        category: matchSiteCategory(testArt.category || manualCategory, siteCategories),
         type: testArt.type || 'News',
         title: testArt.title || { fr: 'Article Test', en: 'Test Article' },
         excerpt: testArt.excerpt || { fr: '', en: '' },
@@ -817,7 +944,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     setProcessingFeedId(feedId);
     try {
       const feedObj = rssFeeds.find((f: any) => f.id === feedId || f.url === feedUrl);
-      const cat = feedCategory || feedObj?.category || 'Économie';
+      const cat = matchSiteCategory(feedCategory || feedObj?.category, siteCategories);
 
       showStatus(isFr ? `Traitement du flux "${feedObj?.name || 'RSS'}" en cours...` : `Processing feed "${feedObj?.name || 'RSS'}"...`);
 
@@ -884,9 +1011,20 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
   const handleRunFullPipeline = async () => {
     setRunningAllPipeline(true);
     let totalGenerated = 0;
+    const activeFeeds = rssFeeds.filter((f: any) => f.active !== false);
+    // rss2json only rate-limits NEW feed conversions, and converting 39 at once
+    // trips it immediately, which is how a full run came back as a wall of
+    // failures. The fetch layer now serialises and spaces conversions; this loop
+    // reports progress so the wait is legible instead of looking frozen.
+    let done = 0;
     try {
-      showStatus(isFr ? "Lancement de la veille globale sur les flux actifs..." : "Running global wire scan across active feeds...");
-      for (const feed of rssFeeds) {
+      for (const feed of activeFeeds) {
+        done++;
+        showStatus(
+          isFr
+            ? `Veille globale ${done}/${activeFeeds.length} — ${feed.name}...`
+            : `Global scan ${done}/${activeFeeds.length} — ${feed.name}...`
+        );
         if (feed.active !== false) {
           try {
             const { ok, data } = await safeFetchJson('/api/rss/fetch-and-generate', {
@@ -895,7 +1033,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
               body: JSON.stringify({ 
                 feedUrl: feed.url, 
                 feedName: feed.name,
-                category: feed.category || 'Économie', 
+                category: matchSiteCategory(feed.category, siteCategories), 
                 maxItems: 1, 
                 autoPublish: false,
                 preferredEngine: 'auto',
@@ -910,7 +1048,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
               const clientRes = await clientProcessFeedAndGenerate({
                 feedUrl: feed.url,
                 feedName: feed.name,
-                category: feed.category || 'Économie',
+                category: matchSiteCategory(feed.category, siteCategories),
                 maxItems: 1,
                 type: 'News',
                 preferredEngine: 'auto'
@@ -1277,7 +1415,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                 className="bg-zinc-950 border border-zinc-800 text-zinc-300 text-xs font-mono px-3 py-2 rounded-xl outline-none focus:border-orange-500"
               >
                 <option value="all">{isFr ? 'Toutes Rubriques' : 'All Categories'}</option>
-                {RSS_CATEGORIES.map(cat => (
+                {siteCategories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
@@ -1575,6 +1713,85 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
             </div>
           </div>
 
+          {/* WHY A FEED CAN LOOK BROKEN — the audit findings, stated in the UI.
+              Measured against all 39 registered sources: every one returns HTTP
+              200 with items from a server, but only Fox News and DW send CORS
+              headers, and every free public relay that used to be in the fallback
+              chain is now dead (codetabs and allorigins time out, corsproxy.io is
+              key-gated, corsproxy.org is a parked domain). */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 text-[11px] leading-relaxed text-zinc-400">
+            <p className="flex items-start gap-2">
+              <Info size={13} className="mt-px shrink-0 text-orange-400" />
+              <span>
+                {isFr ? (
+                  <>
+                    <strong className="text-zinc-200">Comment lire les statuts ci-dessous.</strong>{' '}
+                    Les 39 sources enregistrées répondent toutes (vérifié en direct) : ce sont les
+                    serveurs d&apos;actualités qui n&apos;autorisent pas les appels depuis un navigateur,
+                    pas les agences qui sont en panne. Le relais public utilisé pour contourner cela
+                    est fortement limité : les résultats sont mis en cache 20 minutes et les
+                    nouvelles conversions sont espacées automatiquement. Pour un accès illimité et
+                    fiable à toutes les agences, renseignez une URL de proxy backend dans
+                    <strong className="text-zinc-200"> Admin → APIs & IA</strong>.
+                  </>
+                ) : (
+                  <>
+                    <strong className="text-zinc-200">How to read the statuses below.</strong>{' '}
+                    All 39 registered sources respond (verified live): it is the publishers that
+                    block browser calls, not dead agencies. The public relay that works around this
+                    is heavily rate-limited, so results are cached for 20 minutes and new
+                    conversions are spaced out automatically. For unlimited, reliable access to
+                    every agency, set a backend proxy URL in
+                    <strong className="text-zinc-200"> Admin → APIs &amp; AI</strong>.
+                  </>
+                )}
+              </span>
+            </p>
+
+            {/* The rss2json key. Without it the relay refuses to convert any NEW
+                feed, and stays refused even after waiting, which is the single most
+                common reason a healthy source is reported as broken. */}
+            <div className="mt-3 border-t border-zinc-800 pt-3">
+              <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                {isFr ? 'Clé API rss2json (recommandé)' : 'rss2json API key (recommended)'}
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type={showRss2JsonKey ? 'text' : 'password'}
+                  value={rss2JsonKeyInput}
+                  onChange={(e) => setRss2JsonKeyInput(e.target.value)}
+                  placeholder={rss2JsonKey ? '•••••••• clé enregistrée' : 'https://rss2json.com/#apikey'}
+                  className="min-w-[240px] flex-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100 outline-none focus:border-orange-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRss2JsonKey((v) => !v)}
+                  className="rounded-lg border border-zinc-800 px-2.5 py-2 text-zinc-400 hover:text-zinc-100"
+                  aria-label={showRss2JsonKey ? 'Hide key' : 'Show key'}
+                >
+                  {showRss2JsonKey ? <EyeOff size={13} /> : <Eye size={13} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveRss2JsonKey}
+                  className="rounded-lg bg-orange-600 px-3 py-2 font-bold text-white transition hover:bg-orange-500"
+                >
+                  {isFr ? 'Enregistrer' : 'Save'}
+                </button>
+                {rss2JsonKey && (
+                  <button
+                    type="button"
+                    onClick={handleClearRss2JsonKey}
+                    className="rounded-lg border border-zinc-800 p-2 text-red-400 transition hover:bg-red-500/10"
+                    aria-label="Remove key"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Feed Sources Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {rssFeeds.map((feed: any, index: number) => {
@@ -1707,7 +1924,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                         onChange={e => setNewFeedCategory(e.target.value)}
                         className="w-full bg-zinc-950 border border-zinc-700 text-white px-3 py-2 rounded-xl text-xs outline-none focus:border-orange-500"
                       >
-                        {RSS_CATEGORIES.map(cat => (
+                        {siteCategories.map(cat => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>
@@ -1848,7 +2065,7 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
                   onChange={e => setManualCategory(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-blue-500"
                 >
-                  {RSS_CATEGORIES.map(cat => (
+                  {siteCategories.map(cat => (
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
