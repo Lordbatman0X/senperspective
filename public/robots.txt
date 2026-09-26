@@ -8,4 +8,21 @@ Allow: /
 User-agent: AdsBot-Google
 Allow: /
 
+# Feed aggregators and news crawlers. Explicitly allowed so nothing is
+# ambiguous: the feeds and the article pages are the intended content.
+User-agent: Googlebot-News
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Feedfetcher-Google
+Allow: /
+
 Sitemap: https://senperspective.com/sitemap.xml

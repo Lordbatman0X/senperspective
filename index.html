@@ -23,6 +23,12 @@
     <meta name="author" content="SenPerspective Newsroom — Perspective Group" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
     <link rel="canonical" href="https://senperspective.com" />
+<!-- Feed auto-discovery. Without these, browsers and feed readers do not
+     surface the site as subscribable, and the RSS/Atom files are only found by
+     someone who already knows the URL. Kept in the genuine <head> so they are
+     present on prerendered article pages too, not just after React mounts. -->
+<link rel="alternate" type="application/rss+xml" title="SenPerspective — RSS" href="/rss.xml" />
+<link rel="alternate" type="application/atom+xml" title="SenPerspective — Atom" href="/atom.xml" />
 
     <!-- OpenGraph / Facebook / WhatsApp Meta Tags -->
     <meta property="og:type" content="website" />

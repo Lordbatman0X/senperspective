@@ -54,6 +54,24 @@
         ]
       },
       {
+        "source": "/rss.xml",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/rss+xml; charset=utf-8"
+          }
+        ]
+      },
+      {
+        "source": "/atom.xml",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/atom+xml; charset=utf-8"
+          }
+        ]
+      },
+      {
         "source": "/sitemap.xml",
         "headers": [
           {

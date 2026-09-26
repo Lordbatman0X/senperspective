@@ -2,6 +2,100 @@ import React, { useState } from 'react';
 import { useStore } from '../store';
 import { Mail, CheckCircle2 } from 'lucide-react';
 
+/**
+ * A compact, unobtrusive newsletter box for sidebars and in-article slots.
+ *
+ * Distinct from `NewsletterSignup`, which is a full-width section: this one is
+ * meant to sit inside an existing column without displacing the content around
+ * it. Same store action, so a subscription from here lands in the same
+ * SubscriberTab list.
+ */
+export const NewsletterInline: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const { language, siteSettings, addSubscriber } = useStore();
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  const accentColor = siteSettings?.accentColor || '#E85D42';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    // Validate before the network call so an obviously bad address gets an
+    // immediate answer rather than a silent no-op: addSubscriber returns early
+    // on an invalid address without throwing, which previously left the reader
+    // staring at a form that appeared to do nothing.
+    const clean = email.trim();
+    if (!clean || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
+      setError(language === 'fr' ? 'Adresse e-mail invalide.' : 'Invalid email address.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await addSubscriber(clean);
+      setIsSuccess(true);
+      setEmail('');
+    } catch (err) {
+      console.error('Newsletter inline signup error:', err);
+      setError(language === 'fr' ? 'Inscription impossible. Réessayez.' : 'Could not subscribe. Please retry.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isSuccess) {
+    return (
+      <div className={`border border-emerald-500/30 bg-emerald-500/5 rounded-lg px-4 py-3 ${className}`}>
+        <p className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+          <CheckCircle2 size={14} className="shrink-0" />
+          {language === 'fr' ? 'Inscription confirmée.' : 'Subscription confirmed.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`border border-zinc-200 dark:border-zinc-800 rounded-lg p-4 bg-zinc-50 dark:bg-zinc-900/40 ${className}`}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <Mail size={13} style={{ color: accentColor }} className="shrink-0" />
+        <h3 className="text-[10px] font-black uppercase tracking-widest text-zinc-700 dark:text-zinc-200">
+          {language === 'fr' ? 'Newsletter' : 'Newsletter'}
+        </h3>
+      </div>
+      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed mb-3">
+        {language === 'fr'
+          ? 'Le briefing de la rédaction, chaque matin.'
+          : 'The newsroom briefing, every morning.'}
+      </p>
+      <form onSubmit={handleSubmit} className="flex gap-1.5">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={language === 'fr' ? 'votre@email.com' : 'you@email.com'}
+          aria-label={language === 'fr' ? 'Adresse e-mail' : 'Email address'}
+          className="flex-1 min-w-0 bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 px-2.5 py-1.5 text-[11px] focus:outline-none focus:border-[#E85D42] rounded"
+        />
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          style={{ backgroundColor: accentColor }}
+          className="px-3 py-1.5 text-white text-[10px] font-bold uppercase tracking-wider rounded transition-opacity hover:opacity-90 disabled:opacity-50 shrink-0"
+        >
+          {language === 'fr' ? 'OK' : 'OK'}
+        </button>
+      </form>
+      {error && (
+        <p role="alert" className="mt-1.5 text-[10px] text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+};
+
 export const NewsletterSignup: React.FC = () => {
   const { language, siteSettings, addSubscriber } = useStore();
   const [email, setEmail] = useState('');

@@ -11,7 +11,7 @@ import { ArenaSidebarLive } from '../components/arena/ArenaSidebarLive';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { visibleAds, isAdPubliclyVisible } from '../lib/adCampaign';
-import { NewsletterSignup } from '../components/NewsletterSignup';
+import { NewsletterInline } from '../components/NewsletterSignup';
 import { NowBar } from '../components/home/NowBar';
 import { DecryptagesSection } from '../components/home/DecryptagesSection';
 import { SocietyPeopleSection } from '../components/home/SocietyPeopleSection';
@@ -584,7 +584,12 @@ export function HomePage() {
         
         {/* Right Sidebar Rubrics (Stays lg:col-span-3 when ad disappears, so articles widen) */}
         <div className="lg:col-span-3 min-w-0 space-y-8">
-          
+
+          {/* Newsletter box sits at the very top of the sidebar. It is compact
+              and low-contrast on purpose: present for the reader who wants it,
+              not competing with the news for attention. */}
+          <NewsletterInline />
+
           {/* Widget 1: Trendings - Sourced from our actual journal articles */}
           <div className="glass p-5 border-t-4 border-t-[#E85D42] bg-white/95 dark:bg-zinc-900/80 text-left" style={{ borderTopColor: currentSettings.accentColor }}>
             <div className="flex items-center gap-1.5 mb-4 border-b border-zinc-200/60 dark:border-zinc-800/60 pb-2">

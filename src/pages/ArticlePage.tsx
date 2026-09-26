@@ -12,6 +12,7 @@ import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { visibleAds } from '../lib/adCampaign';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSEO } from '../hooks/useSEO';
+import { NewsletterInline } from '../components/NewsletterSignup';
 
 function MiniCarouselCard({ article }: { article: Article }) {
   const language = useStore((s) => s.language);
@@ -933,6 +934,14 @@ export function ArticlePage() {
 
         </section>
       )}
+
+      {/* Newsletter box. Placed after the article body and before the
+          comments: a reader who has just finished reading is the most likely
+          to subscribe, and it stays out of the way of the headline and the
+          first screenful. */}
+      <div className="max-w-4xl mx-auto mb-10">
+        <NewsletterInline />
+      </div>
 
       {/* Comment Section */}
       {article.commentsEnabled !== false && (

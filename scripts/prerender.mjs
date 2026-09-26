@@ -30,6 +30,7 @@ import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CATEGORY_HUBS } from './categoryHubs.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -442,52 +443,168 @@ const LEAGUE_HUBS = [
 ];
 
 /**
- * Renders a league hub into the genuine index.html shell.
- *
- * Mirrors the article prerender: real text inside the real #root, so React
- * replaces it on mount and a non-JS crawler still reads the page.
+ * Renders a league hub into the genuine index.html shell, via the shared
+ * editorial-hub renderer so both page families stay structurally identical.
  */
 function renderLeagueHub(hub, shell) {
-  const url = `${SITE}${hub.path}`;
+  return renderEditorialHub({ ...hub, kind: 'league' }, shell);
+}
 
-  const sectionsHtml = hub.sections
+/**
+ * RSS 2.0 feed.
+ *
+ * The site had no feed at all, which costs visibility in two ways: readers who
+ * prefer a reader over a site have no way to follow, and search engines get no
+ * second discovery path to the articles. Generated here from the same RTDB
+ * records the sitemap and the article pages use, so it cannot drift.
+ *
+ * Also emits an Atom sibling, because several feed readers and aggregators
+ * still prefer it and it costs almost nothing alongside the RSS 2.0 file.
+ */
+function buildRss(articles, { limit = 50 } = {}) {
+  const items = articles
+    .slice()
+    .sort((a, b) => String(isoDate(b) || '').localeCompare(String(isoDate(a) || '')))
+    .slice(0, limit)
+    .map((a) => {
+      const title = stripTags(t(a.title, 'fr') || t(a.title, 'en') || 'SenPerspective');
+      const desc = stripTags(
+        t(a.seoMetaDescription, 'fr') || t(a.excerpt, 'fr') || stripTags(t(a.body, 'fr')).slice(0, 300)
+      );
+      const link = `${SITE}${articlePath(a)}`;
+      const pub = isoDate(a) || new Date().toISOString();
+      const image = a.seoOgImage || a.featuredImage || a.imageUrl || '';
+      const category = typeof a.category === 'string' ? a.category : '';
+      return `    <item>
+      <title>${esc(title)}</title>
+      <link>${esc(link)}</link>
+      <guid isPermaLink="true">${esc(link)}</guid>
+      <pubDate>${new Date(pub).toUTCString()}</pubDate>
+      <description>${esc(desc)}</description>${category ? `\n      <category>${esc(category)}</category>` : ''}${
+        image
+          ? `\n      <enclosure url="${esc(image)}" type="image/jpeg" length="0" />`
+          : ''
+      }
+    </item>`;
+    })
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>SenPerspective</title>
+    <link>${SITE}</link>
+    <atom:link href="${SITE}/rss.xml" rel="self" type="application/rss+xml" />
+    <description>Actualité, décryptage et analyse depuis Dakar — Perspective Group.</description>
+    <language>fr-SN</language>
+    <copyright>Perspective Group</copyright>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <generator>SenPerspective prerender</generator>
+    <image>
+      <url>${SITE}/favicon.png</url>
+      <title>SenPerspective</title>
+      <link>${SITE}</link>
+    </image>
+${items}
+  </channel>
+</rss>
+`;
+}
+
+function buildAtom(articles, { limit = 50 } = {}) {
+  const entries = articles
+    .slice()
+    .sort((a, b) => String(isoDate(b) || '').localeCompare(String(isoDate(a) || '')))
+    .slice(0, limit)
+    .map((a) => {
+      const title = stripTags(t(a.title, 'fr') || t(a.title, 'en') || 'SenPerspective');
+      const desc = stripTags(
+        t(a.seoMetaDescription, 'fr') || t(a.excerpt, 'fr') || stripTags(t(a.body, 'fr')).slice(0, 300)
+      );
+      const link = `${SITE}${articlePath(a)}`;
+      const pub = isoDate(a) || new Date().toISOString();
+      return `  <entry>
+    <title>${esc(title)}</title>
+    <link href="${esc(link)}" />
+    <id>${esc(link)}</id>
+    <updated>${esc(new Date(pub).toISOString())}</updated>
+    <published>${esc(new Date(pub).toISOString())}</published>
+    <summary>${esc(desc)}</summary>
+  </entry>`;
+    })
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>SenPerspective</title>
+  <link href="${SITE}"/>
+  <link rel="self" href="${SITE}/atom.xml" type="application/atom+xml"/>
+  <id>${SITE}/</id>
+  <updated>${new Date().toISOString()}</updated>
+  <subtitle>Actualité, décryptage et analyse depuis Dakar — Perspective Group.</subtitle>
+  <generator>SenPerspective prerender</generator>
+${entries}
+</feed>
+`;
+}
+
+/**
+ * Generic editorial hub renderer, shared by the category pages and the league
+ * hubs. Both are "an evergreen page about a subject": a heading, an intro, some
+ * real sections of copy, and structured data.
+ *
+ * Reusing one renderer is what keeps the two page families from drifting apart
+ * in structure, head handling or escaping.
+ */
+function renderEditorialHub(
+  { path: urlPath, heading, title, description, intro, sections, kind },
+  shell
+) {
+  const url = `${SITE}${urlPath}`;
+
+  const sectionsHtml = sections
     .map(
       (s) =>
         `<h2 style="font-family:Inter,system-ui,sans-serif;font-size:1.25rem;font-weight:800;margin:1.75rem 0 .5rem">${esc(s.h)}</h2>\n      <p style="font-size:1.05rem;line-height:1.75;margin:0 0 1rem">${esc(s.p)}</p>`
     )
     .join('\n      ');
 
-  // CollectionPage rather than SportsEvent: this page is an editorial hub for a
-  // competition, not a single fixture. Emitting SportsEvent here (with no real
-  // startDate) would be invalid structured data and risks a manual action.
+  // CollectionPage for both families: neither is a single fixture or article,
+  // and emitting NewsArticle here would be invalid structured data.
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: hub.heading,
-    description: hub.description,
+    name: heading,
+    description,
     url,
     inLanguage: 'fr-SN',
     isPartOf: { '@type': 'WebSite', name: 'SenPerspective', url: SITE },
   };
 
+  // Each hub is its own subject; the crumb only marks the section it belongs to.
+  const crumb =
+    kind === 'category'
+      ? `<a href="${SITE}/category/${urlPath.split('/').pop()}" style="color:#E85D42;text-decoration:none">Rubrique</a>`
+      : `<a href="${SITE}/larene" style="color:#E85D42;text-decoration:none">Sports</a>`;
+
   const body = `<div id="sp-prerender" style="max-width:46rem;margin:0 auto;padding:2.5rem 1.25rem 4rem;font-family:Inter,system-ui,sans-serif;color:#172033">
       <p style="font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#E85D42;margin:0 0 1rem">
         <a href="${SITE}/" style="color:#E85D42;text-decoration:none">SenPerspective</a>
-        &middot; Sports
+        &middot; ${esc(crumb)}
       </p>
-      <h1 style="font-size:clamp(1.75rem,4vw,2.5rem);line-height:1.15;font-weight:900;margin:0 0 1rem">${esc(hub.heading)}</h1>
-      <p style="font-size:1.1rem;font-weight:600;line-height:1.65;margin:0 0 1.5rem">${esc(hub.intro)}</p>
+      <h1 style="font-size:clamp(1.75rem,4vw,2.5rem);line-height:1.15;font-weight:900;margin:0 0 1rem">${esc(heading)}</h1>
+      <p style="font-size:1.1rem;font-weight:600;line-height:1.65;margin:0 0 1.5rem">${esc(intro)}</p>
       ${sectionsHtml}
       <p style="font-size:11px;color:#64748b;border-top:1px solid #e2e8f0;padding-top:1rem;margin-top:2rem">
-        <a href="${SITE}/larene" style="color:#E85D42;text-decoration:none">Perspective Group</a> &middot; Dakar, Sénégal
+        <a href="${SITE}/" style="color:#E85D42;text-decoration:none">Perspective Group</a> &middot; Dakar, Sénégal
       </p>
     </div>`;
 
   return applyHead(shell, {
-    a: { title: hub.heading, category: 'Sports' },
+    a: { title: heading, category: kind === 'category' ? 'Actualites' : 'Sports' },
     lang: 'fr',
-    title: hub.title,
-    desc: hub.description,
+    title,
+    desc: description,
     url,
     image: `${SITE}/favicon.png`,
     published: null,
@@ -507,15 +624,14 @@ function buildSitemap(articles) {
   const today = new Date().toISOString().slice(0, 10);
   const staticUrls = [
     { loc: `${SITE}/`, priority: '1.0', freq: 'hourly' },
-    { loc: `${SITE}/category/politique`, priority: '0.8', freq: 'hourly' },
-    { loc: `${SITE}/category/economie`, priority: '0.8', freq: 'hourly' },
-    { loc: `${SITE}/category/societe`, priority: '0.8', freq: 'hourly' },
+    // Category pages come from the shared CATEGORY_HUBS registry, so the
+    // sitemap cannot list a page the build does not actually produce.
+    ...CATEGORY_HUBS.map((c) => ({
+      loc: `${SITE}/category/${c.slug}`,
+      priority: '0.8',
+      freq: 'hourly',
+    })),
     { loc: `${SITE}/category/sports`, priority: '0.8', freq: 'hourly' },
-    { loc: `${SITE}/category/tech-innovation`, priority: '0.7', freq: 'hourly' },
-    { loc: `${SITE}/category/culture`, priority: '0.7', freq: 'daily' },
-    { loc: `${SITE}/category/sante`, priority: '0.7', freq: 'daily' },
-    { loc: `${SITE}/category/international`, priority: '0.7', freq: 'daily' },
-    { loc: `${SITE}/category/decryptages`, priority: '0.8', freq: 'daily' },
     { loc: `${SITE}/larene`, priority: '0.7', freq: 'hourly' },
     // League hubs: the durable, indexable sports surface. The live scores on
     // /larene are deliberately absent from the sitemap because they change too
@@ -615,8 +731,36 @@ async function main() {
   }
   console.log(`[prerender] wrote ${hubsWritten} league hub pages to dist/arena/`);
 
+  // Category hub pages. These were previously SPA-only: an empty #root with
+  // every word arriving after JavaScript, which meant a non-JS crawler saw
+  // nothing on the site's primary entry points.
+  const categoryDir = path.join(DIST, 'category');
+  if (existsSync(categoryDir)) await rm(categoryDir, { recursive: true, force: true });
+  let catsWritten = 0;
+  for (const cat of CATEGORY_HUBS) {
+    if (!/^[a-z0-9-]+$/.test(cat.slug)) {
+      console.warn(`[prerender] skipping unsafe category slug: ${cat.slug}`);
+      continue;
+    }
+    const dir = path.join(categoryDir, cat.slug);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, 'index.html'),
+      renderEditorialHub({ ...cat, path: `/category/${cat.slug}`, kind: 'category' }, shell),
+      'utf8'
+    );
+    catsWritten++;
+  }
+  console.log(`[prerender] wrote ${catsWritten} category hub pages to dist/category/`);
+
   await writeFile(path.join(DIST, 'sitemap.xml'), buildSitemap(articles), 'utf8');
   console.log(`[prerender] wrote sitemap.xml (${articles.length} article urls + 13 static)`);
+
+  // Feeds. Written from the same records, so they can never advertise an
+  // article the sitemap does not also list.
+  await writeFile(path.join(DIST, 'rss.xml'), buildRss(articles), 'utf8');
+  await writeFile(path.join(DIST, 'atom.xml'), buildAtom(articles), 'utf8');
+  console.log('[prerender] wrote rss.xml and atom.xml (50 most recent each)');
 
   // Sanity check: confirm the output really contains words, which is the whole
   // point. If this ever drops to 0 the deployment is worthless, so it warns.
