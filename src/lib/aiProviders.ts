@@ -101,7 +101,12 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProvider> = {
     label: 'Groq',
     header: 'x-groq-key',
     directEndpoint: 'https://api.groq.com/openai/v1/chat/completions',
-    defaultModel: 'llama-3.3-70b-versatile',
+    // WAS 'llama-3.3-70b-versatile', which now fails with "model does not exist or
+    // you do not have access to it". Groq moved the LLaMA 3.3 70B and 3.1 8B
+    // models to Enterprise-only ("Contact Sales" on their models page), so they
+    // are no longer reachable on a developer/free plan. The GPT-OSS models are the
+    // ones an ordinary account can actually call.
+    defaultModel: 'openai/gpt-oss-120b',
     directBlockedReason: '',
     authStyle: 'bearer',
     docsUrl: 'https://console.groq.com/keys',

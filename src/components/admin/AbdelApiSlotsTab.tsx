@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { Bot, Save, Sparkles, KeyRound, Loader2 } from 'lucide-react';
 import { useStore } from '../../store';
+import { ANTHROPIC_PROXY_SNIPPET } from '../../lib/abdelRouter';
 
 interface AbdelApiSlotsTabProps {
   /** Admin toast hook — falls back to an inline banner when not provided. */
@@ -154,6 +155,70 @@ export function AbdelApiSlotsTab({ onNotify }: AbdelApiSlotsTabProps) {
             {isFr ? 'Enregistrer' : 'Save'}
           </button>
         </div>
+      </div>
+
+      {/* ANTHROPIC PROXY GUIDE
+          Anthropic is the one provider that cannot be called from a browser: its
+          API returns no Access-Control-Allow-Origin header, so the request is
+          blocked before it leaves the page. It therefore REQUIRES a small server
+          of your own. This states the exact contract instead of leaving it to be
+          guessed, and the snippet below is the whole server. */}
+      <div className="bg-zinc-900/60 border border-amber-500/30 rounded-2xl p-6 space-y-4 shadow-xl">
+        <div>
+          <h2 className="text-sm font-mono uppercase tracking-wider text-amber-400 font-bold">
+            {isFr ? 'Anthropic (Claude) — relais obligatoire' : 'Anthropic (Claude) — proxy required'}
+          </h2>
+          <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+            {isFr
+              ? "Anthropic n'envoie aucun en-tête CORS : un appel direct depuis le navigateur est bloqué. Il faut donc un petit serveur relais. Voici exactement ce que le site attend de ce serveur."
+              : "Anthropic sends no CORS header, so a direct browser call is blocked. A small relay server is therefore required. This is exactly what the site expects from it."}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3 font-mono text-[11px]">
+          <p className="text-zinc-300 font-bold">{isFr ? '1. Route à exposer' : '1. Route to expose'}</p>
+          <p className="text-emerald-300">POST /api/chat</p>
+
+          <p className="text-zinc-300 font-bold pt-1">{isFr ? '2. En-têtes reçus' : '2. Headers received'}</p>
+          <p className="text-zinc-400">x-anthropic-key: sk-ant-...</p>
+          <p className="text-zinc-400">Content-Type: application/json</p>
+
+          <p className="text-zinc-300 font-bold pt-1">{isFr ? '3. Corps envoyé' : '3. Body sent'}</p>
+          <p className="text-zinc-400">{'{ message, language, model, systemPrompt, history[] }'}</p>
+
+          <p className="text-zinc-300 font-bold pt-1">{isFr ? '4. Réponse attendue' : '4. Expected response'}</p>
+          <p className="text-emerald-300">{'{ "response": "..." }'}</p>
+          <p className="text-zinc-500">{'(or "reply" / "text" / "answer" are accepted too)'}</p>
+        </div>
+
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-zinc-300 font-mono text-[11px] font-bold">
+              {isFr ? '5. Serveur minimal (Express)' : '5. Minimal server (Express)'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  navigator.clipboard.writeText(ANTHROPIC_PROXY_SNIPPET);
+                  notify(isFr ? 'Serveur copié dans le presse-papiers.' : 'Server copied to clipboard.');
+                } catch { /* clipboard blocked */ }
+              }}
+              className="rounded-lg border border-zinc-800 px-2.5 py-1 text-[10px] font-bold text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-100"
+            >
+              {isFr ? 'Copier' : 'Copy'}
+            </button>
+          </div>
+          <pre className="overflow-x-auto text-[10px] leading-relaxed text-zinc-400">
+            <code>{ANTHROPIC_PROXY_SNIPPET}</code>
+          </pre>
+        </div>
+
+        <p className="text-[11px] text-zinc-500 leading-relaxed">
+          {isFr
+            ? "Déployez-le (Render, Railway, Fly.io, Cloud Run), puis : 1) collez la clé Anthropic dans Admin → APIs & IA, 2) renseignez l'URL du backend dans le même écran, 3) dans un bloc ci-dessus, mettez l'endpoint sur /api/chat et la clé sur « Anthropic », puis Testez."
+            : "Deploy it (Render, Railway, Fly.io, Cloud Run), then: 1) paste the Anthropic key in Admin → APIs & AI, 2) set the backend URL in the same screen, 3) in a block above set the endpoint to /api/chat and the key to “Anthropic”, then Test."}
+        </p>
       </div>
 
       {/* Keys moved to Admin -> APIs & IA.

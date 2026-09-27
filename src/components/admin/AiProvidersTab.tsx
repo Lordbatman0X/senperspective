@@ -113,6 +113,16 @@ export function AiProvidersTab() {
         abdelPreferredProvider: preferred,
         aiModelOverrides: models,
       } as any);
+      // Mirrored into localStorage because that is what the engine and the
+      // connectivity test actually read. Without this the model field looked
+      // editable but had no effect on generation.
+      try {
+        for (const id of AI_PROVIDER_IDS) {
+          const v = (models[id] || '').trim();
+          if (v) localStorage.setItem(`ai_model_${id}`, v);
+          else localStorage.removeItem(`ai_model_${id}`);
+        }
+      } catch { /* storage blocked: the registry default still applies */ }
       flash(isFr ? 'Réglages IA enregistrés.' : 'AI settings saved.');
     } finally {
       setSavingPrefs(false);

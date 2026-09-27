@@ -10,6 +10,24 @@ import {
 } from './aiProviders';
 
 /**
+ * The model the admin chose for a provider in Admin -> APIs & IA.
+ *
+ * Stored in localStorage so the connectivity test and the real generation call
+ * resolve the SAME model. Previously the panel's model field was only saved to
+ * siteSettings and never read by the engine, so editing it changed nothing and a
+ * test could pass on one model while articles were generated on another.
+ */
+function getModelOverride(providerId: string): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const v = localStorage.getItem(`ai_model_${providerId}`);
+    return v && v.trim() ? v.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Calls ANY provider directly from the browser and returns the text.
  *
  * This replaces a chain of near-duplicate per-provider fetch blocks, which had
@@ -51,7 +69,7 @@ export async function callProviderDirect(
     return fail(`${meta.label} : ${meta.directBlockedReason}`);
   }
 
-  const model = opts.model || meta.defaultModel;
+  const model = opts.model || getModelOverride(meta.id) || meta.defaultModel;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs || 90_000);
 
@@ -467,27 +485,65 @@ export async function clientTestProvider(provider: string): Promise<{
     if (p === 'GROQ') {
       const key = getClientApiKey('groq');
       if (!key) throw new Error('Clé API Groq non configurée.');
+
+      // Ask Groq which models this account can actually reach instead of
+      // assuming one. Their lineup and plan access change without notice: the
+      // hardcoded "llama-3.3-70b-versatile" became Enterprise-only, so a free
+      // plan got "model does not exist or you do not have access to it" with no
+      // indication of what WOULD work.
+      let available: string[] = [];
+      try {
+        const listRes = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { Authorization: `Bearer ${key}` },
+        });
+        if (listRes.ok) {
+          const listJson: any = await listRes.json().catch(() => null);
+          available = (listJson?.data || [])
+            .map((m: any) => String(m?.id || ''))
+            .filter((id: string) => id && !id.startsWith('whisper') && !id.includes('guard') && !id.includes('safeguard'));
+        }
+      } catch (_) {
+        // Listing is a convenience; a failure here must not fail the test.
+      }
+
+      // Prefer an explicit override, then the registry default, then the first
+      // model this account is actually entitled to.
+      const override = safeJsonParse<string>(localStorage.getItem('ai_model_groq'), '');
+      const candidates = [override, AI_PROVIDERS.groq.defaultModel, ...available].filter(Boolean);
+      const chosen = candidates.find((m: string) => available.length === 0 || available.includes(m)) || available[0] || '';
+
+      if (!chosen) {
+        return {
+          success: false,
+          latencyMs: Date.now() - startTime,
+          message:
+            'Groq : clé acceptée, mais aucun modèle texte accessible pour ce compte. Vérifiez votre palier Groq.',
+          modelUsed: '',
+        };
+      }
+
       const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: chosen,
           messages: [{ role: 'user', content: 'Ping' }],
           max_tokens: 5
         })
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson?.error?.message || `HTTP ${res.status}`);
+        const detail = errJson?.error?.message || `HTTP ${res.status}`;
+        const hint = available.length
+          ? ` Modèles disponibles sur votre compte : ${available.slice(0, 6).join(', ')}.`
+          : '';
+        throw new Error(`${detail}${hint}`);
       }
       return {
         success: true,
         latencyMs: Date.now() - startTime,
-        message: 'Groq Llama 3.3 70B opérationnel (Test direct navigateur)',
-        modelUsed: 'llama-3.3-70b-versatile'
+        message: `Groq opérationnel (${chosen}) — Test direct navigateur`,
+        modelUsed: chosen
       };
     }
 
@@ -762,7 +818,7 @@ Réponds UNIQUEMENT par un tableau JSON d'objets :
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: getModelOverride('groq') || AI_PROVIDERS.groq.defaultModel,
         messages: [{ role: 'user', content: promptText }],
         response_format: { type: 'json_object' }
       })

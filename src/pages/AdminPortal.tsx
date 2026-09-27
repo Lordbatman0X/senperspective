@@ -1149,7 +1149,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         {/* APIs & IA: one registry-driven place for provider keys, Abdel's
             engine, model overrides and a real connection test. */}
         {activeTab === 'ai_providers' && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-6 shadow-xl">
             <AiProvidersTab />
           </div>
         )}
