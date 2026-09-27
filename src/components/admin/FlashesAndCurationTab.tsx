@@ -130,6 +130,8 @@ export function FlashesAndCurationTab() {
   const [dosDescEn, setDosDescEn] = useState('');
   const [dosReadTime, setDosReadTime] = useState('10 MIN');
   const [dosFullFr, setDosFullFr] = useState('');
+  const [dosKeyFr, setDosKeyFr] = useState('');
+  const [dosKeyEn, setDosKeyEn] = useState('');
   const [dosFullEn, setDosFullEn] = useState('');
 
   const handleAddDossier = () => {
@@ -148,10 +150,13 @@ export function FlashesAndCurationTab() {
         readTime: dosReadTime || '10 MIN',
         fullTextFr: dosFullFr.trim() || dosDescFr.trim(),
         fullTextEn: dosFullEn.trim() || dosDescEn.trim(),
-        key1Fr: 'Analyse sectorielle approfondie',
-        key1En: 'In-depth sector analysis',
-        key2Fr: 'Enjeux économiques et stratégiques majeurs',
-        key2En: 'Major economic and strategic stakes'
+        // One real key point, typed by the editor. These used to be two hardcoded
+        // strings written for every dossier regardless of its subject
+        // ("Analyse sectorielle approfondie" / "Enjeux économiques et
+        // stratégiques majeurs"), which published invented analysis under your
+        // newsroom's name. Left blank when the editor does not supply one.
+        keyFr: dosKeyFr.trim(),
+        keyEn: dosKeyEn.trim() || dosKeyFr.trim()
       },
       ...dossiersList
     ];
@@ -162,6 +167,8 @@ export function FlashesAndCurationTab() {
     setDosDescFr('');
     setDosDescEn('');
     setDosFullFr('');
+    setDosKeyFr('');
+    setDosKeyEn('');
     setDosFullEn('');
     showToast(language === 'fr' ? 'Dossier ajouté et enregistré en MongoDB !' : 'Dossier added and saved in MongoDB!');
   };
@@ -759,6 +766,35 @@ export function FlashesAndCurationTab() {
                 value={dosDescEn}
                 onChange={e => setDosDescEn(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42] h-16 resize-none"
+              />
+            </div>
+          </div>
+          {/*
+            One key point, typed by the editor. This replaces two hardcoded strings
+            that were written onto every dossier regardless of its subject
+            ("Analyse sectorielle approfondie" / "Enjeux économiques et
+            stratégiques majeurs"), which published invented analysis under the
+            newsroom's name. Optional: leave it blank and nothing is stored.
+          */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Point clé (FR)</label>
+              <input
+                type="text"
+                value={dosKeyFr}
+                onChange={e => setDosKeyFr(e.target.value)}
+                placeholder="La conclusion en une phrase"
+                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Key point (EN)</label>
+              <input
+                type="text"
+                value={dosKeyEn}
+                onChange={e => setDosKeyEn(e.target.value)}
+                placeholder="Facultatif — reprend le français"
+                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
               />
             </div>
           </div>
