@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import { FALLBACK_TAXONOMY } from './lib/siteTaxonomy';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
@@ -2612,23 +2612,12 @@ export const useStore = create<AppState>()(
         abdelWelcomeOnlyOnHome: true,
         abdelIntroMessageFr: "Bonjour ! Je suis Abdel, votre guide d'actualité sur Perspective Group. Que souhaitez-vous décrypter aujourd'hui ?",
         abdelIntroMessageEn: "Hello! I am Abdel, your news guide on Perspective Group. What would you like to unpack today?",
-        dossiers: [
-          {
-            id: 'dos-1',
-            tag: { fr: 'Dossier Macro', en: 'Macro Dossier' },
-            titleFr: 'Dakar Real Estate & Bulle Foncière : Analyse des Grands Projets',
-            titleEn: 'Dakar Real Estate & Land Bubble: Macro Analysis',
-            descFr: 'L’immobilier à Dakar est l’un des marchés les plus dynamiques de la région UEMOA.',
-            descEn: 'Real estate in Dakar is one of the most dynamic markets in the WAEMU region.',
-            readTime: '12 MIN',
-            fullTextFr: 'Analyse approfondie de la dynamique foncière, des investissements majeurs et de la pression urbaine.',
-            fullTextEn: 'In-depth analysis of land dynamics, major investments, and urban pressure across the Dakar region.',
-            key1Fr: 'Pression démographique et extension urbaine vers Diamniadio',
-            key1En: 'Demographic pressure and urban expansion towards Diamniadio',
-            key2Fr: 'Rendements locatifs et spéculation foncière',
-            key2En: 'Rental yields and land speculation'
-          }
-        ],
+        // No dossiers are seeded. This previously shipped a hand-written dossier
+        // ("Dakar Real Estate & Bulle Fonciere") with invented analysis, which
+        // then appeared as a selectable option in the editor's Dossier box. The
+        // list is now populated only from real editorial work in
+        // Admin -> Flashes / Dossiers, or from articles filed under "Dossier".
+        dossiers: [],
         announcements: [
           {
             id: 'ann-1',

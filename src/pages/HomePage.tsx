@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Article } from '../types';
@@ -342,7 +342,6 @@ export function HomePage() {
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [showNewsletterModal, setShowNewsletterModal] = useState(false);
   const [subscribedEmail, setSubscribedEmail] = useState('');
-  const [selectedDossierModal, setSelectedDossierModal] = useState<any | null>(null);
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -984,7 +983,7 @@ export function HomePage() {
       <SocietyPeopleSection articles={articles} />
 
       {/* SECTION: GRANDS DOSSIERS */}
-      <DossiersSection onSelectDossier={(dossier) => setSelectedDossierModal(dossier)} />
+      <DossiersSection />
 
       {/* SECTION: L'ARÈNE (SPORTS) */}
       <SportsArenaSection articles={articles} />
@@ -1052,77 +1051,8 @@ export function HomePage() {
         </div>
       )}
 
-      {/* INTERACTIVE MODAL 2: Dossier Detail Summary */}
-      {selectedDossierModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-zinc-900 border-2 border-[#E85D42] p-6 sm:p-8 max-w-2xl w-full shadow-2xl relative text-left space-y-4 max-h-[90vh] overflow-y-auto font-sans">
-            <button 
-              onClick={() => setSelectedDossierModal(null)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-900 dark:hover:text-white p-1 cursor-pointer"
-            >
-              <X size={20} />
-            </button>
-
-            <div className="flex items-center gap-2">
-              <FolderKanban size={18} className="text-[#E85D42]" style={{ color: currentSettings.accentColor }} />
-              <span className="text-xs font-mono font-black uppercase tracking-widest text-[#E85D42]">
-                {getSafeText(selectedDossierModal.tag, language)}
-              </span>
-            </div>
-
-            <h2 className="text-xl font-serif font-black text-zinc-900 dark:text-white leading-tight">
-              {language === 'fr' ? selectedDossierModal.titleFr : selectedDossierModal.titleEn}
-            </h2>
-
-            <div className="p-4 bg-zinc-50 dark:bg-zinc-950 border-l-4 border-[#E85D42] space-y-2" style={{ borderLeftColor: currentSettings.accentColor }}>
-              <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-white">
-                {language === 'fr' ? 'SYNTHÈSE EXÉCUTIVE :' : 'EXECUTIVE SUMMARY:'}
-              </h4>
-              <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium leading-relaxed">
-                {language === 'fr' ? selectedDossierModal.fullTextFr : selectedDossierModal.fullTextEn}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-sans">
-              <div className="p-3 bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block mb-1">
-                  {language === 'fr' ? 'POINT CLÉ #1' : 'KEY FINDING #1'}
-                </span>
-                <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                  {language === 'fr' ? selectedDossierModal.key1Fr : selectedDossierModal.key1En}
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block mb-1">
-                  {language === 'fr' ? 'POINT CLÉ #2' : 'KEY FINDING #2'}
-                </span>
-                <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                  {language === 'fr' ? selectedDossierModal.key2Fr : selectedDossierModal.key2En}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 pt-3 border-t border-zinc-200 dark:border-zinc-800">
-              <Link 
-                to="/category/dossiers" 
-                onClick={() => setSelectedDossierModal(null)}
-                className="flex-1 bg-[#E85D42] text-white font-black uppercase tracking-widest text-xs py-2.5 px-4 text-center hover:opacity-90 transition-all"
-                style={{ backgroundColor: currentSettings.accentColor }}
-              >
-                {language === 'fr' ? 'CONSULTER LES ARTICLES DU DOSSIER' : 'EXPLORE DOSSIER ARTICLES'}
-              </Link>
-              <button 
-                onClick={() => alert(language === 'fr' ? 'Téléchargement de la synthèse PDF lancé.' : 'Downloading PDF synthesis report.')}
-                className="flex items-center justify-center gap-2 border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-900 dark:text-white font-black uppercase tracking-widest text-xs py-2.5 px-4 transition-all cursor-pointer"
-              >
-                <FileText size={14} />
-                {language === 'fr' ? 'RAPPORT PDF (SYNTHÈSE)' : 'PDF REPORT SUMMARY'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
+
 

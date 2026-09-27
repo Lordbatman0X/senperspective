@@ -1,64 +1,55 @@
-import React from 'react';
+﻿import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronRight, Hourglass, FolderOpen } from 'lucide-react';
 import { useStore } from '../../store';
+import { getSafeText, formatCategory } from '../../lib/utils';
 
 interface DossiersSectionProps {
-  onSelectDossier: (dossier: any) => void;
+  /**
+   * @deprecated No longer used. Dossiers are now real articles, so a card
+   * navigates to its own page. The prop was kept as optional for call-site
+   * compatibility and is ignored.
+   */
+  onSelectDossier?: (dossier: any) => void;
 }
 
-export const DossiersSection: React.FC<DossiersSectionProps> = ({ onSelectDossier }) => {
+export const DossiersSection: React.FC<DossiersSectionProps> = () => {
   const language = useStore((s) => s.language);
   const siteSettings = useStore((s) => s.siteSettings);
   const accentColor = siteSettings?.accentColor || '#E85D42';
 
-  const dossiers = [
-    {
-      id: 'dossier-gas-energy',
-      tag: language === 'fr' ? 'ÉNERGIE' : 'ENERGY',
-      titleFr: 'Gaz offshore : Sangomar & GTA',
-      titleEn: 'Offshore Gas: Sangomar & GTA',
-      descFr: 'Exploitation des gisements, gaz-to-power et retombées pour le tissu industriel local.',
-      descEn: 'Offshore fields, gas-to-power rollout, and domestic industrial development.',
-      readTime: '15 MIN',
-      fullTextFr: 'L’entrée en production industrielle des gisements offshore de Sangomar et du champ GTA (Grand Tortue Ahmeyim) transforme la trajectoire budgétaire du Sénégal. Ce dossier explore les retombées pour la SENELEC, les PME locales et la pétrochimie.',
-      fullTextEn: 'The ramp-up of offshore production at Sangomar and GTA transforms Senegal’s fiscal trajectory. This dossier explores spinoff benefits for SENELEC, local SMEs, and domestic petrochemicals.',
-      key1Fr: 'Réduction de 35% des coûts de production électrique grâce au Gaz-To-Power.',
-      key1En: 'Expected 35% reduction in electricity generation costs via domestic Gas-To-Power.',
-      key2Fr: 'Souveraineté budgétaire renforcée par les recettes d\'exportation de GNL.',
-      key2En: 'Strengthened fiscal sovereignty backed by LNG export revenues.'
-    },
-    {
-      id: 'dossier-dakar-real-estate',
-      tag: language === 'fr' ? 'URBANISME' : 'URBAN',
-      titleFr: 'Immobilier : Le boom dakarois',
-      titleEn: 'Real Estate: The Dakar Surge',
-      descFr: 'Pression foncière sur la presqu’île, axe Diamniadio-Saly et financements institutionnels.',
-      descEn: 'Cap-Vert land pressure, the Diamniadio-Saly corridor, and private investment inflows.',
-      readTime: '12 MIN',
-      fullTextFr: 'L’expansion urbaine de Dakar vers le pôle de Diamniadio et la Saly Portudal redéfinit la cartographie foncière de la région du Cap-Vert. Notre équipe d’analystes décortique l’impact des taux d’intérêt souverains, de l’urbanisation accélérée et de l’injection de capitaux privés dans l’immobilier résidentiel et tertiaire.',
-      fullTextEn: 'Dakar’s urban expansion towards the Diamniadio hub and Saly Portudal is reshaping the real estate map of the Cap-Vert region. Our intelligence unit analyzes sovereign interest rates, rapid urbanization, and capital inflows in residential and commercial real estate.',
-      key1Fr: 'Pression foncière élevée sur les Almadies, Plateau et Ngor (+18.4% YoY).',
-      key1En: 'Sustained land pressure in Almadies, Plateau, and Ngor (+18.4% YoY).',
-      key2Fr: 'L\'axe autoroutier TER-AIBD agit comme catalyseur d\'investissements institutionnels.',
-      key2En: 'The TER-AIBD transit corridor serves as a major institutional investment catalyst.'
-    },
-    {
-      id: 'dossier-ecowas-trade',
-      tag: language === 'fr' ? 'COMMERCE' : 'TRADE',
-      titleFr: 'Commerce : Corridors & Fret UEMOA',
-      titleEn: 'Trade: UEMOA Freight Corridors',
-      descFr: 'Liaisons Port de Dakar-Bamako, tarifs douaniers et intégration commerciale régionale.',
-      descEn: 'Port of Dakar to Bamako road links, customs policies, and regional logistics.',
-      readTime: '10 MIN',
-      fullTextFr: 'Les corridors logistiques entre le Port Autonome de Dakar, Bamako, Ouagadougou et Abidjan constituent la colonne vertébrale des échanges régionaux. Ce dossier passe en revue les données douanières du premier semestre 2026.',
-      fullTextEn: 'The logistics corridors linking the Port Authority of Dakar, Bamako, Ouagadougou, and Abidjan form the backbone of regional commerce. This dossier reviews H1 2026 customs and trade volume datasets.',
-      key1Fr: 'Croissance de 14.2% des flux de marchandises conteneurisées par le port de Dakar.',
-      key1En: '14.2% growth in containerized cargo throughput via the Port of Dakar.',
-      key2Fr: 'Rôle pivot de la BCEAO dans la stabilisation des liquidités de marché.',
-      key2En: 'Central role of the BCEAO in maintaining regional market liquidity.'
-    }
-  ];
+  /*
+   * Dossiers come from real, published articles, never a hardcoded list.
+   *
+   * WHY: this block previously declared three hand-written dossiers (offshore gas,
+   * Dakar real estate, UEMOA freight corridors) with invented statistics. Nothing
+   * published them and they could never change. The section now reads the same
+   * article store the rest of the site uses, so a dossier appears the moment an
+   * editor files an article under "Dossier".
+   *
+   * An article qualifies when it is published and either:
+   *   - its category is Dossier / Dossiers / Decryptages, or
+   *   - it carries a `dossier` value (set in the editor's Dossier box).
+   * Both the legacy "Dossiers" label and the current "Dossier" are accepted so
+   * existing records keep appearing.
+   */
+  const articles = useStore((s) => s.articles) || [];
+  const dossiers = useMemo(() => {
+    const byDate = (a: any) => {
+      const d = a.publishedAt || a.date || a.updatedAtServer || 0;
+      return typeof d === 'number' ? d : new Date(d).getTime() || 0;
+    };
+
+    return articles
+      .filter((a: any) => {
+        if (a.isPublished === false) return false;
+        const cat = String(a.category || '').trim().toLowerCase();
+        const catOk = /dossier|enqu.t|decryptage/.test(cat);
+        return catOk || !!a.dossier;
+      })
+      .sort((a: any, b: any) => byDate(b) - byDate(a))
+      .slice(0, 3);
+  }, [articles]);
 
   return (
     <section 
@@ -86,15 +77,39 @@ export const DossiersSection: React.FC<DossiersSectionProps> = ({ onSelectDossie
         </Link>
       </div>
 
+      {/*
+        Empty state. Previously the three cards were hardcoded, so this could
+        never be empty; now it genuinely can be, and a blank grid would look
+        like a bug. The section header is hidden with it so the page does not
+        advertise an empty block.
+      */}
+      {dossiers.length === 0 ? (
+        <div className="border border-dashed border-brand-border dark:border-zinc-800 p-8 text-center">
+          <FolderOpen size={22} className="mx-auto mb-2 text-zinc-400" style={{ color: accentColor }} />
+          <p className="text-sm font-bold text-brand-dark dark:text-zinc-200">
+            {language === 'fr' ? 'Aucun dossier pour le moment' : 'No dossier yet'}
+          </p>
+          <p className="text-xs text-brand-muted dark:text-zinc-400 mt-1">
+            {language === 'fr'
+              ? "Classez un article sous la rubrique « Dossier » dans l'éditeur pour le publier ici."
+              : 'File an article under the Dossier section in the editor to feature it here.'}
+          </p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {dossiers.map((dossier, idx) => {
-          const title = language === 'fr' ? dossier.titleFr : dossier.titleEn;
-          const desc = language === 'fr' ? dossier.descFr : dossier.descEn;
+        {dossiers.map((dossier: any, idx: number) => {
+          const title = getSafeText(dossier.title, language) || 'Sans titre';
+          const desc = getSafeText(dossier.excerpt, language) || '';
+          // Reading time is derived from the real body length when the record does
+          // not carry one, so the figure tracks the article instead of being fixed.
+          const readTime = dossier.readingTime
+            ? `${dossier.readingTime} MIN`
+            : `${Math.max(1, Math.round(String(dossier.body?.fr || '').split(/\s+/).filter(Boolean).length / 200))} MIN`;
 
           return (
-            <div 
+            <Link
               key={dossier.id}
-              onClick={() => onSelectDossier(dossier)}
+              to={`/article/${dossier.slug || dossier.id}`}
               className="square-card group flex flex-col justify-between bg-white dark:bg-zinc-900 border border-brand-border dark:border-zinc-800 shadow-sm p-5 sm:p-6 transition-all duration-300 hover:border-brand-primary cursor-pointer"
             >
               <div>
@@ -104,11 +119,11 @@ export const DossiersSection: React.FC<DossiersSectionProps> = ({ onSelectDossie
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] font-black uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5">
-                      {dossier.tag}
+                      {dossier.dossier || formatCategory(dossier.category, language)}
                     </span>
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold text-brand-muted dark:text-zinc-400">
                       <Hourglass size={10} className="shrink-0" style={{ color: accentColor }} />
-                      <span>{dossier.readTime}</span>
+                      <span>{readTime}</span>
                     </span>
                   </div>
                 </div>
@@ -132,10 +147,12 @@ export const DossiersSection: React.FC<DossiersSectionProps> = ({ onSelectDossie
                 </span>
                 <FolderOpen size={14} className="text-zinc-400 group-hover:text-brand-primary transition-colors" />
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>
+      )}
     </section>
   );
 };
+
