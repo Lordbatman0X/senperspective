@@ -8,6 +8,9 @@ import {
   Save, RotateCcw, Send, FileCode, Tag, MessageSquare, Award
 } from 'lucide-react';
 import { useStore } from '../../store';
+import {
+  FALLBACK_TAXONOMY, resolveTaxonomy, matchTaxonomyCategory, taxonomyLabels,
+} from '../../lib/siteTaxonomy';
 import { Article } from '../../types';
 import { safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
 import { 
@@ -38,114 +41,25 @@ export interface FeedHealthRecord {
 }
 
 /**
- * Fallback categories, used only when the site has no categories configured yet.
+ * The RSS surfaces now read the SAME taxonomy as Admin -> Categories and the
+ * article editor, through the shared module. `resolveRssCategories` and
+ * `matchSiteCategory` remain as aliases so the existing call sites here and in
+ * RssFeedManagementTab keep working unchanged.
  *
- * WHY THIS IS NO LONGER THE SOURCE OF TRUTH
- * ----------------------------------------
- * This list used to be the category universe for the whole RSS pipeline while the
- * site ran on a different one. The audit found three competing lists:
- *   - this one (11 entries, including "Meteo & Maritime" and "Chaloupe & Transports")
- *   - siteSettings.categories (10 entries, admin-editable, e.g. "Decryptages", "Sante")
- *   - the values actually used by the 360 published articles (18, e.g. "Afrique",
- *     "Monde", "Diplomatie", "Justice")
- * An article dispatched as "Meteo & Maritime" therefore landed in no category page
- * at all, and feeds could not be filtered by a category that did not exist.
- *
- * Categories now come from the site (see `resolveRssCategories`), so the RSS
- * screen, the article editor and the public category pages can never disagree
- * again. This stays only as a last-resort default.
+ * Previously this file carried its own 11-entry list, so renaming a section in
+ * Admin -> Categories left the RSS generator still offering the old label, and an
+ * article could be filed under a section that has no category page behind it.
+ * Anything arriving from a feed is normalised through the taxonomy at dispatch.
  */
-export const RSS_CATEGORIES = [
-  'Politique',
-  'Économie',
-  'Société',
-  'International',
-  'Tech',
-  'Santé',
-  'Sports',
-  'People',
-  'Gouvernance',
-  'Décryptages'
-];
+export const RSS_CATEGORIES = taxonomyLabels(FALLBACK_TAXONOMY);
 
-/**
- * The categories the RSS pipeline should use, derived from the site's own
- * category list.
- *
- * `siteCategories` is `siteSettings.categories` (the list edited in
- * Admin -> Categories and rendered by the public /category pages). The fallback
- * list is merged in behind it so a category always has a home, and duplicates
- * are removed after accent/case normalisation.
- */
-export function resolveRssCategories(
-  siteCategories?: Array<{ fr?: string; en?: string } | string>
-): string[] {
-  const fromSite = (siteCategories || [])
-    .map((c) => (typeof c === 'string' ? c : c?.fr || ''))
-    .map((s) => String(s || '').trim())
-    .filter(Boolean);
-  const seen = new Set<string>();
-  const merged: string[] = [];
-  for (const c of [...fromSite, ...RSS_CATEGORIES]) {
-    const key = c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(c);
-  }
-  return merged.length ? merged : [...RSS_CATEGORIES];
-}
+export const resolveRssCategories = (siteCategories?: any) =>
+  taxonomyLabels(resolveTaxonomy(siteCategories));
 
-/**
- * Normalises a category onto the site's list.
- *
- * A feed may carry a legacy or finer-grained label ("Dossiers", "Afrique",
- * "Tech & Innovation"). Dispatching under a label the site does not use creates
- * an article that appears in no category page, so those are mapped onto the
- * site's own category, and anything genuinely unknown falls back to the first
- * site category rather than inventing a new one.
- */
-export function matchSiteCategory(
+export const matchSiteCategory = (
   raw: string | undefined | null,
   siteCategories: string[]
-): string {
-  const target = String(raw || '').trim();
-  if (!target || !siteCategories.length) return 'Politique';
-  const norm = (s: string) =>
-    String(s)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  const t = norm(target);
-  const exact = siteCategories.find((c) => norm(c) === t);
-  if (exact) return exact;
-
-  const aliases: Record<string, string> = {
-    dossiers: 'Décryptages',
-    decryptage: 'Décryptages',
-    decryptages: 'Décryptages',
-    'meteo-maritime': 'International',
-    'chaloupe-transports': 'Économie',
-    'culture-people': 'People',
-    'tech-innovation': 'Tech',
-    afrique: 'International',
-    monde: 'International',
-    diplomatie: 'International',
-    justice: 'Gouvernance',
-    business: 'Économie',
-    education: 'Société',
-    religion: 'Société',
-    flash: 'Politique',
-  };
-  const aliased = aliases[t];
-  if (aliased) {
-    const match = siteCategories.find((c) => norm(c) === norm(aliased));
-    if (match) return match;
-  }
-  const partial = siteCategories.find((c) => t.includes(norm(c)) || norm(c).includes(t));
-  return partial || siteCategories[0] || 'Politique';
-}
+): string => matchTaxonomyCategory(raw, siteCategories.map((fr) => ({ id: fr, fr, en: fr })));
 
 export { safeFetchJson };
 

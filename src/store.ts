@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { FALLBACK_TAXONOMY } from './lib/siteTaxonomy';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
@@ -2746,18 +2747,10 @@ export const useStore = create<AppState>()(
         },
         trendingCount: 4,
         mostReadCount: 5,
-        categories: [
-          { id: 'politique', fr: 'Politique', en: 'Politics', icon: 'Landmark' },
-          { id: 'economie', fr: 'Économie', en: 'Economics', icon: 'TrendingUp' },
-          { id: 'societe', fr: 'Société', en: 'Society', icon: 'Users' },
-          { id: 'international', fr: 'International', en: 'International', icon: 'Globe' },
-          { id: 'tech', fr: 'Tech', en: 'Tech', icon: 'Cpu' },
-          { id: 'sante', fr: 'Santé', en: 'Health', icon: 'HeartPulse' },
-          { id: 'sports', fr: 'Sports', en: 'Sports', icon: 'Trophy' },
-          { id: 'people', fr: 'People', en: 'People', icon: 'Smile' },
-          { id: 'gouvernance', fr: 'Gouvernance', en: 'Governance', icon: 'ShieldCheck' },
-          { id: 'decryptages', fr: 'Décryptages', en: 'Decryptions', icon: 'BookOpen' }
-        ],
+        // The default taxonomy is the shared fallback, so the very first load
+        // already agrees with Admin -> Categories, the article editor and the
+        // RSS generator. This used to be a fifth private copy.
+        categories: FALLBACK_TAXONOMY,
         tags: [
           { id: 'senegal', fr: 'Sénégal', en: 'Senegal' },
           { id: 'dakar', fr: 'Dakar', en: 'Dakar' },

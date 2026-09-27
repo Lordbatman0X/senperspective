@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../../store';
+import { resolveTaxonomy } from '../../lib/siteTaxonomy';
 import { Tag, Plus, Edit2, Trash2, Check, X, FolderPlus, Hash, Globe, Search, Layers, Sparkles, ChevronUp, ChevronDown, RefreshCw } from 'lucide-react';
 
 interface CategoryItem {
@@ -18,18 +19,10 @@ interface TagItem {
 export function TaxonomyTab() {
   const { siteSettings, updateSiteSettings, articles, language } = useStore();
 
-  const categories: CategoryItem[] = siteSettings.categories || [
-    { id: 'politique', fr: 'Politique', en: 'Politics' },
-    { id: 'economie', fr: 'Économie', en: 'Economics' },
-    { id: 'societe', fr: 'Société', en: 'Society' },
-    { id: 'international', fr: 'International', en: 'International' },
-    { id: 'tech', fr: 'Tech', en: 'Tech' },
-    { id: 'sante', fr: 'Santé', en: 'Health' },
-    { id: 'sports', fr: 'Sports', en: 'Sports' },
-    { id: 'people', fr: 'People', en: 'People' },
-    { id: 'gouvernance', fr: 'Gouvernance', en: 'Governance' },
-    { id: 'decryptages', fr: 'Décryptages', en: 'Decryptions' }
-  ];
+  // The live taxonomy from siteSettings, with the single shared fallback.
+  // This list used to be duplicated inline here, which is how it drifted from
+  // the copies in the article editor, the RSS generator and constants.ts.
+  const categories: CategoryItem[] = (resolveTaxonomy(siteSettings.categories) as CategoryItem[]);
 
   const tags: TagItem[] = siteSettings.tags || [
     { id: 'senegal', fr: 'Sénégal', en: 'Senegal' },
