@@ -3,7 +3,7 @@ import { Article, BilingualText, KeyActor, TimelineEvent, PerspectiveBrief, Stru
 import { useStore } from '../../store';
 import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon, CheckCircle2, AlertCircle, Search, Compass, Radio, Layers, ExternalLink, Zap, ShieldAlert } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { taxonomyOptions } from '../../lib/siteTaxonomy';
+import { taxonomyOptions, dossierOptions } from '../../lib/siteTaxonomy';
 import { compressImageFile } from '../../lib/imageUtils';
 import { uploadArticleImage } from '../../firebase/storage';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
@@ -51,7 +51,15 @@ export function ArticleEditorTab({
   // says which section the article sits in, the dossier says which running
   // investigation file it belongs to.
   const [dossier, setDossier] = useState<string>('');
-  const dossiersList: any[] = (siteSettings?.dossiers as any[]) || [];
+  // Real dossiers live in siteSettings.dossiers and are authored in
+  // Admin -> Flashes/Dossiers. They must be read through dossierOptions() so the
+  // stored shape (titleFr/titleEn/tag.fr) is actually understood.
+  const dossierChoices = dossierOptions(siteSettings?.dossiers);
+  // An article can reference a dossier that has since been deleted, or a legacy
+  // article that stored the title directly. Keep that value selectable so opening
+  // and saving the article does not silently drop the assignment.
+  const orphanDossier =
+    dossier && !dossierChoices.some((d) => d.id === dossier) ? dossier : '';
   const [type, setType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [isPublished, setIsPublished] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
@@ -951,22 +959,22 @@ export function ArticleEditorTab({
                   className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-semibold focus:outline-none focus:border-[#E85D42] rounded-md"
                 >
                   <option value="">{language === 'fr' ? '— Aucun dossier —' : '— No dossier —'}</option>
+                  {orphanDossier && (
+                    <option value={orphanDossier}>
+                      {language === 'fr' ? '(dossier introuvable) ' : '(missing dossier) '}
+                      {orphanDossier}
+                    </option>
+                  )}
+                  {dossierChoices.map((d) => (
+                    <option key={d.id} value={d.id}>{d.label}</option>
+                  ))}
                   {/* No dossiers configured yet: say so, instead of presenting an
                       empty dropdown that looks broken. */}
-                  {dossiersList.filter((d: any, i: number) => {
-                    const label = typeof d === 'string' ? d : (d?.fr || d?.title || d?.name || '');
-                    return !!label;
-                  }).length === 0 && (
+                  {dossierChoices.length === 0 && !orphanDossier && (
                     <option value="" disabled>
                       {language === 'fr' ? '(aucun dossier configuré)' : '(no dossier configured)'}
                     </option>
                   )}
-                  {dossiersList.map((d: any, i: number) => {
-                    const label = typeof d === 'string' ? d : (d?.fr || d?.title || d?.name || '');
-                    const did = typeof d === 'string' ? d : (d?.id || d?.slug || String(i));
-                    if (!label) return null;
-                    return <option key={did} value={label}>{label}</option>;
-                  })}
                 </select>
                 <p className="text-[9.5px] text-zinc-500 mt-1 leading-snug">
                   {language === 'fr'

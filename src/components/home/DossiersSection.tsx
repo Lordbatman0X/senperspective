@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronRight, Hourglass, FolderOpen } from 'lucide-react';
 import { useStore } from '../../store';
 import { getSafeText, formatCategory } from '../../lib/utils';
+import { resolveDossierLabel } from '../../lib/siteTaxonomy';
 
 interface DossiersSectionProps {
   /**
@@ -119,7 +120,11 @@ export const DossiersSection: React.FC<DossiersSectionProps> = () => {
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-[9px] font-black uppercase tracking-widest bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-2 py-0.5">
-                      {dossier.dossier || formatCategory(dossier.category, language)}
+                      {/* The article stores the dossier id, so resolve it to the current
+                          title. Renaming a dossier then updates every article's badge
+                          instead of freezing the old text into each record. */}
+                      {resolveDossierLabel(dossier.dossier, siteSettings?.dossiers)
+                        || formatCategory(dossier.category, language)}
                     </span>
                     <span className="inline-flex items-center gap-1 text-[9px] font-bold text-brand-muted dark:text-zinc-400">
                       <Hourglass size={10} className="shrink-0" style={{ color: accentColor }} />

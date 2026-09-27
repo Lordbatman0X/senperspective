@@ -102,6 +102,74 @@ export function taxonomyOptions(stored: any): TaxonomyItem[] {
   return out;
 }
 
+export interface DossierOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * Reads a display label out of a dossier record, whatever shape it has.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Dossiers are authored in Admin -> Flashes/Dossiers, which stores:
+ *   { id, tag: { fr, en }, titleFr, titleEn, descFr, ... }
+ * The article editor's Dossier box originally looked only for `fr` / `title` /
+ * `name`, so it matched NONE of those fields, every dossier evaluated to an empty
+ * label, and the box reported "no dossier configured" while the pending dossiers
+ * were sitting in siteSettings. Titles are stored by language, so the language is
+ * honoured here rather than hardcoding one field.
+ */
+export function dossierLabel(d: any, language: 'fr' | 'en' = 'fr'): string {
+  if (!d) return '';
+  if (typeof d === 'string') return d.trim();
+  const byLang = language === 'en'
+    ? [d.titleEn, d.en, d.fr, d.titleFr]
+    : [d.titleFr, d.fr, d.title, d.name, d.titleEn, d.en];
+  for (const v of byLang) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  // `tag` is {fr,en} on these records.
+  if (d.tag) {
+    const t = typeof d.tag === 'string' ? d.tag : (d.tag[language] || d.tag.fr || d.tag.en);
+    if (t) return String(t).trim();
+  }
+  return '';
+}
+
+/** Normalised, selectable options from siteSettings.dossiers. */
+export function dossierOptions(stored: any): DossierOption[] {
+  const list = Array.isArray(stored) ? stored : [];
+  const out: DossierOption[] = [];
+  const seen = new Set<string>();
+  for (const d of list) {
+    const label = dossierLabel(d);
+    if (!label) continue;
+    const id = typeof d === 'string' ? d : (d.id || label);
+    const key = String(id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: key, label });
+  }
+  return out;
+}
+
+/**
+ * Turns a stored article `dossier` value into a human label.
+ *
+ * Articles store the dossier id, so an edit to a dossier's title is reflected
+ * everywhere instead of being frozen into the article. A value that no longer
+ * matches any dossier (a deleted dossier) is still returned, so the editor can
+ * show it rather than silently dropping an existing assignment.
+ */
+export function resolveDossierLabel(value: any, stored: any): string {
+  if (!value) return '';
+  const raw = String(value);
+  const hit = dossierOptions(stored).find((o) => o.id === raw);
+  if (hit) return hit.label;
+  return raw;
+}
+
 /**
  * Maps any incoming category label onto the live taxonomy.
  *
