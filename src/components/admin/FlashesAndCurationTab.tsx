@@ -1,5 +1,6 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../../store';
+import { stripLegacyDossierKeys } from '../../lib/siteTaxonomy';
 import { Zap, Globe, Quote, Plus, Trash2, Edit2, Check, X, Sparkles, Clock, AlertCircle, FolderKanban, Megaphone, Upload, TrendingUp, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 
 export function FlashesAndCurationTab() {
@@ -122,6 +123,32 @@ export function FlashesAndCurationTab() {
 
   // 3. Dossiers & Enquêtes Management State
   const [dossiersList, setDossiersList] = useState<any[]>(siteSettings?.dossiers || []);
+  // Strip the retired key1/key2 fields from stored dossiers.
+  //
+  // A data migration, so deliberately conservative: it runs only when there is
+  // something to change, touches nothing but those four keys, keeps genuinely
+  // authored text (discarding only the known filler) and is idempotent. It writes
+  // the `dossiers` key alone, so no other setting is disturbed. Once the records
+  // are clean this returns null and never writes again.
+  const latestSettings = useRef(siteSettings);
+  latestSettings.current = siteSettings;
+  const migrationRan = useRef(false);
+  useEffect(() => {
+    if (migrationRan.current) return;
+    const stored = latestSettings.current?.dossiers;
+    // siteSettings is filled in asynchronously; keep waiting until it arrives.
+    if (!Array.isArray(stored)) return;
+    const cleaned = stripLegacyDossierKeys(stored);
+    migrationRan.current = true;
+    if (!cleaned) return;
+    setDossiersList(cleaned);
+    updateSiteSettings({ dossiers: cleaned });
+    showToast(
+      language === 'fr'
+        ? 'Nettoyage terminé : anciens champs de points clés supprimés.'
+        : 'Cleanup done: retired key-point fields removed.'
+    );
+  });
   const [dosTagFr, setDosTagFr] = useState('Dossier Macro');
   const [dosTagEn, setDosTagEn] = useState('Macro Dossier');
   const [dosTitleFr, setDosTitleFr] = useState('');

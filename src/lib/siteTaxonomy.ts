@@ -155,6 +155,62 @@ export function dossierOptions(stored: any): DossierOption[] {
 }
 
 /**
+ * Removes the retired key-point fields from dossier records.
+ *
+ * WHY
+ * ---
+ * A dossier used to carry two key points, key1Fr/key1En/key2Fr/key2En, that were
+ * written for EVERY dossier with the same two hardcoded strings regardless of its
+ * subject. The form now has a single authored "Point clé" (keyFr/keyEn), so the
+ * old fields are dead weight that still ships fabricated analysis in your data.
+ *
+ * SAFETY RULES, because this rewrites stored settings:
+ *  - Records are never dropped or reordered; only those four keys are removed.
+ *  - A real, previously-authored key1Fr/key1En is PRESERVED by promoting it to
+ *    keyFr/keyEn when no key point is set yet. Only the known filler strings are
+ *    discarded. Losing genuine editorial text would be worse than leaving filler.
+ *  - Idempotent: running it twice changes nothing the second time.
+ *  - Returns `null` when there is nothing to do, so callers can skip the write
+ *    entirely rather than saving identical settings on every load.
+ */
+const FILLER_KEYS = new Set([
+  'Analyse sectorielle approfondie',
+  'Enjeux économiques et stratégiques majeurs',
+  'In-depth sector analysis',
+  'Major economic and strategic stakes',
+]);
+
+const isFiller = (v: any) => typeof v === 'string' && FILLER_KEYS.has(v.trim());
+
+export function stripLegacyDossierKeys(stored: any): any[] | null {
+  const list = Array.isArray(stored) ? stored : [];
+  let changed = false;
+
+  const cleaned = list.map((d: any) => {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return d;
+    const hasLegacy = ['key1Fr', 'key1En', 'key2Fr', 'key2En'].some((k) => k in d);
+    if (!hasLegacy) return d;
+
+    const next: any = { ...d };
+
+    // Preserve genuine authored text; drop only the invented filler.
+    if (!next.keyFr && next.key1Fr && !isFiller(next.key1Fr)) next.keyFr = next.key1Fr;
+    if (!next.keyEn && next.key1En && !isFiller(next.key1En)) next.keyEn = next.key1En;
+    else if (!next.keyEn && next.keyFr && !isFiller(next.keyFr)) next.keyEn = next.keyFr;
+
+    delete next.key1Fr;
+    delete next.key1En;
+    delete next.key2Fr;
+    delete next.key2En;
+
+    changed = true;
+    return next;
+  });
+
+  return changed ? cleaned : null;
+}
+
+/**
  * Turns a stored article `dossier` value into a human label.
  *
  * Articles store the dossier id, so an edit to a dossier's title is reflected
