@@ -67,6 +67,12 @@ export interface Article {
   
   youtubeVideoId?: string;
   commentsEnabled?: boolean;
+  /**
+   * True when this record came from the lightweight article index rather than the
+   * full catalog, so it carries metadata only and its body still has to be
+   * fetched. See `fetchAllArticles` in firebase/db.ts.
+   */
+  _indexOnly?: boolean;
   adImageUrl?: string;
   adLink?: string;
 

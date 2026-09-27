@@ -13,6 +13,7 @@ import { visibleAds } from '../lib/adCampaign';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSEO } from '../hooks/useSEO';
 import { NewsletterInline } from '../components/NewsletterSignup';
+import { fetchArticleById } from '../firebase/db';
 
 function MiniCarouselCard({ article }: { article: Article }) {
   const language = useStore((s) => s.language);
@@ -327,7 +328,7 @@ export function ArticlePage() {
   };
 
   const decodedId = id ? decodeURIComponent(id) : '';
-  const article = (articles ?? []).find(a => 
+  const matchedArticle = (articles ?? []).find(a => 
     a.slug === id || 
     a.id === id || 
     a.slug === decodedId || 
@@ -337,6 +338,40 @@ export function ArticlePage() {
   );
 
   const [isArticleLoading, setIsArticleLoading] = useState(true);
+
+  // When the list came from the lightweight index (see firebase/db.ts), the
+  // matching record has metadata but no body, timeline or keyActors, so the rest
+  // of this page would render an empty article. The ONE full record is fetched
+  // here instead. From an index entry that is a few KB, and after a full catalog
+  // load it never runs at all.
+  const [fullArticle, setFullArticle] = useState<any>(null);
+  useEffect(() => {
+    const entry: any = matchedArticle;
+    if (!entry?.id) {
+      setFullArticle(null);
+      return;
+    }
+    const needsBody = entry._indexOnly === true || (!entry.body && !entry.content);
+    if (!needsBody) {
+      setFullArticle(null);
+      return;
+    }
+    let cancelled = false;
+    fetchArticleById(entry.id)
+      .then((full) => {
+        if (!cancelled && full) setFullArticle(full);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // Re-runs when the matched article changes.
+  }, [matchedArticle?.id, matchedArticle?._indexOnly]);
+
+  // The full record wins once it arrives, so every field below (body, timeline,
+  // keyActors, SEO) reads from one place. Shadowing the name here means the rest
+  // of this file needed no changes.
+  const article: any = fullArticle || matchedArticle;
 
   useEffect(() => {
     const timer = setTimeout(() => {

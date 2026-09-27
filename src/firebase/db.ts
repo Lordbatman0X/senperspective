@@ -254,19 +254,158 @@ export function subscribeToArticles(
   );
 }
 
-export async function fetchAllArticles(): Promise<Article[]> {
+/**
+ * A lightweight, cacheable index of every article.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * Measured: the `articles` node is 8.82 MB and took 31.7s to download. The call
+ * site used a 15s timeout, so it expired on EVERY load, the catch swallowed it,
+ * and the app fell back to a cache that is empty by design. That produced both
+ * reported symptoms at once: very slow loads, and older articles not appearing.
+ *
+ * The full records cannot simply be cached instead: 8.82 MB exceeds the ~5 MB
+ * localStorage quota, which is why articles were dropped from persistence in the
+ * first place. So lists load a slim index (id, slug, title, excerpt, date,
+ * category, image, tags - no body, no analysis blocks) which is small enough to
+ * cache and render instantly, and the heavy body for ONE article is fetched only
+ * when that article is opened.
+ *
+ * Purely additive: the `articles` node remains the single source of truth and is
+ * never rewritten by any of this.
+ */
+const ARTICLE_INDEX_KEY = 'sp_article_index_v1';
+const ARTICLE_INDEX_TTL_MS = 45 * 60 * 1000;
+
+/** Fields a list view needs. Everything else (body, timeline, keyActors, ...)
+ *  is fetched per-article, because it is most of the payload. */
+function toIndexEntry(a: any) {
+  if (!a || !a.id) return null;
+  // 35 articles store their picture inline as a base64 data URI (up to 73 KB each,
+  // 2.39 MB of the 8.8 MB catalog). Copying those into the index would push it back
+  // over the ~5 MB localStorage quota, so they are omitted here. Nothing is
+  // deleted: the full record still holds the image and the article page reads it
+  // from there once that single record is fetched.
+  const slimImage = (v: any) => (typeof v === 'string' && v.startsWith('data:') ? '' : v);
+  return {
+    id: a.id,
+    slug: a.slug,
+    title: a.title,
+    // The excerpt is a list teaser, not the article, and long ones add up fast.
+    excerpt: trimBilingual(a.excerpt, 320),
+    date: a.date,
+    publishedAt: a.publishedAt,
+    category: a.category,
+    type: a.type,
+    imageUrl: slimImage(a.imageUrl),
+    featuredImage: slimImage(a.featuredImage),
+    isFeatured: a.isFeatured,
+    isPublished: a.isPublished,
+    readingTime: a.readingTime,
+    tags: Array.isArray(a.tags) ? a.tags.slice(0, 8) : a.tags,
+    author: trimBilingual(a.author, 80),
+    commentsEnabled: a.commentsEnabled,
+    sourceName: a.sourceName,
+    // Marks a record that came from the index and still needs its body.
+    _indexOnly: true,
+  };
+}
+
+
+/** Shortens a { fr, en } text field (or a plain string) to `max` characters. */
+function trimBilingual(v: any, max: number): any {
+  if (v == null) return v;
+  if (typeof v === 'string') return v.length > max ? `${v.slice(0, max)}…` : v;
+  if (typeof v === 'object') {
+    const out: any = {};
+    for (const k of Object.keys(v)) {
+      const s2 = v[k];
+      out[k] = typeof s2 === 'string' && s2.length > max ? `${s2.slice(0, max)}…` : s2;
+    }
+    return out;
+  }
+  return v;
+}
+
+function readArticleIndex(): { at: number; items: any[] } | null {
+  if (typeof window === 'undefined') return null;
   try {
-    // 15s (up from 7s): the articles node holds the full catalog — on slower
-    // mobile connections the default timeout can fire while the RTDB
-    // connection is still being established, silently falling back to a
-    // stale local cache. A generous timeout avoids the "other device never
-    // sees new articles" failure mode; the real-time listener in App.tsx is
-    // the primary sync channel anyway.
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 15000);
-    // CAP REMOVED: previously sliced to 100 — return everything.
+    const raw = localStorage.getItem(ARTICLE_INDEX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.items) || !parsed.items.length) return null;
+    if (Date.now() - parsed.at > ARTICLE_INDEX_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeArticleIndex(items: any[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(
+      ARTICLE_INDEX_KEY,
+      JSON.stringify({ at: Date.now(), items: items.map(toIndexEntry).filter(Boolean) })
+    );
+  } catch {
+    // Quota exceeded: the index is still used this session, just not cached.
+  }
+}
+
+/**
+ * Fetches ONE full article record.
+ *
+ * Needed because lists are served from the index, which deliberately omits the
+ * body. A single record is a few KB, so opening an article stays fast.
+ */
+export async function fetchArticleById(articleId: string): Promise<Article | null> {
+  if (!articleId) return null;
+  try {
+    const snap = await withFirestoreTimeout(
+      get(ref(rtdb, `articles/${safeKey(articleId)}`)),
+      12000
+    );
+    const val = snap.val();
+    if (!val || !val.id) return null;
+    return { ...val, id: val.id || articleId } as Article;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAllArticles(): Promise<Article[]> {
+  // Fast path: a fresh cached index renders every list immediately, including the
+  // older articles, without touching the 8.8MB download.
+  const cached = readArticleIndex();
+  if (cached) {
+    // Refresh in the background so the next visit is fresh, but never block on it.
+    void (async () => {
+      try {
+        const fresh = await fetchAllArticlesFromCloud();
+        if (fresh.length) writeArticleIndex(fresh);
+      } catch { /* best effort */ }
+    })();
+    return cached.items as Article[];
+  }
+
+  const remote = await fetchAllArticlesFromCloud();
+  if (remote.length) writeArticleIndex(remote);
+  return remote;
+}
+
+async function fetchAllArticlesFromCloud(): Promise<Article[]> {
+  try {
+    // 60s (was 15s). The measured download of the full catalog is ~32s, so the
+    // old timeout expired on every single load and the failure was silently
+    // swallowed into an empty-cache fallback. 60s leaves headroom on a slow
+    // mobile connection without ever appearing to hang.
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 60000);
+    // No cap: every article is returned, newest first.
     return sortByDateDesc(toList(snap.val()) as Article[]);
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'articles');
+    return [];
   }
 }
 
