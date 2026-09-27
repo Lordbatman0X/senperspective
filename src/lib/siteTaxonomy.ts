@@ -45,6 +45,10 @@ export const FALLBACK_TAXONOMY: TaxonomyItem[] = [
   { id: 'sports', fr: 'Sports', en: 'Sports', icon: 'Trophy' },
   { id: 'people', fr: 'People', en: 'People', icon: 'Smile' },
   { id: 'gouvernance', fr: 'Gouvernance', en: 'Governance', icon: 'ShieldCheck' },
+  // Dossier is a first-class section, not a synonym of Décryptages: it is the
+  // long-running investigation file an article belongs to. It is listed here so it
+  // stays selectable in the editor even on a site whose stored taxonomy predates it.
+  { id: 'dossier', fr: 'Dossier', en: 'Dossier', icon: 'FolderOpen' },
   { id: 'decryptages', fr: 'Décryptages', en: 'Decryptions', icon: 'BookOpen' },
 ];
 
@@ -74,6 +78,28 @@ export function resolveTaxonomy(stored: any): TaxonomyItem[] {
 /** The French labels, which is what articles and feeds store. */
 export function taxonomyLabels(items: TaxonomyItem[]): string[] {
   return items.map((c) => c.fr).filter(Boolean);
+}
+
+/**
+ * The live taxonomy UNION the fallback, deduped.
+ *
+ * Used by the admin selectors. The live list is authoritative and comes first, so
+ * a renamed section shows its new label; the fallback is appended only to fill
+ * gaps, so a section added in code (Dossier) stays selectable on a site whose
+ * stored taxonomy has not been re-saved yet. Without this, adding a section here
+ * would be invisible until someone re-saved Admin -> Categories.
+ */
+export function taxonomyOptions(stored: any): TaxonomyItem[] {
+  const live = resolveTaxonomy(stored);
+  const seen = new Set<string>();
+  const out: TaxonomyItem[] = [];
+  for (const c of [...live, ...FALLBACK_TAXONOMY]) {
+    const key = norm(c.fr);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
 }
 
 /**

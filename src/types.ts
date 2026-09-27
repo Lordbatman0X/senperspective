@@ -73,6 +73,11 @@ export interface Article {
    * fetched. See `fetchAllArticles` in firebase/db.ts.
    */
   _indexOnly?: boolean;
+  /**
+   * The long-running investigation file this article belongs to, chosen in the
+   * editor's Dossier box. Optional: an article does not have to belong to one.
+   */
+  dossier?: string;
   adImageUrl?: string;
   adLink?: string;
 

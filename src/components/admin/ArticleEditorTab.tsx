@@ -3,7 +3,7 @@ import { Article, BilingualText, KeyActor, TimelineEvent, PerspectiveBrief, Stru
 import { useStore } from '../../store';
 import { Save, ArrowLeft, Eye, Edit, Trash2, Plus, ImageIcon, Sparkles, FileText, Check, Upload, HelpCircle, HelpCircle as HelpIcon, X, Loader2, Film, Link as LinkIcon, CheckCircle2, AlertCircle, Search, Compass, Radio, Layers, ExternalLink, Zap, ShieldAlert } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { ARTICLE_CATEGORIES } from '../../constants';
+import { taxonomyOptions } from '../../lib/siteTaxonomy';
 import { compressImageFile } from '../../lib/imageUtils';
 import { uploadArticleImage } from '../../firebase/storage';
 import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
@@ -32,9 +32,11 @@ export function ArticleEditorTab({
 }: ArticleEditorTabProps) {
   const siteSettings = useStore(s => s.siteSettings);
   const storeAds = useStore(s => s.ads) || [];
-  const categoriesList = (siteSettings?.categories && siteSettings.categories.length > 0)
-    ? siteSettings.categories
-    : ARTICLE_CATEGORIES;
+  // Live taxonomy from siteSettings, unioned with the shared fallback so a
+  // section added in code (Dossier) is selectable even before Admin -> Categories
+  // is re-saved. The live list still wins on conflicts, so a renamed section shows
+  // its new label here too.
+  const categoriesList = taxonomyOptions(siteSettings?.categories);
 
   // Toggle split pane preview vs single edit view
   const [splitView, setSplitView] = useState<boolean>(true);
@@ -44,7 +46,12 @@ export function ArticleEditorTab({
 
   // Form states matching types.ts schema properties
   const [slug, setSlug] = useState('');
-  const [category, setCategory] = useState<string>(ARTICLE_CATEGORIES[0].fr);
+  const [category, setCategory] = useState<string>(categoriesList[0]?.fr || 'Politique');
+  // Dossier membership, deliberately distinct from the category: the category
+  // says which section the article sits in, the dossier says which running
+  // investigation file it belongs to.
+  const [dossier, setDossier] = useState<string>('');
+  const dossiersList: any[] = (siteSettings?.dossiers as any[]) || [];
   const [type, setType] = useState<'News' | 'Analysis' | 'Deep Dive' | 'Explainer' | 'Opinion'>('Analysis');
   const [isPublished, setIsPublished] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
@@ -244,6 +251,7 @@ export function ArticleEditorTab({
       setAuthorName(article.author || 'Perspective Staff');
       setYoutubeId(article.youtubeVideoId || '');
       setTags(article.tags || []);
+      setDossier(article.dossier || '');
       setAdImageUrlState(article.adImageUrl || '');
       setAdLinkState(article.adLink || '');
       
@@ -470,6 +478,9 @@ export function ArticleEditorTab({
         author: authorName.trim() || 'Perspective Staff',
         readingTime: Math.max(1, Math.round(wordCount.fr / 200)),
         tags,
+        // Empty means "not part of a dossier"; stored as undefined so the field
+        // is simply absent rather than an empty string in the record.
+        dossier: dossier || undefined,
         seoMetaTitle: seoMetaTitle.trim() || undefined,
         seoMetaDescription: seoMetaDescription.trim() || undefined,
         seoKeywords: seoKeywords.trim() || undefined,
@@ -931,6 +942,37 @@ export function ArticleEditorTab({
                     <option key={c.id} value={c.fr}>{c.fr}{c.en ? ` / ${c.en}` : ''}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">Dossier de rattachement</label>
+                <select
+                  value={dossier}
+                  onChange={e => setDossier(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-700/80 text-zinc-100 p-2 text-xs font-semibold focus:outline-none focus:border-[#E85D42] rounded-md"
+                >
+                  <option value="">{language === 'fr' ? '— Aucun dossier —' : '— No dossier —'}</option>
+                  {/* No dossiers configured yet: say so, instead of presenting an
+                      empty dropdown that looks broken. */}
+                  {dossiersList.filter((d: any, i: number) => {
+                    const label = typeof d === 'string' ? d : (d?.fr || d?.title || d?.name || '');
+                    return !!label;
+                  }).length === 0 && (
+                    <option value="" disabled>
+                      {language === 'fr' ? '(aucun dossier configuré)' : '(no dossier configured)'}
+                    </option>
+                  )}
+                  {dossiersList.map((d: any, i: number) => {
+                    const label = typeof d === 'string' ? d : (d?.fr || d?.title || d?.name || '');
+                    const did = typeof d === 'string' ? d : (d?.id || d?.slug || String(i));
+                    if (!label) return null;
+                    return <option key={did} value={label}>{label}</option>;
+                  })}
+                </select>
+                <p className="text-[9.5px] text-zinc-500 mt-1 leading-snug">
+                  {language === 'fr'
+                    ? "Rattache l'article a un dossier d'enquete suivi. Distinct de la rubrique ci-contre."
+                    : 'Links the article to a running investigation file. Distinct from the section.'}
+                </p>
               </div>
               <div>
                 <label className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider block mb-1">

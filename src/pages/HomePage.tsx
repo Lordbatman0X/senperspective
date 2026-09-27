@@ -116,6 +116,31 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
           </Link>
         </div>
         
+        {/*
+         * Tags row, rendered from the article's own `tags` so it only shows on cards
+         * that genuinely have tags. Keyed by tag + position: the values are not
+         * unique, and the same tag can legitimately be listed twice.
+         */}
+        {((article.tags || []).filter(Boolean).length > 0) && (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {(article.tags || []).filter(Boolean).slice(0, 4).map((tag, ti) => (
+              <span
+                key={`${tag}-${ti}`}
+                className={`px-2 py-0.5 rounded-full border font-semibold ${tall
+                  ? 'text-[10px] border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400'
+                  : 'text-[9.5px] border-brand-border dark:border-zinc-800 text-brand-muted'}`}
+              >
+                #{tag}
+              </span>
+            ))}
+            {(article.tags || []).filter(Boolean).length > 4 && (
+              <span className="px-2 py-0.5 text-[9.5px] font-semibold text-brand-muted">
+                +{(article.tags || []).length - 4}
+              </span>
+            )}
+          </div>
+        )}
+
         <div className={`flex justify-between items-center mt-6 pt-4 ${tall ? 'border-t border-zinc-200 dark:border-zinc-700' : 'border-t border-brand-border dark:border-zinc-800'}`}>
           <div className={`font-bold uppercase tracking-wider ${tall ? 'text-[11px] text-zinc-500 dark:text-zinc-400' : 'text-[10px] text-brand-muted'}`}>
             {tall ? `${formatRelativeDate(article.date, language)} • ${article.readingTime} MIN` : `${article.author} • ${formatRelativeDate(article.date, language)}`}
