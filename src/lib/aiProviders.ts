@@ -43,7 +43,7 @@ export interface AiProvider {
   /** Why direct browser calls may not work, shown verbatim in the admin UI. */
   directBlockedReason: string;
   /** Header for the direct call, when one is possible. */
-  authStyle: 'bearer' | 'query';
+  authStyle: 'bearer' | 'query' | 'x-api-key';
   /** Where the key appears in the direct URL, for 'query' auth. */
   keyParam?: string;
   docsUrl: string;
@@ -77,13 +77,17 @@ export const AI_PROVIDERS: Record<AiProviderId, AiProvider> = {
     header: 'x-anthropic-key',
     directEndpoint: 'https://api.anthropic.com/v1/messages',
     defaultModel: 'claude-3-5-sonnet-latest',
-    // Anthropic's API sends no CORS headers for browser origins, so a direct
-    // call from the deployed site is blocked by the browser. It must go through
-    // the backend proxy, like every other provider, using the x-anthropic-key
-    // header.
-    directBlockedReason:
-      "Anthropic interdit les appels directs depuis un navigateur (pas d'en-têtes CORS). Configurez un endpoint proxy dans l'onglet Assistant Abdel, ou via votre backend.",
-    authStyle: 'bearer',
+    // CORRECTION: this used to claim Anthropic could not be called from a
+    // browser and required a proxy server. That is outdated — Anthropic shipped
+    // CORS support in August 2024, gated behind the
+    // `anthropic-dangerous-direct-browser-access: true` header. It is called
+    // "dangerous" only because the key is then visible in the browser, which is
+    // already how every provider key in this admin suite is handled (localStorage,
+    // never written to the public database). No extra server is required.
+    directBlockedReason: '',
+    // Anthropic authenticates with an `x-api-key` header, not `Authorization:
+    // Bearer`, and additionally requires the version and browser-access headers.
+    authStyle: 'x-api-key',
     docsUrl: 'https://console.anthropic.com/settings/keys',
   },
   deepseek: {

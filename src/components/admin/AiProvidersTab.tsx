@@ -242,8 +242,8 @@ export function AiProvidersTab() {
         </h4>
         <p className="mt-1 text-xs text-zinc-400">
           {isFr
-            ? 'Obligatoire pour Anthropic, qui bloque les appels navigateur. Recommandé si vous préférez garder les clés côté serveur. Saisissez ici l’URL de votre backend ; il recevra les en-têtes x-*-key. Les blocs d’API d’Abdel se gèrent dans « Assistant Abdel & Chat ».'
-            : 'Required for Anthropic, which blocks browser calls. Recommended if you prefer keeping keys server-side. Enter your backend URL here; it receives the x-*-key headers. Abdel’s API blocks live in “Assistant Abdel & Chat”.'}
+            ? 'Optionnel. Les six fournisseurs, Anthropic compris, fonctionnent directement depuis ce navigateur — aucun serveur supplémentaire n’est nécessaire. Renseignez une URL ici uniquement si vous préférez que vos clés restent côté serveur plutôt que dans ce navigateur.'
+            : 'Optional. All six providers, Anthropic included, work directly from this browser — no extra server is required. Only set a URL here if you would rather keep your keys server-side rather than in this browser.'}
         </p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -399,19 +399,11 @@ function ProviderCard({
           <span className="text-sm font-extrabold text-zinc-100">{p.label}</span>
           <span
             className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-              isSet ? 'bg-emerald-500/100/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
+              isSet ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
             }`}
           >
             {isSet ? (isFr ? 'Clé présente' : 'Key present') : isFr ? 'Aucune clé' : 'No key'}
           </span>
-          {!canDirect && (
-            <span
-              title={p.directBlockedReason}
-              className="cursor-help rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-300"
-            >
-              {isFr ? 'Proxy requis' : 'Proxy required'}
-            </span>
-          )}
         </div>
         <a
           href={p.docsUrl}

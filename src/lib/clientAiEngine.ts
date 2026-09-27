@@ -79,6 +79,13 @@ export async function callProviderDirect(
 
     if (meta.authStyle === 'query' && meta.keyParam) {
       url += `${url.includes('?') ? '&' : '?'}${meta.keyParam}=${encodeURIComponent(key)}`;
+    } else if (meta.authStyle === 'x-api-key') {
+      headers['x-api-key'] = key;
+      // Anthropic did not allow browser calls at all until August 2024; these two
+      // headers are what enable them. Without them the request is rejected by the
+      // browser, not by Anthropic.
+      headers['anthropic-version'] = '2023-06-01';
+      headers['anthropic-dangerous-direct-browser-access'] = 'true';
     } else {
       headers['Authorization'] = `Bearer ${key}`;
     }
@@ -88,6 +95,14 @@ export async function callProviderDirect(
       body = {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { responseMimeType: 'application/json' },
+      };
+    } else if (meta.id === 'anthropic') {
+      // Anthropic's /v1/messages shape is not the OpenAI one: the prompt goes in
+      // a messages array and the model is required in the body.
+      body = {
+        model,
+        max_tokens: opts.maxTokens || 4096,
+        messages: [{ role: 'user', content: prompt }],
       };
     } else {
       body = {
@@ -604,15 +619,17 @@ export async function clientTestProvider(provider: string): Promise<{
     if (p === 'ANTHROPIC') {
       const key = getClientApiKey('anthropic');
       if (!key) throw new Error('Clé API Anthropic non configurée.');
-      // This used to return success: true WITHOUT making any network call, so
-      // the diagnostics panel reported Anthropic as healthy while generation
-      // could not use it. An unverifiable provider must not report success.
+      // This branch used to return success WITHOUT any network call, which is why
+      // the panel once reported Anthropic as healthy while generation could not
+      // use it. Anthropic has supported browser calls since August 2024, so a
+      // real request is now made and its real verdict returned.
+      const res = await callProviderDirect('anthropic', 'Ping', { maxTokens: 16, timeoutMs: 20_000 });
+      if (!res.ok) throw new Error(res.error);
       return {
-        success: false,
+        success: true,
         latencyMs: Date.now() - startTime,
-        message:
-          "Anthropic n'autorise pas les appels directs depuis un navigateur (aucun en-tête CORS). La clé est enregistrée et sera utilisée dès qu'un endpoint proxy est configuré dans l'onglet Assistant Abdel.",
-        modelUsed: AI_PROVIDERS.anthropic.defaultModel,
+        message: `Anthropic opérationnel (${res.model}) — Test direct navigateur`,
+        modelUsed: res.model
       };
     }
 
