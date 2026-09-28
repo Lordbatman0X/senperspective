@@ -298,8 +298,26 @@ const THUMB_MAX_CHARS = 32000;
 function makeThumbnail(dataUri: string): Promise<string> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined' || !dataUri) return resolve('');
+    // Hard ceiling. A data URI that never fires onload (corrupt, truncated, or
+    // refused by the browser) would otherwise leave the index write pending
+    // forever — and on a phone that is a hang, not a slow path.
+    let img: HTMLImageElement | null = null;
+    let done = false;
+    const timer = setTimeout(() => {
+      if (img) {
+        img.onload = null;
+        img.onerror = null;
+      }
+      finish('');
+    }, 4000);
+    const finish = (v: string) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve(v);
+    };
     try {
-      const img = new Image();
+      img = new Image();
       img.onload = () => {
         try {
           const nw = img.naturalWidth || THUMB_MAX_W;
@@ -311,18 +329,18 @@ function makeThumbnail(dataUri: string): Promise<string> {
           canvas.width = w;
           canvas.height = h;
           const ctx = canvas.getContext('2d');
-          if (!ctx) return resolve('');
+          if (!ctx) return finish('');
           ctx.drawImage(img, 0, 0, w, h);
           const out = canvas.toDataURL('image/jpeg', THUMB_QUALITY);
-          resolve(out.length <= THUMB_MAX_CHARS ? out : '');
+          finish(out.length <= THUMB_MAX_CHARS ? out : '');
         } catch {
-          resolve('');
+          finish('');
         }
       };
-      img.onerror = () => resolve('');
+      img.onerror = () => finish('');
       img.src = dataUri;
     } catch {
-      resolve('');
+      finish('');
     }
   });
 }
@@ -448,19 +466,59 @@ export async function fetchArticleById(articleId: string): Promise<Article | nul
   }
 }
 
+/**
+ * Fetches the STATIC list index from the CDN.
+ *
+ * WHY: the browser used to download the whole 10.4 MB catalog from the Realtime
+ * Database and build the index locally. On a phone that blew past the client
+ * timeout, so the homepage sat loading for minutes and then failed — while a
+ * desktop with the index already cached looked fine. The build now writes the
+ * same slim index to /article-index.json, a few hundred KB served from the CDN,
+ * which is what a first-time visitor on any connection actually needs.
+ *
+ * The RTDB path stays as a fallback, so an older deploy without this file still
+ * works (just slowly).
+ */
+async function fetchStaticArticleIndex(): Promise<Article[] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await withFirestoreTimeout(
+      fetch('/article-index.json', { cache: 'default' }),
+      12000
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const items = Array.isArray(json?.items) ? json.items : null;
+    if (!items || items.length === 0) return null;
+    return items as Article[];
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchAllArticles(): Promise<Article[]> {
-  // Fast path: a fresh cached index renders every list immediately, including the
-  // older articles, without touching the 8.8MB download.
+  // Fastest path: a fresh cached index renders every list immediately, including
+  // the older articles, without touching the Realtime Database at all.
   const cached = readArticleIndex();
   if (cached) {
     // Refresh in the background so the next visit is fresh, but never block on it.
     void (async () => {
       try {
-        const fresh = await fetchAllArticlesFromCloud();
+        const fresh = (await fetchStaticArticleIndex()) || (await fetchAllArticlesFromCloud());
         if (fresh.length) writeArticleIndex(fresh);
       } catch { /* best effort */ }
     })();
     return cached.items as Article[];
+  }
+
+  // First visit on this device. Try the small static file before the 10.4 MB
+  // database read, which is what made phones hang and then fail.
+  const stat = await fetchStaticArticleIndex();
+  if (stat && stat.length) {
+    // No thumbnail work is needed: this index carries no inline images, so the
+    // writer takes its synchronous path and cannot stall the first paint.
+    void writeArticleIndex(stat);
+    return stat;
   }
 
   const remote = await fetchAllArticlesFromCloud();

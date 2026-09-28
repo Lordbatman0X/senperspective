@@ -970,6 +970,71 @@ async function main() {
     1 + CATEGORY_HUBS.length + 1 + LEAGUE_HUBS.length + 2; // home + hubs + /larene + league hubs + about/contact
   console.log(`[prerender] wrote sitemap.xml (${articles.length} article urls + ${staticCount} static)`);
 
+  /*
+   * The list index, as a STATIC file on the CDN.
+   *
+   * WHY THIS EXISTS
+   * ---------------
+   * The browser used to download the entire catalog from the Realtime Database
+   * and build its list index locally. That catalog is now 10.4 MB and grows every
+   * time an article stores its picture as inline base64. On a phone that exceeded
+   * the client timeout, so the site sat loading for minutes and then failed with
+   * an empty homepage — while the desktop, which had the index cached in
+   * localStorage from an earlier visit, looked fine.
+   *
+   * The build already has every article in memory here, so the same slim index is
+   * written once to disk and served as a static file. Any device, on any
+   * connection, gets a few hundred KB instead of 10 MB, on the very first visit.
+   *
+   * The RTDB download remains as a fallback, so nothing breaks if this file is
+   * missing (an old deploy) — the client simply falls back to the old path.
+   *
+   * Inline base64 pictures are omitted here: this file must stay small, and there
+   * is no image decoder in Node to make a thumbnail. They are flagged instead,
+   * so the client knows the image is pending rather than assuming there is none.
+   */
+  const INDEX_FIELDS = [
+    'id', 'slug', 'title', 'date', 'publishedAt', 'category', 'type',
+    'isFeatured', 'isPublished', 'readingTime', 'commentsEnabled', 'sourceName',
+  ];
+  const isInline = (v) => typeof v === 'string' && v.startsWith('data:');
+  const clamp = (v, max) => {
+    const t = (v || '').trim();
+    return t.length > max ? t.slice(0, max) : t;
+  };
+  const clip = (v, max) => {
+    if (v == null) return v;
+    if (typeof v === 'string') return clamp(v, max);
+    if (typeof v === 'object') {
+      const out = {};
+      for (const [k, val] of Object.entries(v)) out[k] = typeof val === 'string' ? clamp(val, max) : val;
+      return out;
+    }
+    return v;
+  };
+
+  const indexItems = articles.map((a) => {
+    const e = { _indexOnly: true };
+    for (const f of INDEX_FIELDS) if (a[f] !== undefined) e[f] = a[f];
+    e.excerpt = clip(a.excerpt, 320);
+    e.author = clip(a.author, 80);
+    e.tags = Array.isArray(a.tags) ? a.tags.slice(0, 8) : a.tags;
+    const fi = a.featuredImage;
+    const iu = a.imageUrl;
+    if (fi && !isInline(fi)) e.featuredImage = fi;
+    if (iu && !isInline(iu)) e.imageUrl = iu;
+    // The picture is inline base64, which is too large to ship here.
+    e.needsImage = !!(isInline(fi) || isInline(iu));
+    return e;
+  });
+
+  const indexJson = JSON.stringify({ generatedAt: new Date().toISOString(), items: indexItems });
+  await writeFile(path.join(DIST, 'article-index.json'), indexJson, 'utf8');
+  console.log(
+    `[prerender] wrote article-index.json (${indexItems.length} items, ${(indexJson.length / 1024).toFixed(0)} KB, ` +
+    `${indexItems.filter((i) => i.needsImage).length} pending inline images)`
+  );
+
   // INTERNAL LINK INTEGRITY GATE
   // ---------------------------
   // This build now emits thousands of internal links (section pages + related
