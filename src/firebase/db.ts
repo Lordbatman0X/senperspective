@@ -1,4 +1,4 @@
-import {
+﻿import {
   ref,
   get,
   set,
@@ -279,14 +279,69 @@ const ARTICLE_INDEX_TTL_MS = 45 * 60 * 1000;
 
 /** Fields a list view needs. Everything else (body, timeline, keyActors, ...)
  *  is fetched per-article, because it is most of the payload. */
-function toIndexEntry(a: any) {
+const isInlineImage = (v: any) => typeof v === 'string' && v.startsWith('data:');
+
+const THUMB_MAX_W = 320;
+const THUMB_QUALITY = 0.6;
+// Ceiling per thumbnail, so one huge source image cannot blow the index again.
+// The 43 inline pictures average 67 KB as base64; a 320px JPEG lands far below
+// this, and 43 of them stays comfortably inside the localStorage quota.
+const THUMB_MAX_CHARS = 32000;
+
+/**
+ * Downscales a base64 data URI to a small JPEG, in the browser.
+ *
+ * Resolves to '' on any failure (no DOM, a corrupt payload, a browser that
+ * refuses the data URI) so the caller keeps the previous behaviour instead of
+ * breaking the index.
+ */
+function makeThumbnail(dataUri: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined' || !dataUri) return resolve('');
+    try {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const nw = img.naturalWidth || THUMB_MAX_W;
+          const nh = img.naturalHeight || THUMB_MAX_W;
+          const scale = Math.min(1, THUMB_MAX_W / nw);
+          const w = Math.max(1, Math.round(nw * scale));
+          const h = Math.max(1, Math.round(nh * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve('');
+          ctx.drawImage(img, 0, 0, w, h);
+          const out = canvas.toDataURL('image/jpeg', THUMB_QUALITY);
+          resolve(out.length <= THUMB_MAX_CHARS ? out : '');
+        } catch {
+          resolve('');
+        }
+      };
+      img.onerror = () => resolve('');
+      img.src = dataUri;
+    } catch {
+      resolve('');
+    }
+  });
+}
+
+function toIndexEntry(a: any, thumb?: string) {
   if (!a || !a.id) return null;
   // 35 articles store their picture inline as a base64 data URI (up to 73 KB each,
   // 2.39 MB of the 8.8 MB catalog). Copying those into the index would push it back
   // over the ~5 MB localStorage quota, so they are omitted here. Nothing is
   // deleted: the full record still holds the image and the article page reads it
   // from there once that single record is fetched.
-  const slimImage = (v: any) => (typeof v === 'string' && v.startsWith('data:') ? '' : v);
+  // Inline base64 pictures are replaced by a generated THUMBNAIL, never dropped.
+  //
+  // WHY: an empty image made every list card fall back to a generic Unsplash
+  // photo, while the article page — which fetches the full record — showed the
+  // real picture. Card and article disagreed. A 320px JPEG is small enough to
+  // stay inside the localStorage quota while showing the right image.
+  // The full record still holds the original; nothing is deleted.
+  const slimImage = (v: any) => (isInlineImage(v) ? (thumb || '') : v);
   return {
     id: a.id,
     slug: a.slug,
@@ -341,13 +396,32 @@ function readArticleIndex(): { at: number; items: any[] } | null {
   }
 }
 
-function writeArticleIndex(items: any[]) {
+async function writeArticleIndex(items: any[]) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(
-      ARTICLE_INDEX_KEY,
-      JSON.stringify({ at: Date.now(), items: items.map(toIndexEntry).filter(Boolean) })
+    // Give any inline base64 picture a real thumbnail before caching, so a card
+    // shows the image the editor uploaded instead of a generic stock photo. The
+    // full records are already in memory here (this runs on the result of
+    // fetchAllArticlesFromCloud), so this costs no extra network request.
+    const hasInline = items.some(
+      (a) => isInlineImage(a?.featuredImage) || isInlineImage(a?.imageUrl)
     );
+    let entries: any[];
+    if (hasInline) {
+      const thumbed = await Promise.all(
+        items.map(async (a) => {
+          const src = isInlineImage(a?.featuredImage) ? a.featuredImage : a?.imageUrl;
+          if (!isInlineImage(src)) return toIndexEntry(a);
+          return toIndexEntry(a, await makeThumbnail(src));
+        })
+      );
+      entries = thumbed.filter(Boolean);
+    } else {
+      // Wrapped in an arrow: passing toIndexEntry directly would hand it the array
+      // index as its `thumb` argument.
+      entries = items.map((a) => toIndexEntry(a)).filter(Boolean);
+    }
+    localStorage.setItem(ARTICLE_INDEX_KEY, JSON.stringify({ at: Date.now(), items: entries }));
   } catch {
     // Quota exceeded: the index is still used this session, just not cached.
   }
