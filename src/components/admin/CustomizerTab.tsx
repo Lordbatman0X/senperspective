@@ -4,7 +4,7 @@ import { Palette, Phone, Mail, MapPin, ShieldCheck, HelpCircle, Save, Megaphone,
 import { compressImageFile } from '../../lib/imageUtils';
 
 export function CustomizerTab() {
-  const { language, siteSettings, updateSiteSettings } = useStore();
+  const { language, siteSettings, updateSiteSettings, siteSettingsLoaded } = useStore();
 
   // Header Navigation Bar state
   const defaultNavItems = [
@@ -157,6 +157,18 @@ export function CustomizerTab() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    // This handler writes `categories` and `headerNavItems` as well as the
+    // appearance fields, all seeded from siteSettings at mount. Saving before the
+    // real values arrive publishes the bundled defaults over the live taxonomy and
+    // menu — the "footer and menu keep reverting to the old version" report.
+    if (!siteSettingsLoaded) {
+      alert(
+        language === 'fr'
+          ? 'Paramètres en cours de chargement — réessayez dans un instant.'
+          : 'Settings still loading — try again in a moment.'
+      );
+      return;
+    }
     updateSiteSettings({
       siteName,
       boukariCorpLogo,

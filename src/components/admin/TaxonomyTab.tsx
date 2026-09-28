@@ -17,7 +17,7 @@ interface TagItem {
 }
 
 export function TaxonomyTab() {
-  const { siteSettings, updateSiteSettings, articles, language } = useStore();
+  const { siteSettings, updateSiteSettings, articles, language, siteSettingsLoaded } = useStore();
 
   // The live taxonomy from siteSettings, with the single shared fallback.
   // This list used to be duplicated inline here, which is how it drifted from
@@ -113,6 +113,17 @@ export function TaxonomyTab() {
   };
 
   const handleSaveNav = () => {
+    // Refuse to save before the real settings have arrived. Saving here would
+    // write the bundled default menu over the live one — the "reverts to the old
+    // version" behaviour, and the one that hit the footer taxonomy too.
+    if (!siteSettingsLoaded) {
+      showToast(
+        language === 'fr'
+          ? 'Paramètres en cours de chargement — réessayez dans un instant.'
+          : 'Settings still loading — try again in a moment.'
+      );
+      return;
+    }
     // Only the nav key is written, so saving the menu can never disturb
     // categories, tags or any other stored setting.
     updateSiteSettings({ headerNavItems: navItems });
@@ -165,6 +176,17 @@ export function TaxonomyTab() {
 
   // Save Category
   const handleSaveCategory = () => {
+    // Same hydration guard as the menu: `categories` here is seeded from
+    // siteSettings, so saving before the real list lands would publish the
+    // bundled defaults and erase the current taxonomy.
+    if (!siteSettingsLoaded) {
+      showToast(
+        language === 'fr'
+          ? 'Paramètres en cours de chargement — réessayez dans un instant.'
+          : 'Settings still loading — try again in a moment.'
+      );
+      return;
+    }
     if (!catFr.trim()) {
       showToast(language === 'fr' ? 'Le nom en français est requis.' : 'French category name is required.');
       return;

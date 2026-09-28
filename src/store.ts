@@ -929,6 +929,17 @@ interface AppState {
   };
   updateSiteSettings: (settings: Partial<AppState['siteSettings']>) => void;
   loadSiteSettings: () => Promise<void>;
+  /**
+   * True once the shared settings have been fetched from the database (or the
+   * fetch has definitively failed).
+   *
+   * WHY: the taxonomy and navigation editors seed their local state from
+   * siteSettings when they mount. Before the fetch lands, that state is the
+   * bundled default list, so saving at that moment wrote the defaults back over
+   * the live taxonomy — the "it keeps reverting to the old version" report. They
+   * now refuse to save until this is true.
+   */
+  siteSettingsLoaded?: boolean;
   deleteUser: (email: string) => void;
   updateUserRole: (email: string, role: string) => void;
   updateUserSecurity: (email: string, emailVerified: boolean, mfaEnabled: boolean) => void;
@@ -2802,7 +2813,13 @@ export const useStore = create<AppState>()(
       loadSiteSettings: async () => {
         try {
           const remote = await fetchSiteSettings();
-          if (!remote || typeof remote !== 'object') return;
+          // Mark the attempt as finished either way. Editors use this to refuse a
+          // save made before the real values have arrived, which is what used to
+          // write the bundled defaults back over the live taxonomy.
+          if (!remote || typeof remote !== 'object') {
+            set({ siteSettingsLoaded: true } as any);
+            return;
+          }
           const current = get().siteSettings || {};
           const merged: Record<string, any> = { ...current };
           Object.entries(remote).forEach(([key, val]) => {
@@ -2810,9 +2827,10 @@ export const useStore = create<AppState>()(
             if (key === 'updatedAtServer') return;
             merged[key] = val;
           });
-          set({ siteSettings: merged as any });
+          set({ siteSettings: merged as any, siteSettingsLoaded: true } as any);
         } catch (err) {
           console.warn('[Firebase] loadSiteSettings failed:', err);
+          set({ siteSettingsLoaded: true } as any);
         }
       },
       deleteUser: (email) => {

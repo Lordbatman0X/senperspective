@@ -474,17 +474,29 @@ export function Header() {
     { id: 'decryptages', labelFr: 'Décryptages', labelEn: 'Decryptions', url: '/category/decryptages', enabled: true },
   ];
 
-  const activeNavItems = (siteSettings?.headerNavItems && siteSettings.headerNavItems.length > 0)
-    ? siteSettings.headerNavItems.filter(item => item.enabled !== false)
-    : (siteSettings?.categories && siteSettings.categories.length > 0)
-      ? siteSettings.categories.map(cat => ({
-          id: cat.id,
-          labelFr: cat.fr,
-          labelEn: cat.en,
-          url: cat.id === 'sports' ? '/larene' : `/category/${cat.id}`,
-          enabled: true
-        }))
-      : defaultNavItems;
+  // Sports always routes to L'Arène, whichever source the item came from. The
+  // stored headerNavItems still carried /category/sports, so the nav sent readers
+  // to a page that is not the sports section, while the category fallback already
+  // pointed at /larene. Normalising here fixes the existing saved data without
+  // needing a database migration.
+  const withCanonicalUrls = (items: any[]) =>
+    (items || []).map((it) =>
+      it && it.id === 'sports' ? { ...it, url: '/larene' } : it
+    );
+
+  const activeNavItems = withCanonicalUrls(
+    (siteSettings?.headerNavItems && siteSettings.headerNavItems.length > 0)
+      ? siteSettings.headerNavItems.filter(item => item.enabled !== false)
+      : (siteSettings?.categories && siteSettings.categories.length > 0)
+        ? siteSettings.categories.map(cat => ({
+            id: cat.id,
+            labelFr: cat.fr,
+            labelEn: cat.en,
+            url: cat.id === 'sports' ? '/larene' : `/category/${cat.id}`,
+            enabled: true
+          }))
+        : defaultNavItems
+  );
 
   const t = {
     search: language === "fr" ? "RECHERCHER..." : "SEARCH...",
