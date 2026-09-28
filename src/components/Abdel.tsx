@@ -9,6 +9,126 @@ import { getAbdelContextualPrompts, resolveAbdelGreeting } from "../lib/abdelPro
 import { getSafeText } from "../lib/utils";
 import { askAbdel, normalizeAbdelSlots } from "../lib/abdelRouter";
 
+/**
+ * The composer and status strip, defined ONCE.
+ *
+ * WHY THIS IS A COMPONENT
+ * -----------------------
+ * The input row, its send button and the suggestion chips were duplicated
+ * verbatim between the mobile and desktop panels. Any fix applied to one copy
+ * silently left the other broken, and the two could drift apart visually. One
+ * component means one implementation, so mobile and desktop behave identically
+ * by construction.
+ */
+function AbdelComposer({
+  value,
+  onChange,
+  onSubmit,
+  loading,
+  error,
+  source,
+  onRetry,
+  onClear,
+  hasMessages,
+  placeholder,
+  clearLabel,
+  retryLabel,
+  failLabel,
+  viaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onSubmit: () => void;
+  loading: boolean;
+  error: string | null;
+  source: string;
+  onRetry: () => void;
+  onClear: () => void;
+  hasMessages: boolean;
+  placeholder: string;
+  clearLabel: string;
+  retryLabel: string;
+  failLabel: string;
+  viaLabel: string;
+}) {
+  return (
+    <>
+      {/*
+        Status strip. Shows which backend actually answered, or the precise reason
+        it could not. Without this the reader had no way to tell a working answer
+        from a silent fallback to the browser engine, and an admin had no way to
+        see a misconfigured endpoint.
+      */}
+      {(error || source) && (
+        <div
+          className={`px-3 py-2 text-[10.5px] font-mono leading-snug border-t flex items-start gap-2 ${
+            error
+              ? 'bg-rose-50/80 dark:bg-rose-950/30 text-rose-800 dark:text-rose-200 border-rose-200 dark:border-rose-900'
+              : 'bg-zinc-100/60 dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-300 border-zinc-300 dark:border-zinc-800'
+          }`}
+        >
+          <div className="flex-1 min-w-0 break-words">
+            {error ? (
+              <>
+                <span className="font-bold uppercase tracking-wider">{failLabel} — </span>
+                {error}
+              </>
+            ) : (
+              <>
+                <span className="font-bold uppercase tracking-wider">{viaLabel} — </span>
+                {source}
+              </>
+            )}
+          </div>
+          {error ? (
+            <button
+              onClick={onRetry}
+              className="shrink-0 font-bold uppercase tracking-wider underline hover:no-underline cursor-pointer"
+            >
+              {retryLabel}
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      <div className="p-2.5 bg-white/20 dark:bg-zinc-950/20 border-t border-white/20 dark:border-zinc-800/50 flex items-center gap-2">
+        {hasMessages && (
+          <button
+            onClick={onClear}
+            title={clearLabel}
+            aria-label={clearLabel}
+            className="shrink-0 p-2 text-zinc-500 hover:text-rose-500 dark:hover:text-rose-400 transition-colors cursor-pointer"
+          >
+            <RotateCcw size={15} />
+          </button>
+        )}
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          className="flex-1 min-w-0 px-3 py-2 bg-transparent border border-zinc-200/50 dark:border-zinc-800/50 text-sm outline-none focus:border-[#E85D42] transition-colors"
+        />
+        <button
+          onClick={onSubmit}
+          disabled={loading || !value.trim()}
+          aria-label="Envoyer"
+          className="shrink-0 bg-brand-primary text-white p-2 hover:bg-[#c94931] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <Send size={18} />
+        </button>
+      </div>
+    </>
+  );
+}
+
 export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const location = useLocation();
   const { language, setLanguage, theme, toggleTheme, abdelPrompts, siteSettings } = useStore();
@@ -18,6 +138,13 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
   const [messages, setMessages] = useState<{ role: "user" | "abdel"; text: string }[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  // The real reason Abdel could not answer, and where the answer came from.
+  // askAbdel already produces precise diagnostics ("HTTP 401 — invalid key",
+  // "timeout 25s", "endpoint a renvoyé du HTML"); previously they were all
+  // discarded and replaced by a generic "temporarily unavailable" sentence, which
+  // made a misconfiguration impossible to diagnose from the UI.
+  const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<string>('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const contextualData = getAbdelContextualPrompts(
@@ -190,6 +317,8 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
     setMessages((prev) => [...prev, { role: "user", text }]);
     setInput("");
     setLoading(true);
+    setError(null);
+    setSource("");
 
     try {
       // ABDEL ROUTER: the four AI backends linked in Admin →
@@ -216,16 +345,30 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
         { preferredProvider: (siteSettings as any)?.abdelPreferredProvider || '' }
       );
 
-      setMessages((prev) => [
-        ...prev,
-        {
+      // Surface WHY, not just that it failed. `source` tells the reader whether the
+      // answer came from a configured backend or the in-browser engine, so a silent
+      // fallback is no longer invisible.
+      setSource(result?.source === 'slot'
+        ? (result?.slotLabel || result?.slotId || 'backend')
+        : (result?.source === 'client' ? 'navigateur' : ''));
+
+      const reply = result?.text?.trim();
+      if (reply) {
+        setMessages((prev) => [...prev, { role: "abdel", text: reply }]);
+      } else {
+        // Keep the conversation honest: show the actual cause instead of a
+        // friendly sentence that hides a broken endpoint or an expired key.
+        const why = result?.error || '';
+        setError(why || 'aucune réponse');
+        setMessages((prev) => [...prev, {
           role: "abdel",
-          text: result?.text?.trim() || (language === "fr"
-            ? "Abdel est momentanément indisponible. Posez-moi directement votre question ou réessayez dans quelques instants."
-            : "Abdel is temporarily unavailable. Feel free to rephrase or try again in a moment.")
-        }
-      ]);
-    } catch (e) {
+          text: language === "fr"
+            ? "Je n'ai pas pu répondre. Le détail technique est affiché sous la conversation — si vous administrez le site, il indique précisément quoi corriger."
+            : "I could not answer. The technical detail is shown below the conversation — if you run the site, it says exactly what to fix."
+        }]);
+      }
+    } catch (e: any) {
+      setError(e?.message || String(e));
       setMessages((prev) => [...prev, {
         role: "abdel",
         text: language === "fr"
@@ -235,6 +378,15 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  // One-click reset. Previously a conversation could only be discarded by closing
+  // and reopening the panel, which on a phone meant finding the launcher again.
+  const clearConversation = () => {
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setSource("");
   };
 
   const handleSendRef = useRef(handleSend);
@@ -416,23 +568,22 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
                 </div>
               )}
 
-              <div className="p-3 bg-white/20 dark:bg-zinc-950/20 border-t border-white/20 dark:border-zinc-800/40 flex gap-2">
-                <input 
-                  type="text" 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend(input)}
-                  placeholder={t.placeholder}
-                  className="flex-1 px-3 py-2 border border-zinc-200/50 dark:border-zinc-800/50 rounded bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500/70 focus:outline-none focus:border-brand-primary/70 backdrop-blur-md"
-                />
-                <button 
-                  onClick={() => handleSend(input)}
-                  disabled={loading || !input.trim()}
-                  className="bg-brand-primary text-white p-2 hover:bg-[#c94931] transition-colors disabled:opacity-40 flex items-center justify-center rounded-sm"
-                >
-                  <Send size={18} />
-                </button>
-              </div>
+              <AbdelComposer
+                value={input}
+                onChange={setInput}
+                onSubmit={() => handleSend(input)}
+                loading={loading}
+                error={error}
+                source={source}
+                onRetry={() => handleSend(input)}
+                onClear={clearConversation}
+                hasMessages={messages.length > 0}
+                placeholder={t.placeholder}
+                clearLabel={language === "fr" ? "Effacer la conversation" : "Clear conversation"}
+                retryLabel={language === "fr" ? "Réessayer" : "Retry"}
+                failLabel={language === "fr" ? "Échec" : "Failed"}
+                viaLabel={language === "fr" ? "Réponse via" : "Answered by"}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -647,23 +798,22 @@ export function Abdel({ contextArticle }: { contextArticle?: Article }) {
               </div>
             )}
 
-            <div className="p-3 bg-white/20 dark:bg-zinc-950/20 border-t border-white/20 dark:border-zinc-800/40 flex gap-2">
-              <input 
-                type="text" 
+              <AbdelComposer
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSend(input)}
+                onChange={setInput}
+                onSubmit={() => handleSend(input)}
+                loading={loading}
+                error={error}
+                source={source}
+                onRetry={() => handleSend(input)}
+                onClear={clearConversation}
+                hasMessages={messages.length > 0}
                 placeholder={t.placeholder}
-                className="flex-1 px-3 py-2 border border-zinc-200/50 dark:border-zinc-800/50 rounded bg-white/50 dark:bg-zinc-900/40 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500/70 focus:outline-none focus:border-brand-primary/70 backdrop-blur-md"
-              />
-              <button 
-                onClick={() => handleSend(input)}
-                disabled={loading || !input.trim()}
-                className="bg-brand-primary text-white p-2 hover:bg-[#c94931] transition-colors disabled:opacity-40 flex items-center justify-center rounded-sm"
-              >
-                <Send size={18} />
-              </button>
-            </div>
+                clearLabel={language === "fr" ? "Effacer la conversation" : "Clear conversation"}
+                retryLabel={language === "fr" ? "Réessayer" : "Retry"}
+                failLabel={language === "fr" ? "Échec" : "Failed"}
+                viaLabel={language === "fr" ? "Réponse via" : "Answered by"}
+                />
           </motion.div>
         )}
       </AnimatePresence>
