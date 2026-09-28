@@ -1,8 +1,10 @@
 import React from "react";
-import { User } from "lucide-react";
+import { Link } from "react-router-dom";
+import { User, Shield } from "lucide-react";
 import { useStore, unreadTotalFor } from "../../store";
 import { renderNeutralAvatar } from "../AccountDrawer";
-import { isAdminProfile } from "../../firebase/auth";
+import { isAdminProfile, canAccessAdmin } from "../../firebase/auth";
+import { useAuth } from "../../contexts/AuthContext";
 
 export function HeaderAccountMenu() {
   const {
@@ -14,6 +16,8 @@ export function HeaderAccountMenu() {
     setShowSignUpModal,
     setShowProfileDrawer
   } = useStore();
+  // The signed-in Firebase user, for the same admin check the phone drawer runs.
+  const { user } = useAuth();
 
   // Coherent unread indicator: the exact sum of the drawer sections
   //   unread DMs + Activité + Réseau + Briefing
@@ -23,11 +27,23 @@ export function HeaderAccountMenu() {
     ? unreadTotalFor(readerProfile.email, notifications || [], directMessages || [])
     : 0;
 
+  // The desktop had NO Administration entry point at all, while the phone drawer
+  // had one — the same person simply got a different menu per device. It is now
+  // here too, gated by the same predicate the phone uses.
+  const showAdminLink = canAccessAdmin({
+    profile: readerProfile,
+    email: user?.email,
+    allowTempSession:
+      typeof window !== "undefined"
+      && sessionStorage.getItem("perspective-temp-admin-session") === "authenticated"
+  });
+
   if (readerProfile) {
     return (
+      <div className="flex items-center gap-2 border-l border-zinc-700 pl-3">
       <button
         onClick={() => setShowProfileDrawer(true)}
-        className="flex items-center gap-2 border-l border-zinc-700 pl-3 hover:opacity-90 cursor-pointer"
+        className="flex items-center gap-2 hover:opacity-90 cursor-pointer"
       >
         <div className="relative">
           <div className="w-8 h-8 sm:w-4.5 sm:h-4.5 rounded-full overflow-hidden border-2 border-[#E85D42] shrink-0">
@@ -57,6 +73,16 @@ export function HeaderAccountMenu() {
               : "MEMBER"}
         </span>
       </button>
+      {showAdminLink && (
+        <Link
+          to="/admin"
+          className="hidden sm:inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-[#C69B52] hover:text-[#E85D42] transition-colors cursor-pointer"
+        >
+          <Shield size={11} />
+          <span>{language === "fr" ? "Administration" : "Admin"}</span>
+        </Link>
+      )}
+      </div>
     );
   }
 

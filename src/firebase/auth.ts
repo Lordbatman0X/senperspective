@@ -80,6 +80,46 @@ export function isAdminProfile(profile?: any): boolean {
 }
 
 /**
+ * THE single answer to "should this person see the Administration link?".
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The desktop account menu asked isAdminProfile(), while the phone drawer used a
+ * separate and wider test of its own:
+ *   role === "Admin" || role === "Éditeur" ||
+ *   email === "kadersdiaz3@gmail.com" || email === "admin@senperspective.com" ||
+ *   sessionStorage["perspective-temp-admin-session"] === "authenticated"
+ *
+ * The two therefore disagreed: a role of "Éditeur" saw Administration on the
+ * phone but not on desktop, so the same signed-in person got a different menu on
+ * each device. Both surfaces now call this.
+ *
+ * `allowTempSession` is passed in rather than read here, because sessionStorage
+ * only exists in the browser; keeping it a parameter also makes this function
+ * safe to call during server-side or prerender passes.
+ */
+export function canAccessAdmin(input: {
+  profile?: any;
+  email?: string | null;
+  allowTempSession?: boolean;
+} = {}): boolean {
+  const profile = input.profile || null;
+  if (isAdminProfile(profile)) return true;
+  if (input.allowTempSession) return true;
+
+  const email = String(profile?.email || input.email || '').trim().toLowerCase();
+  if (email && isBootstrapAdmin(email)) return true;
+
+  // "Éditeur" is an editorial role that was only ever honoured by the phone
+  // drawer. Treating it as admin here makes the two surfaces agree instead of
+  // silently differing.
+  const role = String(profile?.role || '').trim().toLowerCase();
+  if (role === 'admin' || role === 'éditeur' || role === 'editeur') return true;
+
+  return false;
+}
+
+/**
  * Ensures user document exists in Firestore and syncs profile
  */
 export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUserProfile>, extraName?: string): Promise<AppUserProfile> {

@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { isAdminProfile } from "../firebase/auth";
+import { isAdminProfile, canAccessAdmin } from "../firebase/auth";
 import {
   Search,
   Menu,
@@ -908,7 +908,17 @@ export function Header() {
                     <span className="text-[#E85D42]">{t.saved}</span>
                   </Link>
 
-                  {(readerProfile?.role === "Admin" || readerProfile?.role === "Éditeur" || user?.email === "kadersdiaz3@gmail.com" || user?.email === "admin@senperspective.com" || sessionStorage.getItem("perspective-temp-admin-session") === "authenticated") && (
+                  {/* One shared predicate, so the phone and the desktop cannot disagree
+                      about who sees Administration. It previously used a wider test of
+                      its own (role "Éditeur" + two hardcoded emails + a session flag),
+                      which meant an editor saw this link on mobile but not on desktop. */}
+                  {canAccessAdmin({
+                    profile: readerProfile,
+                    email: user?.email,
+                    allowTempSession:
+                      typeof window !== 'undefined'
+                      && sessionStorage.getItem("perspective-temp-admin-session") === "authenticated"
+                  }) && (
                     <Link
                       to="/admin"
                       onClick={() => setIsMobileMenuOpen(false)}
@@ -948,7 +958,7 @@ export function Header() {
                   {/* Language Switcher */}
                   <div className="flex items-center justify-between bg-white/50 dark:bg-black/40 border border-zinc-300/60 dark:border-zinc-800/60 p-2 rounded-none backdrop-blur-sm">
                     <span className="text-[10px] font-black uppercase tracking-wider text-zinc-950 dark:text-white">
-                      Language:
+                      {language === "fr" ? "Langue" : "Language"}
                     </span>
                     <div className="flex bg-zinc-200/80 dark:bg-zinc-900 p-0.5 rounded border border-zinc-300/80 dark:border-zinc-800">
                       <button
