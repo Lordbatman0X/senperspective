@@ -81,6 +81,101 @@ export function taxonomyLabels(items: TaxonomyItem[]): string[] {
 }
 
 /**
+ * The navigation the header renders, from ONE source, for every viewport.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * The desktop bar and the mobile drawer each used to read `headerNavItems`
+ * independently, and the stored data had drifted out of sync with the taxonomy.
+ * Live values, as stored:
+ *
+ *     id=gouvernance  labelFr="Business"  url=/category/business
+ *     id=international labelFr="Afique"
+ *
+ * So the nav advertised a "Business" section that is not in the taxonomy and has
+ * no page, and a category whose label no longer matched its own id. Desktop and
+ * phone then rendered visibly different lists from the same damaged input.
+ *
+ * WHAT IT DOES
+ * ------------
+ * 1. The admin's saved nav is AUTHORITATIVE for order, labels and visibility. A
+ *    label typed in the nav editor is a deliberate choice and is never rewritten
+ *    from the taxonomy. (An earlier version of this function did the opposite and
+ *    would have silently reverted a menu entry the admin had renamed.)
+ * 2. The taxonomy is used to FILL GAPS, never to overwrite: it supplies items the
+ *    saved nav forgot, so a section added in Admin -> Categories can never be
+ *    unreachable from the menu.
+ * 3. URLs are repaired only where the stored one is known to be wrong (Sports must
+ *    point at /larene) or missing. A deliberately chosen URL is left alone.
+ * 4. External links are preserved verbatim.
+ *
+ * Desktop, mobile and footer all call this, so they are structurally identical by
+ * construction and cannot drift again.
+ */
+export interface NavItem {
+  id: string;
+  labelFr: string;
+  labelEn?: string;
+  url: string;
+  enabled?: boolean;
+  external?: boolean;
+}
+
+/** Sports is L'Arene, not a category page. */
+function categoryUrl(id: string): string {
+  return id === 'sports' ? '/larene' : `/category/${id}`;
+}
+
+export function resolveNavItems(stored: any): NavItem[] {
+  const cats = resolveTaxonomy(stored?.categories);
+  const storedNav: any[] = Array.isArray(stored?.headerNavItems) ? stored.headerNavItems : [];
+
+  const out: NavItem[] = [];
+  const used = new Set<string>();
+  const push = (id: string, fr: string, en: string | undefined, url: string, external?: boolean) => {
+    const key = norm(id || fr);
+    if (!key || used.has(key)) return;
+    used.add(key);
+    out.push({ id: key, labelFr: fr, labelEn: en, url, enabled: true, external });
+  };
+
+  // 1. The saved nav, in the admin's order, with ITS labels. Only the URL is
+  //    touched, and only where it is known-wrong or absent.
+  for (const raw of storedNav) {
+    if (!raw || raw.enabled === false) continue;
+
+    // External links are passed through exactly as saved.
+    if (typeof raw.url === 'string' && /^https?:\/\//i.test(raw.url)) {
+      push(raw.id || raw.labelFr, raw.labelFr || raw.id, raw.labelEn, raw.url, true);
+      continue;
+    }
+
+    const id = raw.id || raw.labelFr || '';
+    if (!id) continue;
+
+    // Sports is the one hard-won correction: L'Arene is the sports section, and
+    // the stored /category/sports pointed readers at the wrong page.
+    const url =
+      norm(id) === 'sports' ? '/larene' : typeof raw.url === 'string' && raw.url ? raw.url : `/category/${id}`;
+
+    // Label precedence: what the admin typed wins. The taxonomy is consulted only
+    // when the nav item has no usable label of its own.
+    const label = raw.labelFr || raw.labelEn || id;
+    push(id, label, raw.labelEn || label, url);
+  }
+
+  // 2. Any real category the saved nav never mentioned, so a section added in
+  //    Admin -> Categories is still reachable. This ADDS, it never removes.
+  for (const c of cats) {
+    if (c.id && !used.has(norm(c.id))) {
+      push(c.id, c.fr || c.id, c.en || c.fr || c.id, categoryUrl(c.id));
+    }
+  }
+
+  return out;
+}
+
+/**
  * The live taxonomy UNION the fallback, deduped.
  *
  * Used by the admin selectors. The live list is authoritative and comes first, so

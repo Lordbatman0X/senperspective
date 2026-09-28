@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../store';
-import { ARTICLE_CATEGORIES } from '../constants';
+import { resolveNavItems } from '../lib/siteTaxonomy';
 
 export function Footer() {
   const language = useStore((s) => s.language);
@@ -30,7 +30,13 @@ export function Footer() {
     contact: language === 'fr' ? 'Contact' : 'Contact Us'
   };
 
-  const editions = (siteSettings?.categories && siteSettings.categories.length > 0) ? siteSettings.categories : ARTICLE_CATEGORIES;
+  // The footer used its own `siteSettings.categories ?? ARTICLE_CATEGORIES` copy,
+  // which is a third independent navigation surface and had already drifted from
+  // the header. It now calls the same resolver as the desktop and mobile menus, so
+  // the three cannot disagree about which sections exist or what they are called.
+  // The resolver has already repaired the URL, so this re-implements the
+  // `sports -> /larene` special case that used to live inline here.
+  const editions = resolveNavItems(siteSettings);
 
   return (
     <footer className="bg-brand-black text-white mt-16 pb-12">
@@ -94,8 +100,8 @@ export function Footer() {
             <ul className="grid grid-cols-2 gap-y-3.5">
               {editions.map(ed => (
                 <li key={ed.id}>
-                  <Link to={ed.id === "sports" ? "/larene" : `/category/${ed.id}`} className="text-gray-400 text-xs font-semibold uppercase hover:text-white transition-colors">
-                    {language === "fr" ? ed.fr : ed.en}
+                  <Link to={ed.url} className="text-gray-400 text-xs font-semibold uppercase hover:text-white transition-colors">
+                    {language === "fr" ? ed.labelFr : (ed.labelEn || ed.labelFr)}
                   </Link>
                 </li>
               ))}

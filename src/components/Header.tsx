@@ -6,6 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
 import { isAdminProfile, canAccessAdmin } from "../firebase/auth";
+import { resolveNavItems } from "../lib/siteTaxonomy";
 import {
   Search,
   Menu,
@@ -463,40 +464,16 @@ export function Header() {
     }
   };
 
-  const defaultNavItems = [
-    { id: 'senegal', labelFr: 'Sénégal', labelEn: 'Senegal', url: '/category/senegal', enabled: true },
-    { id: 'politique', labelFr: 'Politique', labelEn: 'Politics', url: '/category/politique', enabled: true },
-    { id: 'economie', labelFr: 'Économie', labelEn: 'Economy', url: '/category/economie', enabled: true },
-    { id: 'societe', labelFr: 'Société', labelEn: 'Society', url: '/category/societe', enabled: true },
-    { id: 'monde', labelFr: 'Monde', labelEn: 'World', url: '/category/monde', enabled: true },
-    { id: 'sports', labelFr: "Sports", labelEn: 'Sports', url: '/larene', enabled: true },
-    { id: 'tech', labelFr: 'Tech', labelEn: 'Tech', url: '/category/tech', enabled: true },
-    { id: 'decryptages', labelFr: 'Décryptages', labelEn: 'Decryptions', url: '/category/decryptages', enabled: true },
-  ];
-
-  // Sports always routes to L'Arène, whichever source the item came from. The
-  // stored headerNavItems still carried /category/sports, so the nav sent readers
-  // to a page that is not the sports section, while the category fallback already
-  // pointed at /larene. Normalising here fixes the existing saved data without
-  // needing a database migration.
-  const withCanonicalUrls = (items: any[]) =>
-    (items || []).map((it) =>
-      it && it.id === 'sports' ? { ...it, url: '/larene' } : it
-    );
-
-  const activeNavItems = withCanonicalUrls(
-    (siteSettings?.headerNavItems && siteSettings.headerNavItems.length > 0)
-      ? siteSettings.headerNavItems.filter(item => item.enabled !== false)
-      : (siteSettings?.categories && siteSettings.categories.length > 0)
-        ? siteSettings.categories.map(cat => ({
-            id: cat.id,
-            labelFr: cat.fr,
-            labelEn: cat.en,
-            url: cat.id === 'sports' ? '/larene' : `/category/${cat.id}`,
-            enabled: true
-          }))
-        : defaultNavItems
-  );
+  // ONE nav source for every viewport. Both the desktop bar and the mobile drawer
+  // render this exact array, so they cannot show different sections.
+  //
+  // The old inline logic read `headerNavItems` and trusted its stored labels and
+  // URLs, which had drifted from the taxonomy (a "Business" entry pointing at
+  // /category/business, a category labelled "Afique"). resolveNavItems repairs
+  // each item against the taxonomy by id, rebuilds the URL so it cannot 404, and
+  // appends any real category the saved nav forgot. Sports still routes to
+  // /larene via categoryUrl() inside the resolver.
+  const activeNavItems = resolveNavItems(siteSettings);
 
   const t = {
     search: language === "fr" ? "RECHERCHER..." : "SEARCH...",
@@ -769,7 +746,7 @@ export function Header() {
               <ul className="flex items-center justify-center">
                 {activeNavItems.map((item) => {
                   const isExternal = item.url.startsWith('http');
-                  const label = language === "fr" ? item.labelFr : item.labelEn;
+                  const label = language === "fr" ? item.labelFr : (item.labelEn || item.labelFr);
                   if (isExternal) {
                     return (
                       <li key={item.id}>
@@ -876,7 +853,7 @@ export function Header() {
                 <nav className="py-3 flex flex-col bg-transparent">
                   {activeNavItems.map((item) => {
                     const isExternal = item.url.startsWith('http');
-                    const label = language === "fr" ? item.labelFr : item.labelEn;
+                    const label = language === "fr" ? item.labelFr : (item.labelEn || item.labelFr);
                     const isActive = location.pathname === item.url;
 
                     if (isExternal) {
