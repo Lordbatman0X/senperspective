@@ -144,6 +144,19 @@ export function ProfilePage() {
   const [mutes, setMutes] = useState<string[]>([]);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
 
+  // True when `email` is already one of my confirmed friends.
+  //
+  // FIX (friend requests from people already accepted, never going away): a
+  // request row can outlive the friendship it created — the confirm flow wrote
+  // an 'accepted' record but left the original 'pending' row in place. Every
+  // load then re-offered that stale row, because nothing checked the friend
+  // list. An existing friendship must outrank any leftover request.
+  const isAlreadyConnected = (email: unknown): boolean => {
+    const v = String(email ?? '').toLowerCase().trim();
+    if (!v) return false;
+    return friends.some(f => String(f ?? '').toLowerCase().trim() === v);
+  };
+
   // Report modal state
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("");
@@ -221,8 +234,9 @@ export function ProfilePage() {
           const to = String(r?.to || '').toLowerCase().trim();
           return from === me || to === me;
         });
-        setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending'));
-        setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending'));
+        setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.from)));
+        setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.to)));
+        return;
       } catch (err) {
         console.warn('[Profile] Friend requests load notice:', err);
       }
@@ -241,8 +255,8 @@ export function ProfilePage() {
             const to = String(r?.to || '').toLowerCase().trim();
             return from === me || to === me;
           });
-          setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending'));
-          setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending'));
+          setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.from)));
+          setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.to)));
           // Refresh friendship state (in case a request was confirmed/rejected)
           loadRelations('friends', 'user_id', decodedEmailMemo, 'friend_email', 'friend')
             .then(setTargetFriends)
@@ -388,8 +402,8 @@ export function ProfilePage() {
         const to = String(r?.to || '').toLowerCase().trim();
         return from === userEmailLow || to === userEmailLow;
       });
-      setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
-      setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending'));
+      setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending' && !isAlreadyConnected(r?.from)));
+      setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending' && !isAlreadyConnected(r?.to)));
     } catch (err) {
       console.warn('[Profile] Friend requests load notice:', err);
     }
@@ -429,6 +443,15 @@ export function ProfilePage() {
       // (cross-page/backward compat: original pending request may predate the fix).
       // NOTE: legacyRelationKeys() covers pre-fix formats only (never the
       // canonical '__' key), so the accepted record below is never deleted.
+      //
+      // FIX (already-accepted requests kept reappearing): the pending row lived
+      // at its own node and was never removed, so it matched
+      // `status === 'pending'` on every load even after the friendship existed.
+      // deleteRelationPair() clears both directions and every legacy variant.
+      // It MUST run BEFORE the accepted record is written, otherwise the write
+      // lands on a key that is about to be deleted.
+      await persistOrWarn('confirm: clear pending request',
+        Promise.resolve(deleteRelationPair('friend_requests', fromEmail, me).then(() => true)));
       await persistOrWarn('confirm: request accepted',
         saveFirestoreDoc('friend_requests', requestKey(fromEmail, me), {
           id: requestKey(fromEmail, me), from: fromEmail, to: me,

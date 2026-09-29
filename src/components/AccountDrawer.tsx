@@ -425,44 +425,61 @@ export function AccountDrawer({
       }
     };
 
-    // Load pending incoming + outgoing friend requests (request/confirm flow)
-    // Realtime listener keeps requests in sync across devices — when one device
-    // confirms/rejects, the other device sees the updated state without reload.
-    const loadRequests = async () => {
-      try {
-        const rows: any[] = await fetchFirestoreCollection('friend_requests');
-        const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-        const incoming = Array.from(new Set(rows
-          .filter(r => String(r?.to || '').toLowerCase().trim() === email && r?.status === 'pending')
-          .map(r => String(r?.from || '').toLowerCase().trim())
-          .filter(Boolean))) as string[];
-        const outgoing = Array.from(new Set(rows
-          .filter(r => String(r?.from || '').toLowerCase().trim() === email && r?.status === 'pending')
-          .map(r => String(r?.to || '').toLowerCase().trim())
-          .filter(Boolean))) as string[];
-        setFriendRequests(incoming);
-        setSentRequests(outgoing);
-      } catch (err) {
-        console.warn("[AccountDrawer] Notice loading friend requests:", err);
-      }
-    };
+  // Shared derivation of the pending-request lists, used by both the one-shot
+  // load and the realtime listener so they can never disagree.
+  //
+  // FIX (requests from people already accepted, reappearing on every reload):
+  // both lists were built from `status === 'pending'` alone. Confirming a
+  // request writes a NEW record with `status: 'accepted'` under the reversed
+  // key, but it never removed the original PENDING row, so that stale row kept
+  // matching the filter forever. The user was then permanently offered a
+  // request from someone they were already friends with.
+  //
+  // Two guards, both required:
+  //   1. only genuinely 'pending' rows are offered;
+  //   2. an existing friendship outranks any leftover request row.
+  const requestRowsFrom = (rows: any[], email: string) => {
+    const me = email.toLowerCase().trim();
+    const connected = new Set(friendsList.map(e => e.toLowerCase().trim()));
+    const isPending = (r: any) => String(r?.status || '').toLowerCase().trim() === 'pending';
+    const usable = (v: string) => { const s = v.toLowerCase().trim(); return Boolean(s) && s !== me && !connected.has(s); };
 
-    // Realtime listener for friend_requests — pushes changes across devices.
-    // Registered inside the load functions' parent effect so cleanup is correct.
-    let unsubFriendRequests: (() => void) | undefined;
+    const incoming = Array.from(new Set(rows
+      .filter(r => String(r?.to || '').toLowerCase().trim() === me && isPending(r))
+      .map(r => String(r?.from || '').toLowerCase().trim())
+      .filter(usable))) as string[];
+
+    const outgoing = Array.from(new Set(rows
+      .filter(r => String(r?.from || '').toLowerCase().trim() === me && isPending(r))
+      .map(r => String(r?.to || '').toLowerCase().trim())
+      .filter(usable))) as string[];
+
+    return { incoming, outgoing };
+  };
+
+  const loadRequests = async () => {
+    try {
+      const rows: any[] = await fetchFirestoreCollection('friend_requests');
+      const email = ((readerProfile.email ?? '').toLowerCase()).trim();
+      const { incoming, outgoing } = requestRowsFrom(rows, email);
+      setFriendRequests(incoming);
+      setSentRequests(outgoing);
+    } catch (err) {
+      console.warn("[AccountDrawer] Notice loading friend requests:", err);
+    }
+  };
+
+  // Realtime listener for friend_requests — pushes changes across devices.
+  // Registered inside the load functions' parent effect so cleanup is correct.
+  let unsubFriendRequests: (() => void) | undefined;
     if (readerProfile?.email) {
       unsubFriendRequests = subscribeToFriendRequests(
         (rows) => {
           try {
             const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-            const incoming = Array.from(new Set(rows
-              .filter(r => String(r?.to || '').toLowerCase().trim() === email && r?.status === 'pending')
-              .map(r => String(r?.from || '').toLowerCase().trim())
-              .filter(Boolean))) as string[];
-            const outgoing = Array.from(new Set(rows
-              .filter(r => String(r?.from || '').toLowerCase().trim() === email && r?.status === 'pending')
-              .map(r => String(r?.to || '').toLowerCase().trim())
-              .filter(Boolean))) as string[];
+            // Reuse the same derivation as loadRequests so the live feed and the
+            // one-shot load can never disagree about what counts as pending.
+            const { incoming, outgoing } = requestRowsFrom(rows, email);
             setFriendRequests(incoming);
             setSentRequests(outgoing);
           } catch (err) {
@@ -528,6 +545,19 @@ export function AccountDrawer({
         const ts = Date.now();
         const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
         const acceptKey = requestKey(targetEmail, myEmail);
+        // FIX (accepted requests kept coming back):
+        // deleteRelationPair() removes BOTH directions and every legacy key
+        // variant, which is what actually clears the original PENDING row.
+        //
+        // The old code only wrote an 'accepted' record at the reversed key and
+        // swept legacy keys, so the pending row (a separate node) survived and
+        // matched `status === 'pending'` on every subsequent load. The user was
+        // then permanently offered a request from an existing friend.
+        //
+        // Order matters: the pending rows are deleted FIRST, then the accepted
+        // record is written at the canonical key. Doing it the other way round
+        // re-created the row we just cleaned up.
+        await deleteRelationPair('friend_requests', targetEmail, myEmail);
         await saveFirestoreDoc('friend_requests', acceptKey, {
           id: acceptKey, from: targetEmail, to: myEmail,
           status: 'accepted',
