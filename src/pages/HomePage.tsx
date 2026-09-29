@@ -11,6 +11,7 @@ import { ArenaSidebarLive } from '../components/arena/ArenaSidebarLive';
 import { useSEO } from '../hooks/useSEO';
 import { getSafeImageUrl, DEFAULT_FALLBACK_IMAGE } from '../lib/imageUtils';
 import { visibleAds, isAdPubliclyVisible } from '../lib/adCampaign';
+import { resolveCuratedRow } from '../lib/curatedRows';
 import { NewsletterInline } from '../components/NewsletterSignup';
 import { NowBar } from '../components/home/NowBar';
 import { SocietyPeopleSection } from '../components/home/SocietyPeopleSection';
@@ -461,6 +462,7 @@ export function HomePage() {
       <NowBar 
         flashArticles={flashArticles} 
         analystDispatches={currentSettings.analystDispatches} 
+        articles={articles}
       />
 
       {/* LEVEL 2: THE MAIN STORIES */}
@@ -693,39 +695,52 @@ export function HomePage() {
             </p>
             <div className="space-y-4 font-sans">
               {(currentSettings.leMondeDispatches && currentSettings.leMondeDispatches.length > 0) ? (
-                currentSettings.leMondeDispatches.slice(0, 5).map((item: any, idx: number) => (
-                  <div 
-                    key={`${item.id}-${idx}`} 
-                    className="block border-l-2 border-[#E85D42] pl-3 py-1 bg-zinc-50/50 dark:bg-zinc-950/30 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/20 transition-colors group"
-                    style={{ borderLeftColor: currentSettings.accentColor }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-[8px] font-mono tracking-wider font-extrabold text-[#E85D42]">
-                        {language === 'fr' ? item.tagFr : item.tagEn}
-                      </span>
-                      <span 
-                        className="text-[8px] font-mono tracking-wider font-extrabold dark:text-zinc-400"
-                        style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                      >
-                        {item.time}
-                      </span>
-                    </div>
-                    <p 
-                      className="text-xs leading-relaxed font-extrabold mt-0.5 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors"
-                      style={{ color: theme === 'dark' ? undefined : '#000000' }}
-                    >
-                      {language === 'fr' ? item.titleFr : item.titleEn}
-                    </p>
-                    {(item.excerptFr || item.excerptEn) && (
+                currentSettings.leMondeDispatches.slice(0, 5).map((item: any, idx: number) => {
+                  // Briefs may point at an existing article. The title/excerpt
+                  // then follow that article, and the row links to the story.
+                  const row = resolveCuratedRow(item, articles, language, { kind: 'brief' });
+                  const inner = (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] font-mono tracking-wider font-extrabold text-[#E85D42]">
+                          {row.tag}
+                        </span>
+                        <span 
+                          className="text-[8px] font-mono tracking-wider font-extrabold dark:text-zinc-400"
+                          style={{ color: theme === 'dark' ? undefined : '#000000' }}
+                        >
+                          {item.time}
+                        </span>
+                      </div>
                       <p 
-                        className="text-[10px] font-medium line-clamp-1 mt-0.5 dark:text-zinc-300"
+                        className="text-xs leading-relaxed font-extrabold mt-0.5 dark:text-zinc-100 group-hover:text-[#E85D42] transition-colors"
                         style={{ color: theme === 'dark' ? undefined : '#000000' }}
                       >
-                        {language === 'fr' ? item.excerptFr : item.excerptEn}
+                        {row.text}
                       </p>
-                    )}
-                  </div>
-                ))
+                      {row.excerpt && (
+                        <p 
+                          className="text-[10px] font-medium line-clamp-1 mt-0.5 dark:text-zinc-300"
+                          style={{ color: theme === 'dark' ? undefined : '#000000' }}
+                        >
+                          {row.excerpt}
+                        </p>
+                      )}
+                    </>
+                  );
+                  const cls =
+                    'block border-l-2 border-[#E85D42] pl-3 py-1 bg-zinc-50/50 dark:bg-zinc-950/30 hover:bg-zinc-100/60 dark:hover:bg-zinc-800/20 transition-colors group';
+                  const style = { borderLeftColor: currentSettings.accentColor };
+                  return row.url ? (
+                    <Link key={`${item.id}-${idx}`} to={row.url} className={cls} style={style}>
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={`${item.id}-${idx}`} className={cls} style={style}>
+                      {inner}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="text-xs text-zinc-500 italic">No updates</p>
               )}

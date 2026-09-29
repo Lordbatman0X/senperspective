@@ -3,13 +3,16 @@ import { Link } from 'react-router-dom';
 import { Radio } from 'lucide-react';
 import { useStore } from '../../store';
 import { Article } from '../../types';
+import { resolveCuratedRow } from '../../lib/curatedRows';
 
 interface NowBarProps {
   flashArticles?: Article[];
   analystDispatches?: any[];
+  /** Existing articles, so a dispatch that references one can link to it. */
+  articles?: Article[];
 }
 
-export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispatches = [] }) => {
+export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispatches = [], articles = [] }) => {
   const language = useStore((s) => s.language);
   const siteSettings = useStore((s) => s.siteSettings);
   const accentColor = siteSettings?.accentColor || '#E85D42';
@@ -46,11 +49,17 @@ export const NowBar: React.FC<NowBarProps> = ({ flashArticles = [], analystDispa
   });
 
   // 2. Add Analyst dispatches
+  // A dispatch may reference an existing article (`articleId`). When it does,
+  // the text is derived from that article unless the admin typed an override,
+  // and the ticker item links to the story. Hand-typed rows are unchanged.
   analystDispatches.forEach((disp, idx) => {
+    const row = resolveCuratedRow(disp, articles, language, { kind: 'ticker' });
+    if (!row.text) return;
     tickerItems.push({
       id: `dispatch-${disp.id || idx}`,
       badge: disp.time || 'DIRECT',
-      text: language === 'fr' ? disp.contentFr : disp.contentEn,
+      text: row.text,
+      link: row.url,
       badgeColor: 'bg-red-500/20 text-red-700 dark:text-red-300'
     });
   });

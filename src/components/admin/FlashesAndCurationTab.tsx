@@ -1,6 +1,7 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore } from '../../store';
 import { stripLegacyDossierKeys } from '../../lib/siteTaxonomy';
+import { ArticlePicker } from './ArticlePicker';
 import { Zap, Globe, Quote, Plus, Trash2, Edit2, Check, X, Sparkles, Clock, AlertCircle, FolderKanban, Megaphone, Upload, TrendingUp, ArrowUp, ArrowDown, RefreshCw } from 'lucide-react';
 
 export function FlashesAndCurationTab() {
@@ -35,27 +36,61 @@ export function FlashesAndCurationTab() {
   const [newFlashEn, setNewFlashEn] = useState('');
   const [newFlashLevel, setNewFlashLevel] = useState('standard');
   const [newFlashTime, setNewFlashTime] = useState('16:30 DKR');
+  // NEW: the admin now selects an existing article instead of retyping it.
+  const [newFlashArticle, setNewFlashArticle] = useState<any>(null);
+  const [newFlashOverride, setNewFlashOverride] = useState('');
+
+  const publishedArticles = useMemo(
+    () => (articles || []).filter((a: any) => a && (a.title || a.id)),
+    [articles]
+  );
 
   const handleAddFlash = () => {
-    if (!newFlashFr.trim() || !newFlashEn.trim()) {
-      showToast(language === 'fr' ? 'Veuillez remplir le flash en français et en anglais.' : 'Please provide flash text in both languages.');
+    // An article reference is the only required input. A row with neither an
+    // article nor custom text would render as a blank ticker item, so it is
+    // rejected rather than saved.
+    if (!newFlashArticle && !newFlashOverride.trim()) {
+      showToast(
+        language === 'fr'
+          ? "Sélectionnez un article, ou saisissez un texte personnalisé."
+          : 'Select an article, or type custom text.'
+      );
       return;
     }
+    const titleFr = newFlashOverride.trim()
+      || (newFlashArticle?.title?.fr || (typeof newFlashArticle?.title === 'string' ? newFlashArticle.title : '') || '');
+    const titleEn = newFlashOverride.trim()
+      || (newFlashArticle?.title?.en || newFlashArticle?.title?.fr || '');
+    const excerptFr = newFlashArticle?.excerpt?.fr || '';
+    const excerptEn = newFlashArticle?.excerpt?.en || excerptFr;
+
     const updated = [
       {
         id: `disp-${Date.now()}`,
         time: newFlashTime || '16:00 DKR',
-        contentFr: newFlashFr.trim(),
-        contentEn: newFlashEn.trim(),
+        // Store the article reference. The public ticker derives its text from
+        // the article, so editing the article updates the ticker automatically.
+        articleId: newFlashArticle?.id || newFlashArticle?.slug || undefined,
+        slug: newFlashArticle?.slug || undefined,
+        // Overrides are empty unless the admin typed something, so the ticker
+        // follows the article by default.
+        contentFr: newFlashOverride.trim() || titleFr,
+        contentEn: newFlashOverride.trim() || titleEn,
         level: newFlashLevel
       },
       ...analystDispatches
     ];
     setAnalystDispatches(updated);
     updateSiteSettings({ analystDispatches: updated });
+    setNewFlashArticle(null);
+    setNewFlashOverride('');
     setNewFlashFr('');
     setNewFlashEn('');
-    showToast(language === 'fr' ? 'Flash info ajouté et enregistré en MongoDB !' : 'Flash bulletin added and saved in MongoDB!');
+    showToast(
+      language === 'fr'
+        ? 'Flash info ajouté et enregistré en MongoDB !'
+        : 'Flash bulletin added and saved in MongoDB!'
+    );
   };
 
   const handleDeleteFlash = (id: string) => {
@@ -86,27 +121,43 @@ export function FlashesAndCurationTab() {
   const [intTitleEn, setIntTitleEn] = useState('');
   const [intExcerptFr, setIntExcerptFr] = useState('');
   const [intExcerptEn, setIntExcerptEn] = useState('');
+  // NEW: select an existing article instead of retyping the brief.
+  const [intArticle, setIntArticle] = useState<any>(null);
 
   const handleAddInternational = () => {
-    if (!intTitleFr.trim() || !intTitleEn.trim()) {
-      showToast(language === 'fr' ? 'Le titre international en français et anglais est requis.' : 'International title in FR and EN is required.');
+    if (!intArticle && !intTitleFr.trim()) {
+      showToast(
+        language === 'fr'
+          ? "Sélectionnez un article existant pour la dépêche."
+          : 'Select an existing article for the brief.'
+      );
       return;
     }
+    const artTitleFr = intArticle?.title?.fr || (typeof intArticle?.title === 'string' ? intArticle.title : '') || '';
+    const artTitleEn = intArticle?.title?.en || intArticle?.title?.fr || '';
+    const artExcerptFr = intArticle?.excerpt?.fr || '';
+    const artExcerptEn = intArticle?.excerpt?.en || artExcerptFr;
+
     const updated = [
       {
         id: `lm-${Date.now()}`,
         time: intTime || '14:00 GMT',
-        tagFr: intTagFr || 'International',
-        tagEn: intTagEn || 'International',
-        titleFr: intTitleFr.trim(),
-        titleEn: intTitleEn.trim(),
-        excerptFr: intExcerptFr.trim(),
-        excerptEn: intExcerptEn.trim()
+        // Reference to the source article; the public box links to it.
+        articleId: intArticle?.id || intArticle?.slug || undefined,
+        slug: intArticle?.slug || undefined,
+        tagFr: intTagFr || intArticle?.category || 'International',
+        tagEn: intTagEn || intArticle?.category || 'International',
+        // Empty overrides fall back to the article's own copy.
+        titleFr: intTitleFr.trim() || artTitleFr,
+        titleEn: intTitleEn.trim() || artTitleEn,
+        excerptFr: intExcerptFr.trim() || artExcerptFr,
+        excerptEn: intExcerptEn.trim() || artExcerptEn
       },
       ...internationalNews
     ];
     setInternationalNews(updated);
     updateSiteSettings({ leMondeDispatches: updated });
+    setIntArticle(null);
     setIntTitleFr('');
     setIntTitleEn('');
     setIntExcerptFr('');
@@ -521,28 +572,21 @@ export function FlashesAndCurationTab() {
         {/* Add Flash Form */}
         <div className="bg-zinc-950/60 border border-zinc-800/80 p-5 rounded-lg space-y-4">
           <h4 className="text-xs font-bold uppercase tracking-wider text-[#E85D42]">
-            {language === 'fr' ? '+ Diffuser un nouveau Flash Info' : '+ Broadcast New Flash Bulletin'}
+            {language === 'fr' ? "+ Diffuser un nouveau Flash Info" : '+ Broadcast New Flash Bulletin'}
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Texte Flash (FR)</label>
-              <textarea 
-                value={newFlashFr}
-                onChange={e => setNewFlashFr(e.target.value)}
-                placeholder="Ex: Tensions d'arbitrage levées..."
-                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42] h-20 resize-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Flash Text (EN)</label>
-              <textarea 
-                value={newFlashEn}
-                onChange={e => setNewFlashEn(e.target.value)}
-                placeholder="Ex: Maritime transit clearance issued..."
-                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42] h-20 resize-none"
-              />
-            </div>
-          </div>
+          {/* NEW: pick an existing article. The FR/EN textareas are gone — the
+              article already carries the copy, and retyping it is what let the
+              ticker drift from the story. The override box is the only text
+              field left, and it is optional. */}
+          <ArticlePicker
+            articles={publishedArticles}
+            language={language}
+            value={newFlashArticle?.id || newFlashArticle?.slug}
+            onSelect={setNewFlashArticle}
+            label={language === 'fr' ? 'Sélectionner un article existant' : 'Select an existing article'}
+            overrideValue={newFlashOverride}
+            onOverrideChange={setNewFlashOverride}
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Heure / Horodatage</label>
@@ -643,44 +687,44 @@ export function FlashesAndCurationTab() {
               />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Titre (FR)</label>
-              <input 
-                type="text"
-                value={intTitleFr}
-                onChange={e => setIntTitleFr(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
-              />
+          {/* NEW: the brief is chosen from an existing article. Title/excerpt
+              inputs are replaced by one picker; the tag and time fields stay
+              because they belong to the curation, not the article. */}
+          <ArticlePicker
+            articles={publishedArticles}
+            language={language}
+            value={intArticle?.id || intArticle?.slug}
+            onSelect={setIntArticle}
+            label={language === 'fr' ? "Sélectionner l'article pour la brève" : 'Select the article for the brief'}
+          />
+          {intArticle && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                  {language === 'fr' ? 'Titre personnalisé (optionnel)' : 'Custom title (optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={intTitleFr}
+                  onChange={e => setIntTitleFr(e.target.value)}
+                  placeholder={intArticle?.title?.fr || intArticle?.title?.en || ''}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                  {language === 'fr' ? 'Extrait personnalisé (optionnel)' : 'Custom excerpt (optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={intExcerptFr}
+                  onChange={e => setIntExcerptFr(e.target.value)}
+                  placeholder={intArticle?.excerpt?.fr || intArticle?.excerpt?.en || ''}
+                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Title (EN)</label>
-              <input 
-                type="text"
-                value={intTitleEn}
-                onChange={e => setIntTitleEn(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42]"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Extrait (FR)</label>
-              <textarea 
-                value={intExcerptFr}
-                onChange={e => setIntExcerptFr(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42] h-16 resize-none"
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1">Excerpt (EN)</label>
-              <textarea 
-                value={intExcerptEn}
-                onChange={e => setIntExcerptEn(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 p-2.5 text-xs font-medium rounded focus:outline-none focus:border-[#E85D42] h-16 resize-none"
-              />
-            </div>
-          </div>
+          )}
           <button 
             onClick={handleAddInternational}
             className="px-5 py-2.5 bg-[#E85D42] text-white font-black text-xs uppercase tracking-widest hover:bg-[#d04930] transition-all cursor-pointer rounded"

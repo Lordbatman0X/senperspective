@@ -12,7 +12,8 @@
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:header-nav": "esbuild src/lib/siteTaxonomy.ts --bundle --format=esm --platform=neutral --outfile=.navtest.mjs --log-level=error && node scripts/test-header-nav.mjs"
+    "test:header-nav": "esbuild src/lib/siteTaxonomy.ts --bundle --format=esm --platform=neutral --outfile=.navtest.mjs --log-level=error && node scripts/test-header-nav.mjs",
+    "test:curated-rows": "node --experimental-strip-types scripts/test-curated-rows.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
