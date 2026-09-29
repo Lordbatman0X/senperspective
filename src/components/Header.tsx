@@ -464,16 +464,25 @@ export function Header() {
     }
   };
 
-  // ONE nav source for every viewport. Both the desktop bar and the mobile drawer
-  // render this exact array, so they cannot show different sections.
+  // ONE resolver, two different scopes, on purpose.
   //
-  // The old inline logic read `headerNavItems` and trusted its stored labels and
-  // URLs, which had drifted from the taxonomy (a "Business" entry pointing at
-  // /category/business, a category labelled "Afique"). resolveNavItems repairs
-  // each item against the taxonomy by id, rebuilds the URL so it cannot 404, and
-  // appends any real category the saved nav forgot. Sports still routes to
-  // /larene via categoryUrl() inside the resolver.
+  // `curatedNavItems` is the admin's saved navigation, in their order, with
+  // nothing appended. This is what the compact desktop bar renders: the bar is
+  // a deliberate navigation choice, not a mirror of the taxonomy. Before the
+  // `includeUnlistedCategories` option existed, the resolver appended every
+  // category, so the bar grew silently each time a category was added in
+  // Admin -> Categories and eventually wrapped onto two rows.
+  //
+  // `activeNavItems` additionally appends any real category the saved nav
+  // forgot, so a brand new section is still reachable from the mobile drawer
+  // and the footer without the admin having to re-save anything.
+  const curatedNavItems = resolveNavItems(siteSettings, { includeUnlistedCategories: false });
   const activeNavItems = resolveNavItems(siteSettings);
+
+  // If the admin has never saved a navigation, `curatedNavItems` is empty and the
+  // bar would render as a bare strip. Fall back to the full taxonomy in that one
+  // case, so a fresh install still navigable.
+  const desktopNavItems = curatedNavItems.length > 0 ? curatedNavItems : activeNavItems;
 
   const t = {
     search: language === "fr" ? "RECHERCHER..." : "SEARCH...",
@@ -744,7 +753,7 @@ export function Header() {
           >
             <nav className="max-w-7xl mx-auto px-4">
               <ul className="flex items-center justify-center">
-                {activeNavItems.map((item) => {
+                {desktopNavItems.map((item) => {
                   const isExternal = item.url.startsWith('http');
                   const label = language === "fr" ? item.labelFr : (item.labelEn || item.labelFr);
                   if (isExternal) {
@@ -754,7 +763,7 @@ export function Header() {
                           href={item.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block px-4 py-3 text-xs font-extrabold uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300"
+                          className="block px-2.5 lg:px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300 whitespace-nowrap"
                         >
                           {label}
                         </a>
@@ -765,7 +774,7 @@ export function Header() {
                     <li key={item.id}>
                       <Link
                         to={item.url}
-                        className="block px-4 py-3 text-xs font-extrabold uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300"
+                        className="block px-2.5 lg:px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300 whitespace-nowrap"
                       >
                         {label}
                       </Link>
@@ -775,9 +784,9 @@ export function Header() {
                 <li>
                   <Link
                     to="/saved"
-                    className="flex items-center gap-1.5 px-5 py-3 text-xs font-extrabold uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300 border-l border-brand-border ml-2 pl-6"
+                    className="flex items-center gap-1.5 pl-3.5 pr-2.5 lg:px-3.5 py-2 text-[11px] font-extrabold uppercase tracking-wider text-[#172033] dark:text-[#f2f4f5] hover:bg-[#E85D42] hover:text-white transition-all duration-300 border-l border-brand-border ml-1.5 whitespace-nowrap"
                   >
-                    <Bookmark size={14} />
+                    <Bookmark size={13} />
                     {t.saved}
                   </Link>
                 </li>

@@ -126,8 +126,26 @@ function categoryUrl(id: string): string {
   return id === 'sports' ? '/larene' : `/category/${id}`;
 }
 
-export function resolveNavItems(stored: any): NavItem[] {
-  const cats = resolveTaxonomy(stored?.categories);
+export interface ResolveNavOptions {
+  /**
+   * Append categories that exist in the taxonomy but were never added to the
+   * saved nav.
+   *
+   * true  — full taxonomy union. The footer and the mobile drawer use this, so
+   *         a section created in Admin -> Categories is always reachable.
+   * false — the curated set only: exactly what the admin saved in
+   *         Admin -> Navigation, in their order, with nothing appended.
+   *
+   * The desktop bar passes false. When this defaulted to true it appended
+   * every category, so the bar silently grew every time a category was added
+   * and stopped being a deliberate navigation choice.
+   */
+  includeUnlistedCategories?: boolean;
+}
+
+export function resolveNavItems(stored: any, options: ResolveNavOptions = {}): NavItem[] {
+  const includeUnlisted = options.includeUnlistedCategories !== false;
+  const cats = includeUnlisted ? resolveTaxonomy(stored?.categories) : [];
   const storedNav: any[] = Array.isArray(stored?.headerNavItems) ? stored.headerNavItems : [];
 
   const out: NavItem[] = [];
@@ -166,6 +184,8 @@ export function resolveNavItems(stored: any): NavItem[] {
 
   // 2. Any real category the saved nav never mentioned, so a section added in
   //    Admin -> Categories is still reachable. This ADDS, it never removes.
+  //    Skipped when includeUnlistedCategories is false (the desktop bar), so
+  //    the bar shows only the curated set and not the whole taxonomy.
   for (const c of cats) {
     if (c.id && !used.has(norm(c.id))) {
       push(c.id, c.fr || c.id, c.en || c.fr || c.id, categoryUrl(c.id));

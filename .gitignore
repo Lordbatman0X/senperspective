@@ -48,3 +48,4 @@ shot_*.png
 # Local production-data dump (contains live API keys) - never commit
 src/lib/tmp_live.json
 tmp_*.json
+.navtest.mjs
