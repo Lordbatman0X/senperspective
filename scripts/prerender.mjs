@@ -31,6 +31,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORY_HUBS } from './categoryHubs.mjs';
+import { resolveCardImage, isInlineImage as isInline } from './thumbnail.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -989,9 +990,9 @@ async function main() {
    * The RTDB download remains as a fallback, so nothing breaks if this file is
    * missing (an old deploy) — the client simply falls back to the old path.
    *
-   * Inline base64 pictures are omitted here: this file must stay small, and there
-   * is no image decoder in Node to make a thumbnail. They are flagged instead,
-   * so the client knows the image is pending rather than assuming there is none.
+   * Inline base64 pictures are decoded into small card-sized JPEGs below (see
+   * scripts/thumbnail.mjs) rather than shipped verbatim, so that a card shows
+   * the editor's own image instead of falling back to the generic stock photo.
    */
   const INDEX_FIELDS = [
     'id', 'slug', 'title', 'date', 'publishedAt', 'category', 'type',
@@ -1013,26 +1014,55 @@ async function main() {
     return v;
   };
 
-  const indexItems = articles.map((a) => {
-    const e = { _indexOnly: true };
-    for (const f of INDEX_FIELDS) if (a[f] !== undefined) e[f] = a[f];
-    e.excerpt = clip(a.excerpt, 320);
-    e.author = clip(a.author, 80);
-    e.tags = Array.isArray(a.tags) ? a.tags.slice(0, 8) : a.tags;
-    const fi = a.featuredImage;
-    const iu = a.imageUrl;
-    if (fi && !isInline(fi)) e.featuredImage = fi;
-    if (iu && !isInline(iu)) e.imageUrl = iu;
-    // The picture is inline base64, which is too large to ship here.
-    e.needsImage = !!(isInline(fi) || isInline(iu));
-    return e;
-  });
+  const indexItems = await Promise.all(
+    articles.map(async (a) => {
+      const e = { _indexOnly: true };
+      for (const f of INDEX_FIELDS) if (a[f] !== undefined) e[f] = a[f];
+      e.excerpt = clip(a.excerpt, 320);
+      e.author = clip(a.author, 80);
+      e.tags = Array.isArray(a.tags) ? a.tags.slice(0, 8) : a.tags;
+
+      // Card images. Uploaded pictures are stored inline as base64, which is far
+      // too large to ship in this file, so decode them here and embed a real
+      // card-sized JPEG instead. Previously they were dropped and merely flagged
+      // `needsImage`, which nothing consumed -- so those cards silently rendered
+      // the generic stock fallback instead of the editor's own image.
+      const fi = await resolveCardImage(a.featuredImage);
+      const iu = await resolveCardImage(a.imageUrl);
+      const pick = fi || iu;
+      if (pick) {
+        e.featuredImage = pick.url;
+        if (pick.url !== a.imageUrl) e.imageUrl = pick.url;
+      }
+      // Only still true when an inline picture existed but could not be decoded.
+      // `db.ts` consumes this to lazily fetch the full article and retry.
+      e.needsImage = !!(!pick && (isInline(a.featuredImage) || isInline(a.imageUrl)));
+      return e;
+    })
+  );
 
   const indexJson = JSON.stringify({ generatedAt: new Date().toISOString(), items: indexItems });
   await writeFile(path.join(DIST, 'article-index.json'), indexJson, 'utf8');
+
+  // The index is mirrored into localStorage so cards can paint before the live
+  // database read completes. Browsers cap that at roughly 5 MB per origin, and
+  // silently losing the whole cache to a quota error would bring back the
+  // fallback-image bug. Fail loudly at build time instead.
+  const INDEX_MAX_BYTES = 4 * 1024 * 1024;
+  const indexBytes = Buffer.byteLength(indexJson, 'utf8');
+  if (indexBytes > INDEX_MAX_BYTES) {
+    throw new Error(
+      `article-index.json is ${(indexBytes / 1024 / 1024).toFixed(2)} MB, over the ` +
+      `${(INDEX_MAX_BYTES / 1024 / 1024).toFixed(0)} MB localStorage budget. ` +
+      `Lower THUMB_MAX_W/THUMB_QUALITY in scripts/thumbnail.mjs, or trim the catalog.`
+    );
+  }
+
+  const pending = indexItems.filter((i) => i.needsImage).length;
+  const withImage = indexItems.filter((i) => i.featuredImage).length;
   console.log(
-    `[prerender] wrote article-index.json (${indexItems.length} items, ${(indexJson.length / 1024).toFixed(0)} KB, ` +
-    `${indexItems.filter((i) => i.needsImage).length} pending inline images)`
+    `[prerender] wrote article-index.json (${indexItems.length} items, ` +
+    `${(indexBytes / 1024).toFixed(0)} KB, ${withImage} with images, ${pending} pending)`
   );
 
   // INTERNAL LINK INTEGRITY GATE

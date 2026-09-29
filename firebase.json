@@ -131,6 +131,15 @@
         ]
       },
       {
+        "source": "/article-index.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=600, s-maxage=3600"
+          }
+        ]
+      },
+      {
         "source": "/assets/**",
         "headers": [
           {
