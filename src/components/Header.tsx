@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { isAdminProfile, canAccessAdmin } from "../firebase/auth";
+import { isAdminProfile, canAccessAdmin, saveUserProfileFields } from "../firebase/auth";
 import { resolveNavItems } from "../lib/siteTaxonomy";
 import {
   Search,
@@ -292,6 +292,16 @@ export function Header() {
         const dataUrl = await compressImageFile(file, 400, 400, 0.75);
         setEditAvatar(dataUrl);
         setReaderProfile({ ...readerProfile, avatarUrl: dataUrl });
+        // FIX (desktop picture reverts, phone keeps the old one): this handler
+        // only touched local React state, so the avatar was never written to
+        // the database at all. It looked saved on this device until the next
+        // reload or deploy, and other devices never saw it. Persist it through
+        // the shared, whitelist-guarded writer used by the drawer and profile
+        // page so all three surfaces agree.
+        if (readerProfile?.email) {
+          await saveUserProfileFields(readerProfile.email, { avatarUrl: dataUrl })
+            .catch((err) => console.warn('[Header] avatar persist failed:', err));
+        }
         setSettingsSuccessMsg(
           language === "fr"
             ? "✓ Photo personnalisée importée de votre appareil"
@@ -2664,9 +2674,20 @@ export function Header() {
                           onChange={(e) => {
                             setEditName(e.target.value);
                           }}
-                          onBlur={() => {
+                          onBlur={async () => {
                             if (editName.trim() && readerProfile) {
-                              setReaderProfile({ ...readerProfile, name: editName });
+                              const newName = editName.trim();
+                              // Guard against a no-op write that would bump
+                              // updatedAt on every blur.
+                              if (newName === readerProfile.name) return;
+                              setReaderProfile({ ...readerProfile, name: newName });
+                              // FIX (name resets after a deploy / differs per
+                              // device): this only updated local state, so the
+                              // name was never stored. Persist it now.
+                              if (readerProfile.email) {
+                                await saveUserProfileFields(readerProfile.email, { name: newName })
+                                  .catch((err) => console.warn('[Header] name persist failed:', err));
+                              }
                             }
                           }}
                           className="w-full bg-brand-soft/25 border border-brand-border focus:border-brand-dark focus:outline-none p-3 text-xs font-bold font-serif text-brand-dark rounded-none"
@@ -2686,6 +2707,12 @@ export function Header() {
                               onClick={() => {
                                 setEditAvatar(opt.url);
                                 setReaderProfile({ ...readerProfile, avatarUrl: opt.url });
+                                // FIX (preset avatar never saved): same
+                                // local-state-only bug as the custom upload.
+                                if (readerProfile.email) {
+                                  saveUserProfileFields(readerProfile.email, { avatarUrl: opt.url })
+                                    .catch((err) => console.warn('[Header] avatar preset persist failed:', err));
+                                }
                                 setSettingsSuccessMsg(
                                   language === "fr"
                                     ? `✓ Avatar mis à jour : ${opt.label}`

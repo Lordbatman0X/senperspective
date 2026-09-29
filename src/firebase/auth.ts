@@ -149,6 +149,35 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         }
       }
     }
+    // FIX (avatar / cover / name / bio / privacy reverting on every login).
+    //
+    // The uid-keyed record is not always the real profile: the email-keyed
+    // mirror is written as a POINTER (`pointerTo: uid`) that also carries a
+    // COPY of avatarUrl / coverPhotoUrl / name. This function read whichever
+    // record sat at `users/${uid}` and, if that happened to be the pointer,
+    // it adopted the mirror's stale copies as the truth — then wrote them back
+    // over the canonical record with `set()`. Result: the moment a user signed
+    // in on a new build (i.e. right after a deploy), their picture and name
+    // snapped back to whatever the old mirror held, and the change was then
+    // persisted, so it stayed wrong on every device.
+    //
+    // Resolve the pointer to the canonical record and merge the two, with the
+    // canonical record winning on any field it actually defines.
+    if (data && (data as any).pointerTo) {
+      const target = sanitizeKeySegment(String((data as any).pointerTo));
+      if (target) {
+        const canonicalSnap = await withFirestoreTimeout(
+          get(ref(rtdb, `users/${target}`)), 5000
+        ).catch(() => null);
+        const canonical = canonicalSnap && canonicalSnap.exists()
+          ? (canonicalSnap.val() as Partial<AppUserProfile>)
+          : null;
+        if (canonical) {
+          data = { ...data, ...canonical } as Partial<AppUserProfile>;
+        }
+      }
+    }
+
     let profileData: AppUserProfile;
 
     if (data) {
@@ -177,7 +206,35 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
           : (Array.isArray(data?.friend_ids) ? data.friend_ids.map((id: string) => String(id || '').toLowerCase().trim()).filter(Boolean) : []),
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
-      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, lastActive: Date.now() })), 5000).catch(() => {});
+      // FIX (profile fields resetting on every deploy/login).
+      //
+      // This used to `set()` a freshly rebuilt object, which is destructive in
+      // two ways: any field not explicitly re-listed below was DELETED from the
+      // record, and any field whose rebuilt value fell back to a default
+      // (`''`, `1`, `0`, `false`) OVERWROTE the value the user had actually
+      // saved. Because this runs on every sign-in, a deploy was enough to wipe
+      // the avatar, cover, name, bio and the email/privacy toggles.
+      //
+      // Spread the stored record underneath so unknown fields survive, and only
+      // let a non-empty rebuilt value override what is already stored.
+      const preserved = (data || {}) as Record<string, any>;
+      const merged: Record<string, any> = { ...preserved, ...profileData } as any;
+      for (const field of ['avatarUrl', 'coverPhotoUrl', 'name', 'bio']) {
+        const stored = preserved[field];
+        const next = (profileData as any)[field];
+        if ((next === undefined || next === null || next === '') && stored !== undefined && stored !== null && stored !== '') {
+          merged[field] = stored;
+        }
+      }
+      // Booleans must never be flipped by a login sync: only a genuine `false`
+      // written by the user may clear a `true`, and an absent value keeps the
+      // stored one.
+      for (const field of ['hideEmail', 'hidePersonalInfo']) {
+        if (preserved[field] === true && (profileData as any)[field] !== true) {
+          merged[field] = true;
+        }
+      }
+      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...merged, lastActive: Date.now() })), 5000).catch(() => {});
     } else {
       profileData = {
         uid,
@@ -201,21 +258,23 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
       await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, createdAtServer: Date.now() })), 5000).catch(() => {});
     }
 
-    // Email-keyed mirror is now just a tiny POINTER to the canonical uid
-    // record. Previously a full copy was written on every login, which
-    // created multiple accounts per email (e.g. kadersdiaz3@gmail.com had 3
-    // records) that could drift out of sync.
+    // The email-keyed mirror is a POINTER and nothing else.
+    //
+    // FIX (desktop and phone showing different pictures/names): this used to
+    // also write a COPY of avatarUrl / coverPhotoUrl / name / role onto the
+    // mirror. That copy went stale the moment the user edited their profile
+    // from any surface, and because `fetchUserProfile` and `fetchAllUsers`
+    // both resolve pointers, whichever record was read first could hand back
+    // the STALE copy — so the desktop build and the phone build regularly
+    // disagreed about the same account.
+    //
+    // Writing only the pointer removes the second source of truth entirely.
     if (email && email !== uid) {
       await withFirestoreTimeout(
         dbSet(ref(rtdb, `users/${emailKey(email)}`), stripUndefined({
           email,
           uid,
           pointerTo: uid,
-          avatarUrl: profileData.avatarUrl,
-          coverPhotoUrl: profileData.coverPhotoUrl || '',
-          name: profileData.name,
-          role: profileData.role,
-          updatedAt: new Date().toISOString(),
         })),
         5000
       ).catch(() => {});
@@ -458,6 +517,9 @@ const PROFILE_EDITABLE_FIELDS = [
   'jobTitle',
   'location',
   'website',
+  // Self-selected display badges. Not privilege-bearing (admin-assigned roles
+  // live in `role`), so it is safe to let a user manage their own.
+  'accolades',
 ] as const;
 
 export async function saveUserProfileFields(
@@ -491,12 +553,19 @@ export async function saveUserProfileFields(
         if (snap.exists()) existing = snap.val() || {};
       } catch (_) { /* non-fatal: treat as empty and create */ }
 
-      // A pointer record must stay a pointer. Mirroring fields onto it is
-      // harmless (fetchAllUsers skips pointers), but rewriting it without
-      // `pointerTo` would turn it into a phantom duplicate account.
-      if (existing.pointerTo) {
-        existing = { pointerTo: existing.pointerTo };
-      }
+      // A pointer record must stay a pointer and carry NO profile fields.
+      //
+      // FIX (desktop vs phone disagreeing): this used to reset `existing` to
+      // `{ pointerTo }` and then spread `clean` on top of it, so the email-keyed
+      // mirror ended up holding its own avatarUrl / name / cover copy. Readers
+      // that resolve the pointer can then return either the canonical record or
+      // that stale copy, which is exactly why the desktop build and the phone
+      // build showed different information for the same account.
+      //
+      // Skip it: `resolveAccountKeys()` also returns the canonical uid key, and
+      // that record is the one written just below. The pointer is already
+      // correct — it needs no update.
+      if (existing.pointerTo) continue;
 
       await withFirestoreTimeout(
         dbSet(existingRef, {

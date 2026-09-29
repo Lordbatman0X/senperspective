@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { fetchUserProfile, syncUserProfile, isAdminProfile, setUserRole as setUserRoleCloud } from '../firebase/auth';
+import { fetchUserProfile, saveUserProfileFields, isAdminProfile, setUserRole as setUserRoleCloud } from '../firebase/auth';
 import {
   saveFirestoreDoc,
   deleteFirestoreDoc,
@@ -674,13 +674,25 @@ export function ProfilePage() {
     }
   };
 
-  // Helper to durably save user fields to Central Database (Firebase Firestore)
+  // Helper to durably save user fields to Central Database (Firebase RTDB)
   const persistUserUpdate = async (userEmail: string, payload: Record<string, any>) => {
     const cleanEmail = userEmail.toLowerCase().trim();
     try {
       const clean = await sanitizeFirestorePayload(payload);
-      const uid = readerProfile.uid || readerProfile.id;
-      await syncUserProfile({ email: cleanEmail, uid, ...clean });
+      // FIX (avatar / cover / privacy resetting after a deploy, and desktop
+      // disagreeing with phone): this called `syncUserProfile()`, which is the
+      // LOGIN path. It rebuilds a whole profile object and `set()`s it, so a
+      // single-field edit round-tripped through it could drop or default the
+      // other fields, and it derived its write key from `readerProfile.uid`,
+      // which is not always the canonical uid.
+      //
+      // `saveUserProfileFields()` is the dedicated, whitelist-guarded writer:
+      // it merges into the existing record, touches ONLY the fields being
+      // edited, and resolves every key variant for the account. Route all
+      // profile edits through it so this surface and the account drawer share
+      // one write path.
+      const ok = await saveUserProfileFields(cleanEmail, clean);
+      if (!ok) console.warn("[ProfilePage] profile update reported no write:", cleanEmail);
     } catch (err) {
       console.warn("[Profile update notice - Central]:", err);
     }
@@ -719,7 +731,7 @@ export function ProfilePage() {
     try {
       const newStatus = !targetUser.hidePersonalInfo;
       const userEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-      await persistUserUpdate(userEmail, { hide_personal_info: newStatus, hidePersonalInfo: newStatus });
+      await persistUserUpdate(userEmail, { hidePersonalInfo: newStatus });
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hidePersonalInfo: newStatus });
@@ -741,7 +753,7 @@ export function ProfilePage() {
     try {
       const newStatus = !targetUser.hideEmail;
       const userEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-      await persistUserUpdate(userEmail, { hide_email: newStatus, hideEmail: newStatus });
+      await persistUserUpdate(userEmail, { hideEmail: newStatus });
       
       if (isSelf) {
         setReaderProfile({ ...readerProfile, hideEmail: newStatus });
