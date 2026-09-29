@@ -471,6 +471,17 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                   return (
                     <div className="py-12 text-center text-brand-muted italic font-serif">
                       {language === "fr" ? "Aucun membre trouvé." : "No members found."}
+                      {/* Distinguish "genuinely no other accounts" from "the
+                          directory failed to load". These look identical to the
+                          reader otherwise, which is what made this hard to
+                          diagnose. */}
+                      {allUsers.length === 0 && (
+                        <p className="mt-2 text-[10px] font-mono not-italic opacity-70">
+                          {language === "fr"
+                            ? "Chargement de l'annuaire…"
+                            : "Loading directory…"}
+                        </p>
+                      )}
                     </div>
                   );
                 }

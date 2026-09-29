@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { fetchUserProfile, syncUserProfile } from '../firebase/auth';
+import { fetchUserProfile, saveUserProfileFields, syncUserProfile } from '../firebase/auth';
 import {
   fetchFirestoreCollection,
   saveFirestoreDoc,
@@ -631,16 +631,35 @@ export function AccountDrawer({
   };
 
   const syncProfileToFirestore = async (updatedFields: Record<string, any>) => {
-    if (readerProfile && readerProfile.email) {
+    if (!readerProfile?.email) return;
+    try {
+      const safeFields = await sanitizeFirestorePayload(updatedFields);
+
+      // Persist the edited fields to EVERY key variant for this account.
+      //
+      // WHY: this account exists in the database under two competing records —
+      // the real Firebase uid key and an email-derived shadow key whose own
+      // `uid` field holds the mangled email rather than the Firebase uid. The
+      // old path called syncUserProfile(), which writes to `users/${uid}`; with
+      // the mangled uid it only ever updated the shadow record, leaving the
+      // canonical one stale. The directory merge then picked whichever record
+      // came last, so an edit appeared to save and then reverted on the next
+      // load — the "it resets my name, photo and cover" report.
+      //
+      // saveUserProfileFields() writes all key variants and keeps each
+      // record's identity intact, so the two can no longer disagree.
+      await saveUserProfileFields(readerProfile.email, safeFields);
+
+      // Keep the in-memory profile authoritative for this session, and refresh
+      // it from the server so what the drawer shows is what was actually stored.
       try {
-        const safeFields = await sanitizeFirestorePayload(updatedFields);
-        await syncUserProfile({
-          ...readerProfile,
-          ...safeFields
-        });
-      } catch (err) {
-        console.error("Error syncing profile updates to Firebase:", err);
+        const fresh = await fetchUserProfile(readerProfile.email);
+        if (fresh) setReaderProfile({ ...readerProfile, ...fresh });
+      } catch (_) {
+        // Non-fatal: keep the optimistic local value if the read-back fails.
       }
+    } catch (err) {
+      console.error("Error syncing profile updates to Firebase:", err);
     }
   };
 

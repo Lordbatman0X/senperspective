@@ -279,7 +279,11 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
  */
 export async function fetchAllUsers(): Promise<AppUserProfile[]> {
   try {
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')));
+    // Timeout-guarded, like every other read in this file. Without it a slow or
+    // throttled /users response left the promise pending indefinitely, the
+    // caller swallowed the failure, and the Network tab stayed empty for the
+    // whole session with no way to recover.
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')), 10000);
     // FIX (stale roles shown): each user may have TWO records (uid key + email
     // mirror key). Merge duplicates by email instead of keeping the first
     // record encountered, preferring an attributed 'Admin' role.
@@ -297,9 +301,26 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
           const role = (existing.role === 'Admin' || profile.role === 'Admin')
             ? 'Admin'
             : (profile.role || existing.role);
+
+          // FIX (profile fields reverting / Network list disagreeing with the
+          // header): an account can hold a canonical uid-keyed record AND an
+          // email-derived shadow record. Object.entries order is not meaningful,
+          // so a plain merge let whichever record was read last win, and the
+          // two could carry different avatars, names and covers. Prefer the
+          // record whose `uid` is a real Firebase uid (no '@') as the canonical
+          // one, so every surface shows the same profile.
+          const existingIsCanonical = !String(existing.uid || '').includes('@');
+          const incomingIsCanonical = !String(profile.uid || key).includes('@');
+
+          const winner = incomingIsCanonical && !existingIsCanonical ? profile : existing;
+          const loser = winner === profile ? existing : profile;
+
           byEmail.set(k, {
-            ...existing, ...profile, role,
-            uid: profile.uid || existing.uid || key,
+            ...loser,
+            ...winner,
+            // Identity always comes from the canonical record.
+            uid: winner.uid || loser.uid || key,
+            role,
           } as AppUserProfile);
         } else {
           byEmail.set(k, { ...profile, uid: profile.uid || key });
@@ -334,12 +355,24 @@ async function resolveAccountKeys(emailOrUid: string): Promise<string[]> {
   } else {
     try {
       const snap = await get(ref(rtdb, `users/${clean}`));
-      const email = snap.exists() ? String(snap.val()?.email || '') : '';
+      const record = snap.exists() ? (snap.val() as any) : null;
+      const email = record ? String(record.email || '') : '';
       if (email.includes('@')) {
         const lower = email.toLowerCase();
         keys.add(lower);
         keys.add(emailKey(email));
         keys.add(lower.replace(/[^a-zA-Z0-9_-]/g, '_'));
+      }
+
+      // FIX (edits reverting): a shadow record can carry a `uid` field holding
+      // a mangled email instead of the real Firebase uid. Following that field
+      // locates the CANONICAL uid-keyed record, which otherwise never receives
+      // profile edits and silently wins/loses the directory merge on every
+      // load. Without this, saving a name or photo updated only the shadow and
+      // the change appeared to revert.
+      const storedUid = record ? String(record.uid || '') : '';
+      if (storedUid && !storedUid.includes('@') && storedUid !== clean) {
+        keys.add(storedUid);
       }
     } catch (_) { /* non-fatal: fall back to single key */ }
   }
@@ -360,6 +393,90 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
   } catch (err) {
     console.warn('[Firebase] Notice deleting user profile:', err);
   }
+}
+
+/**
+ * Persist reader-editable profile fields to Realtime Database.
+ *
+ * WHY THIS EXISTS: every edit in ConnectionsAndProfile (avatar upload, cover
+ * photo, display name, bio, privacy toggles, streak, reading time) called only
+ * `setReaderProfile(...)`, i.e. local React state. Nothing was ever written, so
+ * the drawer showed the new value until the next fetch or reload and then
+ * reverted to whatever the database held. That is exactly the "it resets the
+ * name and the image I changed" symptom.
+ *
+ * Written with the same read-merge-write shape as setUserRole /
+ * setUserSuspended, and applied to every key variant, because an account can
+ * exist under BOTH a uid key and an email-mirror key. Writing only one would
+ * leave the other stale, and login sync may read either.
+ *
+ * Only the fields listed in PROFILE_EDITABLE_FIELDS are accepted. Role,
+ * suspension and account identity are deliberately NOT writable from here —
+ * those stay admin-only, so this cannot be used to escalate privileges.
+ */
+const PROFILE_EDITABLE_FIELDS = [
+  'name',
+  'bio',
+  'avatarUrl',
+  'coverPhotoUrl',
+  'hidePersonalInfo',
+  'hideEmail',
+  'streak',
+  'readingTime',
+  'jobTitle',
+  'location',
+  'website',
+] as const;
+
+export async function saveUserProfileFields(
+  emailOrUid: string,
+  patch: Partial<AppUserProfile>
+): Promise<boolean> {
+  if (!emailOrUid) return false;
+
+  // Whitelist: silently drop anything that is not a reader-editable field so
+  // a caller cannot smuggle `role` or `suspended` through this path.
+  const clean: Record<string, any> = {};
+  for (const field of PROFILE_EDITABLE_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(patch, field)) {
+      clean[field] = (patch as any)[field];
+    }
+  }
+  if (Object.keys(clean).length === 0) return false;
+
+  const targets = await resolveAccountKeys(emailOrUid);
+  let wrote = false;
+  for (const key of targets) {
+    if (!key) continue;
+    try {
+      const existingRef = ref(rtdb, `users/${key}`);
+      let existing: any = {};
+      try {
+        const snap = await get(existingRef);
+        if (snap.exists()) existing = snap.val() || {};
+      } catch (_) { /* non-fatal: treat as empty and create */ }
+
+      // A pointer record must stay a pointer. Mirroring fields onto it is
+      // harmless (fetchAllUsers skips pointers), but rewriting it without
+      // `pointerTo` would turn it into a phantom duplicate account.
+      if (existing.pointerTo) {
+        existing = { pointerTo: existing.pointerTo };
+      }
+
+      await withFirestoreTimeout(
+        dbSet(existingRef, {
+          ...existing,
+          ...clean,
+          updatedAt: new Date().toISOString(),
+        }),
+        6000
+      );
+      wrote = true;
+    } catch (err) {
+      console.warn(`[Firebase] saveUserProfileFields ${key} failed:`, err);
+    }
+  }
+  return wrote;
 }
 
 /**

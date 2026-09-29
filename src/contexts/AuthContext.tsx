@@ -45,6 +45,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<AppUserProfile | null>(null);
   const [allUsers, setAllUsers] = useState<AppUserProfile[]>([]);
+  const [directoryError, setDirectoryError] = useState<string | null>(null);
+  const directoryRetryRef = useRef(false);
   const [loading, setLoading] = useState(true);
 
   const isAdmin = Boolean(
@@ -57,6 +59,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const list = await fetchAllUsers();
       if (list && list.length > 0) {
         setAllUsers(list);
+        setDirectoryError(null);
         // FIX (role attributions not appearing in profiles): publish the
         // fetched directory into the zustand store's `users` so attributed
         // roles, suspension flags and avatars are visible app-wide, and merge
@@ -78,7 +81,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
       }
     } catch (e) {
-      // Non-blocking
+      // FIX (Network tab permanently empty): this catch used to be an empty
+      // `// Non-blocking` comment. A single failed or slow /users read therefore
+      // left `allUsers` at [] for the rest of the session with no retry, and the
+      // drawer rendered "Aucun membre trouvé." even though the database holds the
+      // accounts. Because the failure is in the shared read path it hit every
+      // device equally — which is why both phone and desktop showed nothing.
+      console.warn('[AuthContext] Directory load failed:', e);
+      setDirectoryError(e instanceof Error ? e.message : String(e));
+      // Keep whatever directory we already had rather than blanking the tab.
+      const cached = useStore.getState().users;
+      if (cached && cached.length) setAllUsers(cached as any[]);
+      if (!directoryRetryRef.current) {
+        directoryRetryRef.current = true;
+        setTimeout(() => {
+          directoryRetryRef.current = false;
+          void loadDirectory();
+        }, 4000);
+      }
     }
   };
 
