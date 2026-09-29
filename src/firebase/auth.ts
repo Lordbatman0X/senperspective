@@ -347,34 +347,66 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
 async function resolveAccountKeys(emailOrUid: string): Promise<string[]> {
   const clean = emailOrUid.trim();
   const keys = new Set<string>([clean]);
+  const lower = clean.toLowerCase();
+  if (clean.includes('@')) keys.add(lower);
+
+  // FIX (profile edits not reaching other devices).
+  //
+  // One account can leave two records behind: a canonical one keyed by the real
+  // Firebase Auth uid, and a shadow keyed by the sanitized email whose `uid`
+  // field holds a mangled address. Following `uid` finds the canonical record —
+  // but ONLY in the non-email branch. The drawer always saves by EMAIL, so the
+  // canonical key was never discovered and every edit landed on the shadow
+  // alone. The editing device showed the change from local state, while any
+  // other device re-read the untouched canonical record and saw the old name,
+  // photo and cover — even after a hard refresh, because the data really was
+  // different on the server.
+  //
+  // The chain is email key -> record -> pointerTo/uid -> canonical key, so it
+  // must be walked with a worklist rather than a single pre-computed pass: the
+  // key that carries the real uid (the pointer mirror) is only discovered
+  // AFTER reading the sanitized-email record.
+  const emailVariants = new Set<string>([clean]);
   if (clean.includes('@')) {
-    const lower = clean.toLowerCase();
-    keys.add(lower);
-    keys.add(emailKey(clean));
-    keys.add(lower.replace(/[^a-zA-Z0-9_-]/g, '_'));
-  } else {
+    emailVariants.add(lower);
+    emailVariants.add(emailKey(clean));
+    emailVariants.add(lower.replace(/[^a-zA-Z0-9_-]/g, '_'));
+  }
+
+  const queue: string[] = Array.from(emailVariants);
+  const seen = new Set<string>(queue);
+
+  while (queue.length) {
+    const key = queue.shift() as string;
+    keys.add(key);
     try {
-      const snap = await get(ref(rtdb, `users/${clean}`));
-      const record = snap.exists() ? (snap.val() as any) : null;
-      const email = record ? String(record.email || '') : '';
+      // RTDB rejects `.` `#` `$` `/` `[` `]` inside a path segment, and an
+      // email address contains a dot. Every key derived from an email must
+      // therefore be sanitized before being used to build a path — otherwise
+      // the read throws and the chain never reaches the canonical record.
+      const snap = await get(ref(rtdb, `users/${sanitizeKeySegment(key)}`));
+      const record: any = snap.exists() ? snap.val() : null;
+      if (!record) continue;
+
+      const add = (next: string) => {
+        if (next && !seen.has(next)) { seen.add(next); keys.add(next); queue.push(next); }
+      };
+
+      const email = String(record.email || '');
       if (email.includes('@')) {
-        const lower = email.toLowerCase();
-        keys.add(lower);
-        keys.add(emailKey(email));
-        keys.add(lower.replace(/[^a-zA-Z0-9_-]/g, '_'));
+        const el = email.toLowerCase();
+        add(el);
+        add(emailKey(email));
+        add(el.replace(/[^a-zA-Z0-9_-]/g, '_'));
       }
 
-      // FIX (edits reverting): a shadow record can carry a `uid` field holding
-      // a mangled email instead of the real Firebase uid. Following that field
-      // locates the CANONICAL uid-keyed record, which otherwise never receives
-      // profile edits and silently wins/loses the directory merge on every
-      // load. Without this, saving a name or photo updated only the shadow and
-      // the change appeared to revert.
-      const storedUid = record ? String(record.uid || '') : '';
-      if (storedUid && !storedUid.includes('@') && storedUid !== clean) {
-        keys.add(storedUid);
-      }
-    } catch (_) { /* non-fatal: fall back to single key */ }
+      // `pointerTo` is written on the email mirror and always holds the real
+      // Firebase uid. `uid` on a shadow record is a mangled email, so it is only
+      // useful when it contains no '@'.
+      add(String(record.pointerTo || ''));
+      const storedUid = String(record.uid || '');
+      if (storedUid && !storedUid.includes('@')) add(storedUid);
+    } catch (_) { /* non-fatal: keep the keys resolved so far */ }
   }
   return Array.from(keys).filter(Boolean);
 }
@@ -448,8 +480,11 @@ export async function saveUserProfileFields(
   let wrote = false;
   for (const key of targets) {
     if (!key) continue;
+    // Same RTDB path rule as the read: a raw email is not a valid path segment.
+    const segment = sanitizeKeySegment(key);
+    if (!segment) continue;
     try {
-      const existingRef = ref(rtdb, `users/${key}`);
+      const existingRef = ref(rtdb, `users/${segment}`);
       let existing: any = {};
       try {
         const snap = await get(existingRef);
