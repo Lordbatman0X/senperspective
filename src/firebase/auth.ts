@@ -372,12 +372,19 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
       : {};
 
     // Pass 1 — learn which uid/keys belong to which real email address.
+    //
+    // A record is only a disposable "pointer stub" when it points at a DIFFERENT
+    // key. A self-pointer (`pointerTo === key`) is a real account that merely
+    // carries a redundant pointer, and in the live data those are the records
+    // that actually hold a name, avatar, bio AND email. Skipping them (as the
+    // old `if (p.pointerTo) continue;` did) is what left the Network tab
+    // showing 1 of 8 accounts.
     const emailByUid = new Map<string, string>();
     const emailBySanitizedKey = new Map<string, string>();
     const norm = (s: unknown) => String(s ?? '').toLowerCase().trim();
     for (const [key, d] of Object.entries(raw)) {
       const p = (d || {}) as any;
-      if (p.pointerTo) continue;
+      if (p.pointerTo && p.pointerTo !== key) continue;
       const email = norm(p.email);
       if (!email) continue;
       if (p.uid) {
@@ -385,6 +392,8 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
         // A lowercased duplicate key must resolve to the same person.
         emailByUid.set(norm(p.uid).toLowerCase(), email);
       }
+      // The record key is often the uid itself (canonical or lowercased).
+      emailByUid.set(norm(key), email);
       // A sanitised key (dots -> underscore) maps back to the address too.
       emailBySanitizedKey.set(norm(key).replace(/[._]/g, ''), email);
       emailBySanitizedKey.set(norm(email).replace(/[._@]/g, ''), email);
@@ -397,14 +406,18 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
     // Pass 2 — assign every record an identity and merge by it.
     Object.entries(raw).forEach(([key, d]) => {
       const profile = (d || {}) as AppUserProfile & { pointerTo?: string };
-      // Skip pointer records — they are not real accounts, just email-keyed
-      // shortcuts pointing at the canonical uid-keyed record.
-      if (profile.pointerTo) return;
+      // Skip only genuine pointer STUBS (they point at a different key and
+      // carry no profile data of their own). A self-pointer is a real record.
+      if (profile.pointerTo && profile.pointerTo !== key) return;
 
       // Resolve the identity from any available signal, most reliable first.
+      // `emailByUid` is keyed by uid AND by record key, so a lowercased
+      // duplicate (e.g. sq7d8wld...) resolves to the address held by its
+      // canonical twin (Sq7D8WLD...) without needing a uid field of its own.
       const identity =
         norm(profile.email)
         || emailByUid.get(norm(profile.uid))
+        || emailByUid.get(norm(key))
         || emailBySanitizedKey.get(norm(key).replace(/[._]/g, ''))
         || emailBySanitizedKey.get(norm(key).replace(/[._@]/g, ''))
         || norm(key);
@@ -478,10 +491,12 @@ async function repairUserEmails(
   let patched = 0;
   for (const [key, d] of Object.entries(raw)) {
     const p = (d || {}) as any;
-    if (p.pointerTo) continue;
+    // A self-pointer is a real record, not a stub — backfill it too.
+    if (p.pointerTo && p.pointerTo !== key) continue;
     if (norm(p.email)) continue; // already identified
     const resolved =
       emailByUid.get(norm(p.uid))
+      || emailByUid.get(norm(key))
       || emailBySanitizedKey.get(norm(key).replace(/[._]/g, ''))
       || emailBySanitizedKey.get(norm(key).replace(/[._@]/g, ''));
     if (!resolved) continue;
