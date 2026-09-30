@@ -32,19 +32,19 @@
     },
     "relations": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "friends": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "followers": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "friend_requests": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": true
     },
     "blocks": {
       ".read": true,

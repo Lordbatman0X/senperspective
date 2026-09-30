@@ -9,10 +9,10 @@ import {
   updateProfile,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { ref, get, set as dbSet, remove } from 'firebase/database';
+import { ref, get, set as dbSet, update as dbUpdate, remove } from 'firebase/database';
 import { auth, rtdb } from './config';
 import { handleFirestoreError, OperationType } from './errors';
-import { withFirestoreTimeout } from './db';
+import { withFirestoreTimeout, safeKey } from './db';
 
 export const BOOTSTRAP_ADMIN_EMAILS = [
   'admin@senperspective.com',
@@ -347,53 +347,157 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
     // mirror key). Merge duplicates by email instead of keeping the first
     // record encountered, preferring an attributed 'Admin' role.
     const byEmail = new Map<string, AppUserProfile>();
-    if (snap.exists() && typeof snap.val() === 'object') {
-      Object.entries(snap.val() as Record<string, any>).forEach(([key, d]) => {
-        const profile = (d || {}) as AppUserProfile;
-        // Skip pointer records — they are not real accounts, just email-key
-        // shortcuts pointing at the canonical uid-keyed record.
-        if ((profile as any).pointerTo) return;
-        const k = (profile.email || key).toLowerCase().trim();
-        if (!k) return;
-        const existing = byEmail.get(k);
-        if (existing) {
-          const role = (existing.role === 'Admin' || profile.role === 'Admin')
-            ? 'Admin'
-            : (profile.role || existing.role);
 
-          // FIX (profile fields reverting / Network list disagreeing with the
-          // header): an account can hold a canonical uid-keyed record AND an
-          // email-derived shadow record. Object.entries order is not meaningful,
-          // so a plain merge let whichever record was read last win, and the
-          // two could carry different avatars, names and covers. Prefer the
-          // record whose `uid` is a real Firebase uid (no '@') as the canonical
-          // one, so every surface shows the same profile.
-          const existingIsCanonical = !String(existing.uid || '').includes('@');
-          const incomingIsCanonical = !String(profile.uid || key).includes('@');
+    // FIX (accounts missing from the Network tab, duplicates everywhere).
+    //
+    // The live `users` collection holds the SAME person under up to four keys:
+    // the real Firebase uid, that uid lowercased, and two sanitised email keys
+    // (dots -> underscore). Crucially, several of those records have NO `email`
+    // field at all — only a name and an avatar.
+    //
+    // The old identity key was `profile.email || recordKey`. So an email-less
+    // record fell back to its own key and became a SEPARATE person, while the
+    // same human under a keyed record merged into one. That is why friends
+    // like kdrboukari@gmail.com and saheltdg@gmail.com exist in the database
+    // but never appeared in the Network tab: their only email-bearing record
+    // was under a different key, and the rest were orphaned by the fallback.
+    //
+    // Two passes fix it:
+    //   1. Index every record that DOES have an email, so an email-less record
+    //      can borrow the identity of its sibling.
+    //   2. Group by email, merging duplicates and never dropping a record just
+    //      because it lacks an email.
+    const raw = (snap.exists() && typeof snap.val() === 'object')
+      ? (snap.val() as Record<string, any>)
+      : {};
 
-          const winner = incomingIsCanonical && !existingIsCanonical ? profile : existing;
-          const loser = winner === profile ? existing : profile;
+    // Pass 1 — learn which uid/keys belong to which real email address.
+    const emailByUid = new Map<string, string>();
+    const emailBySanitizedKey = new Map<string, string>();
+    const norm = (s: unknown) => String(s ?? '').toLowerCase().trim();
+    for (const [key, d] of Object.entries(raw)) {
+      const p = (d || {}) as any;
+      if (p.pointerTo) continue;
+      const email = norm(p.email);
+      if (!email) continue;
+      if (p.uid) {
+        emailByUid.set(norm(p.uid), email);
+        // A lowercased duplicate key must resolve to the same person.
+        emailByUid.set(norm(p.uid).toLowerCase(), email);
+      }
+      // A sanitised key (dots -> underscore) maps back to the address too.
+      emailBySanitizedKey.set(norm(key).replace(/[._]/g, ''), email);
+      emailBySanitizedKey.set(norm(email).replace(/[._@]/g, ''), email);
+    }
 
-          byEmail.set(k, {
-            ...loser,
-            ...winner,
-            // Identity always comes from the canonical record.
-            uid: winner.uid || loser.uid || key,
-            role,
-          } as AppUserProfile);
-        } else {
-          byEmail.set(k, { ...profile, uid: profile.uid || key });
-        }
-      });
-    } else {
+    if (Object.keys(raw).length === 0) {
       console.warn('[Firebase] No users data found');
     }
+
+    // Pass 2 — assign every record an identity and merge by it.
+    Object.entries(raw).forEach(([key, d]) => {
+      const profile = (d || {}) as AppUserProfile & { pointerTo?: string };
+      // Skip pointer records — they are not real accounts, just email-keyed
+      // shortcuts pointing at the canonical uid-keyed record.
+      if (profile.pointerTo) return;
+
+      // Resolve the identity from any available signal, most reliable first.
+      const identity =
+        norm(profile.email)
+        || emailByUid.get(norm(profile.uid))
+        || emailBySanitizedKey.get(norm(key).replace(/[._]/g, ''))
+        || emailBySanitizedKey.get(norm(key).replace(/[._@]/g, ''))
+        || norm(key);
+      if (!identity) return;
+
+      const existing = byEmail.get(identity);
+      if (existing) {
+        const role = (existing.role === 'Admin' || profile.role === 'Admin')
+          ? 'Admin'
+          : (profile.role || existing.role);
+
+        // Prefer the record whose `uid` is a real Firebase uid (no '@') as the
+        // canonical one, so every surface shows the same profile.
+        const existingIsCanonical = !String(existing.uid || '').includes('@');
+        const incomingIsCanonical = !String(profile.uid || key).includes('@');
+        const winner = incomingIsCanonical && !existingIsCanonical ? profile : existing;
+        const loser = winner === profile ? existing : profile;
+
+        // Keep the BEST value per field instead of letting the winner's blanks
+        // erase the loser's data. An email-less record still carries the real
+        // name/avatar, and that is often the only copy that has it.
+        const merged: any = { ...loser, ...winner };
+        for (const field of ['email', 'name', 'avatarUrl', 'coverPhotoUrl', 'bio', 'role'] as const) {
+          const w = (winner as any)[field];
+          const l = (loser as any)[field];
+          if (w === undefined || w === null || w === '') merged[field] = l;
+        }
+        // Never let the identity be lost in the merge.
+        merged.email = norm(profile.email) || norm(existing.email) || identity;
+        merged.role = role;
+        byEmail.set(identity, { ...merged, uid: winner.uid || loser.uid || key } as AppUserProfile);
+      } else {
+        byEmail.set(identity, {
+          ...profile,
+          email: norm(profile.email) || identity,
+          uid: profile.uid || key,
+        } as AppUserProfile);
+      }
+    });
     const users: AppUserProfile[] = Array.from(byEmail.values());
+    // Backfill any missing `email` back onto the orphaned records, so the next
+    // read does not have to infer identity again — and so other code paths
+    // (which still key on `email`) can see these accounts at all.
+    void repairUserEmails(raw, emailByUid, emailBySanitizedKey).catch(() => {});
     return users;
   } catch (err) {
     console.error('[Firebase] Error fetching all users:', err);
     return [];
   }
+}
+
+/**
+ * Persist the resolved email onto user records that are missing one.
+ *
+ * WHY: the live `users` collection contains many records with a name and an
+ * avatar but NO `email` field — leftovers from earlier builds. Every code path
+ * that keys an account on its email therefore cannot see them, which is why
+ * several members were invisible in the Network tab. Writing the resolved
+ * address back is additive: no field is cleared, and a record that already has
+ * an email is left untouched.
+ *
+ * Runs at most once per browser (guarded by a caller-level flag) and never
+ * throws, so it can never block the directory from rendering.
+ */
+async function repairUserEmails(
+  raw: Record<string, any>,
+  emailByUid: Map<string, string>,
+  emailBySanitizedKey: Map<string, string>
+): Promise<number> {
+  const norm = (s: unknown) => String(s ?? '').toLowerCase().trim();
+  let patched = 0;
+  for (const [key, d] of Object.entries(raw)) {
+    const p = (d || {}) as any;
+    if (p.pointerTo) continue;
+    if (norm(p.email)) continue; // already identified
+    const resolved =
+      emailByUid.get(norm(p.uid))
+      || emailBySanitizedKey.get(norm(key).replace(/[._]/g, ''))
+      || emailBySanitizedKey.get(norm(key).replace(/[._@]/g, ''));
+    if (!resolved) continue;
+    try {
+      // `update` on the leaf path: additive, so no other field can be lost.
+      await withFirestoreTimeout(
+        dbUpdate(ref(rtdb, `users/${safeKey(key)}`), { email: resolved }),
+        6000
+      );
+      patched++;
+    } catch (err) {
+      console.warn('[Firebase] email backfill failed for', key, err);
+    }
+  }
+  if (patched) console.info(`[Firebase] backfilled email on ${patched} user record(s)`);
+  return patched;
 }
 
 /**
