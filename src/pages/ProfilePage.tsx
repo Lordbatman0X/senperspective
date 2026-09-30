@@ -4,17 +4,29 @@ import { useAuth } from "../contexts/AuthContext";
 import { useStore } from "../store";
 import { compressImageFile, sanitizeFirestorePayload } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
+import {
+  loadSocialState,
+  subscribeToSocialState,
+  befriend,
+  unfriend,
+  sendFriendRequest,
+  declineFriendRequest,
+  follow as socialFollow,
+  unfollow as socialUnfollow,
+  setTypedRelation,
+  normEmail,
+  type SocialState,
+  type RelationState,
+} from '../firebase/social';
+
 import { fetchUserProfile, saveUserProfileFields, isAdminProfile, setUserRole as setUserRoleCloud } from '../firebase/auth';
+// NOTE: relationship keys, writes and deletes now live in firebase/social.ts.
+// Only generic document helpers remain here; importing the old relation key
+// helpers would risk reintroducing the split-brain key formats.
 import {
   saveFirestoreDoc,
   deleteFirestoreDoc,
-  deleteRelationPair,
-  legacyRelationKeys,
-  friendsKey,
-  requestKey,
-  typedRelationKey,
   fetchFirestoreCollection,
-  subscribeToFriendRequests,
 } from '../firebase/db';
 import { 
   renderNeutralAvatar 
@@ -127,35 +139,17 @@ export function ProfilePage() {
     setPendingShareArticleId
   } = useStore();
 
-  const [friends, setFriends] = useState<string[]>([]);
+  // Relationship state is DERIVED from firebase/social.ts (see below) rather
+  // than held in per-page state, so it cannot drift from the database.
+  const [targetFriends, setTargetFriends] = useState<string[]>([]);
+  const [targetFollowing, setTargetFollowing] = useState<string[]>([]);
   const [showInternalShareModal, setShowInternalShareModal] = useState<boolean>(false);
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [editedBio, setEditedBio] = useState("");
 
-  // New relation states
-  const [following, setFollowing] = useState<string[]>([]);
-  const [followers, setFollowers] = useState<string[]>([]);
-  const [targetFollowing, setTargetFollowing] = useState<string[]>([]);
-  const [blocks, setBlocks] = useState<string[]>([]);
-  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
-  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
-  const [mutes, setMutes] = useState<string[]>([]);
   const [hasBlockedMe, setHasBlockedMe] = useState(false);
-
-  // True when `email` is already one of my confirmed friends.
-  //
-  // FIX (friend requests from people already accepted, never going away): a
-  // request row can outlive the friendship it created — the confirm flow wrote
-  // an 'accepted' record but left the original 'pending' row in place. Every
-  // load then re-offered that stale row, because nothing checked the friend
-  // list. An existing friendship must outrank any leftover request.
-  const isAlreadyConnected = (email: unknown): boolean => {
-    const v = String(email ?? '').toLowerCase().trim();
-    if (!v) return false;
-    return friends.some(f => String(f ?? '').toLowerCase().trim() === v);
-  };
 
   // Report modal state
   const [showReportModal, setShowReportModal] = useState(false);
@@ -182,109 +176,55 @@ export function ProfilePage() {
       .filter((v: string) => Boolean(v) && v !== k)));
   };
 
-  // FIX (following/followers were inverted): a FOLLOW record is authored by the
-  // FOLLOWER — it stores user_id=<follower> + follower_email=<followed>.
-  // "Following" (accounts I follow) = rows where user_id == ME, read follower_email.
-  // "Followers" (accounts following X) = rows where follower_email == X, read user_id.
+  // NOTE: `following`, `followers`, `friends`, `blocks`, `mutes` and the
+  // request lists are all derived in the social-state effect below, so there
+  // is deliberately no per-page effect loading them from RTDB any more. Two
+  // independent loaders for the same fact is how the pages drifted apart.
 
-  // Following of CURRENT user (accounts they follow)
-  useEffect(() => {
-    if (!readerProfile?.email) return;
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const load = async () => setFollowing(await loadRelations('followers', 'user_id', myEmail, 'follower_email'));
-    load();
-  }, [readerProfile?.email]);
-
-  // Followers of TARGET user (people whose user_id follows the target:
-  // in the 'followers' collection, user_id = follower, follower_email = followed)
-  useEffect(() => {
-    const dec = decodeURIComponent(email || "").toLowerCase().trim();
-    if (!dec) return;
-    const load = async () => setFollowers(await loadRelations('followers', 'follower_email', dec, 'user_id'));
-    load();
-  }, [email]);
-
-  // Following of TARGET user
-  useEffect(() => {
-    const dec = decodeURIComponent(email || "").toLowerCase().trim();
-    if (!dec) return;
-    const load = async () => setTargetFollowing(await loadRelations('followers', 'user_id', dec, 'follower_email'));
-    load();
-  }, [email]);
-
-  // Friends of TARGET user + my pending friend requests
+  // Handle finding target user
   // (self-contained: must not reference consts declared after the component's
   // early-return, which would throw a temporal-dead-zone ReferenceError)
-  const [targetFriends, setTargetFriends] = useState<string[]>([]);
   const decodedEmailMemo = decodeURIComponent(email || "").toLowerCase().trim();
-  // Realtime listener for friend_requests + one-shot load, both registered at
-  // top level (NOT nested inside a callback — hooks must not be called inside
-  // other hooks' callbacks, which would throw React error #321).
-  let unsubFriendRequestsPP: (() => void) | undefined;
   useEffect(() => {
     if (!decodedEmailMemo) return;
-    const me = ((readerProfile?.email || '') as string).toLowerCase().trim();
-    const load = async () => {
-      setTargetFriends(await loadRelations('friends', 'user_id', decodedEmailMemo, 'friend_email', 'friend'));
-      try {
-        if (!me) { setIncomingRequests([]); setOutgoingRequests([]); return; }
-        const rows: any[] = await fetchFirestoreCollection('friend_requests');
-        const mine = rows.filter((r: any) => {
-          const from = String(r?.from || '').toLowerCase().trim();
-          const to = String(r?.to || '').toLowerCase().trim();
-          return from === me || to === me;
-        });
-        setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.from)));
-        setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.to)));
-        return;
-      } catch (err) {
-        console.warn('[Profile] Friend requests load notice:', err);
-      }
-    };
-    load();
-  }, [decodedEmailMemo, readerProfile?.email]);
+    loadRelations('friends', 'user_id', decodedEmailMemo, 'friend_email', 'friend')
+      .then(setTargetFriends)
+      .catch(() => {});
+  }, [decodedEmailMemo]);
+
+  // The TARGET user's own follows (this is about someone else, so it is not
+  // part of the signed-in account's derived social state).
+  useEffect(() => {
+    if (!decodedEmailMemo) return;
+    loadRelations('followers', 'user_id', decodedEmailMemo, 'follower_email')
+      .then(setTargetFollowing)
+      .catch(() => {});
+  }, [decodedEmailMemo]);
+
+  // Social state now comes from ONE derivation (firebase/social.ts) instead of
+  // each page filtering raw RTDB rows on its own. That single derivation is
+  // what guarantees a stale pending request can never be shown next to an
+  // existing friendship — the invariant whose absence caused the bug.
+  const [social, setSocial] = useState<SocialState | null>(null);
 
   useEffect(() => {
-    const me = ((readerProfile?.email || '') as string).toLowerCase().trim();
-    if (!me) return;
-    unsubFriendRequestsPP = subscribeToFriendRequests(
-      (rows) => {
-        try {
-          const mine = rows.filter((r: any) => {
-            const from = String(r?.from || '').toLowerCase().trim();
-            const to = String(r?.to || '').toLowerCase().trim();
-            return from === me || to === me;
-          });
-          setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.from)));
-          setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === me && r?.status === 'pending' && !isAlreadyConnected(r?.to)));
-          // Refresh friendship state (in case a request was confirmed/rejected)
-          loadRelations('friends', 'user_id', decodedEmailMemo, 'friend_email', 'friend')
-            .then(setTargetFriends)
-            .catch(() => {});
-        } catch (err) {
-          console.warn('[Profile] Friend requests realtime error:', err);
-        }
-      },
-      (err) => console.warn('[Profile] Friend requests subscription error:', err)
-    );
-    return () => unsubFriendRequestsPP?.();
-  }, [decodedEmailMemo, readerProfile?.email]);
-
-  // Blocks of CURRENT user
-  useEffect(() => {
-    if (!readerProfile?.email) return;
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const load = async () => setBlocks(await loadRelations('blocks', 'user_id', myEmail, 'blocked_email', 'block'));
-    load();
+    const me = readerProfile?.email;
+    if (!me) { setSocial(null); return; }
+    let cancelled = false;
+    loadSocialState(me)
+      .then(s => { if (!cancelled) setSocial(s); })
+      .catch(() => {});
+    const unsub = subscribeToSocialState(me, s => { if (!cancelled) setSocial(s); });
+    return () => { cancelled = true; unsub(); };
   }, [readerProfile?.email]);
 
-  // Mutes of CURRENT user
-  useEffect(() => {
-    if (!readerProfile?.email) return;
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const load = async () => setMutes(await loadRelations('blocks', 'user_id', myEmail, 'blocked_email', 'mute'));
-    load();
-  }, [readerProfile?.email]);
+  const friends = social?.friends ?? [];
+  const following = social?.following ?? [];
+  const followers = social?.followers ?? [];
+  const blocks = social?.blocked ?? [];
+  const mutes = social?.muted ?? [];
+  const incomingRequests = social?.incoming ?? [];
+  const outgoingRequests = social?.outgoing ?? [];
 
   // Check if TARGET user has blocked CURRENT user
   useEffect(() => {
@@ -297,14 +237,6 @@ export function ProfilePage() {
     };
     check();
   }, [email, readerProfile?.email]);
-
-  // Friends of CURRENT user (FIX: value field is friend_email, not email)
-  useEffect(() => {
-    if (!readerProfile?.email) return;
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const load = async () => setFriends(await loadRelations('friends', 'user_id', myEmail, 'friend_email', 'friend'));
-    load();
-  }, [readerProfile?.email]);
 
   // Handle finding target user
   const decodedEmail = decodeURIComponent(email || "").toLowerCase().trim();
@@ -377,6 +309,11 @@ export function ProfilePage() {
   const targetEmailLow = (targetUser.email || decodedEmail).toLowerCase().trim();
   const isSelf = userEmailLow.length > 0 && userEmailLow === targetEmailLow;
   const isFriend = friends.includes(targetEmailLow) || friends.includes(decodedEmail);
+  // The authoritative relation to the target account. Everything below reads
+  // this instead of re-deriving from ad-hoc lists.
+  const relation: RelationState = social
+    ? social.getRelation(targetEmailLow)
+    : (isFriend ? 'friends' : 'none');
   const isAdmin = isAdminProfile(readerProfile);
 
   // Privacy gate rule: show public info always; hide detailed stats/accolades/badges
@@ -393,82 +330,31 @@ export function ProfilePage() {
   // handles both for backward compatibility.
   const friendRequestId = (a: string, b: string) => `${a}_${b}`;
 
-  const loadPendingRequests = async () => {
-    if (!userEmailLow) { setIncomingRequests([]); setOutgoingRequests([]); return; }
-    try {
-      const rows: any[] = await fetchFirestoreCollection('friend_requests');
-      const mine = rows.filter((r: any) => {
-        const from = String(r?.from || '').toLowerCase().trim();
-        const to = String(r?.to || '').toLowerCase().trim();
-        return from === userEmailLow || to === userEmailLow;
-      });
-      setIncomingRequests(mine.filter((r: any) => String(r?.to || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending' && !isAlreadyConnected(r?.from)));
-      setOutgoingRequests(mine.filter((r: any) => String(r?.from || '').toLowerCase().trim() === userEmailLow && r?.status === 'pending' && !isAlreadyConnected(r?.to)));
-    } catch (err) {
-      console.warn('[Profile] Friend requests load notice:', err);
-    }
-  };
-
+  /**
+   * Accept an incoming request.
+   *
+   * There is no local-state bookkeeping here on purpose: `befriend()` writes
+   * the friendship AND consumes the request in one operation, and the derived
+   * social-state subscription then updates the UI. Optimistically patching
+   * local arrays is what previously allowed the UI to claim a friendship the
+   * server never had.
+   */
   const confirmFriendRequest = async (fromEmail: string) => {
     const me = userEmailLow;
-    // Helper: warn (not crash) when the cloud write is rejected, but ALWAYS
-    // update local state so the UI stays consistent — the realtime listener
-    // reconciles from RTDB when the write lands, and legacy sweeps clean up
-    // duplicates. An unchecked write that fails (permission/offline) while the
-    // UI pretends success is exactly the "relations not persistent" bug.
-    const persistOrWarn = async (label: string, p: Promise<boolean>) => {
-      try {
-        const ok = await p;
-        if (ok !== true) {
-          console.warn(`[Profile] ${label}: cloud write not confirmed — local state kept, will reconcile.`);
-          setErrorMsg(language === "fr"
-            ? "Écriture cloud non confirmée — état local conservé, resynchronisation en cours."
-            : "Cloud write not confirmed — local state kept, re-syncing.");
-          setTimeout(() => setErrorMsg(""), 5000);
-        }
-        return ok === true;
-      } catch (err) {
-        console.warn(`[Profile] ${label} failed:`, err);
-        return false;
-      }
-    };
+    const other = normEmail(fromEmail);
+    if (!me || !other) return;
     try {
-      const ts = Date.now();
-      // Establish the mutual friendship (both directions, canonical keys).
-      await persistOrWarn('confirm: friends forward',
-        saveFirestoreDoc('friends', friendsKey(me, fromEmail), { id: friendsKey(me, fromEmail), user_id: me, friend_email: fromEmail, email: fromEmail, connected_at: ts, type: 'friend' }));
-      await persistOrWarn('confirm: friends reverse',
-        saveFirestoreDoc('friends', friendsKey(fromEmail, me), { id: friendsKey(fromEmail, me), user_id: fromEmail, friend_email: me, email: me, connected_at: ts, type: 'friend' }));
-      // Mark request accepted on the canonical key + sweep legacy key variants
-      // (cross-page/backward compat: original pending request may predate the fix).
-      // NOTE: legacyRelationKeys() covers pre-fix formats only (never the
-      // canonical '__' key), so the accepted record below is never deleted.
-      //
-      // FIX (already-accepted requests kept reappearing): the pending row lived
-      // at its own node and was never removed, so it matched
-      // `status === 'pending'` on every load even after the friendship existed.
-      // deleteRelationPair() clears both directions and every legacy variant.
-      // It MUST run BEFORE the accepted record is written, otherwise the write
-      // lands on a key that is about to be deleted.
-      await persistOrWarn('confirm: clear pending request',
-        Promise.resolve(deleteRelationPair('friend_requests', fromEmail, me).then(() => true)));
-      await persistOrWarn('confirm: request accepted',
-        saveFirestoreDoc('friend_requests', requestKey(fromEmail, me), {
-          id: requestKey(fromEmail, me), from: fromEmail, to: me,
-          status: 'accepted', created_at: ts, accepted_at: ts,
-        }));
-      try {
-        for (const legacyId of legacyRelationKeys(fromEmail, me)) {
-          await deleteFirestoreDoc('friend_requests', legacyId).catch(() => {});
-        }
-      } catch { /* best-effort legacy sweep */ }
-      // Refresh relationship state
-      setTargetFriends(await loadRelations('friends', 'user_id', targetEmailLow, 'friend_email', 'friend'));
-      await loadPendingRequests();
-      useStore().addFriend({ id: fromEmail, email: fromEmail, name: fromEmail.split('@')[0], status: 'friend' } as any);
+      const ok = await befriend(me, other);
+      if (!ok) {
+        setErrorMsg(language === "fr"
+          ? "Écriture cloud non confirmée — réessai en cours."
+          : "Cloud write not confirmed — retrying.");
+        setTimeout(() => setErrorMsg(""), 5000);
+        return;
+      }
       useStore().addNotification({
         id: 'notif-friend-accepted-' + Date.now(),
-        email: fromEmail,
+        email: other,
         text: {
           fr: `${targetUser.name || me} a confirmé votre demande d'amitié. Vous êtes maintenant amis !`,
           en: `${targetUser.name || me} confirmed your friend request. You are now friends!`
@@ -486,63 +372,65 @@ export function ProfilePage() {
     }
   };
 
+  /**
+   * The single friend button, driven entirely by the derived relation state.
+   *
+   * `relation` comes from `social.getRelation()`, so there is exactly one
+   * source of truth for "what is our relation". The old version re-derived it
+   * here from three independent lists, which is how the button could offer to
+   * "confirm" a friendship that already existed.
+   */
   const handleFriendship = async () => {
     if (!readerProfile?.email) {
       setAuthTab("login");
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
-    if (myEmail === targetEmail) return;
-    const a = myEmail, b = targetEmail;
-    const requestId = requestKey(a, b);
+    const a = normEmail(readerProfile.email);
+    const b = normEmail(targetUser.email || decodedEmail);
+    if (!a || !b || a === b) return;
     try {
-      if (isFriend) {
-        // Remove friendship both directions (+ legacy key variants)
-        await deleteRelationPair('friends', a, b);
-        setFriends((friends ?? []).filter(f => f !== b));
-        setTargetFriends((prev) => prev.filter(f => f !== a));
-        useStore().deleteFriend(b);
-        setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
-      } else if (incomingRequests.some((r: any) => String(r?.from || '').toLowerCase().trim() === b)) {
-        // The other account already requested me → confirm it
-        await confirmFriendRequest(b);
-        return;
-      } else if (outgoingRequests.some((r: any) => String(r?.to || '').toLowerCase().trim() === b)) {
-        // Cancel my pending outgoing request — delete canonical + legacy keys so
-        // neither AccountDrawer nor ProfilePage can resurrect it on reload.
-        await deleteRelationPair('friend_requests', a, b);
-        setOutgoingRequests(prev => prev.filter((r: any) => String(r?.to || '').toLowerCase().trim() !== b));
-        setSuccessMsg(language === "fr" ? "Demande d'amitié annulée." : "Friend request cancelled.");
-      } else {
-        // Send a new friend request (friendship NOT established yet).
-        // Check the write result: on failure keep the request VISIBLE locally
-        // (optimistic pending) instead of dropping it — the realtime listener
-        // reconciles once the server confirms, so reload never loses it.
-        const ok = await saveFirestoreDoc('friend_requests', requestId, { id: requestId, from: a, to: b, status: 'pending', created_at: Date.now() });
-        setOutgoingRequests(prev => [...prev, { id: requestId, from: a, to: b, status: ok === true ? 'pending' : 'pending-local' }]);
-        if (ok !== true) {
-          console.warn('[Profile] friend request cloud write not confirmed — kept locally.');
-          setErrorMsg(language === "fr"
-            ? "Demande conservée localement — synchronisation en cours."
-            : "Request kept locally — syncing.");
-          setTimeout(() => setErrorMsg(""), 5000);
+      switch (relation) {
+        case 'friends': {
+          await unfriend(a, b);
+          setTargetFriends((prev) => prev.filter(f => normEmail(f) !== a));
+          setSuccessMsg(language === "fr" ? "Contact retiré de votre réseau." : "Contact removed from your secure network.");
+          break;
         }
-        useStore().addNotification({
-          id: 'notif-friend-request-' + Date.now(),
-          email: b,
-          text: {
-            fr: `${readerProfile?.name || a} vous a envoyé une demande d'amitié. Confirmez-la depuis son profil.`,
-            en: `${readerProfile?.name || a} sent you a friend request. Confirm it from their profile.`
-          },
-          date: new Date().toISOString().split('T')[0],
-          isRead: false,
-          category: 'network',
-          groupKey: `network:${a}`,
-          actorEmail: a
-        });
-        setSuccessMsg(language === "fr" ? "Demande d'amitié envoyée. En attente de confirmation." : "Friend request sent. Awaiting confirmation.");
+        case 'incoming': {
+          await confirmFriendRequest(b);
+          return;
+        }
+        case 'outgoing': {
+          await declineFriendRequest(a, b);
+          setSuccessMsg(language === "fr" ? "Demande d'amitié annulée." : "Friend request cancelled.");
+          break;
+        }
+        default: {
+          const ok = await sendFriendRequest(a, b);
+          if (!ok) {
+            setErrorMsg(language === "fr"
+              ? "Impossible d'envoyer la demande — réessayez."
+              : "Could not send the request — please retry.");
+            setTimeout(() => setErrorMsg(""), 4000);
+            return;
+          }
+          useStore().addNotification({
+            id: 'notif-friend-request-' + Date.now(),
+            email: b,
+            text: {
+              fr: `${readerProfile?.name || a} vous a envoyé une demande d'amitié. Confirmez-la depuis son profil.`,
+              en: `${readerProfile?.name || a} sent you a friend request. Confirm it from their profile.`
+            },
+            date: new Date().toISOString().split('T')[0],
+            isRead: false,
+            category: 'network',
+            groupKey: `network:${a}`,
+            actorEmail: a
+          });
+          setSuccessMsg(language === "fr" ? "Demande d'amitié envoyée. En attente de confirmation." : "Friend request sent. Awaiting confirmation.");
+          break;
+        }
       }
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
@@ -559,29 +447,23 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
-    if (myEmail === targetEmail) return;
+    const myEmail = normEmail(readerProfile.email);
+    const targetEmail = normEmail(targetUser.email);
+    if (!myEmail || !targetEmail || myEmail === targetEmail) return;
 
-    const isFollowing = following.includes(targetEmail);
     try {
+      // Follow state is separate from the friend relation, so it is read from
+      // the derived `following` list rather than from `relation`.
+      const isFollowing = following.includes(targetEmail);
       if (isFollowing) {
-        // FIX (unfollow not persistent): delete canonical + legacy key variants
-        await deleteRelationPair('followers', myEmail, targetEmail);
-        setFollowing(following.filter(f => f !== targetEmail));
-        setFollowers((followers ?? []).filter(f => f !== myEmail));
+        await socialUnfollow(myEmail, targetEmail);
         setSuccessMsg(language === "fr" ? "Vous ne suivez plus ce membre." : "Unfollowed member.");
       } else {
-        const followKey = friendsKey(myEmail, targetEmail);
-        // Check the write: on failure keep the follow VISIBLE locally so the
-        // relation is never silently lost — the listener reconciles on confirm.
-        const ok = await saveFirestoreDoc('followers', followKey, { id: followKey, user_id: myEmail, follower_email: targetEmail, followed_at: Date.now(), type: 'follow' });
-        setFollowing([...new Set([...following, targetEmail])]);
-        setFollowers((prev) => (prev.includes(myEmail) ? prev : [...prev, myEmail]));
-        if (ok !== true) {
-          console.warn('[Profile] follow cloud write not confirmed — kept locally.');
-          setErrorMsg(language === "fr" ? "Suivi conservé localement — synchronisation en cours." : "Follow kept locally — syncing.");
-          setTimeout(() => setErrorMsg(""), 5000);
+        const ok = await socialFollow(myEmail, targetEmail);
+        if (!ok) {
+          setErrorMsg(language === "fr" ? "Suivi non confirmé — réessayez." : "Follow not confirmed — retry.");
+          setTimeout(() => setErrorMsg(""), 4000);
+          return;
         }
         setSuccessMsg(language === "fr" ? "Vous suivez désormais ce membre !" : "Following member!");
       }
@@ -600,34 +482,18 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
-    if (myEmail === targetEmail) return;
+    const myEmail = normEmail(readerProfile.email);
+    const targetEmail = normEmail(targetUser.email);
+    if (!myEmail || !targetEmail || myEmail === targetEmail) return;
 
-    const isCurrentlyBlocked = blocks.includes(targetEmail);
     try {
-      if (isCurrentlyBlocked) {
-        // Type-scoped delete: only removes the BLOCK, never the mute that
-        // may share this pair (blocks collection holds both relations).
-        await deleteRelationPair('blocks', myEmail, targetEmail, 'block');
-        setBlocks(blocks.filter(x => x !== targetEmail));
-        setSuccessMsg(language === "fr" ? "Membre débloqué." : "Unblocked member.");
-      } else {
-        // Typed canonical key — block and mute for the same pair coexist
-        // instead of overwriting each other under a shared friendsKey.
-        const blockKey = typedRelationKey('block', myEmail, targetEmail);
-        const ok = await saveFirestoreDoc('blocks', blockKey, { id: blockKey, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'block' });
-        setBlocks([...new Set([...blocks, targetEmail])]);
-        if (ok !== true) {
-          console.warn('[Profile] block cloud write not confirmed — kept locally.');
-        }
-        setSuccessMsg(language === "fr" ? "Membre bloqué avec succès." : "Blocked member successfully.");
-        // Auto-remove friend and follow connections on block
-        await deleteRelationPair('friends', myEmail, targetEmail);
-        await deleteRelationPair('followers', myEmail, targetEmail);
-        setFriends((friends ?? []).filter(f => f !== targetEmail));
-        setFollowing(following.filter(f => f !== targetEmail));
-      }
+      // setTypedRelation() also unfriends and cancels any open request, so a
+      // block can never leave a live friendship or pending request behind.
+      const isBlocked = relation === 'blocked';
+      await setTypedRelation('block', myEmail, targetEmail, !isBlocked);
+      setSuccessMsg(isBlocked
+        ? (language === "fr" ? "Membre débloqué." : "Unblocked member.")
+        : (language === "fr" ? "Membre bloqué avec succès." : "Blocked member successfully."));
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
       console.error("Error setting block status:", err);
@@ -641,23 +507,17 @@ export function ProfilePage() {
       setShowSignUpModal(true);
       return;
     }
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const targetEmail = ((targetUser.email ?? '').toLowerCase()).trim();
-    if (myEmail === targetEmail) return;
+    const myEmail = normEmail(readerProfile.email);
+    const targetEmail = normEmail(targetUser.email);
+    if (!myEmail || !targetEmail || myEmail === targetEmail) return;
 
-    const isCurrentlyMuted = mutes.includes(targetEmail);
     try {
-      if (isCurrentlyMuted) {
-        // Type-scoped delete: only removes the MUTE, never the block.
-        await deleteRelationPair('blocks', myEmail, targetEmail, 'mute');
-        setMutes(mutes.filter(x => x !== targetEmail));
-        setSuccessMsg(language === "fr" ? "Notifications réactivées." : "Unmuted member.");
-      } else {
-        const muteKey = typedRelationKey('mute', myEmail, targetEmail);
-        await saveFirestoreDoc('blocks', muteKey, { id: muteKey, user_id: myEmail, blocked_email: targetEmail, created_at: new Date().toISOString(), type: 'mute' });
-        setMutes([...new Set([...mutes, targetEmail])]);
-        setSuccessMsg(language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications.");
-      }
+      // Block and mute are typed, so muting never removes an existing block.
+      const isMuted = relation === 'muted';
+      await setTypedRelation('mute', myEmail, targetEmail, !isMuted);
+      setSuccessMsg(isMuted
+        ? (language === "fr" ? "Notifications réactivées." : "Unmuted member.")
+        : (language === "fr" ? "Membre masqué (sourdine active)." : "Muted member notifications."));
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err) {
       console.error("Error setting mute status:", err);

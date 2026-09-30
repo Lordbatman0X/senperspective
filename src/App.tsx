@@ -15,6 +15,7 @@ import { Layout } from './components/Layout';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
+import { repairSocialData } from './firebase/social';
 import { subscribeToArticles } from './firebase/db';
 import { subscribeToAllComments } from './firebase/db';
 import { subscribeToAds } from './firebase/db';
@@ -71,6 +72,30 @@ function App() {
     // FIX (ads disappearing on reload): load persisted ads from RTDB so admin
     // changes survive reloads and sync across all devices.
     loadAds();
+
+    // One-time repair of contradictory social data left by older builds.
+    //
+    // Earlier versions wrote an 'accepted' request row without removing the
+    // original 'pending' one, so requests from already-confirmed friends
+    // accumulated and reappeared on every load. The new model hides them
+    // regardless, but this physically cleans them up once per browser.
+    // Guarded by a localStorage flag so it never runs on every page load.
+    try {
+      if (!localStorage.getItem('senperspective_social_repaired_v1')) {
+        localStorage.setItem('senperspective_social_repaired_v1', '1');
+        repairSocialData()
+          .then(r => {
+            if (r.removedRequests || r.removedFriendRows) {
+              console.info(
+                `[social] repaired: ${r.removedRequests} stale request(s) removed, ` +
+                `${r.removedFriendRows} duplicate friend row(s) removed, ` +
+                `${r.friendships} friendship(s) kept.`
+              );
+            }
+          })
+          .catch(() => { /* non-fatal: the UI hides contradictions regardless */ });
+      }
+    } catch { /* localStorage may be unavailable (private mode) */ }
 
     // FIX (articles not syncing across devices and browsers): replaced the
     // 3-minute polling with a PERSISTENT real-time listener. A one-shot get()

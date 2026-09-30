@@ -6,16 +6,24 @@ import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
 import { fetchUserProfile, saveUserProfileFields, syncUserProfile } from '../firebase/auth';
+// NOTE: relationship keys, writes and deletes now live in firebase/social.ts.
+// Only generic document helpers remain here; importing the old relation key
+// helpers would risk reintroducing the split-brain key formats.
 import {
   fetchFirestoreCollection,
   saveFirestoreDoc,
   deleteFirestoreDoc,
-  deleteRelationPair,
-  friendsKey,
-  legacyRelationKeys,
-  requestKey,
-  subscribeToFriendRequests,
 } from '../firebase/db';
+import {
+  loadSocialState,
+  subscribeToSocialState,
+  befriend,
+  unfriend,
+  sendFriendRequest,
+  declineFriendRequest,
+  normEmail,
+  type SocialState,
+} from '../firebase/social';
 import { sanitizeFirestorePayload } from "../lib/imageUtils";
 import {
   X,
@@ -257,8 +265,6 @@ export function AccountDrawer({
     return () => window.removeEventListener("open-account-chat", handle);
   }, [setSelectedChatUser, setAttachedMaterialType, setAttachedMaterialId, setShowProfileModal]);
   
-  // Friends list state with real-time Firestore sync
-  const [friendsList, setFriendsList] = useState<string[]>([]);
   const [networkSearchQuery, setNetworkSearchQuery] = useState("");
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<any | null>(null);
 
@@ -377,235 +383,64 @@ export function AccountDrawer({
     };
   }, [showProfileModal]);
 
-  // Real-time Firestore listener for friends
+  // Relationship state now comes from ONE derivation (firebase/social.ts),
+  // subscribed once. The three lists keep their original names so the render
+  // tree is unchanged, but they are now always mutually consistent: a pending
+  // request can never coexist with an existing friendship.
+  const [friendsList, setFriendsList] = useState<string[]>([]);
   const [friendRequests, setFriendRequests] = useState<string[]>([]);
   const [sentRequests, setSentRequests] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!readerProfile?.email) return;
-    const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-
-    const loadFriends = async () => {
-      try {
-        // FIX (friends list empty on reload): friend_ids on the user profile is
-        // only a cache — the source of truth is the `friends` collection.
-        // Merge BOTH: collection rows (either direction, legacy or canonical
-        // fields) + the profile's friend_ids cache, deduped. Self-rows ignored.
-        const found = new Set<string>();
-        try {
-          const rows: any[] = await fetchFirestoreCollection('friends');
-          for (const r of rows) {
-            const uid = String(r?.user_id || '').toLowerCase().trim();
-            const fem = String(r?.friend_email || r?.email || '').toLowerCase().trim();
-            if (!uid || !fem || uid === fem) continue;
-            if (uid === email) found.add(fem);
-            else if (fem === email) found.add(uid);
-          }
-        } catch (e) {
-          console.warn('[AccountDrawer] Friends collection load notice:', e);
-        }
-        try {
-          const u = await fetchUserProfile(email);
-          if (u && Array.isArray((u as any).friend_ids)) {
-            for (const id of (u as any).friend_ids) {
-              const v = String(id || '').toLowerCase().trim();
-              if (v && v !== email) found.add(v);
-            }
-          }
-        } catch (e) {
-          console.warn('[AccountDrawer] friend_ids load notice:', e);
-        }
-        const list = Array.from(found);
-        if (list.length > 0 || found.size === 0) {
-          setFriendsList(list);
-          useStore.getState().setFriends(list);
-        }
-      } catch (err) {
-        console.warn("[AccountDrawer] Notice loading friends:", err);
-      }
+    if (!readerProfile?.email) {
+      setFriendsList([]); setFriendRequests([]); setSentRequests([]);
+      return;
+    }
+    let cancelled = false;
+    const applySocial = (s: SocialState) => {
+      if (cancelled) return;
+      setFriendsList(s.friends);
+      setFriendRequests(s.incoming);
+      setSentRequests(s.outgoing);
+      useStore.getState().setFriends(s.friends);
     };
-
-  // Shared derivation of the pending-request lists, used by both the one-shot
-  // load and the realtime listener so they can never disagree.
-  //
-  // FIX (requests from people already accepted, reappearing on every reload):
-  // both lists were built from `status === 'pending'` alone. Confirming a
-  // request writes a NEW record with `status: 'accepted'` under the reversed
-  // key, but it never removed the original PENDING row, so that stale row kept
-  // matching the filter forever. The user was then permanently offered a
-  // request from someone they were already friends with.
-  //
-  // Two guards, both required:
-  //   1. only genuinely 'pending' rows are offered;
-  //   2. an existing friendship outranks any leftover request row.
-  const requestRowsFrom = (rows: any[], email: string) => {
-    const me = email.toLowerCase().trim();
-    const connected = new Set(friendsList.map(e => e.toLowerCase().trim()));
-    const isPending = (r: any) => String(r?.status || '').toLowerCase().trim() === 'pending';
-    const usable = (v: string) => { const s = v.toLowerCase().trim(); return Boolean(s) && s !== me && !connected.has(s); };
-
-    const incoming = Array.from(new Set(rows
-      .filter(r => String(r?.to || '').toLowerCase().trim() === me && isPending(r))
-      .map(r => String(r?.from || '').toLowerCase().trim())
-      .filter(usable))) as string[];
-
-    const outgoing = Array.from(new Set(rows
-      .filter(r => String(r?.from || '').toLowerCase().trim() === me && isPending(r))
-      .map(r => String(r?.to || '').toLowerCase().trim())
-      .filter(usable))) as string[];
-
-    return { incoming, outgoing };
-  };
-
-  const loadRequests = async () => {
-    try {
-      const rows: any[] = await fetchFirestoreCollection('friend_requests');
-      const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-      const { incoming, outgoing } = requestRowsFrom(rows, email);
-      setFriendRequests(incoming);
-      setSentRequests(outgoing);
-    } catch (err) {
-      console.warn("[AccountDrawer] Notice loading friend requests:", err);
-    }
-  };
-
-  // Realtime listener for friend_requests — pushes changes across devices.
-  // Registered inside the load functions' parent effect so cleanup is correct.
-  let unsubFriendRequests: (() => void) | undefined;
-    if (readerProfile?.email) {
-      unsubFriendRequests = subscribeToFriendRequests(
-        (rows) => {
-          try {
-            const email = ((readerProfile.email ?? '').toLowerCase()).trim();
-            // Reuse the same derivation as loadRequests so the live feed and the
-            // one-shot load can never disagree about what counts as pending.
-            const { incoming, outgoing } = requestRowsFrom(rows, email);
-            setFriendRequests(incoming);
-            setSentRequests(outgoing);
-          } catch (err) {
-            console.warn("[AccountDrawer] Friend requests realtime error:", err);
-          }
-        },
-        (err) => console.warn("[AccountDrawer] Friend requests subscription error:", err)
-      );
-    }
-
-    loadFriends();
-    loadRequests();
-    return () => { unsubFriendRequests?.(); };
+    loadSocialState(readerProfile.email).then(applySocial).catch(() => {});
+    const unsub = subscribeToSocialState(readerProfile.email, applySocial);
+    return () => { cancelled = true; unsub(); };
   }, [readerProfile?.email]);
 
-  // Request-aware friend action:
-  //  - already friends          → remove (both directions)
-  //  - incoming pending request → confirm friendship
-  //  - outgoing pending request → cancel request
-  //  - otherwise                → send a friend request
-  // FIX (relations not persistent): single source of truth for relation
-  // matching — RTDB keys may use legacy formats, so match on FIELDS and
-  // dedupe case-insensitively. Self-rows are ignored.
-  const keyMatches = (key: string, fromNorm: string, toNorm: string) =>
-    key === `${fromNorm}_${toNorm}` ||
-    key === `${toNorm}_${fromNorm}` ||
-    key === friendsKey(fromNorm, toNorm) ||
-    key === friendsKey(toNorm, fromNorm) ||
-    key === requestKey(fromNorm, toNorm) ||
-    key === requestKey(toNorm, fromNorm);
-
-  const matchRequest = (r: any, fromNorm: string, toNorm: string) => {
-    const from = String(r?.from || '').toLowerCase();
-    const to = String(r?.to || '').toLowerCase();
-    if (from && to) {
-      return (from === fromNorm && to === toNorm) ||
-        (from === toNorm && to === fromNorm);
-    }
-    const key = String(r?.id || '').toLowerCase();
-    return Boolean(key) && keyMatches(key, fromNorm, toNorm);
-  };
-
+  /**
+   * The single friend action, driven by the derived lists above.
+   *
+   * Previously this read three independently-derived lists and hand-wrote RTDB
+   * rows at three different key formats. Accepting wrote an 'accepted' row but
+   * left the pending one in place, which is what made already-accepted
+   * requests reappear forever. All writes now go through social.ts, which
+   * enforces that a friendship and a request can never coexist.
+   */
   const toggleFriend = async (friendEmail: string) => {
     if (!readerProfile?.email) return;
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const targetEmail = friendEmail.toLowerCase().trim();
-    if (myEmail === targetEmail) return;
+    const myEmail = normEmail(readerProfile.email);
+    const targetEmail = normEmail(friendEmail);
+    if (!myEmail || !targetEmail || myEmail === targetEmail) return;
 
     try {
-      const rid = requestKey(myEmail, targetEmail);
       if (friendsList.includes(targetEmail)) {
-        // Remove friendship both directions (+ legacy key variants) + friend_ids
-        await deleteRelationPair('friends', myEmail, targetEmail);
-        const nextFriends = friendsList.filter(e => e !== targetEmail);
-        setFriendsList(nextFriends);
-        useStore.getState().setFriends(nextFriends);
-        await syncUserProfile({ ...readerProfile, friend_ids: nextFriends });
-        setSettingsSuccessMsg(language === "fr" ? "✓ Contact retiré du réseau" : "✓ Contact removed from network");
+        await unfriend(myEmail, targetEmail);
+        setSettingsSuccessMsg(language === "fr" ? "Contact retiré du réseau" : "Contact removed from network");
       } else if (friendRequests.includes(targetEmail)) {
-        // Confirm the incoming request → mutual friendship
-        // Accept on the canonical key + sweep legacy variants, then establish the
-        // mutual friendship records in `friends/` (so ProfilePage sees it on reload).
-        const ts = Date.now();
-        const targetUser = allUsers.find(u => ((u.email ?? '').toLowerCase()).trim() === targetEmail);
-        const acceptKey = requestKey(targetEmail, myEmail);
-        // FIX (accepted requests kept coming back):
-        // deleteRelationPair() removes BOTH directions and every legacy key
-        // variant, which is what actually clears the original PENDING row.
-        //
-        // The old code only wrote an 'accepted' record at the reversed key and
-        // swept legacy keys, so the pending row (a separate node) survived and
-        // matched `status === 'pending'` on every subsequent load. The user was
-        // then permanently offered a request from an existing friend.
-        //
-        // Order matters: the pending rows are deleted FIRST, then the accepted
-        // record is written at the canonical key. Doing it the other way round
-        // re-created the row we just cleaned up.
-        await deleteRelationPair('friend_requests', targetEmail, myEmail);
-        await saveFirestoreDoc('friend_requests', acceptKey, {
-          id: acceptKey, from: targetEmail, to: myEmail,
-          status: 'accepted',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
-        try {
-          for (const legacyId of legacyRelationKeys(targetEmail, myEmail)) {
-            await deleteFirestoreDoc('friend_requests', legacyId).catch(() => {});
-          }
-        } catch { /* best-effort legacy sweep */ }
-        // Also write the mutual friendship records (both directions) — matches
-        // what ProfilePage confirmFriendRequest does, so both pages agree on reload.
-        const fk1 = friendsKey(myEmail, targetEmail);
-        await saveFirestoreDoc('friends', fk1, {
-          id: fk1,
-          user_id: myEmail,
-          friend_email: targetEmail,
-          email: targetEmail,
-          connected_at: ts,
-          type: 'friend',
-        }).catch(() => {});
-        const fk2 = friendsKey(targetEmail, myEmail);
-        await saveFirestoreDoc('friends', fk2, {
-          id: fk2,
-          user_id: targetEmail,
-          friend_email: myEmail,
-          email: myEmail,
-          connected_at: ts,
-          type: 'friend',
-        }).catch(() => {});
-        setFriendRequests(prev => prev.filter(e => e !== targetEmail));
-        const nextFriends = Array.from(new Set([...friendsList, targetEmail]));
-        setFriendsList(nextFriends);
-        useStore.getState().setFriends(nextFriends);
-        await syncUserProfile({ ...readerProfile, friend_ids: nextFriends });
-        setSettingsSuccessMsg(language === "fr" ? "✓ Demande confirmée — vous êtes amis !" : "✓ Request confirmed — you are now friends!");
+        await befriend(myEmail, targetEmail);
+        setSettingsSuccessMsg(language === "fr" ? "Demande confirmée — vous êtes amis !" : "Request confirmed — you are now friends!");
       } else if (sentRequests.includes(targetEmail)) {
-        // Cancel the outgoing request — delete canonical + legacy keys so neither
-        // AccountDrawer nor ProfilePage can resurrect it on reload.
-        await deleteRelationPair('friend_requests', myEmail, targetEmail);
-        setSentRequests(prev => prev.filter(e => e !== targetEmail));
+        await declineFriendRequest(myEmail, targetEmail);
         setSettingsSuccessMsg(language === "fr" ? "Demande annulée." : "Request cancelled.");
       } else {
-        // Send a new friend request (friendship only after confirmation)
-        await saveFirestoreDoc('friend_requests', rid, { id: rid, from: myEmail, to: targetEmail, status: 'pending', createdAt: new Date().toISOString() });
-        setSentRequests(prev => Array.from(new Set([...prev, targetEmail])));
-        setSettingsSuccessMsg(language === "fr" ? "Demande envoyée — en attente de confirmation." : "Request sent — awaiting confirmation.");
+        const ok = await sendFriendRequest(myEmail, targetEmail);
+        if (!ok) {
+          setSettingsSuccessMsg(language === "fr" ? "Demande impossible — réessayez." : "Could not send — please retry.");
+        } else {
+          setSettingsSuccessMsg(language === "fr" ? "Demande envoyée — en attente de confirmation." : "Request sent — awaiting confirmation.");
+        }
       }
       setTimeout(() => setSettingsSuccessMsg(""), 3500);
     } catch (err) {
@@ -635,24 +470,14 @@ export function AccountDrawer({
 
   const rejectFriendRequest = async (fromEmail: string) => {
     if (!readerProfile?.email) return;
-    const myEmail = ((readerProfile.email ?? '').toLowerCase()).trim();
-    const targetEmail = fromEmail.toLowerCase().trim();
+    const myEmail = normEmail(readerProfile.email);
+    const targetEmail = normEmail(fromEmail);
+    if (!myEmail || !targetEmail) return;
     try {
-      // Reject on the canonical key + sweep legacy variants so the pending
-      // request can never resurrect on reload (cross-page fix).
-      const rejectKey = requestKey(targetEmail, myEmail);
-      await saveFirestoreDoc('friend_requests', rejectKey, {
-        id: rejectKey, from: targetEmail, to: myEmail,
-        status: 'rejected',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }).catch(() => {});
-      try {
-        for (const legacyId of legacyRelationKeys(targetEmail, myEmail)) {
-          await deleteFirestoreDoc('friend_requests', legacyId).catch(() => {});
-        }
-      } catch { /* best-effort legacy sweep */ }
-      setFriendRequests(prev => prev.filter(e => e !== targetEmail));
+      // A rejection simply removes the request. It deliberately does NOT write
+      // a status: 'rejected' row: leaving a tombstone behind is what allowed
+      // dead requests to accumulate and resurface across builds.
+      await declineFriendRequest(myEmail, targetEmail);
       setSettingsSuccessMsg(language === "fr" ? "Demande refusée." : "Request declined.");
       setTimeout(() => setSettingsSuccessMsg(""), 3000);
     } catch (err) {
