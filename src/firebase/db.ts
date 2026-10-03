@@ -59,6 +59,23 @@ export function safeKey(id: string): string {
   return String(id).replace(/[.#$/[\]]/g, '_');
 }
 
+/** Build an RTDB path segment WITHOUT changing letter case.
+ *
+ *  WHY THIS EXISTS SEPARATELY FROM `sanitizeKeySegment`: Firebase Auth uids
+ *  are case-SENSITIVE (`Sq7D8WLD...` and `sq7d8wld...` are two DIFFERENT
+ *  database records), but `sanitizeKeySegment()` lowercases its input because
+ *  email mirrors must be canonicalised. Using it for a uid therefore rewrote
+ *  every canonical-uid write onto an all-lowercase shadow record, so the record
+ *  that desktop actually read was never the record the phone updated.
+ *
+ *  Only the six characters RTDB forbids in a key are replaced; case is kept.
+ *  Use `sanitizeKeySegment()` for email-derived keys, `rtdbPathSegment()` for
+ *  anything that may already be a uid.
+ */
+export function rtdbPathSegment(id: string): string {
+  return String(id == null ? '' : id).trim().replace(/[.#$/[\]]/g, '_');
+}
+
 // -------------------------------------------------------------
 // CANONICAL RELATION KEYS (single source of truth)
 // -------------------------------------------------------------

@@ -46,13 +46,13 @@ export interface AppUserProfile {
 
 const googleProvider = new GoogleAuthProvider();
 
-import { sanitizeKeySegment, friendsKey, requestKey, legacyRelationKeys } from './db';
+import { sanitizeKeySegment, friendsKey, requestKey, legacyRelationKeys, rtdbPathSegment } from './db';
 
 /** RTDB-safe key: these characters are forbidden in RTDB keys.
  *  Canonical helpers (sanitizeKeySegment/friendsKey/requestKey/legacyRelationKeys)
  *  live in firebase/db.ts — re-exported here so every writer/reader shares
  *  one implementation. */
-export { sanitizeKeySegment, friendsKey, requestKey, legacyRelationKeys };
+export { sanitizeKeySegment, friendsKey, requestKey, legacyRelationKeys, rtdbPathSegment };
 
 /** RTDB-safe key for single-email user records (kept for backward compat). */
 const emailKey = (email: string): string => sanitizeKeySegment(email);
@@ -565,7 +565,12 @@ async function resolveAccountKeys(emailOrUid: string): Promise<string[]> {
       // email address contains a dot. Every key derived from an email must
       // therefore be sanitized before being used to build a path — otherwise
       // the read throws and the chain never reaches the canonical record.
-      const snap = await get(ref(rtdb, `users/${sanitizeKeySegment(key)}`));
+      //
+      // `rtdbPathSegment()` rather than `sanitizeKeySegment()`: these keys may be
+      // canonical uids, which are case-sensitive, and lowercasing here made the
+      // walk read the all-lowercase shadow instead of the real record — so the
+      // canonical key was never discovered and never written to.
+      const snap = await get(ref(rtdb, `users/${rtdbPathSegment(key)}`));
       const record: any = snap.exists() ? snap.val() : null;
       if (!record) continue;
 
@@ -601,7 +606,9 @@ export async function deleteUserProfile(emailOrUid: string): Promise<void> {
     const targets = await resolveAccountKeys(emailOrUid);
     for (const key of targets) {
       if (!key) continue;
-      await withFirestoreTimeout(remove(ref(rtdb, `users/${key}`)), 5000).catch(() => {});
+      // Case-preserving segment: a raw uid must keep its case, and an email
+      // must have its dots escaped, so both go through rtdbPathSegment().
+      await withFirestoreTimeout(remove(ref(rtdb, `users/${rtdbPathSegment(key)}`)), 5000).catch(() => {});
     }
   } catch (err) {
     console.warn('[Firebase] Notice deleting user profile:', err);
@@ -665,7 +672,15 @@ export async function saveUserProfileFields(
   for (const key of targets) {
     if (!key) continue;
     // Same RTDB path rule as the read: a raw email is not a valid path segment.
-    const segment = sanitizeKeySegment(key);
+    //
+    // FIX (phone edit invisible on desktop): this used `sanitizeKeySegment()`,
+    // which LOWERCASES its input. Keys returned by resolveAccountKeys() include
+    // the canonical Firebase uid (e.g. `Sq7D8WLDqyLpbSH51cP5wBfikLk2`), and uids
+    // are case-sensitive, so the write silently landed on a DIFFERENT record —
+    // the all-lowercase shadow `sq7d8wldqylpbsh51cp5wbfiklk2`. The phone then
+    // rendered the new value from its own local state, while the desktop read
+    // the untouched canonical record. `rtdbPathSegment()` keeps the case.
+    const segment = rtdbPathSegment(key);
     if (!segment) continue;
     try {
       const existingRef = ref(rtdb, `users/${segment}`);
@@ -715,7 +730,8 @@ export async function setUserRole(emailOrUid: string, role: string): Promise<voi
   for (const key of targets) {
     if (!key) continue;
     try {
-      const existingRef = ref(rtdb, `users/${key}`);
+      // Case-preserving segment: these keys may be canonical uids.
+      const existingRef = ref(rtdb, `users/${rtdbPathSegment(key)}`);
       let existing: any = {};
       try {
         const snap = await get(existingRef);
@@ -744,7 +760,8 @@ export async function setUserSuspended(emailOrUid: string, suspended: boolean): 
   for (const key of targets) {
     if (!key) continue;
     // Use set() to create-or-update, instead of update() which silently no-ops on missing records
-    const existingRef = ref(rtdb, `users/${key}`);
+    // Case-preserving segment: these keys may be canonical uids.
+    const existingRef = ref(rtdb, `users/${rtdbPathSegment(key)}`);
     let existing: any = {};
     try {
       const snap = await get(existingRef);
