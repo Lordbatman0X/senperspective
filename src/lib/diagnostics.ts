@@ -61,12 +61,19 @@ export function startDiagnostics(): void {
   });
 
   // Surface our own warnings (timeouts, permission denials) too.
-  const origError = console.error.bind(console);
-  console.error = (...args: any[]) => {
-    push('console-error', args.map(a => (a && a.message) || String(a)).join(' '));
-    void flush();
-    origError(...args);
-  };
+  //
+  // console.warn matters as much as console.error here: the database layer
+  // reports its failures through console.warn ("Database timeout after 7000ms",
+  // "write not confirmed by server"), so hooking console.error alone silently
+  // discarded the very signal this reporter exists to collect.
+  for (const level of ['error', 'warn'] as const) {
+    const original = console[level].bind(console);
+    console[level] = (...args: any[]) => {
+      push(`${level}-output`, args.map(a => (a && a.message) || String(a)).join(' '));
+      void flush();
+      original(...args);
+    };
+  }
 
   window.addEventListener('online', () => { push('net', 'back online'); void flush(); });
   window.addEventListener('offline', () => { push('net', 'went offline'); void flush(); });
