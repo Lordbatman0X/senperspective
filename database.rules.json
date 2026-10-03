@@ -2,14 +2,57 @@
   "rules": {
     ".read": false,
     ".write": false,
+
+    "admins": {
+      ".read": "auth != null",
+      ".write": false
+    },
+
+    "users": {
+      ".read": true,
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || newData.child('email').val() === auth.token.email || (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com'))",
+        "role": {
+          ".validate": "(auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')) || !newData.exists() || newData.val() === data.val()"
+        },
+        "suspended": {
+          ".validate": "(auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')) || !newData.exists() || newData.val() === data.val()"
+        },
+        "suspendedAt": {
+          ".validate": "(auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')) || !newData.exists() || newData.val() === data.val()"
+        }
+      }
+    },
+
     "articles": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
     },
     "ads": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
     },
+    "media": {
+      ".read": true,
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
+    },
+    "site_settings": {
+      ".read": true,
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
+    },
+    "dispatches": {
+      ".read": "auth != null",
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
+    },
+    "analytics_archive": {
+      ".read": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')",
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
+    },
+    "daily_analytics": {
+      ".read": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')",
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
+    },
+
     "comments": {
       ".read": true,
       ".write": true
@@ -22,71 +65,63 @@
       ".read": true,
       ".write": "auth != null"
     },
-    "users": {
-      ".read": true,
-      ".write": true
-    },
-    "site_settings": {
-      ".read": true,
-      ".write": true
-    },
+
     "relations": {
-      ".read": true,
-      ".write": true
-    },
-    "friends": {
-      ".read": true,
-      ".write": true
-    },
-    "followers": {
-      ".read": true,
-      ".write": true
-    },
-    "friend_requests": {
-      ".read": true,
-      ".write": true
-    },
-    "blocks": {
       ".read": true,
       ".write": "auth != null"
     },
+    "friends": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "followers": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "friend_requests": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "blocks": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
     "messages": {
       ".read": "auth != null",
       ".write": "auth != null"
     },
     "notifications": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "notification_responses": {
-      ".read": true,
-      ".write": true
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
-    "dispatches": {
-      ".read": "auth != null"
+
+    "reports": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
-    "analytics_archive": {
-      ".read": "auth != null"
-    },
+
     "subscribers": {
       ".read": "auth != null",
       ".write": true
     },
-    "reports": {
-      ".read": "auth != null",
-      ".write": true
-    },
+
     "analytics_events": {
-      ".read": "auth != null",
+      ".read": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')",
       ".write": true
     },
     "user_consents": {
-      ".read": "auth != null",
+      ".read": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')",
       ".write": true
     },
     "reader_profiles": {
-      ".read": "auth != null",
+      ".read": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')",
       ".write": true
     }
   }
 }
+
