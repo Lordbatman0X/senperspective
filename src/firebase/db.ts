@@ -1,4 +1,4 @@
-﻿import {
+import {
   ref,
   get,
   set,
@@ -9,9 +9,14 @@
   increment,
   Unsubscribe,
 } from 'firebase/database';
-import { rtdb } from './config';
+import { rtdb, firebaseConfig } from './config';
 import { handleFirestoreError, OperationType } from './errors';
 import { Article } from '../types';
+
+function isPermissionError(err: any): boolean {
+  const msg = String(err?.message || err || '').toLowerCase();
+  return msg.includes('permission_denied') || msg.includes('permission denied') || msg.includes('unauthorized');
+}
 
 // -------------------------------------------------------------
 // TIMEOUT GUARD
@@ -527,16 +532,29 @@ export async function fetchAllArticles(): Promise<Article[]> {
 }
 
 async function fetchAllArticlesFromCloud(): Promise<Article[]> {
+  // 1. Direct REST read (fast path: instant, avoids WebSocket timeout on mobile/phone)
+  if (firebaseConfig?.databaseURL) {
+    try {
+      const res = await fetch(`${firebaseConfig.databaseURL}/articles.json`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          return sortByDateDesc(toList(data) as Article[]);
+        }
+      }
+    } catch {
+      // Fall through to SDK read
+    }
+  }
+
   try {
-    // 60s (was 15s). The measured download of the full catalog is ~32s, so the
-    // old timeout expired on every single load and the failure was silently
-    // swallowed into an empty-cache fallback. 60s leaves headroom on a slow
-    // mobile connection without ever appearing to hang.
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 60000);
-    // No cap: every article is returned, newest first.
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 30000);
     return sortByDateDesc(toList(snap.val()) as Article[]);
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, 'articles');
+    if (isPermissionError(error)) {
+      handleFirestoreError(error, OperationType.GET, 'articles');
+    }
+    console.warn('[Firebase] fetchAllArticlesFromCloud timeout/notice:', error);
     return [];
   }
 }
@@ -653,15 +671,27 @@ export async function deleteComment(commentId: string): Promise<void> {
 }
 
 export async function fetchAllComments(): Promise<any[]> {
+  // 1. Direct REST read (fast path: instant, avoids WebSocket timeout on mobile/phone)
+  if (firebaseConfig?.databaseURL) {
+    try {
+      const res = await fetch(`${firebaseConfig.databaseURL}/comments.json`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        return toList(data);
+      }
+    } catch {
+      // Fall through to SDK read
+    }
+  }
+
   try {
-    // FIX (comments disappearing on reload): increase timeout from default 7s
-    // to 12s for comment fetches. Comments are high-value engagement data that
-    // must survive page reloads; a premature timeout causes the store to fall
-    // back to the empty seed array and the realtime listener hasn't fired yet.
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'comments')), 12000);
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'comments')), 20000);
     return toList(snap.val()) as any[];
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, 'comments');
+    if (isPermissionError(error)) {
+      handleFirestoreError(error, OperationType.GET, 'comments');
+    }
+    console.warn('[Firebase] fetchAllComments error:', error);
     return [];
   }
 }
@@ -857,15 +887,60 @@ export async function sendDirectMessage(msg: Omit<FirestoreDirectMessage, 'id'>)
 // SITE SETTINGS
 // -------------------------------------------------------------
 export async function fetchSiteSettings(): Promise<any> {
+  // 1. Direct REST read (fast path: instant, avoids WebSocket timeout on mobile/phone)
+  if (firebaseConfig?.databaseURL) {
+    try {
+      const res = await fetch(`${firebaseConfig.databaseURL}/site_settings/global.json`, {
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data === 'object') {
+          return data;
+        }
+      }
+    } catch {
+      // Fall through to SDK read
+    }
+  }
+
+  // 2. SDK fallback with generous timeout
   try {
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'site_settings/global')));
+    const snap = await withFirestoreTimeout(get(ref(rtdb, 'site_settings/global')), 20000);
     if (snap.exists()) {
       return snap.val();
     }
     return null;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, 'site_settings/global');
+    if (isPermissionError(error)) {
+      handleFirestoreError(error, OperationType.GET, 'site_settings/global');
+    }
+    console.warn('[Firebase] fetchSiteSettings notice:', error);
+    return null;
   }
+}
+
+export function subscribeToSiteSettings(
+  onSuccess: (data: any) => void,
+  onError?: (error: any) => void
+): Unsubscribe {
+  const settingsRef = ref(rtdb, 'site_settings/global');
+  return onValue(
+    settingsRef,
+    (snapshot) => {
+      try {
+        if (snapshot.exists()) {
+          onSuccess(snapshot.val());
+        }
+      } catch (err) {
+        if (onError) onError(err);
+      }
+    },
+    (err) => {
+      console.warn('[Firebase] site_settings subscription notice:', err?.message);
+      if (onError) onError(err);
+    }
+  );
 }
 
 export async function updateSiteSettings(settings: any): Promise<void> {
@@ -877,7 +952,10 @@ export async function updateSiteSettings(settings: any): Promise<void> {
       })
     );
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, 'site_settings/global');
+    if (isPermissionError(error)) {
+      handleFirestoreError(error, OperationType.WRITE, 'site_settings/global');
+    }
+    console.warn('[Firebase] updateSiteSettings notice:', error);
   }
 }
 

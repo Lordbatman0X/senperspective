@@ -95,6 +95,7 @@ export function Header() {
   const { user, loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isScrolledSearchOpen, setIsScrolledSearchOpen] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showHeader, setShowHeader] = useState(true);
@@ -486,13 +487,12 @@ export function Header() {
   // `activeNavItems` additionally appends any real category the saved nav
   // forgot, so a brand new section is still reachable from the mobile drawer
   // and the footer without the admin having to re-save anything.
+  // Synchronized navigation items: phone drawer and desktop bar render the
+  // exact same set of navigation categories in the exact same order.
   const curatedNavItems = resolveNavItems(siteSettings, { includeUnlistedCategories: false });
   const activeNavItems = resolveNavItems(siteSettings);
-
-  // If the admin has never saved a navigation, `curatedNavItems` is empty and the
-  // bar would render as a bare strip. Fall back to the full taxonomy in that one
-  // case, so a fresh install still navigable.
-  const desktopNavItems = curatedNavItems.length > 0 ? curatedNavItems : activeNavItems;
+  const navItems = curatedNavItems.length > 0 ? curatedNavItems : activeNavItems;
+  const desktopNavItems = navItems;
 
   const t = {
     search: language === "fr" ? "RECHERCHER..." : "SEARCH...",
@@ -706,12 +706,12 @@ export function Header() {
                 </AnimatePresence>
               </div>
 
-              {/* Scrolled Right: Account actions */}
+              {/* Desktop Scrolled Right: Account actions */}
               {isScrolled && (
                 <motion.div
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center gap-2"
+                  className="hidden md:flex items-center gap-2"
                 >
                   {readerProfile ? (
                     <button
@@ -743,11 +743,100 @@ export function Header() {
                 </motion.div>
               )}
 
-              {/* Mobile space adjuster if not scrolled */}
-              {!isScrolled && <div className="md:hidden w-7"></div>}
+              {/* Mobile Right Action Area: Synchronized Search & Account / Login controls */}
+              <div className="md:hidden flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+                  className={`p-1.5 transition-colors ${
+                    isScrolled
+                      ? "text-zinc-800 dark:text-zinc-200 hover:text-[#E85D42]"
+                      : currentSettings.headerStyle === "editorial"
+                        ? "text-brand-dark dark:text-brand-white hover:text-[#E85D42]"
+                        : "text-white/90 hover:text-white"
+                  }`}
+                  title={language === "fr" ? "Rechercher" : "Search"}
+                  aria-label={language === "fr" ? "Rechercher" : "Search"}
+                >
+                  <Search size={18} strokeWidth={2.5} />
+                </button>
+
+                {readerProfile ? (
+                  <button
+                    onClick={() => setShowProfileModal(true)}
+                    className="flex items-center gap-1 cursor-pointer"
+                    title={language === "fr" ? "Mon compte" : "Account"}
+                  >
+                    <div className="relative w-6 h-6 rounded-full">
+                      <div className="w-6 h-6 rounded-full overflow-hidden border border-[#E85D42]">
+                        {renderNeutralAvatar(readerProfile.avatarUrl, readerProfile.name, 24)}
+                      </div>
+                      {unreadTotal > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 min-w-[13px] h-[13px] bg-red-600 text-white text-[7.5px] font-mono font-black flex items-center justify-center px-0.5 rounded-full border border-white dark:border-zinc-900 shadow-sm tabular-nums">
+                          {unreadTotal > 9 ? "9+" : unreadTotal}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setAuthTab("login");
+                      setShowSignUpModal(true);
+                    }}
+                    className={`text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.5 transition-colors ${
+                      isScrolled
+                        ? "text-[#E85D42] hover:text-[#D45037]"
+                        : currentSettings.headerStyle === "editorial"
+                          ? "text-[#E85D42] hover:text-[#D45037]"
+                          : "text-white hover:text-white/80"
+                    }`}
+                  >
+                    {language === "fr" ? "CONNEXION" : "LOG IN"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Mobile inline search bar (synchronized search capabilities on phone) */}
+        <AnimatePresence>
+          {isMobileSearchOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="md:hidden border-t border-zinc-200/50 dark:border-zinc-800/60 px-4 py-2 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md relative z-20"
+            >
+              <form
+                onSubmit={(e) => {
+                  handleSearch(e);
+                  setIsMobileSearchOpen(false);
+                }}
+                className="relative flex items-center"
+              >
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder={t.search}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 py-1.5 pl-8 pr-8 text-xs font-semibold text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#E85D42]"
+                />
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSearchOpen(false)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                >
+                  <X size={14} />
+                </button>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Navigation row */}
@@ -837,8 +926,11 @@ export function Header() {
               {/* Drawer Title / Branding block */}
               <div className="p-4 border-b border-zinc-300/40 dark:border-zinc-800/40 flex justify-between items-center bg-white/30 dark:bg-black/30 backdrop-blur-md">
                 <div className="flex flex-col">
-                  <span className="text-sm font-black uppercase tracking-[0.2em] text-[#E85D42]">
-                    PERSPECTIVE
+                  <span
+                    className="text-sm font-black uppercase tracking-[0.2em]"
+                    style={{ color: currentSettings.accentColor || "#E85D42" }}
+                  >
+                    {currentSettings.siteName || "PERSPECTIVE"}
                   </span>
                   <span className="text-[8.5px] uppercase tracking-widest text-zinc-900 dark:text-white font-black -mt-0.5">
                     GROUP
@@ -870,7 +962,7 @@ export function Header() {
 
                 {/* Categories Navigation with translucent hover states & bold black text */}
                 <nav className="py-3 flex flex-col bg-transparent">
-                  {activeNavItems.map((item) => {
+                  {navItems.map((item) => {
                     const isExternal = item.url.startsWith('http');
                     const label = language === "fr" ? item.labelFr : (item.labelEn || item.labelFr);
                     const isActive = location.pathname === item.url;

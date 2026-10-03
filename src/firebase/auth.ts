@@ -10,7 +10,7 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import { ref, get, set as dbSet, update as dbUpdate, remove } from 'firebase/database';
-import { auth, rtdb } from './config';
+import { auth, rtdb, firebaseConfig } from './config';
 import { handleFirestoreError, OperationType } from './errors';
 import { withFirestoreTimeout, safeKey } from './db';
 
@@ -338,38 +338,41 @@ export async function fetchUserProfile(identifier: string): Promise<AppUserProfi
  */
 export async function fetchAllUsers(): Promise<AppUserProfile[]> {
   try {
-    // Timeout-guarded, like every other read in this file. Without it a slow or
-    // throttled /users response left the promise pending indefinitely, the
-    // caller swallowed the failure, and the Network tab stayed empty for the
-    // whole session with no way to recover.
-    const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')), 10000);
+    let raw: Record<string, any> = {};
+
+    // 1. Direct REST read (fast path: instant, avoids WebSocket timeout)
+    if (firebaseConfig?.databaseURL) {
+      try {
+        const res = await fetch(`${firebaseConfig.databaseURL}/users.json`, {
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data === 'object') {
+            raw = data;
+          }
+        }
+      } catch {
+        // Fall through to SDK read
+      }
+    }
+
+    // 2. SDK fallback
+    if (Object.keys(raw).length === 0) {
+      try {
+        const snap = await withFirestoreTimeout(get(ref(rtdb, 'users')), 15000);
+        if (snap.exists() && typeof snap.val() === 'object') {
+          raw = snap.val() as Record<string, any>;
+        }
+      } catch (err) {
+        console.warn('[Firebase] fetchAllUsers SDK notice:', err);
+      }
+    }
+
     // FIX (stale roles shown): each user may have TWO records (uid key + email
     // mirror key). Merge duplicates by email instead of keeping the first
     // record encountered, preferring an attributed 'Admin' role.
     const byEmail = new Map<string, AppUserProfile>();
-
-    // FIX (accounts missing from the Network tab, duplicates everywhere).
-    //
-    // The live `users` collection holds the SAME person under up to four keys:
-    // the real Firebase uid, that uid lowercased, and two sanitised email keys
-    // (dots -> underscore). Crucially, several of those records have NO `email`
-    // field at all — only a name and an avatar.
-    //
-    // The old identity key was `profile.email || recordKey`. So an email-less
-    // record fell back to its own key and became a SEPARATE person, while the
-    // same human under a keyed record merged into one. That is why friends
-    // like kdrboukari@gmail.com and saheltdg@gmail.com exist in the database
-    // but never appeared in the Network tab: their only email-bearing record
-    // was under a different key, and the rest were orphaned by the fallback.
-    //
-    // Two passes fix it:
-    //   1. Index every record that DOES have an email, so an email-less record
-    //      can borrow the identity of its sibling.
-    //   2. Group by email, merging duplicates and never dropping a record just
-    //      because it lacks an email.
-    const raw = (snap.exists() && typeof snap.val() === 'object')
-      ? (snap.val() as Record<string, any>)
-      : {};
 
     // Pass 1 — learn which uid/keys belong to which real email address.
     //
@@ -464,7 +467,7 @@ export async function fetchAllUsers(): Promise<AppUserProfile[]> {
     void repairUserEmails(raw, emailByUid, emailBySanitizedKey).catch(() => {});
     return users;
   } catch (err) {
-    console.error('[Firebase] Error fetching all users:', err);
+    console.warn('[Firebase] Notice fetching all users:', err);
     return [];
   }
 }

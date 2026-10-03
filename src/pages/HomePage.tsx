@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { Article } from '../types';
@@ -22,43 +22,48 @@ import { UtilitySection } from '../components/home/UtilitySection';
 function ArticleCard({ article, large = false, small = false, tall = false }: { article: Article, large?: boolean, small?: boolean, tall?: boolean }) {
   const navigate = useNavigate();
   const language = useStore((s) => s.language);
-  const { toggleSavedArticle, savedArticles } = useStore();
+  const { toggleSavedArticle, savedArticles, siteSettings } = useStore();
   const isSaved = savedArticles?.includes(article.id) || false;
+  const accentColor = (siteSettings as any)?.accentColor || '#E85D42';
   
   if (large) {
     return (
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-40px" }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="w-full max-w-full flex-shrink-0 group relative overflow-hidden flex flex-row h-[16rem] sm:h-[18rem] md:h-[19rem] cursor-pointer square-card bg-white dark:bg-zinc-900 border border-brand-border dark:border-zinc-800" 
+      <div 
+        className="w-full max-w-full flex-shrink-0 group/hero relative overflow-hidden flex flex-row h-[16rem] sm:h-[18rem] md:h-[20rem] cursor-pointer bg-white dark:bg-zinc-900 select-none" 
         onClick={() => { navigate(`/article/${article.slug || article.id}`); }}
       >
-        {/* Left Side: Image */}
-        <div className="w-1/2 sm:w-[52%] md:w-[55%] h-full shrink-0 relative overflow-hidden bg-brand-black">
+        {/* Left Side: Image with smooth zoom and no Y-displacement */}
+        <div className="w-1/2 sm:w-[52%] md:w-[55%] h-full shrink-0 relative overflow-hidden bg-zinc-950">
            <div 
-              className="w-full h-full bg-cover bg-center opacity-90 group-hover:scale-105 group-hover:opacity-100 transition-transform duration-700"
+              className="w-full h-full bg-cover bg-center opacity-90 group-hover/hero:scale-105 group-hover/hero:opacity-100 transition-transform duration-700 ease-out"
               style={{ backgroundImage: `url(${getSafeImageUrl(article.featuredImage || article.imageUrl)})` }}
            />
-           <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent opacity-80 pointer-events-none" />
-           <div className="absolute top-3 left-3 bg-brand-primary text-white text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2.5 py-1 shadow-md z-10">
-              {formatCategory(article.category, language)}
+           <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/10 to-transparent pointer-events-none" />
+           
+           {/* Badges: Category only (À LA UNE tag removed per user request) */}
+           <div className="absolute top-3 left-3 flex items-center gap-1.5 z-20">
+             <span className="bg-black/75 backdrop-blur-xs text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-2 py-1 shadow-md border border-white/20 select-none">
+               {formatCategory(article.category, language)}
+             </span>
            </div>
         </div>
 
         {/* Right Side: Title & Content */}
         <div className="w-1/2 sm:w-[48%] md:w-[45%] h-full shrink-0 flex flex-col justify-between p-3.5 sm:p-5 md:p-6 lg:p-7 z-10 relative bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 overflow-hidden">
            <div className="flex-1 min-w-0 flex flex-col justify-center">
-             <h3 className="relative text-brand-dark dark:text-zinc-100 font-black text-xs sm:text-base md:text-xl lg:text-2xl leading-tight mb-1.5 sm:mb-2 group-hover:text-brand-primary transition-colors line-clamp-2 md:line-clamp-3">
-               {getSafeText(article.title, language) || 'Sans titre'}
+             <h3 
+               className="relative text-zinc-900 dark:text-zinc-100 font-black text-xs sm:text-base md:text-xl lg:text-2xl leading-tight mb-1.5 sm:mb-2 transition-colors duration-300 line-clamp-2 md:line-clamp-3 font-serif"
+             >
+               <span className="group-hover/hero:underline decoration-[#E85D42] decoration-2 underline-offset-4">
+                 {getSafeText(article.title, language) || 'Sans titre'}
+               </span>
              </h3>
-             <p className="relative text-brand-muted dark:text-zinc-400 font-medium text-[10px] sm:text-xs md:text-sm line-clamp-2 sm:line-clamp-3 mb-2 leading-relaxed">
+             <p className="relative text-zinc-600 dark:text-zinc-400 font-medium text-[10px] sm:text-xs md:text-sm line-clamp-2 sm:line-clamp-3 mb-2 leading-relaxed">
                {getSafeText(article.excerpt, language) || ''}
              </p>
            </div>
            <div className="mt-auto flex justify-between items-center border-t border-zinc-200 dark:border-zinc-800 pt-2.5 relative">
-              <span className="text-[9px] sm:text-[10px] font-bold text-brand-muted dark:text-zinc-400 uppercase tracking-wider truncate mr-1">
+              <span className="text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider truncate mr-1">
                 {article.author} • {formatRelativeDate(article.date, language)}
               </span>
               <button 
@@ -66,7 +71,7 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
                   e.stopPropagation();
                   toggleSavedArticle(article.id);
                 }}
-                className={`p-2 -mr-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-brand-dark dark:text-zinc-300 hover:text-brand-primary transition-all shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center ${isSaved ? 'text-brand-primary dark:text-brand-primary' : ''}`}
+                className={`p-2 -mr-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-[#E85D42] transition-all shrink-0 min-w-[36px] min-h-[36px] flex items-center justify-center ${isSaved ? 'text-[#E85D42] dark:text-[#E85D42]' : ''}`}
                 title={isSaved ? "Article sauvegardé" : "Sauvegarder l'article"}
                 aria-label="Save article"
               >
@@ -76,7 +81,7 @@ function ArticleCard({ article, large = false, small = false, tall = false }: { 
               </button>
            </div>
         </div>
-      </motion.div>
+      </div>
     );
   }
 
@@ -211,85 +216,106 @@ function CategorySection({ title, subTitle, articles }: { title: string, subTitl
 function HeroCarousel({ articles }: { articles: Article[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeHero, setActiveHero] = useState(0);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Exact scroll-to-index with center alignment and zero drift
+  const scrollTo = (idx: number) => {
+    if (!containerRef.current) return;
+    const container = containerRef.current;
+    const children = Array.from(container.children) as HTMLElement[];
+    if (children[idx]) {
+      const target = children[idx];
+      container.scrollTo({ left: target.offsetLeft, behavior: 'smooth' });
+      setActiveHero(idx);
+    }
+  };
 
   const handleScroll = () => {
     if (!containerRef.current) return;
-    const scrollLeft = containerRef.current.scrollLeft;
-    const width = containerRef.current.offsetWidth;
-    const idx = Math.round(scrollLeft / width);
-    setActiveHero(idx);
-  };
+    const container = containerRef.current;
+    const scrollLeft = container.scrollLeft;
+    const children = Array.from(container.children) as HTMLElement[];
+    if (children.length === 0) return;
 
-  const scrollTo = (idx: number) => {
-    if (!containerRef.current) return;
-    const width = containerRef.current.offsetWidth;
-    containerRef.current.scrollTo({ left: width * idx, behavior: 'smooth' });
-    setActiveHero(idx);
+    let closestIdx = 0;
+    let minDistance = Infinity;
+    children.forEach((child, i) => {
+      const distance = Math.abs(child.offsetLeft - scrollLeft);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestIdx = i;
+      }
+    });
+    setActiveHero(closestIdx);
   };
 
   useEffect(() => {
-    if ((articles ?? []).length <= 1) return;
+    if ((articles ?? []).length <= 1 || isHovered) return;
     const timer = setInterval(() => {
       setActiveHero(prev => {
         const next = (prev + 1) % (articles ?? []).length;
         scrollTo(next);
         return next;
       });
-    }, 10000);
+    }, 8000);
     return () => clearInterval(timer);
-  }, [(articles ?? []).length]);
+  }, [(articles ?? []).length, isHovered]);
 
   if ((articles ?? []).length === 0) return null;
 
   return (
-        <section className="block mb-8 relative group overflow-hidden bg-white dark:bg-zinc-900 shadow-sm border border-brand-border dark:border-zinc-800" >
-          {/* Navigation Arrows */}
-          <button 
-             onClick={(e) => { e.stopPropagation(); scrollTo(activeHero === 0 ? (articles ?? []).length - 1 : activeHero - 1); }} 
-             className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
-             aria-label="Previous slide"
-          >
-             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <button 
-             onClick={(e) => { e.stopPropagation(); scrollTo((activeHero + 1) % (articles ?? []).length); }} 
-             className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
-             aria-label="Next slide"
-          >
-             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
+    <section 
+      className="block mb-8 relative group overflow-hidden bg-white dark:bg-zinc-900 shadow-sm border border-brand-border dark:border-zinc-800"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Navigation Arrows */}
+      <button 
+         onClick={(e) => { e.stopPropagation(); scrollTo(activeHero === 0 ? (articles ?? []).length - 1 : activeHero - 1); }} 
+         className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
+         aria-label="Previous slide"
+      >
+         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <button 
+         onClick={(e) => { e.stopPropagation(); scrollTo((activeHero + 1) % (articles ?? []).length); }} 
+         className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 md:w-11 md:h-11 bg-black/40 hover:bg-black/70 text-white flex justify-center items-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-xs border border-white/20 rounded-none shadow-md cursor-pointer"
+         aria-label="Next slide"
+      >
+         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"><path d="m9 18 6-6-6-6"/></svg>
+      </button>
 
-          {/* Indication Dots */}
-          <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 backdrop-blur-xs border border-white/20 shadow-md">
-             {(articles ?? []).map((_, idx) => (
-                <button 
-                  key={idx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    scrollTo(idx);
-                  }}
-                  className={`h-1.5 transition-all duration-300 cursor-pointer ${idx === activeHero ? 'w-6 bg-[#E85D42]' : 'w-2 bg-white/50 hover:bg-white/80'}`}
-                  aria-label={`Go to slide ${idx + 1}`}
-                />
-             ))}
-          </div>
+      {/* Indication Dots */}
+      <div className="absolute bottom-3 left-3 z-20 flex items-center gap-1.5 bg-black/60 px-2.5 py-1 backdrop-blur-xs border border-white/20 shadow-md">
+         {(articles ?? []).map((_, idx) => (
+            <button 
+              key={idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                scrollTo(idx);
+              }}
+              className={`h-1.5 transition-all duration-300 cursor-pointer ${idx === activeHero ? 'w-6 bg-[#E85D42]' : 'w-2 bg-white/50 hover:bg-white/80'}`}
+              aria-label={`Go to slide ${idx + 1}`}
+            />
+         ))}
+      </div>
 
-          <div 
-             ref={containerRef}
-             onScroll={handleScroll}
-             className="flex w-full max-w-full overflow-x-auto hide-scrollbar snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing"
-          >
-             {(articles ?? []).map((article, idx) => (
-                <div 
-                  key={`${article.id}-${idx}`} 
-                  className="w-full min-w-full max-w-full shrink-0 flex-shrink-0 snap-start" 
-                  style={{ width: '100%', minWidth: '100%', maxWidth: '100%', scrollSnapAlign: 'start' }}
-                >
-                  <ArticleCard article={article} large />
-                </div>
-             ))}
-          </div>
-        </section>
+      <div 
+         ref={containerRef}
+         onScroll={handleScroll}
+         className="flex w-full max-w-full overflow-x-auto hide-scrollbar snap-x snap-mandatory scroll-smooth cursor-grab active:cursor-grabbing"
+      >
+         {(articles ?? []).map((article, idx) => (
+            <div 
+              key={`${article.id}-${idx}`} 
+              className="w-full min-w-full max-w-full shrink-0 flex-shrink-0 snap-start" 
+              style={{ width: '100%', minWidth: '100%', maxWidth: '100%', scrollSnapAlign: 'start' }}
+            >
+              <ArticleCard article={article} large />
+            </div>
+         ))}
+      </div>
+    </section>
   );
 }
 
@@ -467,9 +493,11 @@ export function HomePage() {
 
       {/* LEVEL 2: THE MAIN STORIES */}
       <section id="section-main-stories" aria-labelledby="heading-main-stories" className="mb-12">
-        <h2 id="heading-main-stories" className="sr-only">
-          {language === 'fr' ? 'Les Grands Titres' : 'Main Stories'}
-        </h2>
+        <div className="border-b-2 border-brand-dark dark:border-zinc-800 pb-2 mb-4">
+          <h2 id="heading-main-stories" className="text-xl md:text-2xl font-black uppercase tracking-wider text-brand-dark dark:text-zinc-100 font-serif">
+            {language === 'fr' ? 'À LA UNE' : 'TOP STORIES'}
+          </h2>
+        </div>
 
         {/* Big Carousel of HotTopics (Lead Stories) */}
         <HeroCarousel articles={featuredArticles} />

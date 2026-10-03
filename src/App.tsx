@@ -20,6 +20,7 @@ import { subscribeToArticles } from './firebase/db';
 import { subscribeToAllComments } from './firebase/db';
 import { subscribeToAds } from './firebase/db';
 import { subscribeToNotifications } from './firebase/db';
+import { subscribeToSiteSettings } from './firebase/db';
 import { useRouteScroll } from './lib/navigation';
 
 // Injected by Vite at build time — changes on every deploy. A device that
@@ -202,6 +203,26 @@ function App() {
       (err) => console.warn('[App] Ad realtime subscription notice:', err?.message)
     );
 
+    // Realtime listener for site settings so changes from desktop or mobile sync instantly across all devices.
+    const unsubSiteSettings = subscribeToSiteSettings(
+      (remote) => {
+        try {
+          if (!remote || typeof remote !== 'object') return;
+          const current = useStore.getState().siteSettings || {};
+          const merged: Record<string, any> = { ...current };
+          Object.entries(remote).forEach(([key, val]) => {
+            if (val === undefined || val === null || val === '') return;
+            if (key === 'updatedAtServer') return;
+            merged[key] = val;
+          });
+          useStore.setState({ siteSettings: merged as any, siteSettingsLoaded: true } as any);
+        } catch (e) {
+          console.warn('[App] SiteSettings realtime merge notice:', e);
+        }
+      },
+      (err) => console.warn('[App] SiteSettings realtime subscription notice:', err?.message)
+    );
+
     // Safety net: when a hidden tab becomes visible again after a long time
     // (device unlock, browser resume), force one fresh fetch in case the
     // listener connection was interrupted while the tab was frozen.
@@ -210,6 +231,7 @@ function App() {
       if (document.visibilityState === 'visible' && Date.now() - lastFetch > 60 * 1000) {
         lastFetch = Date.now();
         loadArticles();
+        loadSiteSettings();
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -218,12 +240,16 @@ function App() {
     // 3-minute polling loop guarantees every device converges on the cloud
     // content even if the push channel dies.
     const pollTimer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') loadArticles();
+      if (document.visibilityState === 'visible') {
+        loadArticles();
+        loadSiteSettings();
+      }
     }, 3 * 60 * 1000);
     return () => {
       unsubArticles();
       unsubComments();
       unsubAds();
+      unsubSiteSettings();
       window.clearInterval(pollTimer);
       document.removeEventListener('visibilitychange', onVisible);
     };

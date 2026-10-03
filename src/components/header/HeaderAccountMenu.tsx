@@ -76,10 +76,10 @@ export function HeaderAccountMenu() {
       {showAdminLink && (
         <Link
           to="/admin"
-          className="hidden sm:inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-[#C69B52] hover:text-[#E85D42] transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-[#C69B52] hover:text-[#E85D42] transition-colors cursor-pointer"
         >
           <Shield size={11} />
-          <span>{language === "fr" ? "Administration" : "Admin"}</span>
+          <span className="hidden sm:inline">{language === "fr" ? "Administration" : "Admin"}</span>
         </Link>
       )}
       </div>

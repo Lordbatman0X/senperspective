@@ -290,6 +290,9 @@ export function HeaderTopBar() {
             <span className="hidden md:inline uppercase tracking-wider text-gray-300">
               {t.weather}
             </span>
+            <span className="inline md:hidden uppercase tracking-wider text-gray-300">
+              {locationInfo.cityCode || locationInfo.cityName} {weatherData.tempC}°C
+            </span>
           </span>
         </div>
 
