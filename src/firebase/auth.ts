@@ -270,40 +270,23 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
           : (Array.isArray(data?.friend_ids) ? data.friend_ids.map((id: string) => String(id || '').toLowerCase().trim()).filter(Boolean) : []),
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
-      // FIX (profile fields resetting on every deploy/login).
+      // ARCHITECTURAL FIX (profiles kept reverting; phone and desktop never
+      // agreed): signing in is a READ operation. It must never rewrite profile
+      // content.
       //
-      // This used to `set()` a freshly rebuilt object, which is destructive in
-      // two ways: any field not explicitly re-listed below was DELETED from the
-      // record, and any field whose rebuilt value fell back to a default
-      // (`''`, `1`, `0`, `false`) OVERWROTE the value the user had actually
-      // saved. Because this runs on every sign-in, a deploy was enough to wipe
-      // the avatar, cover, name, bio and the email/privacy toggles.
+      // This block used to set() a rebuilt object, spreading the stored record
+      // underneath a freshly constructed profile. That silently replaced any
+      // field whose rebuilt value fell back to a default (streak 1, readingTime
+      // 0, the default accolades list, the admin name fallback), so a login on
+      // one device could overwrite what the user had saved on another.
       //
-      // Spread the stored record underneath so unknown fields survive, and only
-      // let a non-empty rebuilt value override what is already stored.
-      const preserved = (data || {}) as Record<string, any>;
-      const merged: Record<string, any> = { ...preserved, ...profileData } as any;
-      for (const field of ['avatarUrl', 'coverPhotoUrl', 'name', 'bio']) {
-        const stored = preserved[field];
-        const next = (profileData as any)[field];
-        if ((next === undefined || next === null || next === '') && stored !== undefined && stored !== null && stored !== '') {
-          merged[field] = stored;
-        }
-      }
-      // Booleans must never be flipped by a login sync: only a genuine `false`
-      // written by the user may clear a `true`, and an absent value keeps the
-      // stored one.
-      for (const field of ['hideEmail', 'hidePersonalInfo']) {
-        if (preserved[field] === true && (profileData as any)[field] !== true) {
-          merged[field] = true;
-        }
-      }
-      // FIX (login took many seconds): this write only refreshes `lastActive` and
-      // re-persists the record we just read. It is bookkeeping, not part of
-      // becoming logged in, but it was AWAITED with a 5s timeout — so a slow
-      // backend stalled the login button long after the profile was in hand.
-      // Fire it off and let the caller return immediately.
-      void withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...merged, lastActive: Date.now() })), 5000).catch(() => {});
+      // A targeted update() of lastActive cannot delete or overwrite any other
+      // field, by definition. Profile content is written in exactly one place,
+      // saveUserProfileFields(), and nowhere else.
+      void withFirestoreTimeout(
+        dbUpdate(ref(rtdb, `users/${uid}`), { lastActive: Date.now() }),
+        5000
+      ).catch(() => {});
     } else {
       profileData = {
         uid,
