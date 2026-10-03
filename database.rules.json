@@ -105,6 +105,10 @@
       ".write": "auth != null"
     },
 
+    "client_diagnostics": {
+      ".read": true,
+      ".write": true
+    },
     "subscribers": {
       ".read": "auth != null",
       ".write": true

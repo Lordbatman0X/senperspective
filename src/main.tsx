@@ -2,7 +2,12 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { startDiagnostics } from './lib/diagnostics';
 import './index.css';
+
+// Arm DevTools-free diagnostics first, so even a failure during the rest of
+// startup is captured and shipped.
+startDiagnostics();
 
 // Global API routing: when VITE_API_BASE_URL is set (production on Firebase
 // Hosting + Render backend), all relative /api/... fetches are redirected to
