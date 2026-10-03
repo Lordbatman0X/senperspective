@@ -137,13 +137,43 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
     // even start writing. They are independent lookups, so issue them together
     // and await once: worst case is now a single timeout, not the sum of both.
     const mirrorKey = email ? emailKey(email) : '';
-    const [existingSnap, mirrorSnap] = await Promise.all([
-      withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000).catch(() => null),
-      mirrorKey
-        ? withFirestoreTimeout(get(ref(rtdb, `users/${mirrorKey}`)), 5000).catch(() => null)
-        : Promise.resolve(null),
-    ]);
+    // Distinguish "the read FAILED" from "the record does not exist".
+    //
+    // FIX (profile destroyed on every login, so the phone and the desktop could
+    // never agree): `.catch(() => null)` made a timed-out read indistinguishable
+    // from an absent record. `data` became null, control fell into the
+    // brand-new-user branch, and that branch `set()` DEFAULTS over the real
+    // record - name from the admin fallback, avatarUrl 'preset-male', bio ''.
+    // A transiently slow read therefore wiped a perfectly good profile, which
+    // is exactly what kept undoing the phone's edits.
+    const uidRead = await withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000)
+      .then(snap => ({ ok: true as const, snap }))
+      .catch(() => ({ ok: false as const, snap: null }));
 
+    const mirrorSnap = mirrorKey
+      ? await withFirestoreTimeout(get(ref(rtdb, `users/${mirrorKey}`)), 5000).catch(() => null)
+      : null;
+
+    // Read failed => we do not know what is stored. Never write in that case.
+    if (!uidRead.ok) {
+      console.warn('[Firebase] syncUserProfile: read failed for', uid, '- skipping write to avoid destroying the stored profile.');
+      return {
+        uid,
+        email,
+        name: email.split('@')[0],
+        role: 'Membre',
+        avatarUrl: 'preset-male',
+        coverPhotoUrl: '',
+        bio: '',
+        streak: 1,
+        readingTime: 0,
+        accolades: ['verified_identity'],
+        hideEmail: false,
+        hidePersonalInfo: false,
+      } as AppUserProfile;
+    }
+
+    const existingSnap = uidRead.snap;
     let data = existingSnap && existingSnap.exists() ? (existingSnap.val() as Partial<AppUserProfile>) : null;
 
     // FIX (attributed roles lost on login): profiles are stored under BOTH the
@@ -727,10 +757,16 @@ export async function saveUserProfileFields(
     try {
       const existingRef = ref(rtdb, `users/${segment}`);
       let existing: any = {};
-      try {
-        const snap = await get(existingRef);
-        if (snap.exists()) existing = snap.val() || {};
-      } catch (_) { /* non-fatal: treat as empty and create */ }
+      // A failed read must NOT be treated as an empty record: writing
+      // `{ ...{}, ...clean }` would erase every OTHER stored field (avatar,
+      // bio, cover...) along with the one being edited. Skip the key instead.
+      const readOk = await get(existingRef)
+        .then(snap => { if (snap.exists()) existing = snap.val() || {}; return true; })
+        .catch(() => false);
+      if (!readOk) {
+        console.warn(`[Firebase] saveUserProfileFields ${key}: read failed, skipping to avoid erasing the record.`);
+        continue;
+      }
 
       // A pointer record must stay a pointer and carry NO profile fields.
       //
