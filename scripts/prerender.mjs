@@ -48,7 +48,13 @@ const SITE = 'https://senperspective.com';
 function getJson(url) {
   return new Promise((resolve, reject) => {
     const req = fetch(url, { headers: { Accept: 'application/json' } });
-    const timer = setTimeout(() => req.abort?.(), 30000);
+    // The articles payload is ~12 MB of JSON, so the abort budget has to cover a
+    // slow transfer rather than a fast API call. At 30s this aborted
+    // intermittently: the fetch died, 0 articles were prerendered, and the
+    // script then crashed on `dist/article` never being created — failing the
+    // whole build for a purely network-timing reason. This is a build-time
+    // script, so a generous ceiling costs nothing at runtime.
+    const timer = setTimeout(() => req.abort?.(), 180000);
     req
       .then((res) => {
         clearTimeout(timer);

@@ -92,7 +92,18 @@ export function Header() {
     updateMatch,
     updateUserSecurity,
   } = useStore();
-  const { user, loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers } = useAuth();
+  const { user, loading: authLoading, loginWithEmail, registerWithEmail, resetUserPassword, logoutUser, allUsers } = useAuth();
+
+  // The profile is no longer restored from localStorage (it is server-owned and
+  // was showing a stale copy), so on reload `readerProfile` is null until
+  // AuthContext has restored the Firebase session and re-read the profile.
+  //
+  // The header used to branch purely on `readerProfile`, so during that window
+  // it rendered the LOGIN button for a user who WAS signed in — which looked
+  // exactly like the accounts "logging off" on every reload. `authLoading`
+  // distinguishes "still restoring" from "genuinely signed out".
+  const restoringSession = Boolean(user) && authLoading;
+  const showLoginCta = !readerProfile && !restoringSession;
   const [isScrolled, setIsScrolled] = useState(false);
   const [isScrolledSearchOpen, setIsScrolledSearchOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
@@ -729,7 +740,7 @@ export function Header() {
                         )}
                       </div>
                     </button>
-                  ) : (
+                  ) : showLoginCta ? (
                     <button
                       onClick={() => {
                         setAuthTab("login");
@@ -739,6 +750,10 @@ export function Header() {
                     >
                       {language === "fr" ? "CONNEXION" : "LOG IN"}
                     </button>
+                  ) : (
+                    // Session still restoring — a neutral placeholder, never the
+                    // LOGIN button, so a signed-in user is not shown as signed out.
+                    <div className="w-5 h-5 rounded-full bg-black/10 dark:bg-white/10 animate-pulse" />
                   )}
                 </motion.div>
               )}
@@ -778,7 +793,7 @@ export function Header() {
                       )}
                     </div>
                   </button>
-                ) : (
+                ) : showLoginCta ? (
                   <button
                     onClick={() => {
                       setAuthTab("login");
@@ -794,6 +809,9 @@ export function Header() {
                   >
                     {language === "fr" ? "CONNEXION" : "LOG IN"}
                   </button>
+                ) : (
+                  // Session still restoring — placeholder, not the LOGIN button.
+                  <div className="w-6 h-6 rounded-full bg-black/10 dark:bg-white/10 animate-pulse" />
                 )}
               </div>
             </div>

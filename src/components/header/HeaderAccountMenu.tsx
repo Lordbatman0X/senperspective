@@ -17,7 +17,14 @@ export function HeaderAccountMenu() {
     setShowProfileDrawer
   } = useStore();
   // The signed-in Firebase user, for the same admin check the phone drawer runs.
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+
+  // The profile is no longer restored from localStorage, so on reload it is null
+  // until AuthContext re-reads it. Branching on `readerProfile` alone showed the
+  // LOGIN / SIGN UP pair to a user who was still signed in, which looked like
+  // the accounts logging themselves off on every refresh. Wait out the restore
+  // instead of advertising a signed-out state.
+  const restoringSession = Boolean(user) && authLoading;
 
   // Coherent unread indicator: the exact sum of the drawer sections
   //   unread DMs + Activité + Réseau + Briefing
@@ -88,6 +95,12 @@ export function HeaderAccountMenu() {
 
   return (
     <div className="flex items-center gap-2 border-l border-zinc-700 pl-3 font-sans">
+      {restoringSession ? (
+        // Session restoring — reserve the space so the bar does not jump, but
+        // do not claim the visitor is signed out.
+        <div className="w-8 h-8 sm:w-4.5 sm:h-4.5 rounded-full bg-white/10 animate-pulse" />
+      ) : (
+        <>
       <button
         onClick={() => {
           setAuthTab("login");
@@ -109,6 +122,8 @@ export function HeaderAccountMenu() {
       >
         {language === "fr" ? "S'INSCRIRE" : "SIGN UP"}
       </button>
+        </>
+      )}
     </div>
   );
 }
