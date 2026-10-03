@@ -268,7 +268,12 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
           merged[field] = true;
         }
       }
-      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...merged, lastActive: Date.now() })), 5000).catch(() => {});
+      // FIX (login took many seconds): this write only refreshes `lastActive` and
+      // re-persists the record we just read. It is bookkeeping, not part of
+      // becoming logged in, but it was AWAITED with a 5s timeout — so a slow
+      // backend stalled the login button long after the profile was in hand.
+      // Fire it off and let the caller return immediately.
+      void withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...merged, lastActive: Date.now() })), 5000).catch(() => {});
     } else {
       profileData = {
         uid,
@@ -289,7 +294,7 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         updatedAt: new Date().toISOString(),
         ...(!isFirebaseUser ? (userOrData as Partial<AppUserProfile>) : {})
       };
-      await withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, createdAtServer: Date.now() })), 5000).catch(() => {});
+      void withFirestoreTimeout(dbSet(ref(rtdb, `users/${uid}`), stripUndefined({ ...profileData, createdAtServer: Date.now() })), 5000).catch(() => {});
     }
 
     // The email-keyed mirror is a POINTER and nothing else.
@@ -304,7 +309,9 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
     //
     // Writing only the pointer removes the second source of truth entirely.
     if (email && email !== uid) {
-      await withFirestoreTimeout(
+      // Non-blocking: the mirror is a pointer that already exists in practice,
+      // so awaiting this write only added its timeout to the login latency.
+      void withFirestoreTimeout(
         dbSet(ref(rtdb, `users/${emailKey(email)}`), stripUndefined({
           email,
           uid,
@@ -316,7 +323,8 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
 
     // If Admin, register in /admins/{uid} for security rules
     if (isAdmin) {
-      await withFirestoreTimeout(
+      // Non-blocking for the same reason as the writes above.
+      void withFirestoreTimeout(
         dbSet(ref(rtdb, `admins/${uid}`), stripUndefined({
           email,
           uid,
