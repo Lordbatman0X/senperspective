@@ -146,13 +146,14 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
     // record - name from the admin fallback, avatarUrl 'preset-male', bio ''.
     // A transiently slow read therefore wiped a perfectly good profile, which
     // is exactly what kept undoing the phone's edits.
-    const uidRead = await withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000)
-      .then(snap => ({ ok: true as const, snap }))
-      .catch(() => ({ ok: false as const, snap: null }));
-
-    const mirrorSnap = mirrorKey
-      ? await withFirestoreTimeout(get(ref(rtdb, `users/${mirrorKey}`)), 5000).catch(() => null)
-      : null;
+    const [uidRead, mirrorSnap] = await Promise.all([
+      withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000)
+        .then(snap => ({ ok: true as const, snap }))
+        .catch(() => ({ ok: false as const, snap: null })),
+      mirrorKey
+        ? withFirestoreTimeout(get(ref(rtdb, `users/${mirrorKey}`)), 5000).catch(() => null)
+        : Promise.resolve(null),
+    ]);
 
     // Read failed => we do not know what is stored. Never write in that case.
     if (!uidRead.ok) {
