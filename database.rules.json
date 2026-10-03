@@ -5,7 +5,7 @@
 
     "admins": {
       ".read": "auth != null",
-      ".write": false
+      ".write": "auth != null && (auth.token.email === 'kadersdiaz3@gmail.com' || auth.token.email === 'admin@senperspective.com')"
     },
 
     "users": {
