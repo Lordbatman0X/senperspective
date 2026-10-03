@@ -338,7 +338,17 @@ export function HeaderTopBar() {
             </button>
           </div>
 
-          <HeaderAccountMenu />
+          {/* Account control.
+              HIDDEN ON MOBILE (`hidden md:flex`): the mobile main header row
+              already renders its own avatar button (Header.tsx, the `md:hidden`
+              block), so leaving this one visible showed TWO identical avatars
+              side by side at the top of the page on phones.
+              Safe to hide here because this bar is not sticky — it scrolls away,
+              so on desktop the sticky main bar is the only account control left
+              visible once the user has scrolled down. */}
+          <div className="hidden md:flex items-center">
+            <HeaderAccountMenu />
+          </div>
         </div>
       </div>
     </div>

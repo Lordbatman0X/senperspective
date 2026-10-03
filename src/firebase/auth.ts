@@ -174,6 +174,30 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
           : null;
         if (canonical) {
           data = { ...data, ...canonical } as Partial<AppUserProfile>;
+        } else {
+          // The canonical read FAILED (timeout/offline). `data` is still just a
+          // POINTER STUB — it carries no name, avatar, bio or cover. Falling
+          // through would rebuild the profile from defaults
+          // (name = email.split('@')[0], avatarUrl = 'preset-male', bio = '')
+          // and `set()` those over the real record, DESTROYING the user's
+          // profile. This is what silently reset a profile to
+          // "kadersdiaz3" / "preset-male" while the server data was correct.
+          // Bail out WITHOUT writing: a slow read must never overwrite data.
+          console.warn('[Firebase] syncUserProfile: canonical read failed for', target, '- skipping write to avoid clobbering the profile.');
+          return {
+            uid,
+            email,
+            name: (data.name || email.split('@')[0]) as string,
+            role: ((data as any).role || 'Membre') as any,
+            avatarUrl: ((data as any).avatarUrl || 'preset-male') as string,
+            coverPhotoUrl: '',
+            bio: ((data as any).bio || '') as string,
+            streak: (data.streak || 1) as number,
+            readingTime: (data.readingTime || 0) as number,
+            accolades: (data.accolades || ['verified_identity']) as any,
+            hideEmail: false,
+            hidePersonalInfo: false,
+          } as AppUserProfile;
         }
       }
     }
