@@ -3165,7 +3165,11 @@ export const useStore = create<AppState>()(
       // v5: purge the full `articles` array from localStorage (it caused
       // QuotaExceededError crashes — articles are re-fetched from the cloud
       // on every load and backed up separately in LOCAL_ARTICLES_KEY).
-      version: 5,
+      // v6: purge the persisted `readerProfile`. It cached the name/avatar in
+      // localStorage and was rehydrated on every load, so the header showed a
+      // stale copy and a hard refresh re-read that same stale copy. The server
+      // record is the source of truth for the profile.
+      version: 6,
       storage: createSafeJSONStorage(),
       // v3: every browser drops ALL stale persisted data on next load.
       // Shared-domain data (articles/users/comments/messages/...) is never
@@ -3179,8 +3183,7 @@ export const useStore = create<AppState>()(
           const keys = [
             'theme', 'language', 'savedArticles', 'activeMessengerContact',
             'messengerTextScale', 'notificationPreferences',
-            'notificationResponses', 'readerProfile',
-            'siteSettings'
+            'notificationResponses', 'siteSettings'
           ];
           for (const k of keys) {
             if (persistedState[k] !== undefined && persistedState[k] !== null) {
@@ -3251,7 +3254,17 @@ export const useStore = create<AppState>()(
           messengerTextScale: state.messengerTextScale,
           notificationPreferences: state.notificationPreferences,
           notificationResponses: state.notificationResponses,
-          readerProfile: state.readerProfile,
+          // REMOVED: readerProfile — it is SHARED, server-owned data.
+          //
+          // FIX (profile edit on the phone never showed on the desktop, even
+          // after a hard refresh): this persisted the whole profile to
+          // localStorage, and zustand rehydrated that copy on every load. The
+          // header renders from `store.readerProfile`, so the browser showed
+          // the cached name/avatar and kept showing it until a fresh fetch
+          // happened to win the race. A hard refresh re-read the SAME stale
+          // copy, which is why reloading never fixed it. The server record is
+          // the only source of truth for the profile, exactly like `users`.
+          //
           // REMOVED: articles — see comment above; causes QuotaExceededError.
           siteSettings: state.siteSettings,
           // REMOVED: users - must be fetched from MongoDB on every page load
