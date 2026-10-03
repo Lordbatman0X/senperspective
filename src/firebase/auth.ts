@@ -129,8 +129,21 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
   const isAdmin = isBootstrapAdmin(email);
 
   try {
-    // Timeout-guarded: a slow backend must never delay login (reads AND writes)
-    const existingSnap = await withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000).catch(() => null);
+    // Timeout-guarded: a slow backend must never delay login (reads AND writes).
+    //
+    // FIX (multi-second delay between pressing Login and being logged in): the
+    // uid read and the email-mirror read were AWAITED SEQUENTIALLY, each with a
+    // 5s timeout, so a slow round-trip stacked up to 10s before login could
+    // even start writing. They are independent lookups, so issue them together
+    // and await once: worst case is now a single timeout, not the sum of both.
+    const mirrorKey = email ? emailKey(email) : '';
+    const [existingSnap, mirrorSnap] = await Promise.all([
+      withFirestoreTimeout(get(ref(rtdb, `users/${uid}`)), 5000).catch(() => null),
+      mirrorKey
+        ? withFirestoreTimeout(get(ref(rtdb, `users/${mirrorKey}`)), 5000).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
     let data = existingSnap && existingSnap.exists() ? (existingSnap.val() as Partial<AppUserProfile>) : null;
 
     // FIX (attributed roles lost on login): profiles are stored under BOTH the
@@ -138,15 +151,12 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
     // is missing (or has no role yet), adopt the email-keyed record so roles
     // attributed by the super admin survive the login sync instead of being
     // replaced by a fresh 'Membre' profile.
-    if ((!data || !data.role) && email) {
-      const mirrorSnap = await withFirestoreTimeout(get(ref(rtdb, `users/${emailKey(email)}`)), 5000).catch(() => null);
-      const mirror = mirrorSnap && mirrorSnap.exists() ? (mirrorSnap.val() as Partial<AppUserProfile>) : null;
-      if (mirror) {
-        if (!data) {
-          data = { ...mirror, uid };
-        } else {
-          data = { ...mirror, ...data, role: data.role || mirror.role };
-        }
+    if ((!data || !data.role) && mirrorSnap && mirrorSnap.exists()) {
+      const mirror = mirrorSnap.val() as Partial<AppUserProfile>;
+      if (!data) {
+        data = { ...mirror, uid };
+      } else {
+        data = { ...mirror, ...data, role: data.role || mirror.role };
       }
     }
     // FIX (avatar / cover / name / bio / privacy reverting on every login).

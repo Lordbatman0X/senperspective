@@ -148,7 +148,21 @@
             '</div>';
           document.body.appendChild(host);
         }
-        setTimeout(render, 6000);
+        // Boot watchdog. Only fires if React still has not mounted.
+         //
+         // FIX ("Affichage impossible" with "No JS error captured" on a healthy
+         // browser): this fired at 6s. Startup performs several Realtime Database
+         // reads, each guarded by a 7s timeout, so on a slow or congested
+         // connection the bundle legitimately had not mounted yet. The card is
+         // position:fixed with the maximum z-index, so once drawn it covered the
+         // app permanently - even though the app went on to render normally a
+         // moment later. That produced a white screen with no JS error, which
+         // matches the reported symptom exactly.
+         //
+         // Generous timeout: a slow network should show a slow page, never a
+         // false "unsupported browser" verdict. A genuine JS error still paints
+         // this immediately via showSoon() above, so real faults stay fast.
+         setTimeout(render, 30000);
       })();
     </script>
     <!-- nomodule fallback: browsers that cannot even run ES modules
