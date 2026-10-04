@@ -1,4 +1,5 @@
-import { CarouselCardKind, CarouselDraft, CarouselSocialLink, CAROUSEL_SIZE } from './types';
+import { CarouselCardKind, CarouselDraft, CarouselLogoPlacement, CarouselSocialLink, CAROUSEL_SIZE } from './types';
+import { BG, G, MUTED, SANS, SERIF, computeCardLayout, wrapText, type EditableField } from './layout';
 import { DEFAULT_ACCENT } from './draft';
 
 /**
@@ -10,37 +11,12 @@ import { DEFAULT_ACCENT } from './draft';
  * right in preview" and "looks right in the download" is exactly the bug we
  * already paid for once with the old studio.
  *
- * Every coordinate below is in 1080×1080 space, matching the approved design.
+ * Every coordinate comes from `layout.ts`, which the editor overlay also reads.
+ * That shared module is why an editable region can sit exactly on top of the
+ * glyphs it edits: there is only one set of numbers.
+ *
+ * All coordinates are in 1080×1080 space, matching the approved design.
  */
-
-/** Geometry, in card pixels. Mirrors the approved design 1:1. */
-const G = {
-  margin: 58,
-  photoHeight: 750,      // cover card photo
-  bodyTop: 752,          // cover card text block top
-  coverTitleSize: 52,
-  ledeSize: 27,
-  textRuleY: 196,
-  bodyTitleSize: 66,
-  coverBodyTop: 360,
-  paraSize: 29,
-  endPad: 78,
-  endTop: 88,
-  quoteSize: 42,
-  bySize: 26,
-  taglineSize: 33,
-  followSize: 28,
-  rowTop: 570,
-  iconSize: 62,
-  footerSize: 21,
-  logoSize: 56,
-  endLogoSize: 70,
-};
-
-const SERIF = '"Playfair Display", Georgia, serif';
-const SANS = 'Inter, system-ui, sans-serif';
-const BG = '#0b0b0b';
-const MUTED = '#cfcfcf';
 
 export interface RenderOptions {
   kind: CarouselCardKind;
@@ -49,22 +25,18 @@ export interface RenderOptions {
   images?: Record<string, CanvasImageSource>;
 }
 
-/** Wraps `text` to `maxWidth`, returning the lines. */
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word;
-    if (ctx.measureText(test).width <= maxWidth || !line) {
-      line = test;
-    } else {
-      lines.push(line);
-      line = word;
-    }
-  }
-  if (line) lines.push(line);
-  return lines;
+/**
+ * Draws one pre-laid-out field at exactly the position the editor overlay uses.
+ *
+ * The overlay draws its hit-region from the same `EditableField` this receives,
+ * which is what keeps "click the text" and "the text" in agreement.
+ */
+function drawField(ctx: CanvasRenderingContext2D, f: EditableField): void {
+  ctx.font = f.font;
+  ctx.textAlign = f.align;
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = f.color;
+  f.lines.forEach((line, i) => ctx.fillText(line, f.x, f.y + i * f.lineHeight));
 }
 
 /** Draws `text` wrapped, returning the y just past the last line. */
@@ -84,16 +56,14 @@ function drawParagraph(
 /** Draws the Perspective wordmark, or a custom logo image when one is set. */
 function drawLogo(
   ctx: CanvasRenderingContext2D,
-  draft: CarouselDraft,
-  cx: number,
-  top: number,
-  size: number,
+  at: Required<CarouselLogoPlacement>,
   color: string,
   image?: CanvasImageSource,
 ): void {
+  const { cx, top, size } = at;
   if (image) {
     const scale = size / 260; // custom logos are laid out on a 260px reference width
-    ctx.drawImage(image, cx - (260 * scale) / 2, top, 260 * scale, (120 * scale));
+    ctx.drawImage(image, cx - (260 * scale) / 2, top, 260 * scale, 120 * scale);
     return;
   }
   ctx.save();
@@ -177,6 +147,7 @@ function drawFooter(ctx: CanvasRenderingContext2D, draft: CarouselDraft, accent:
  */
 function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: Record<string, CanvasImageSource>): void {
   const accent = draft.accentColor || DEFAULT_ACCENT;
+  const layout = computeCardLayout('cover', draft);
   const photo = images.coverImage;
 
   if (photo) {
@@ -201,22 +172,14 @@ function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: 
   ctx.fillStyle = topScrim;
   ctx.fillRect(0, 0, CAROUSEL_SIZE, 260);
 
-  drawLogo(ctx, draft, G.margin + 130, 46, G.logoSize, accent, images.logo);
+  drawLogo(ctx, layout.logo, accent, images.logo);
   drawPill(ctx, draft.category, accent);
 
-  let y = G.coverBodyTop;
-  drawRule(ctx, y, accent);
-  y += 47;
+  drawRule(ctx, G.coverBodyTop, accent);
 
-  ctx.fillStyle = '#fff';
-  ctx.font = `italic 700 ${G.coverTitleSize}px ${SERIF}`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  y = drawParagraph(ctx, draft.title, G.margin, y, CAROUSEL_SIZE - G.margin * 2, 58) + 26;
-
-  ctx.fillStyle = MUTED;
-  ctx.font = `${G.ledeSize}px ${SANS}`;
-  drawParagraph(ctx, draft.lede, G.margin, y, 900, 38);
+  // Painted from the shared layout so the editor's hit-regions land exactly on
+  // these glyphs, and so the lede sits below the title however the title wraps.
+  for (const f of layout.fields) drawField(ctx, f);
 
   drawFooter(ctx, draft, accent, 0);
 }
@@ -229,24 +192,14 @@ function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: 
  */
 function drawBody(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: Record<string, CanvasImageSource>): void {
   const accent = draft.accentColor || DEFAULT_ACCENT;
+  const layout = computeCardLayout('body', draft);
 
-  drawLogo(ctx, draft, G.margin + 130, 46, G.logoSize, '#fff', images.logo);
+  drawLogo(ctx, layout.logo, '#fff', images.logo);
   drawPill(ctx, draft.category, accent);
 
-  drawRule(ctx, G.textRuleY, accent);
+  drawRule(ctx, G.ruleY, accent);
 
-  ctx.fillStyle = '#fff';
-  ctx.font = `italic 700 ${G.bodyTitleSize}px ${SERIF}`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  const headingBottom = drawParagraph(ctx, draft.bodyHeading, G.margin, 236, CAROUSEL_SIZE - G.margin * 2, 74);
-
-  ctx.fillStyle = '#d6d6d6';
-  ctx.font = `${G.paraSize}px ${SANS}`;
-  let y = Math.max(G.coverBodyTop, headingBottom + 80);
-  for (const para of draft.paragraphs) {
-    y = drawParagraph(ctx, para, G.margin, y, CAROUSEL_SIZE - G.margin * 2, 43) + 34;
-  }
+  for (const f of layout.fields) drawField(ctx, f);
 
   drawFooter(ctx, draft, accent, 1);
 }
@@ -260,6 +213,7 @@ function drawBody(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: R
  */
 function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: Record<string, CanvasImageSource>): void {
   const accent = draft.accentColor || DEFAULT_ACCENT;
+  const layout = computeCardLayout('closing', draft);
   const photo = images.closingImage;
 
   if (photo) {
@@ -278,33 +232,12 @@ function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
-  let y = G.endTop;
 
-  ctx.fillStyle = '#fff';
-  ctx.font = `italic 600 ${G.quoteSize}px ${SERIF}`;
-  const quoted = `« ${draft.quote} »`;
-  y = drawParagraph(ctx, quoted, G.endPad, y, CAROUSEL_SIZE - G.endPad * 2, 55) + 30;
+  for (const f of layout.fields) drawField(ctx, f);
 
-  ctx.font = `italic ${G.bySize}px ${SERIF}`;
-  ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.fillText(draft.quoteAttribution, G.endPad + 4, y);
-  y += G.bySize + 60;
+  drawSocialRow(ctx, draft.socials, layout.socialRowY);
 
-  // Centred copy must be anchored at the card's centre, not at the left pad:
-  // with `textAlign = 'center'`, x is where the MIDDLE of each line goes, so
-  // passing the left margin centres the block half off the canvas.
-  ctx.textAlign = 'center';
-  ctx.font = `italic 700 ${G.taglineSize}px ${SERIF}`;
-  ctx.fillStyle = '#fff';
-  y = drawParagraph(ctx, draft.tagline, CAROUSEL_SIZE / 2, y, CAROUSEL_SIZE - 240, 45) + 64;
-
-  ctx.font = `italic ${G.followSize}px ${SERIF}`;
-  ctx.fillText(draft.socialHeading, CAROUSEL_SIZE / 2, y);
-  y += 52;
-
-  drawSocialRow(ctx, draft.socials, y);
-
-  drawLogo(ctx, draft, CAROUSEL_SIZE / 2, 928, G.endLogoSize, '#fff', images.logo);
+  drawLogo(ctx, layout.logo, '#fff', images.logo);
 }
 
 /** The five (or fewer) circular social links on the closing card. */

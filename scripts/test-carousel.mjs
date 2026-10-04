@@ -26,7 +26,7 @@ import {
   formatReadTime,
   normalizeDraft,
 } from '../src/lib/carousel/draft';
-import { MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
+import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
 
 let pass = 0;
 const ok = (n) => { console.log(`  PASS  ${n}`); pass++; };
@@ -129,6 +129,30 @@ const englishOnly = buildDraftFromArticle({
 });
 assert.ok(englishOnly.paragraphs[0].startsWith('An English only body'));
 ok('falls back to the English body when French is empty');
+
+console.log('\n- logo placement -');
+const withLogo = normalizeDraft({ logos: { cover: { cx: 300, top: 90, size: 80 } } });
+assert.equal(withLogo.logos?.cover.cx, 300);
+assert.equal(withLogo.logos?.cover.size, 80);
+ok('a stored logo position is preserved');
+
+// A drag writes raw pointer math, so hostile numbers must not reach the canvas:
+// size 0 would render an invisible logo the editor thinks they placed.
+const clamped = normalizeDraft({
+  logos: {
+    cover: { cx: 99999, top: -400, size: 0 },
+    body: { cx: Number.NaN, top: 10, size: 10000 },
+  },
+});
+assert.equal(clamped.logos?.cover.cx, CAROUSEL_SIZE);
+assert.equal(clamped.logos?.cover.top, 0);
+assert.equal(clamped.logos?.cover.size, 24);
+assert.equal(clamped.logos?.body.cx, CAROUSEL_SIZE / 2);
+assert.equal(clamped.logos?.body.size, 150);
+ok('out-of-range and NaN logo values are clamped into the card');
+
+assert.equal(normalizeDraft({}).logos, undefined);
+ok('a draft with no dragged logo keeps the approved default position');
 
 console.log('\n- normalisation of stored drafts -');
 assert.equal(normalizeDraft(null).title, emptyDraft().title);

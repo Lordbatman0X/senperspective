@@ -1,6 +1,7 @@
 import {
   CarouselDraft,
   CarouselSocialLink,
+  CAROUSEL_SIZE,
   DEFAULT_CAROUSEL_SOCIALS,
   MAX_CAROUSEL_PARAGRAPHS,
 } from './types';
@@ -196,9 +197,38 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
     : [];
   const socials = filteredSocials.length ? filteredSocials : base.socials;
 
+  /**
+   * Logo placement is normalized rather than trusted.
+   *
+   * A drag writes raw pointer arithmetic, so a bad or partial write could store
+   * `size: 0` or `NaN`. Either would silently render a missing logo on the card
+   * the editor believes they positioned, so every axis is clamped here — the
+   * editor and the exporter read the same sanitized numbers.
+   */
+  const clamp = (value: unknown, min: number, max: number, fallback: number): number => {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, Math.round(n)));
+  };
+  const logos = input.logos
+    ? Object.fromEntries(
+        (['cover', 'body', 'closing'] as const)
+          .filter(kind => input.logos?.[kind])
+          .map(kind => {
+            const at = input.logos![kind]!;
+            return [kind, {
+              cx: clamp(at.cx, 0, CAROUSEL_SIZE, CAROUSEL_SIZE / 2),
+              top: clamp(at.top, 0, CAROUSEL_SIZE - 40, 46),
+              size: clamp(at.size, 24, 150, 56),
+            }];
+          }),
+      ) as CarouselDraft['logos']
+    : undefined;
+
   return {
     ...base,
     ...input,
+    logos,
     category: input.category?.trim() || base.category,
     title: input.title?.trim() || base.title,
     lede: input.lede?.trim() || base.lede,

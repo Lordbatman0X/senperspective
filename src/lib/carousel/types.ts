@@ -1,10 +1,10 @@
 /**
- * Social carousel — fixed-template card data.
+ * Social carousel — card data.
  *
- * Deliberately minimal. The carousel is ONE approved design repeated with
- * different content, so there are no layout knobs here: no positions, no sizes,
- * no colours-per-element. Only the things an editor genuinely chooses (which
- * article, which photo, which logo) are stored, and the renderer owns the rest.
+ * The carousel is ONE approved design repeated with different content, so the
+ * only things stored here are what an editor genuinely chooses: which article,
+ * which photo, which logo, the copy, and where the logo sits. All typography
+ * and spacing live in `layout.ts`, which both the renderer and the editor read.
  */
 
 /** The three approved card formats. There is no fourth and no free-form mode. */
@@ -22,6 +22,22 @@ export interface CarouselSocialLink {
    * a blank circle and look like a bug.
    */
   icon: 'globe' | 'youtube' | 'tiktok' | 'facebook' | 'instagram';
+}
+
+/**
+ * Where the logo sits on one card.
+ *
+ * Per-card and per-axis on purpose: the approved design puts the wordmark top-left
+ * on cards 1 and 2 but centred at the bottom on card 3, so a single global
+ * position cannot express the design.
+ */
+export interface CarouselLogoPlacement {
+  /** Horizontal centre, in card pixels. */
+  cx: number;
+  /** Top edge, in card pixels. */
+  top: number;
+  /** Wordmark size, in card pixels. */
+  size: number;
 }
 
 /**
@@ -71,6 +87,13 @@ export interface CarouselDraft {
    * campaign logo.
    */
   logoUrl?: string;
+  /**
+   * Per-card logo placement, set when the editor drags or resizes the logo.
+   *
+   * Absent means "use the approved default position", which is what keeps every
+   * freshly built draft looking like the design without the editor touching it.
+   */
+  logos?: Partial<Record<CarouselCardKind, CarouselLogoPlacement>>;
   /** Accent colour used for the rule, the active dot and the closing tint. */
   accentColor: string;
 }

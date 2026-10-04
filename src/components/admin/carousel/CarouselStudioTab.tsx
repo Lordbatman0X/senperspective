@@ -13,6 +13,9 @@ import {
   Loader2, RotateCcw, Save, Share2, Upload, X,
 } from 'lucide-react';
 
+/** Widest the big editing card may get, so it never overflows a laptop panel. */
+const CARD_EDIT_MAX_WIDTH = 520;
+
 const CARD_LABELS: Record<CarouselCardKind, string> = {
   cover: '1 · Couverture',
   body: '2 · Développement',
@@ -335,7 +338,11 @@ export function CarouselStudioTab() {
           <RotateCcw size={12} /> Repartir d’un gabarit vierge
         </button>
       </div>
-      {/* ---------- Previews ---------- */}
+      {/* ---------- Previews ----------
+          The ARTIFACT is direct-manipulation: you click the text on the card to
+          rewrite it, drag the logo, and use the slider for its size. So the
+          card itself is the editor; the form below is the fallback for the
+          things a canvas cannot host (date, read time, category, socials). */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
@@ -356,21 +363,68 @@ export function CarouselStudioTab() {
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-4">
-          {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
-            <div key={kind} className={activeCard === kind ? 'block' : 'hidden sm:block'}>
-              <CarouselPreview kind={kind} draft={draft} width={240} className="rounded-md" />
-              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-2 text-center">{CARD_LABELS[kind]}</p>
-            </div>
-          ))}
+
+        <p className="text-[11px] text-zinc-500 leading-relaxed">
+          Cliquez un texte pour le réécrire. Glissez le logo à l’endroit voulu ; le curseur
+          «&nbsp;Taille&nbsp;» ajuste sa taille sur la carte sélectionnée.
+        </p>
+
+        {/* The card being edited, large enough to click into. */}
+        <div className="flex justify-center">
+          <CarouselPreview
+            kind={activeCard}
+            draft={draft}
+            width={Math.min(520, CARD_EDIT_MAX_WIDTH)}
+            className="rounded-md shadow-2xl ring-1 ring-white/10"
+            editable
+            onChange={patch}
+          />
+        </div>
+
+        {/* The artifact's per-card image buttons. */}
+        <div className="grid sm:grid-cols-2 gap-3">
+          <ImagePicker
+            label="Photo — carte 1 · Couverture"
+            value={draft.coverImage}
+            media={media}
+            onChange={url => patch({ coverImage: url })}
+          />
+          <ImagePicker
+            label="Photo — carte 3 · Clôture (fond)"
+            value={draft.closingImage}
+            media={media}
+            onChange={url => patch({ closingImage: url })}
+          />
+        </div>
+
+        {/* Read-only thumbnails of the other two cards. */}
+        <div className="flex flex-wrap gap-4 pt-2 border-t border-zinc-800">
+          {(['cover', 'body', 'closing'] as CarouselCardKind[])
+            .filter(kind => kind !== activeCard)
+            .map(kind => (
+              <button
+                key={kind}
+                type="button"
+                onClick={() => setActiveCard(kind)}
+                className="text-left cursor-pointer group"
+              >
+                <CarouselPreview kind={kind} draft={draft} width={168} className="rounded-md ring-1 ring-white/10 group-hover:ring-[#E85D42]" />
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-2 text-center group-hover:text-white">
+                  {CARD_LABELS[kind]}
+                </p>
+              </button>
+            ))}
         </div>
       </div>
 
-      {/* ---------- Controls ---------- */}
+      {/* ---------- Controls ----------
+          Only what the card itself cannot host. All headline/paragraph/quote
+          copy is edited in place on the canvas, per the artifact; repeating it
+          here would give the editor two places to change one value. */}
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
-            <ImageIcon size={13} /> Logo & photos
+            <ImageIcon size={13} /> Logo
           </div>
           <ImagePicker
             label="Logo (vide = logo Perspective)"
@@ -378,28 +432,25 @@ export function CarouselStudioTab() {
             media={media}
             onChange={url => patch({ logoUrl: url })}
           />
-          <ImagePicker
-            label="Photo de couverture (carte 1)"
-            value={draft.coverImage}
-            media={media}
-            onChange={url => patch({ coverImage: url })}
-          />
-          <ImagePicker
-            label="Photo de clôture (carte 3)"
-            value={draft.closingImage}
-            media={media}
-            onChange={url => patch({ closingImage: url })}
-          />
+          <p className="text-[10px] text-zinc-500 leading-relaxed">
+            Le logo se positionne et se redimensionne directement sur chaque carte :
+            glissez-le, puis utilisez le curseur «&nbsp;Taille&nbsp;».
+          </p>
+          <button
+            type="button"
+            onClick={() => patch({ logos: undefined })}
+            disabled={!draft.logos}
+            className="text-zinc-500 hover:text-white disabled:opacity-40 disabled:hover:text-zinc-500 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+          >
+            Réinitialiser la position des logos
+          </button>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
-            <Share2 size={13} /> Textes
+            <Share2 size={13} /> Pied de page & paragraphes
           </div>
           <Field label="Catégorie" value={draft.category} onChange={v => patch({ category: v })} maxLength={24} />
-          <Field label="Titre (carte 1)" value={draft.title} onChange={v => patch({ title: v })} multiline rows={2} maxLength={120} />
-          <Field label="Chapô (carte 1)" value={draft.lede} onChange={v => patch({ lede: v })} multiline rows={3} maxLength={280} />
-          <Field label="Sous-titre (carte 2)" value={draft.bodyHeading} onChange={v => patch({ bodyHeading: v })} maxLength={48} />
           <div className="space-y-3">
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
               Paragraphes (carte 2) — {MAX_CAROUSEL_PARAGRAPHS} maximum
@@ -429,10 +480,6 @@ export function CarouselStudioTab() {
               </button>
             )}
           </div>
-          <Field label="Citation (carte 3)" value={draft.quote} onChange={v => patch({ quote: v })} multiline rows={4} maxLength={280} />
-          <Field label="Signature de la citation" value={draft.quoteAttribution} onChange={v => patch({ quoteAttribution: v })} maxLength={40} />
-          <Field label="Accroche (carte 3)" value={draft.tagline} onChange={v => patch({ tagline: v })} multiline rows={2} maxLength={160} />
-          <Field label="Titre des réseaux" value={draft.socialHeading} onChange={v => patch({ socialHeading: v })} maxLength={32} />
           <div className="grid grid-cols-2 gap-3">
             <Field label="Date" value={draft.date} onChange={v => patch({ date: v })} maxLength={32} />
             <Field label="Durée de lecture" value={draft.readingTime} onChange={v => patch({ readingTime: v })} maxLength={16} />
