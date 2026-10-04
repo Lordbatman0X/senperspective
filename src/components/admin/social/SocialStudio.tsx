@@ -47,7 +47,23 @@ import { generateBothCaptions } from '../../../lib/social/captions';
 import { alignLayerPosition, createImage, createLogo, createShape, createText, migrateSocialDesign, uid, type AlignMode } from '../../../lib/social/document';
 import { buildCard, buildInitialCards, syncAllDots } from '../../../lib/social/templates';
 import { downloadCanvasAsPng, downloadTextFile, exportFilename, renderCardToCanvas } from '../../../lib/social/renderer';
-import { preloadAssets, ensureFontsReady } from '../../../lib/social/imageLoader';
+import { preloadAssets, ensureFontsReady, readImageFile } from '../../../lib/social/imageLoader';
+
+/** Readable reasons an upload can be rejected, shown verbatim to the editor. */
+const UPLOAD_ERRORS: Record<string, [string, string]> = {
+  'not-an-image': [
+    'Ce fichier n’est pas une image (PNG, JPG ou SVG attendu).',
+    'That file is not an image (PNG, JPG or SVG expected).',
+  ],
+  'decode-failed': [
+    'L’image n’a pas pu être lue. Réessayez avec un autre fichier.',
+    'That image could not be read. Try a different file.',
+  ],
+  'read-failed': [
+    'Lecture du fichier impossible.',
+    'Could not read that file.',
+  ],
+};
 import { StudioStage } from './StudioStage';
 import { LayersPanel } from './LayersPanel';
 import { FiltersPanel } from './FiltersPanel';
@@ -55,6 +71,7 @@ import { InspectorPanel } from './InspectorPanel';
 import { CaptionPanel } from './CaptionPanel';
 import { CardThumbnail } from './CardThumbnail';
 import { InsertBar, AlignBar } from './CanvasToolbar';
+import { SimpleEditor } from './SimpleEditor';
 import { GhostButton } from './StudioPrimitives';
 import { MediaSelector } from '../components/MediaSelector';
 
@@ -76,7 +93,7 @@ export interface SocialStudioProps {
   onClose: () => void;
 }
 
-type RightTab = 'design' | 'filters' | 'captions' | 'export';
+type RightTab = 'simple' | 'design' | 'filters' | 'captions' | 'export';
 
 
 export function SocialStudio({
@@ -99,7 +116,7 @@ export function SocialStudio({
   );
   const [activeCard, setActiveCard] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [rightTab, setRightTab] = useState<RightTab>('design');
+  const [rightTab, setRightTab] = useState<RightTab>('simple');
   const [showSafeZones, setShowSafeZones] = useState(true);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -243,6 +260,28 @@ export function SocialStudio({
    * this editor has single selection only. The geometry itself lives in
    * `alignLayerPosition`, where it is unit tested.
    */
+  /**
+   * Align a specific layer, from the simple editor's Position row.
+   *
+   * Selecting the target first is what makes the alignment visible: the editor
+   * sees the box jump on the canvas and the measurement bar update, instead of
+   * pressing a button that appears to do nothing.
+   */
+  const alignLayerById = useCallback((layerId: string, mode: AlignMode) => {
+    setSelectedId(layerId);
+    if (activeCard >= design.cards.length) return;
+    updateCard(activeCard, c => {
+      const layer = c.layers.find(l => l.id === layerId);
+      if (!layer) return c;
+      const next = alignLayerPosition(layer, mode, format);
+      return {
+        ...c,
+        layers: c.layers.map(l => (l.id === layerId ? ({ ...l, ...next } as SocialLayer) : l)),
+      };
+    });
+  }, [activeCard, design.cards.length, updateCard, format]);
+
+  /** Apply an alignment to whatever is currently selected. */
   const alignSelection = useCallback((mode: AlignMode) => {
     if (!selectedId || activeCard >= design.cards.length) return;
     updateCard(activeCard, c => {
@@ -403,17 +442,13 @@ export function SocialStudio({
 
   /** Device uploads become data URLs so they travel inside the saved document. */
   const handleDeviceFile = useCallback(async (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setStatus(t('Ce fichier nâ€™est pas une image.', 'That file is not an image.'));
+    const result = await readImageFile(file);
+    if ('error' in result) {
+      const [fr, en] = UPLOAD_ERRORS[result.error] ?? UPLOAD_ERRORS['read-failed'];
+      setStatus(t(fr, en));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = String(reader.result || '');
-      if (dataUrl) await applyAsset(dataUrl);
-    };
-    reader.onerror = () => setStatus(t('Lecture du fichier impossible.', 'Could not read that file.'));
-    reader.readAsDataURL(file);
+    await applyAsset(result.src);
   }, [applyAsset, t]);
 
   /**
@@ -454,18 +489,15 @@ export function SocialStudio({
     await preloadAssets([src]);
   }, [selectedId, card, patchLayer, updateCard, activeCard, format]);
 
-  const handleLogoUpload = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) {
-      setStatus(t('Ce fichier nâ€™est pas une image.', 'That file is not an image.'));
+  const handleLogoUpload = useCallback(async (file: File) => {
+    const result = await readImageFile(file);
+    if ('error' in result) {
+      const [fr, en] = UPLOAD_ERRORS[result.error] ?? UPLOAD_ERRORS['read-failed'];
+      setStatus(t(fr, en));
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result || '');
-      if (dataUrl) applyLogoAsset(dataUrl);
-    };
-    reader.onerror = () => setStatus(t('Lecture du fichier impossible.', 'Could not read that file.'));
-    reader.readAsDataURL(file);
+    await applyLogoAsset(result.src);
+    setStatus(t('Logo ajouté.', 'Logo added.'));
   }, [applyLogoAsset, t]);
 
   /**
@@ -811,11 +843,32 @@ export function SocialStudio({
         <aside className="w-80 shrink-0 border-l border-zinc-800 bg-zinc-900/40 flex flex-col">
           <div className="flex border-b border-zinc-800 shrink-0">
             {([
-              ['design', t('Calques', 'Layers'), LayersIcon],
-              ['filters', t('Effets', 'Filters'), Grid3x3],
-              ['captions', t('LÃ©gendes', 'Captions'), FileText],
+              ['simple', t('Carte', 'Card'), null],
+              ['captions', t('Légendes', 'Captions'), FileText],
               ['export', t('Export', 'Export'), Download],
             ] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                onClick={() => setRightTab(id)}
+                className={`flex-1 py-2 text-[9px] font-bold uppercase tracking-wider border-b-2 transition-colors inline-flex items-center justify-center gap-1 ${
+                  rightTab === id
+                    ? 'border-[#E85D42] text-[#E85D42]'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {Icon && <Icon size={11} />} {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Advanced editing, reachable but not in the way. The first version led
+              with this and it was the main reason the Studio felt impenetrable. */}
+          {rightTab !== 'simple' && rightTab !== 'captions' && rightTab !== 'export' && (
+            <div className="flex border-b border-zinc-800 shrink-0 bg-zinc-950/60">
+              {([
+                ['design', t('Calques', 'Layers'), LayersIcon],
+                ['filters', t('Effets', 'Filters'), Grid3x3],
+              ] as const).map(([id, label, Icon]) => (
               <button
                 key={id}
                 onClick={() => setRightTab(id)}
@@ -828,9 +881,23 @@ export function SocialStudio({
                 <Icon size={11} /> {label}
               </button>
             ))}
-          </div>
+            </div>
+          )}
 
           <div className="flex-1 min-h-0 overflow-y-auto p-3">
+            {rightTab === 'simple' && card && (
+              <SimpleEditor
+                card={card}
+                format={format}
+                content={content}
+                onPatchText={(layerId, text) => patchLayer(layerId, { text, binding: undefined } as Partial<SocialLayer>)}
+                onUploadLogo={handleLogoUpload}
+                onOpenLibrary={() => setMediaOpen(true)}
+                onAlign={alignSelection}
+                onAlignLayer={alignLayerById}
+              />
+            )}
+
             {rightTab === 'design' && card && (
               <div className="flex flex-col gap-4">
                 <LayersPanel

@@ -126,18 +126,32 @@ function paintImageInto(
   radius: number,
 ): boolean {
   const img = peekImage(src);
-  if (!img || !img.width || !img.height) return false;
+  if (!img) return false;
 
-  const rect = computeImageRect(
-    { w: img.naturalWidth, h: img.naturalHeight },
-    box, fit, focalX, focalY,
-  );
+  // An SVG with only a `viewBox` and no width/height attributes reports
+  // naturalWidth/naturalWidth of 0, so it was being rejected here and the logo
+  // silently never drew — which is exactly what an uploaded vector logo hits.
+  // Fall back to the layout size so the image is still painted, at its
+  // intrinsic aspect ratio when one is available.
+  const nw = img.naturalWidth || img.width || 0;
+  const nh = img.naturalHeight || img.height || 0;
+  const ratioOk = nw > 0 && nh > 0;
+  const natural = ratioOk ? { w: nw, h: nh } : { w: box.w, h: box.h };
+
+  const rect = computeImageRect(natural, box, ratioOk ? fit : 'fill', focalX, focalY);
   ctx.save();
   if (radius > 0) {
     roundRectPath(ctx, box.x, box.y, box.w, box.h, radius);
     ctx.clip();
   }
-  ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+  try {
+    ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+  } catch {
+    // A decode that succeeded can still fail at draw time (truncated file,
+    // unsupported format). Treat it as a failure rather than throwing.
+    ctx.restore();
+    return false;
+  }
   ctx.restore();
   return true;
 }
@@ -328,7 +342,37 @@ function paintLogo(
       }
     : box;
 
-  paintImageInto(ctx, src, padded, layer.lockAspect ? 'contain' : 'fill', 0.5, 0.5, 0);
+  if (!src) {
+    drawMissingAsset(ctx, padded, 'LOGO');
+    return;
+  }
+
+  const painted = paintImageInto(ctx, src, padded, layer.lockAspect ? 'contain' : 'fill', 0.5, 0.5, 0);
+  if (!painted) {
+    // Without this the layer is simply absent and the editor has no way to know
+    // their upload failed. A visible placeholder turns "the logo doesn't appear"
+    // into an actionable state.
+    drawMissingAsset(ctx, padded, 'LOGO ?');
+  }
+}
+
+/** A visible marker for an asset that is absent or failed to paint. */
+function drawMissingAsset(ctx: CanvasRenderingContext2D, box: Rect, label: string): void {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.setLineDash([6, 6]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(box.x, box.y, box.w, box.h);
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.font = '600 24px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, box.x + box.w / 2, box.y + box.h / 2);
+  ctx.restore();
 }
 /**
  * Paint one card into a 2D context.

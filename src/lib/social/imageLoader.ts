@@ -15,13 +15,24 @@ const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<HTMLImageElement | null>>();
 
 /**
+ * Cross-origin is only set for remote URLs.
+ *
+ * Applying `crossOrigin` to a `data:` URL makes some browsers refuse to decode
+ * the image at all, which is why an uploaded logo (stored as a data URL) could
+ * fail while a library URL worked. Data URLs and blobs are already same-origin,
+ * so they must not carry the attribute.
+ */
+function isRemote(src: string): boolean {
+  return /^(https?:)?\/\//i.test(src);
+}
+
+/**
  * Fetch and decode an image.
  *
- * `crossOrigin='anonymous'` is set so a remote asset does not taint the canvas —
- * a tainted canvas cannot be exported with `toBlob`, which would break export
- * for any image not already served same-origin. Remote servers must send CORS
- * headers; where they do not, the image simply fails and the layer falls back to
- * its fill colour rather than silently exporting a blank card.
+ * For a remote asset `crossOrigin='anonymous'` keeps the canvas untainted, which
+ * is required for `toBlob` to work on export. Remote servers must therefore
+ * send CORS headers; where they do not, the image fails and the layer falls back
+ * to its fill colour rather than exporting a blank card.
  */
 export function loadImage(src: string): Promise<HTMLImageElement | null> {
   if (!src) return Promise.resolve(null);
@@ -35,9 +46,15 @@ export function loadImage(src: string): Promise<HTMLImageElement | null> {
 
   const promise = new Promise<HTMLImageElement | null>((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (isRemote(src)) img.crossOrigin = 'anonymous';
     img.decoding = 'async';
     img.onload = () => {
+      // An SVG with no intrinsic size still loads; give it a usable size so
+      // downstream code can compute a rect for it.
+      if (!img.naturalWidth && !img.naturalHeight) {
+        img.width = 512;
+        img.height = 512;
+      }
       cache.set(src, { state: 'ready', image: img });
       inFlight.delete(src);
       resolve(img);
@@ -54,6 +71,12 @@ export function loadImage(src: string): Promise<HTMLImageElement | null> {
   return promise;
 }
 
+/** Drop a cached entry, so a replaced file is re-decoded rather than reused. */
+export function invalidateImage(src: string): void {
+  cache.delete(src);
+  inFlight.delete(src);
+}
+
 /** Synchronous peek, for renderers that run inside an animation frame. */
 export function peekImage(src: string): HTMLImageElement | null {
   const entry = cache.get(src);
@@ -62,6 +85,38 @@ export function peekImage(src: string): HTMLImageElement | null {
 
 export function isImageReady(src: string): boolean {
   return cache.get(src)?.state === 'ready';
+}
+
+/**
+ * Read an uploaded file as a data URL, verifying it actually decodes.
+ *
+ * Reading a file is not the same as it being a usable image: a renamed `.png`
+ * that is really a PDF, or a corrupt file, produces a data URL that decodes to
+ * nothing. Checking here is what turns "my logo disappeared" into an error the
+ * editor can act on.
+ */
+export function readImageFile(file: File): Promise<{ src: string } | { error: string }> {
+  return new Promise(resolve => {
+    if (!file.type.startsWith('image/')) {
+      resolve({ error: 'not-an-image' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = String(reader.result || '');
+      if (!src) {
+        resolve({ error: 'read-failed' });
+        return;
+      }
+      // Decode before accepting, so a broken upload never reaches the document.
+      const probe = new Image();
+      probe.onload = () => resolve({ src });
+      probe.onerror = () => resolve({ error: 'decode-failed' });
+      probe.src = src;
+    };
+    reader.onerror = () => resolve({ error: 'read-failed' });
+    reader.readAsDataURL(file);
+  });
 }
 
 /** Preload every distinct asset a set of cards needs. */

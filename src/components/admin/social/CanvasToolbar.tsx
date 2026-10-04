@@ -27,7 +27,9 @@ import {
   BadgeCheck,
 } from 'lucide-react';
 
-export type { AlignMode } from '../../lib/social/document';
+import type { AlignMode } from '../../../lib/social/document';
+
+export type { AlignMode };
 
 function ToolbarButton({
   icon,
