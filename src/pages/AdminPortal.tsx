@@ -3399,10 +3399,21 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
       {socialStudioArticle && (
         <SocialStudio
           article={socialStudioArticle}
-          logoSrc={(siteSettings as any)?.boukariCorpLogo}
-          logoLight={(siteSettings as any)?.boukariCorpLogo}
-          logoDark={(siteSettings as any)?.boukariCorpLogo}
+          // The publication's own logo, NOT boukariCorpLogo: that is the parent
+          // company's footer mark and using it here was showing the wrong brand.
+          logoSrc={(siteSettings as any)?.socialLogo}
+          logoLight={(siteSettings as any)?.socialLogoLight}
+          logoDark={(siteSettings as any)?.socialLogoDark}
           language={language}
+          onSaveBrandLogo={async (brand) => {
+            // Saved once, site-wide. Every card — existing ones included —
+            // renders it, so it is never copied into individual documents.
+            updateSiteSettings({
+              socialLogo: brand.src,
+              socialLogoLight: brand.light,
+              socialLogoDark: brand.dark,
+            });
+          }}
           onSave={async (design) => {
             // Only the `social` field is written back. Every other field of the
             // article is left exactly as it was, so the Studio can never

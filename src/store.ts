@@ -845,7 +845,23 @@ interface AppState {
     tags?: { id: string; fr: string; en: string; }[];
     keywords?: string[];
     siteName: string;
+    /**
+     * Boukari Corporation's mark, shown in the site footer. NOT the publication's
+     * logo — see `socialLogo`.
+     */
     boukariCorpLogo?: string;
+    /**
+     * The Perspective Group wordmark used on social cards.
+     *
+     * Kept separate from `boukariCorpLogo` because they are different brands, and
+     * because a social card must never silently inherit the footer logo. Stored
+     * once here rather than copied into every card: replacing it updates all
+     * existing cards at once.
+     */
+    socialLogo?: string;
+    /** Optional light/dark variants, so the card can pick the legible one. */
+    socialLogoLight?: string;
+    socialLogoDark?: string;
     accentColor: string;
     editorialPhone: string;
     supportEmail: string;

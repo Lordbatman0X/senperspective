@@ -54,6 +54,8 @@ export interface StudioStageProps {
   showSafeZones: boolean;
   /** True when a logo layer is in `auto` tone, so the readback pass is needed. */
   logoAuto: boolean;
+  /** The site-wide publication logo drawn by brand-linked layers. */
+  brandLogo?: { src?: string; light?: string; dark?: string };
 }
 
 export function StudioStage({
@@ -66,6 +68,7 @@ export function StudioStage({
   preloadedSources = [],
   showSafeZones,
   logoAuto,
+  brandLogo,
 }: StudioStageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -132,14 +135,14 @@ export function StudioStage({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const base: RenderContext = { content };
+    const base: RenderContext = { content, brandLogo };
     const logoLuminance = logoAuto
       ? sampleLogoLuminances(canvas, card, format, base)
       : undefined;
 
     ctx.clearRect(0, 0, format.width, format.height);
     renderCard(ctx, card, format, { ...base, logoLuminance });
-  }, [card, format, content, logoAuto, reloadKey]);
+  }, [card, format, content, logoAuto, brandLogo, reloadKey]);
 
   const toCardCoords = useCallback((clientX: number, clientY: number) => {
     const rect = wrapRef.current?.getBoundingClientRect();

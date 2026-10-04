@@ -33,6 +33,17 @@ import type { SocialFormat } from './networks';
 export interface RenderContext {
   content: ResolvedContent;
   /**
+   * The site-wide Perspective Group logo.
+   *
+   * A logo layer with no `src` of its own is BRAND-LINKED and draws this. That is
+   * why the brand asset is NOT written into each card: the editor inserts it once
+   * in the site settings, every card picks it up immediately, and replacing it
+   * updates every existing card rather than leaving a stale copy behind in each
+   * document. A card only stores an `src` when the editor deliberately overrides
+   * the brand for that one card.
+   */
+  brandLogo?: { src?: string; light?: string; dark?: string };
+  /**
    * Pre-sampled luminance under each logo layer, keyed by layer id. The stage
    * computes this once before painting; sampling mid-draw would force a
    * synchronous canvas flush on every animation frame.
@@ -295,6 +306,10 @@ function applyEffects(ctx: CanvasRenderingContext2D, layer: SocialLayer, box: Re
 /**
  * Resolve which logo asset to draw.
  *
+ * Precedence: the layer's own file (a deliberate per-card override), then the
+ * site-wide brand logo. A brand-linked layer therefore always shows the current
+ * brand asset without the card storing a copy of it.
+ *
  * `auto` consults the luminance sampled under the logo box and takes the better
  * contrast. A manual tone always wins — the escape hatch for a card where the
  * sample is wrong, a busy photo edge being the usual reason.
@@ -302,10 +317,13 @@ function applyEffects(ctx: CanvasRenderingContext2D, layer: SocialLayer, box: Re
 export function resolveLogoSrc(
   layer: LogoLayer,
   sampledLuminance: number | undefined,
+  brand?: RenderContext['brandLogo'],
 ): { src: string; tone: LogoTone } {
-  const light = layer.toneSrc?.light || layer.src;
-  const dark = layer.toneSrc?.dark || layer.src;
-  const hasBoth = Boolean(layer.toneSrc?.light && layer.toneSrc?.dark);
+  // A layer with its own file is an override and never falls back.
+  const own = layer.src || '';
+  const light = layer.toneSrc?.light || own || brand?.light || brand?.src || '';
+  const dark = layer.toneSrc?.dark || own || brand?.dark || brand?.src || '';
+  const hasBoth = Boolean((layer.toneSrc?.light || own || brand?.light) && (layer.toneSrc?.dark || own || brand?.dark));
 
   if (layer.tone === 'auto' && sampledLuminance !== undefined && hasBoth) {
     const tone = chooseLogoTone(
@@ -319,7 +337,7 @@ export function resolveLogoSrc(
   if (layer.tone === 'light' || layer.tone === 'dark') {
     return { src: layer.tone === 'light' ? light : dark, tone: layer.tone };
   }
-  return { src: layer.src, tone: 'custom' };
+  return { src: own || brand?.src || '', tone: own ? 'custom' : 'auto' };
 }
 
 function paintLogo(
@@ -327,8 +345,9 @@ function paintLogo(
   layer: LogoLayer,
   box: Rect,
   sampledLuminance: number | undefined,
+  brand?: RenderContext['brandLogo'],
 ): void {
-  const { src } = resolveLogoSrc(layer, sampledLuminance);
+  const { src } = resolveLogoSrc(layer, sampledLuminance, brand);
   if (!src) return;
 
   // Padding insets the artwork inside its box without changing the box, so the
@@ -433,7 +452,7 @@ export function renderCard(
         break;
 
       case 'logo':
-        paintLogo(ctx, layer, box, rctx.logoLuminance?.[layer.id]);
+        paintLogo(ctx, layer, box, rctx.logoLuminance?.[layer.id], rctx.brandLogo);
         break;
 
       case 'text': {
@@ -465,7 +484,8 @@ export function sampleLogoLuminances(
   rctx: RenderContext,
 ): Record<string, number> {
   const logos = card.layers.filter(
-    (l): l is LogoLayer => l.kind === 'logo' && l.visible && Boolean(resolveLogoSrc(l, undefined).src),
+    (l): l is LogoLayer =>
+      l.kind === 'logo' && l.visible && Boolean(resolveLogoSrc(l, undefined, rctx.brandLogo).src),
   );
   if (!logos.length) return {};
 

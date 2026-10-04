@@ -1,6 +1,7 @@
 export function SimpleEditor({
   card,
   content,
+  brandLogoSrc,
   onPatchText,
   onUploadLogo,
   onOpenLibrary,
@@ -14,7 +15,8 @@ export function SimpleEditor({
   const byline = textByName(card, 'Signature');
   const eyebrow = textByName(card, 'Rubrique');
 
-  const hasLogoFile = Boolean(logo?.src);
+  const hasLogoFile = Boolean(logo?.src || brandLogoSrc);
+  const usingBrand = !logo?.src && Boolean(brandLogoSrc);
   const alignTarget = headline?.id ?? logo?.id;
 
   return (
@@ -23,7 +25,7 @@ export function SimpleEditor({
       <Row
         icon={<ImageIcon size={13} />}
         label="Logo"
-        hint="Le logo en haut de la carte. Un fichier clair sur fond sombre, ou l’inverse."
+        hint="Le logo Perspective Group. Insérez-le une fois : il s’applique automatiquement à toutes les cartes, articles compris."
       >
         <div
           className={`flex items-center justify-center border mb-2 px-2 py-2 ${
@@ -31,9 +33,11 @@ export function SimpleEditor({
           }`}
         >
           {hasLogoFile ? (
-            <span className="text-[10px] font-mono text-emerald-400">Fichier chargé ✓</span>
+            <span className="text-[10px] font-mono text-emerald-400">
+              {usingBrand ? 'Logo du site appliqué ✓' : 'Logo de cette carte ✓'}
+            </span>
           ) : (
-            <span className="text-[10px] font-mono text-amber-300">Aucun logo — importez-en un</span>
+            <span className="text-[10px] font-mono text-amber-300">Aucun logo — importez-le ci-dessous</span>
           )}
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -166,6 +170,8 @@ export interface SimpleEditorProps {
   card: SocialCard;
   format: SocialFormat;
   content: ResolvedContent;
+  /** The site-wide publication logo, if one has been saved. */
+  brandLogoSrc?: string;
   onPatchText: (layerId: string, text: string) => void;
   onUploadLogo: (file: File) => void;
   onOpenLibrary: () => void;

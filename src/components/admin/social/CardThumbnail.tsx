@@ -16,16 +16,12 @@ export function CardThumbnail({
   card,
   format,
   content,
-  logoSrc,
-  logoLight,
-  logoDark,
+  brandLogo,
 }: {
   card: SocialCard;
   format: SocialFormat;
   content: ResolvedContent;
-  logoSrc?: string;
-  logoLight?: string;
-  logoDark?: string;
+  brandLogo?: { src?: string; light?: string; dark?: string };
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Backing store at full size would allocate dozens of 1080x1350 canvases for
@@ -41,22 +37,11 @@ export function CardThumbnail({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Fill the brand logo onto any layer that has none, so a template seeded
-    // without site settings still previews with the wordmark.
-    const withLogo = {
-      ...card,
-      layers: card.layers.map(l => (
-        l.kind === 'logo' && !l.src && logoSrc
-          ? { ...l, src: logoSrc, toneSrc: { light: logoLight || logoSrc, dark: logoDark || logoSrc } }
-          : l
-      )),
-    };
-
     ctx.save();
     ctx.scale(scale, scale);
-    renderCard(ctx, withLogo, format, { content });
+    renderCard(ctx, card, format, { content, brandLogo });
     ctx.restore();
-  }, [card, format, content, logoSrc, logoLight, logoDark]);
+  }, [card, format, content, brandLogo]);
 
   return <canvas ref={canvasRef} className="w-full h-full object-contain" />;
 }

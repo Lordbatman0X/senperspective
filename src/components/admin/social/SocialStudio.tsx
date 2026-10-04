@@ -89,6 +89,14 @@ export interface SocialStudioProps {
   logoLight?: string;
   logoDark?: string;
   language: 'fr' | 'en';
+  /**
+   * Persist the publication logo once, site-wide.
+   *
+   * Cards never store the brand file: a logo layer with no `src` is brand-linked
+   * and draws whatever this holds. That means the editor inserts the logo once
+   * and every card, including ones already saved, updates at the same time.
+   */
+  onSaveBrandLogo?: (brand: { src: string; light?: string; dark?: string }) => Promise<void> | void;
   onSave: (design: SocialDesign) => Promise<{ success: boolean; error?: string }>;
   onClose: () => void;
 }
@@ -103,6 +111,7 @@ export function SocialStudio({
   logoLight,
   logoDark,
   language,
+  onSaveBrandLogo,
   onSave,
   onClose,
 }: SocialStudioProps) {
@@ -130,6 +139,38 @@ export function SocialStudio({
   const format = getFormat(design.network, design.formatId);
   const spec = getNetwork(design.network);
   const card = design.cards[activeCard] ?? null;
+
+  /**
+   * The publication logo, resolved once and handed to every renderer.
+   *
+   * Brand-linked logo layers (those with no `src` of their own) draw this, so the
+   * brand asset lives in exactly one place instead of being copied into every
+   * card document.
+   */
+  const brandLogo = useMemo(
+    () => ({ src: logoSrc, light: logoLight || logoSrc, dark: logoDark || logoSrc }),
+    [logoSrc, logoLight, logoDark],
+  );
+
+  /**
+   * Everything the card needs decoded before it can paint.
+   *
+   * The brand logo is included, otherwise a brand-linked layer would render as a
+   * placeholder on the first frame and only appear after an unrelated repaint.
+   */
+  const assetSources = useMemo(() => {
+    const sources: string[] = [];
+    for (const value of [logoSrc, logoLight, logoDark]) {
+      if (value) sources.push(value);
+    }
+    for (const c of design.cards) {
+      for (const layer of c.layers) {
+        if (layer.kind === 'logo' && layer.src) sources.push(layer.src);
+        if ((layer.kind === 'background' || layer.kind === 'image') && layer.src) sources.push(layer.src);
+      }
+    }
+    return Array.from(new Set(sources));
+  }, [logoSrc, logoLight, logoDark, design.cards]);
 
   const t = useCallback((fr: string, en: string) => (language === 'fr' ? fr : en), [language]);
 
@@ -489,6 +530,40 @@ export function SocialStudio({
     await preloadAssets([src]);
   }, [selectedId, card, patchLayer, updateCard, activeCard, format]);
 
+  /**
+ * Set the publication logo, once, for the whole site.
+ *
+ * The editor was previously asked for this per card, which is both tedious and
+ * wrong: it stored a copy of the brand in every article document, so replacing
+ * the logo would have left a stale copy behind in each one.
+ *
+ * Now the file is saved to the site settings and the card's logo layers are
+ * reset to brand-linked (`src: ''`), so they follow the brand instead of holding
+ * their own duplicate.
+ */
+  const saveBrandLogo = useCallback(async (src: string) => {
+    // Save site-wide first, so the renderer has it even if the reset below is
+    // what the editor ends up seeing.
+    await onSaveBrandLogo?.({ src, light: src, dark: src });
+
+    applyChange(d => ({
+      ...d,
+      cards: d.cards.map(c => ({
+        ...c,
+        layers: c.layers.map(l => (
+          l.kind === 'logo' && l.src
+            // Clearing the override puts the layer back on the brand asset.
+            ? { ...l, src: '', toneSrc: undefined, tone: 'auto' as const }
+            : l
+        )),
+      })),
+    }));
+    setStatus(t(
+      'Logo Perspective Group enregistré. Il s’applique à toutes les cartes.',
+      'Perspective Group logo saved. It applies to every card.',
+    ));
+  }, [onSaveBrandLogo, applyChange, t]);
+
   const handleLogoUpload = useCallback(async (file: File) => {
     const result = await readImageFile(file);
     if ('error' in result) {
@@ -496,9 +571,15 @@ export function SocialStudio({
       setStatus(t(fr, en));
       return;
     }
+    if (onSaveBrandLogo) {
+      await saveBrandLogo(result.src);
+      return;
+    }
+    // Ad hoc mode has nowhere to persist a site setting, so fall back to the
+    // current card only.
     await applyLogoAsset(result.src);
-    setStatus(t('Logo ajouté.', 'Logo added.'));
-  }, [applyLogoAsset, t]);
+    setStatus(t('Logo ajouté à cette carte.', 'Logo added to this card.'));
+  }, [saveBrandLogo, applyLogoAsset, onSaveBrandLogo, t]);
 
   /**
    * Apply an asset chosen in the media library.
@@ -569,7 +650,7 @@ export function SocialStudio({
     if (!content) return;
     setExporting(true);
     try {
-      const canvas = await renderCardToCanvas(design.cards[index], format, { content });
+      const canvas = await renderCardToCanvas(design.cards[index], format, { content, brandLogo });
       const name = exportFilename(content.slug, design.network, index, design.cards.length);
       await downloadCanvasAsPng(canvas, name);
       setStatus(t('Image exportÃ©e.', 'Image exported.'));
@@ -807,9 +888,7 @@ export function SocialStudio({
                       card={c}
                       format={format}
                       content={content}
-                      logoSrc={logoSrc}
-                      logoLight={logoLight}
-                      logoDark={logoDark}
+                      brandLogo={brandLogo}
                     />
                   </div>
                 </div>
@@ -826,9 +905,10 @@ export function SocialStudio({
             selectedId={selectedId}
             onSelect={setSelectedId}
             onChangeLayer={patchLayer}
-            preloadedSources={content.image ? [content.image] : []}
+            preloadedSources={[...assetSources, ...(content.image ? [content.image] : [])]}
             showSafeZones={showSafeZones}
             logoAuto={logoAuto}
+            brandLogo={brandLogo}
           />
         ) : (
           <div className="flex-1 grid place-items-center text-xs text-zinc-500 text-center px-6">
@@ -890,6 +970,7 @@ export function SocialStudio({
                 card={card}
                 format={format}
                 content={content}
+                brandLogoSrc={logoSrc}
                 onPatchText={(layerId, text) => patchLayer(layerId, { text, binding: undefined } as Partial<SocialLayer>)}
                 onUploadLogo={handleLogoUpload}
                 onOpenLibrary={() => setMediaOpen(true)}

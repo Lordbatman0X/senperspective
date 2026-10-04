@@ -17,7 +17,7 @@ const {
   buildFilterString,
   chooseLogoTone, colorLuminance, contrastRatio, relativeLuminance,
   migrateSocialDesign, createText, createLogo, alignLayerPosition,
-  computeImageRect,
+  computeImageRect, resolveLogoSrc,
   buildCoverCard, buildBriefCard, buildClosingCard,
 } = await import('../.socialtest.mjs');
 
@@ -313,5 +313,26 @@ ok('a new logo has a real, grabbable size');
 const builtLogo = createLogo({ x: 64, y: 64, w: 240, h: 40 });
 assert.deepEqual([builtLogo.x, builtLogo.y, builtLogo.w, builtLogo.h], [64, 64, 240, 40]);
 ok('logo geometry is settable, so a new logo can be placed immediately');
+
+console.log('Logo resolution');
+const brand = { src: 'https://site.test/perspective.png', light: 'https://site.test/light.png', dark: 'https://site.test/dark.png' };
+// A brand-linked layer has no file of its own and must draw the site logo.
+const brandLinked = createLogo({ src: '', tone: 'auto' });
+assert.equal(resolveLogoSrc(brandLinked, undefined, brand).src, brand.src);
+ok('a brand-linked layer draws the site-wide logo');
+// A card override must win over the brand, so a deliberate choice is honoured.
+const overridden = createLogo({ src: 'data:image/png;base64,OWN', tone: 'custom' });
+assert.equal(resolveLogoSrc(overridden, undefined, brand).src, 'data:image/png;base64,OWN');
+ok('a per-card logo overrides the brand asset');
+// With no brand saved there is nothing to draw, and the placeholder shows.
+assert.equal(resolveLogoSrc(brandLinked, undefined, undefined).src, '');
+ok('no brand and no override yields no file, so the placeholder renders');
+// An explicit tone still resolves from the brand variants.
+assert.equal(resolveLogoSrc(createLogo({ src: '', tone: 'light' }), undefined, brand).src, brand.light);
+assert.equal(resolveLogoSrc(createLogo({ src: '', tone: 'dark' }), undefined, brand).src, brand.dark);
+ok('explicit light/dark tones read the brand variants');
+// A brand-linked layer is never left claiming a file it does not have.
+assert.equal(resolveLogoSrc(brandLinked, undefined, brand).tone, 'auto');
+ok('a brand-linked layer reports auto tone, not a false custom override');
 
 console.log(`\n${pass} checks passed.`);
