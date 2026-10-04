@@ -13,7 +13,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test:header-nav": "esbuild src/lib/siteTaxonomy.ts --bundle --format=esm --platform=neutral --outfile=.navtest.mjs --log-level=error && node scripts/test-header-nav.mjs",
-    "test:curated-rows": "node --experimental-strip-types scripts/test-curated-rows.mjs"
+    "test:curated-rows": "node --experimental-strip-types scripts/test-curated-rows.mjs",
+    "test:social-studio": "esbuild src/lib/social/index.ts --bundle --format=esm --platform=neutral --outfile=.socialtest.mjs --log-level=error && node scripts/test-social-studio.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

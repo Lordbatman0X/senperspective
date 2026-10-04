@@ -1,3 +1,5 @@
+import type { SocialDesign } from './types/social';
+
 export type Language = 'fr' | 'en';
 
 export interface BilingualText {
@@ -85,6 +87,15 @@ export interface Article {
   keyActors?: KeyActor[];
   timeline?: TimelineEvent[];
   structuralForces?: StructuralForces;
+
+  /**
+   * The Social Studio design for this article: card layouts, per-layer styling
+   * and the FR/EN caption overrides. Optional and additive — an article with
+   * no `social` renders and behaves exactly as it did before the Studio
+   * existed. It holds no copy of the title, excerpt or date, so editing those
+   * here cannot be overwritten by the Studio and vice versa.
+   */
+  social?: SocialDesign;
   
   relatedArticleIds?: string[]; // IDs of related articles
   
