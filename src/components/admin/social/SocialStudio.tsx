@@ -45,6 +45,7 @@ import { DEFAULT_FORMAT_ID, getFormat, getNetwork, MAX_CARDS, NETWORK_ORDER, res
 import { resolveContent, type SocialSource } from '../../../lib/social/content';
 import { generateBothCaptions } from '../../../lib/social/captions';
 import { alignLayerPosition, createImage, createLogo, createShape, createText, migrateSocialDesign, uid, type AlignMode } from '../../../lib/social/document';
+import { alignBoxes, groupLayers, ungroupLayers } from '../../../lib/social/canvasOps';
 import { buildCard, buildInitialCards, syncAllDots } from '../../../lib/social/templates';
 import { downloadCanvasAsPng, downloadTextFile, exportFilename, renderCardToCanvas } from '../../../lib/social/renderer';
 import { preloadAssets, ensureFontsReady, readImageFile } from '../../../lib/social/imageLoader';
@@ -125,6 +126,14 @@ export function SocialStudio({
   );
   const [activeCard, setActiveCard] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * Multi-selection, as ids.
+   *
+   * `selectedId` is kept as the "primary" layer for the inspector, which still
+   * edits one layer at a time; the canvas itself works on the full selection so
+   * groups and marquee moves behave like Figma.
+   */
+  const [selection, setSelection] = useState<string[]>([]);
   const [rightTab, setRightTab] = useState<RightTab>('simple');
   const [showSafeZones, setShowSafeZones] = useState(true);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -240,13 +249,76 @@ export function SocialStudio({
     applyChange(d => ({ ...d, cards: d.cards.map((c, i) => (i === index ? fn(c) : c)) }));
   }, [applyChange]);
 
-  const patchLayer = useCallback((id: string, patch: Partial<SocialLayer>) => {
+  /** Apply many layer patches as ONE undo step, which is what a drag needs. */
+  const patchLayers = useCallback((patches: Array<{ id: string; patch: Partial<SocialLayer> }>) => {
+    if (!patches.length) return;
     if (activeCard < 0 || activeCard >= design.cards.length) return;
+    const byId = new Map(patches.map(p => [p.id, p.patch]));
     updateCard(activeCard, c => ({
       ...c,
-      layers: c.layers.map(l => (l.id === id ? ({ ...l, ...patch } as SocialLayer) : l)),
+      layers: c.layers.map(l => {
+        const patch = byId.get(l.id);
+        return patch ? ({ ...l, ...patch } as SocialLayer) : l;
+      }),
     }));
   }, [activeCard, design.cards.length, updateCard]);
+
+  const patchLayer = useCallback((id: string, patch: Partial<SocialLayer>) => {
+    patchLayers([{ id, patch }]);
+  }, [patchLayers]);
+
+  const setSelectionSafe = useCallback((ids: string[]) => {
+    setSelection(ids);
+    // The inspector follows the most recently touched layer.
+    setSelectedId(ids.length ? ids[ids.length - 1] : null);
+  }, []);
+
+  /** Replace the single-layer selection everywhere it is read. */
+  const selectOne = useCallback((id: string | null) => {
+    setSelection(id ? [id] : []);
+    setSelectedId(id);
+  }, []);
+
+  const deleteSelection = useCallback(() => {
+    if (!selection.length || !card) return;
+    updateCard(activeCard, c => ({
+      ...c,
+      layers: c.layers.filter(l => !selection.includes(l.id) || l.locked),
+    }));
+    setSelectionSafe([]);
+  }, [selection, card, activeCard, updateCard, setSelectionSafe]);
+
+  const duplicateSelection = useCallback(() => {
+    if (!selection.length || !card) return;
+    updateCard(activeCard, c => {
+      const layers = [...c.layers];
+      const newIds: string[] = [];
+      // Walk top-down so a duplicate lands directly above its original, and keep
+      // the copies in the same relative order.
+      for (const id of [...selection].reverse()) {
+        const index = layers.findIndex(l => l.id === id);
+        if (index < 0) continue;
+        const copy = { ...layers[index], id: uid(), name: `${layers[index].name} (copie)`, x: layers[index].x + 20, y: layers[index].y + 20 };
+        layers.splice(index + 1, 0, copy);
+        newIds.unshift(copy.id);
+      }
+      setSelectionSafe(newIds);
+      return { ...c, layers };
+    });
+  }, [selection, card, activeCard, updateCard, setSelectionSafe]);
+
+  const groupSelection = useCallback(() => {
+    if (selection.length < 2 || !card) return;
+    updateCard(activeCard, c => {
+      const { layers } = groupLayers(c.layers, selection);
+      return { ...c, layers };
+    });
+  }, [selection, card, activeCard, updateCard]);
+
+  const ungroupSelection = useCallback(() => {
+    if (!card) return;
+    updateCard(activeCard, c => ({ ...c, layers: ungroupLayers(c.layers, selection) }));
+  }, [selection, card, activeCard, updateCard]);
 
   const addLayer = useCallback((kind: 'text' | 'shape' | 'image' | 'logo') => {
     if (!card) return;
@@ -324,18 +396,41 @@ export function SocialStudio({
 
   /** Apply an alignment to whatever is currently selected. */
   const alignSelection = useCallback((mode: AlignMode) => {
-    if (!selectedId || activeCard >= design.cards.length) return;
+    const ids = selection.length ? selection : (selectedId ? [selectedId] : []);
+    if (!ids.length || activeCard >= design.cards.length) return;
+    // Gutter alignment is the engine's frame-align plus the template's inner
+    // margin, so it reduces to a plain alignment applied to a single box.
+    const toEngine: Record<AlignMode, 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom'> = {
+      left: 'left', centerH: 'centerH', right: 'right',
+      top: 'top', centerV: 'centerV', bottom: 'bottom',
+      gutterH: 'left', gutterV: 'top',
+    };
+    const engineMode = toEngine[mode];
     updateCard(activeCard, c => {
-      const layer = c.layers.find(l => l.id === selectedId);
-      if (!layer) return c;
-
-      const next = alignLayerPosition(layer, mode, format);
+      const chosen = c.layers.filter(l => ids.includes(l.id) && !l.locked);
+      if (!chosen.length) return c;
+      const gx = Math.round(format.width * 0.062);
+      const gy = Math.round(format.height * 0.062);
+      const boxesToAlign = chosen.map(l => ({ x: l.x, y: l.y, w: l.w, h: l.h }));
+      const deltas = alignBoxes(boxesToAlign, engineMode, { width: format.width, height: format.height });
+      const byId = new Map(chosen.map((l, i) => [l.id, deltas[i]]));
       return {
         ...c,
-        layers: c.layers.map(l => (l.id === selectedId ? ({ ...l, ...next } as SocialLayer) : l)),
+        layers: c.layers.map(l => {
+          const d = byId.get(l.id);
+          if (!d) return l;
+          // Gutter shifts the single box to the template's inner margin.
+          const useGx = mode === 'gutterH' && chosen.length === 1;
+          const useGy = mode === 'gutterV' && chosen.length === 1;
+          return {
+            ...l,
+            x: Math.round(useGx ? gx : l.x + d.dx),
+            y: Math.round(useGy ? gy : l.y + d.dy),
+          } as SocialLayer;
+        }),
       };
     });
-  }, [selectedId, activeCard, design.cards.length, updateCard, format]);
+  }, [selection, selectedId, activeCard, design.cards.length, updateCard, format]);
 
   const reorderLayer = useCallback((id: string, direction: 'up' | 'down' | 'front' | 'back') => {
     updateCard(activeCard, c => {
@@ -902,9 +997,13 @@ export function SocialStudio({
             card={card}
             format={format}
             content={content}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onChangeLayer={patchLayer}
+            selection={selection}
+            onSelectionChange={setSelectionSafe}
+            onPatchLayers={patchLayers}
+            onDeleteSelection={deleteSelection}
+            onDuplicateSelection={duplicateSelection}
+            onGroup={groupSelection}
+            onUngroup={ungroupSelection}
             preloadedSources={[...assetSources, ...(content.image ? [content.image] : [])]}
             showSafeZones={showSafeZones}
             logoAuto={logoAuto}
@@ -983,13 +1082,20 @@ export function SocialStudio({
               <div className="flex flex-col gap-4">
                 <LayersPanel
                   layers={card.layers}
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  selection={selection}
+                  onSelect={(id, additive) => {
+                    if (!additive) { selectOne(id); return; }
+                    setSelectionSafe(
+                      selection.includes(id) ? selection.filter(s => s !== id) : [...selection, id],
+                    );
+                  }}
                   onPatch={patchLayer}
                   onReorder={reorderLayer}
                   onDuplicate={duplicateLayer}
                   onDelete={deleteLayer}
                   onAdd={addLayer}
+                  onGroup={groupSelection}
+                  onUngroup={ungroupSelection}
                 />
                 <InspectorPanel
                   layer={selectedLayer}

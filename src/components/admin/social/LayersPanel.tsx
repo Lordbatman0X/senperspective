@@ -1,15 +1,20 @@
 ﻿export function LayersPanel({
   layers,
-  selectedId,
+  selection,
   onSelect,
   onPatch,
   onReorder,
   onDuplicate,
   onDelete,
   onAdd,
+  onGroup,
+  onUngroup,
 }: LayersPanelProps) {
+  // The primary (last-touched) layer drives single-layer actions and inspector.
+  const selectedId = selection[selection.length - 1] ?? null;
   const selected = layers.find(l => l.id === selectedId) ?? null;
   const ordered = [...layers].reverse();
+  const hasGroups = layers.some(l => Boolean(l.group));
 
   return (
     <div className="flex flex-col gap-3">
@@ -29,11 +34,11 @@
 
       <div className="flex flex-col gap-1">
         {ordered.map(layer => {
-          const isSelected = layer.id === selectedId;
+          const isSelected = selection.includes(layer.id);
           return (
             <div
               key={layer.id}
-              onClick={() => onSelect(layer.id)}
+              onClick={(e) => onSelect(layer.id, e.shiftKey)}
               className={`flex items-center gap-1.5 px-2 py-1.5 border cursor-pointer transition-colors ${
                 isSelected
                   ? 'border-[#E85D42] bg-[#E85D42]/10'
@@ -65,6 +70,12 @@
                 </span>
               )}
 
+              {layer.group && (
+                <span className="text-[9px] font-mono text-zinc-500 shrink-0" title="Ce calque appartient à un groupe">
+                  G
+                </span>
+              )}
+
               <button
                 type="button"
                 title={layer.locked ? 'DÃ©verrouiller' : 'Verrouiller'}
@@ -77,6 +88,21 @@
           );
         })}
       </div>
+
+      {selection.length >= 2 && (
+        <div className="grid grid-cols-2 gap-1">
+          <GhostButton onClick={onGroup} title="Grouper la sélection (Ctrl+G)">
+            Grouper
+          </GhostButton>
+          <GhostButton
+            onClick={onUngroup}
+            disabled={!hasGroups}
+            title="Dégrouper la sélection (Ctrl+Maj+G)"
+          >
+            Dégrouper
+          </GhostButton>
+        </div>
+      )}
 
       {selected && (
         <>
@@ -164,13 +190,16 @@ const BLEND_OPTIONS: Array<{ value: LayerBlend; label: string }> = [
 
 export interface LayersPanelProps {
   layers: SocialLayer[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
+  /** Ids of every selected layer. */
+  selection: string[];
+  onSelect: (id: string, additive?: boolean) => void;
   onPatch: (id: string, patch: Partial<SocialLayer>) => void;
   onReorder: (id: string, direction: 'up' | 'down' | 'front' | 'back') => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onAdd: (kind: 'text' | 'shape' | 'image' | 'logo') => void;
+  onGroup: () => void;
+  onUngroup: () => void;
 }
 
 function kindIcon(layer: SocialLayer) {
