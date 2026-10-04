@@ -49,7 +49,11 @@ shot_*.png
 src/lib/tmp_live.json
 tmp_*.json
 .navtest.mjs
+.carouseltest.mjs
 
 # Pre-repair snapshots of the live `users` tree (real emails + inline base64
 # profile photos). Local recovery only - must never reach the repository.
 backups/
+
+# Local, throwaway carousel design preview (not part of the app build)
+card-preview/

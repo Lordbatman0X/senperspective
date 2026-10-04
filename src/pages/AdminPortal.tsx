@@ -5,7 +5,7 @@ import { fetchUserProfile } from '../firebase/auth';
 import { 
   LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
-  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud, Server
+  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud, Server, Share2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
@@ -48,6 +48,7 @@ interface AdminSection {
   /** Hidden from every admin except the bootstrap super-admin. */
   superAdminOnly?: boolean;
 }
+import { CarouselStudioTab } from '../components/admin/carousel/CarouselStudioTab';
 import { FlashesAndCurationTab } from '../components/admin/FlashesAndCurationTab';
 import { signInEmail, signOutUser } from '../firebase/auth';
 
@@ -418,7 +419,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'list' | 'editor' | 'taxonomy' | 'media' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'ads' | 'security' | 'accounts' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config' | 'ai_providers'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'admin_dashboard' | 'list' | 'editor' | 'taxonomy' | 'media' | 'social_carousel' | 'matches' | 'comments' | 'subscribers' | 'google_integrations' | 'ads' | 'security' | 'accounts' | 'customizer' | 'homepage_curation' | 'live_alerts' | 'flashes_curation' | 'audience' | 'navigation' | 'seo_distribution' | 'settings' | 'activity_log' | 'abdel_chat_config' | 'ai_providers'>('overview');
   // The AI Diagnostics sub-tab was removed: every key, engine and proxy setting
   // it held now lives in the single "APIs & IA" section, which renders from the
   // provider registry instead of a hardcoded copy of the list.
@@ -789,6 +790,7 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         { id: 'taxonomy', label: language === 'fr' ? 'Catégories' : 'Categories', icon: Tag, badge: 0 },
         { id: 'homepage_curation', label: language === 'fr' ? 'Page d’accueil' : 'Homepage', icon: Home, badge: 0 },
         { id: 'media', label: language === 'fr' ? 'Médiathèque' : 'Media Library', icon: ImageIcon, badge: 0 },
+        { id: 'social_carousel', label: language === 'fr' ? 'Carrousel Social' : 'Social Carousel', icon: Share2, badge: 0 },
       ],
     },
     {
@@ -1110,6 +1112,10 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
             deleteMedia={deleteMedia}
             updateMediaName={updateMediaName}
           />
+        )}
+
+        {activeTab === 'social_carousel' && (
+          <CarouselStudioTab />
         )}
 
         {activeTab === 'comments' && (

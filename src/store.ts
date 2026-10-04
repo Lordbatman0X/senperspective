@@ -817,6 +817,12 @@ interface AppState {
     ga4MeasurementId?: string;
     /** Display name subscribers see as the sender. Defaults to "Perspective Group". */
     newsletterSenderName?: string;
+    /**
+     * The saved social carousel draft (logo, photos, text for the three fixed
+     * cards). Persisted here rather than on the article so one carousel can be
+     * staged without touching editorial records.
+     */
+    socialCarousel?: import('./lib/carousel/types').CarouselDraft;
     /** Absolute https URL of the sender photo shown on every newsletter. */
     newsletterSenderPhoto?: string;
     /** Signature block appended to every newsletter. Plain text or HTML. */

@@ -13,6 +13,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test:header-nav": "esbuild src/lib/siteTaxonomy.ts --bundle --format=esm --platform=neutral --outfile=.navtest.mjs --log-level=error && node scripts/test-header-nav.mjs",
+    "test:carousel": "esbuild scripts/test-carousel.mjs --bundle --format=esm --platform=node --outfile=.carouseltest.mjs --log-level=error && node .carouseltest.mjs",
     "test:curated-rows": "node --experimental-strip-types scripts/test-curated-rows.mjs"
   },
   "dependencies": {
