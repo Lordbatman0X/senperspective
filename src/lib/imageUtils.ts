@@ -20,6 +20,28 @@ export function getSafeImageUrl(url?: string, fallback = DEFAULT_FALLBACK_IMAGE)
 }
 
 /**
+ * True when any pixel is not fully opaque.
+ *
+ * Sampled on a stride rather than read in full: a 1080px logo has ~1M pixels,
+ * and the answer we need is "is there transparency anywhere", so checking every
+ * pixel is wasted work on large canvases.
+ */
+function hasVisibleAlpha(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  const step = Math.max(1, Math.floor(Math.min(width, height) / 128));
+  try {
+    const { data } = ctx.getImageData(0, 0, width, height);
+    for (let i = 3; i < data.length; i += 4 * step) {
+      if (data[i] < 250) return true;
+    }
+    return false;
+  } catch {
+    // A tainted canvas (cross-origin image) can't be sampled; assume the worst
+    // so we keep the original file rather than flattening its transparency.
+    return true;
+  }
+}
+
+/**
  * Utility to compress base64 images or File objects using HTML Canvas.
  * Ensures data URLs remain small (e.g., < 100KB) and never exceed Firestore document limits (1MB).
  */
@@ -95,8 +117,19 @@ export async function compressDataUrl(
       }
       ctx.drawImage(img, 0, 0, width, height);
 
-      // Convert to compressed JPEG
-      const compressed = canvas.toDataURL("image/jpeg", quality);
+      // JPEG has no alpha channel: encoding to it flattens transparent pixels
+      // onto black, which turned cut-out logo PNGs into solid rectangles.
+      //
+      // This is decided by INSPECTING the image, not by a caller-supplied flag.
+      // An opt-in flag was tried first and was not enough: this function is also
+      // reached on the save path (via `sanitizeFirestorePayload`), which
+      // re-compresses every `data:image/` field in the payload and knows nothing
+      // about which field is a logo. Any caller that forgot the flag — or simply
+      // did not exist yet — silently re-flattened the logo on save. Detecting the
+      // alpha channel here means transparency survives on every path by default,
+      // and opaque photos still get the much smaller JPEG.
+      const keepsAlpha = hasVisibleAlpha(ctx, canvas.width, canvas.height);
+      const compressed = canvas.toDataURL(keepsAlpha ? "image/png" : "image/jpeg", quality);
       resolve(compressed);
     };
 

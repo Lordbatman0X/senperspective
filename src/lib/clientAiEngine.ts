@@ -678,6 +678,14 @@ ${prompt || 'Réécriture intégrale avec dossier analytique, Perspective Brief,
 CATÉGORIE CIBLE : ${category}
 FORMAT / TYPE D'ARTICLE : ${type}
 
+RÈGLES POUR LE BLOC "carouselCopy" (réseaux sociaux) :
+- Rédige ces textes pour les cartes du carrousel social 1080x1080 de Perspective.
+- Français uniquement, sans guillemets autour de la citation, sans emoji, sans hashtag.
+- Respecte strictement les longueurs : un texte trop long déborde du gabarit.
+- "paragraphs" contient exactement 3 éléments, les points clés de l'article.
+- La citation doit être soit attribuable à une source réelle, soit présentée comme
+  une synthèse de la rédaction ("La rédaction"), jamais comme une fausse citation.
+
 DONNÉES SOURCE DE L'ARTICLE :
 ${articleContext}
 
@@ -705,7 +713,20 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     "social": { "fr": "Répercussions sociales et populaires", "en": "Social & public impact" },
     "international": { "fr": "Dimensions régionales et diplomatiques", "en": "Diplomatic & international angles" }
   },
-  "tags": ["Tag1", "Tag2", "Tag3"]
+  "tags": ["Tag1", "Tag2", "Tag3"],
+  "carouselCopy": {
+    "category": "POLITIQUE",
+    "title": "Titre choc pour la carte de couverture, 6 mots maximum, percutant",
+    "lede": "Une seule phrase de resume qui decrit l'enjeu, 140 caracteres maximum",
+    "bodyHeading": "Le Brief",
+    "paragraphs": [
+      "Point cle 1 : 2 phrases factuelles, 240 caracteres maximum",
+      "Point cle 2 : 2 phrases factuelles, 240 caracteres maximum",
+      "Point cle 3 : 2 phrases factuelles, 240 caracteres maximum"
+    ],
+    "quote": "Une citation forte, credible et attribuable, ou une synthese de la redaction",
+    "quoteAttribution": "La redaction"
+  }
 }`;
 
   let rawContent = '';

@@ -5,6 +5,7 @@ import type { CarouselCardKind, CarouselDraft } from '../../../lib/carousel/type
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../../../lib/carousel/types';
 import { buildDraftFromArticle, emptyDraft, normalizeDraft } from '../../../lib/carousel/draft';
 import { renderCardToDataUrl } from '../../../lib/carousel/render';
+import { collectDraftImages, loadCardImages } from '../../../lib/carousel/images';
 import { compressImageFile } from '../../../lib/imageUtils';
 import { CarouselPreview } from './CarouselPreview';
 import { ArticlePicker } from '../ArticlePicker';
@@ -176,28 +177,19 @@ function ImagePicker({
   );
 }
 /**
- * Loads every image the draft references.
+ * Loads every image the draft references, for export.
  *
  * The PNG export needs real, decoded images: a card drawn from an unloaded
  * Image draws an empty box, so we wait for all of them before exporting rather
  * than letting a slow photo silently produce a broken card.
+ *
+ * Unlike the preview this deliberately reuses `collectDraftImages` so the two
+ * agree on the exact key set — the preview showing a logo the export then
+ * dropped (or vice versa) is what a duplicated list here would reintroduce.
  */
 async function loadDraftImages(draft: CarouselDraft): Promise<Record<string, CanvasImageSource>> {
-  const sources: Array<[string, string]> = [];
-  if (draft.coverImage) sources.push(['coverImage', draft.coverImage]);
-  if (draft.closingImage) sources.push(['closingImage', draft.closingImage]);
-  if (draft.logoUrl) sources.push(['logo', draft.logoUrl]);
-
-  const entries = await Promise.all(sources.map(([key, url]) => new Promise<[string, CanvasImageSource] | null>(
-    (resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => resolve([key, img]);
-      img.onerror = () => resolve(null); // a broken URL must not abort the export
-      img.src = url;
-    },
-  )));
-  return Object.fromEntries(entries.filter(Boolean) as Array<[string, CanvasImageSource]>);
+  const { images } = await loadCardImages(collectDraftImages(draft));
+  return images;
 }
 
 /**
@@ -250,10 +242,10 @@ export function CarouselStudioTab() {
     const article = articles.find(a => a.id === picked.id);
     if (!article) return;
     setDraft(buildDraftFromArticle(article, draft.socials, {
-      logoUrl: draft.logoUrl,
+      logoUrls: draft.logoUrls,
       closingImage: draft.closingImage,
     }));
-    setStatus({ tone: 'ok', text: 'Carte remplie depuis l’article (logo et photo de clôture conservés).' });
+    setStatus({ tone: 'ok', text: 'Carte remplie depuis l’article (logos et photo de clôture conservés).' });
   };
 
   const handleSave = async () => {
@@ -262,6 +254,31 @@ export function CarouselStudioTab() {
     setSaving(false);
     setStatus({ tone: 'ok', text: 'Gabarit enregistré.' });
   };
+
+  /** A blank template, keeping the brand assets (logos) the editor uploaded. */
+  const handleResetTemplate = () => {
+    setDraft({ ...emptyDraft(draft.socials), logoUrls: draft.logoUrls });
+    setStatus(null);
+  };
+
+  /**
+   * The logo file for one card.
+   *
+   * Each card has its own slot: a dark cover and a light body card often need
+   * different logo artwork, and forcing one file on all three meant uploading
+   * twice and then losing one of the choices on the next save.
+   */
+  function setCardLogo(kind: CarouselCardKind, url: string) {
+    setDraft(prev => {
+      const logoUrls = { ...(prev.logoUrls || {}) };
+      if (url) logoUrls[kind] = url;
+      else delete logoUrls[kind];
+      return { ...prev, logoUrls };
+    });
+  }
+
+  const uploadedCardCount = (['cover', 'body', 'closing'] as CarouselCardKind[])
+    .filter(kind => !!draft.logoUrls?.[kind]).length;
 
   /** Downloads all three cards, one PNG per card. */
   const handleDownloadAll = async () => {
@@ -332,7 +349,7 @@ export function CarouselStudioTab() {
         />
         <button
           type="button"
-          onClick={() => { setDraft({ ...emptyDraft(draft.socials), logoUrl: draft.logoUrl }); setStatus(null); }}
+          onClick={handleResetTemplate}
           className="flex items-center gap-1.5 text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
         >
           <RotateCcw size={12} /> Repartir d’un gabarit vierge
@@ -426,15 +443,52 @@ export function CarouselStudioTab() {
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <ImageIcon size={13} /> Logo
           </div>
-          <ImagePicker
-            label="Logo (vide = logo Perspective)"
-            value={draft.logoUrl}
-            media={media}
-            onChange={url => patch({ logoUrl: url })}
-          />
+          {/*
+            One upload per card. The preview thumbnail sits beside each input so
+            the editor can see the cut-out against a checkerboard rather than
+            discovering a flattened logo only after downloading the PNG.
+          */}
+          {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
+            <div key={kind} className="flex items-start gap-3">
+              <div
+                className="w-20 h-20 shrink-0 border border-zinc-800 rounded-md overflow-hidden flex items-center justify-center"
+                style={{
+                  // Checkerboard, so transparent artwork is visibly transparent
+                  // rather than merely looking dark on the panel background.
+                  backgroundColor: '#18181b',
+                  backgroundImage:
+                    'linear-gradient(45deg, #27272a 25%, transparent 25%), linear-gradient(-45deg, #27272a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #27272a 75%), linear-gradient(-45deg, transparent 75%, #27272a 75%)',
+                  backgroundSize: '12px 12px',
+                  backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+                }}
+              >
+                {draft.logoUrls?.[kind]
+                  ? <img src={draft.logoUrls[kind]} alt="" className="w-full h-full object-contain p-1" />
+                  : <span className="text-[9px] uppercase tracking-wider text-zinc-600 text-center px-1">
+                      Logo<br />Perspective
+                    </span>}
+              </div>
+              <div className="flex-1">
+                <ImagePicker
+                  label={`Logo ${CARD_LABELS[kind]}`}
+                  value={draft.logoUrls?.[kind]}
+                  media={media}
+                  onChange={url => setCardLogo(kind, url)}
+                />
+              </div>
+            </div>
+          ))}
           <p className="text-[10px] text-zinc-500 leading-relaxed">
-            Le logo se positionne et se redimensionne directement sur chaque carte :
-            glissez-le, puis utilisez le curseur «&nbsp;Taille&nbsp;».
+            Chaque carte a son propre logo. Les PNG transparents sont conservés tels
+            quels&nbsp;; laissez le champ vide pour utiliser le logo «&nbsp;Perspective&nbsp;» dessiné.
+            Le logo se positionne et se redimensionne directement sur la carte&nbsp;: glissez-le,
+            puis utilisez le curseur «&nbsp;Taille&nbsp;».
+            {uploadedCardCount > 0 && (
+              <span className="block mt-1 text-zinc-400">
+                {uploadedCardCount} carte{uploadedCardCount > 1 ? 's' : ''} sur 3 utilise
+                {uploadedCardCount > 1 ? 'nt' : ''} un logo importé.
+              </span>
+            )}
           </p>
           <button
             type="button"

@@ -3,6 +3,8 @@ import type { CarouselCardKind, CarouselDraft, CarouselLogoPlacement } from '../
 import { CAROUSEL_SIZE } from '../../../lib/carousel/types';
 import { renderCard } from '../../../lib/carousel/render';
 import { computeCardLayout, type EditableField } from '../../../lib/carousel/layout';
+import { collectDraftImages, loadCardImages } from '../../../lib/carousel/images';
+import { AlertTriangle } from 'lucide-react';
 
 interface CarouselPreviewProps {
   kind: CarouselCardKind;
@@ -53,6 +55,15 @@ export function CarouselPreview({
   const [activeField, setActiveField] = useState<string | null>(null);
   const [showLogoHandle, setShowLogoHandle] = useState(false);
 
+  /**
+   * Set when an image in the draft could not be loaded at all.
+   *
+   * Previously a failed load was swallowed and the card simply drew without
+   * its photo, which is indistinguishable from a design choice. Surfacing it
+   * turns a silent gap into something the editor can act on.
+   */
+  const [imageError, setImageError] = useState('');
+
   // Images are loaded in an effect so a slow network repaints the card when
   // they arrive, instead of rendering a card with its photo missing.
   const imagesRef = useRef<Record<string, CanvasImageSource>>({});
@@ -78,10 +89,7 @@ export function CarouselPreview({
 
   useEffect(() => {
     let cancelled = false;
-    const sources: Array<[string, string]> = [];
-    if (draft.coverImage) sources.push(['coverImage', draft.coverImage]);
-    if (draft.closingImage) sources.push(['closingImage', draft.closingImage]);
-    if (draft.logoUrl) sources.push(['logo', draft.logoUrl]);
+    const sources = collectDraftImages(draft);
 
     const paint = () => {
       const canvas = canvasRef.current;
@@ -93,20 +101,31 @@ export function CarouselPreview({
 
     if (!sources.length) {
       imagesRef.current = {};
+      setImageError('');
       paint();
       return () => { cancelled = true; };
     }
 
-    Promise.all(sources.map(([key, url]) => new Promise<void>((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        if (!cancelled) imagesRef.current[key] = img;
-        resolve();
-      };
-      img.onerror = () => resolve(); // a broken URL must not blank the whole card
-      img.src = url;
-    }))).then(paint);
+    /**
+     * Images are loaded through the shared two-step loader rather than with a
+     * bare `crossOrigin = 'anonymous'`.
+     *
+     * That bare assignment made any host without CORS headers fail the load
+     * outright, which is why article photos silently vanished from the cover
+     * card; the loader falls back to a plain load so the preview still shows
+     * them, and reports failures so the editor is told rather than left
+     * guessing why a card is empty.
+     */
+    loadCardImages(sources).then(({ images, failed }) => {
+      if (cancelled) return;
+      imagesRef.current = images;
+      setImageError(
+        failed.length
+          ? `${failed.length} image(s) n'a pas pu être chargée. Vérifiez l'URL ou téléversez-la depuis l'appareil.`
+          : '',
+      );
+      paint();
+    });
 
     return () => { cancelled = true; };
   }, [kind, draft, fontsReady]);
@@ -232,6 +251,19 @@ export function CarouselPreview({
               <span className="text-[11px] tabular-nums w-8">{Math.round(logoAt.size)}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Load failures, shown as an overlay badge so the card's own box — which
+          the drag coordinates are derived from — is left untouched. */}
+      {imageError && (
+        <div
+          role="status"
+          title={imageError}
+          className="absolute bottom-2 left-2 right-2 flex items-start gap-1.5 bg-amber-950/90 text-amber-200 border border-amber-700/60 rounded px-2 py-1.5 text-[10px] leading-snug"
+        >
+          <AlertTriangle size={12} className="shrink-0 mt-px" />
+          <span>{imageError}</span>
         </div>
       )}
     </div>

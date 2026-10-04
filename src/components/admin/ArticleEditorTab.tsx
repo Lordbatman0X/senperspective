@@ -10,6 +10,8 @@ import { stripHtmlTags, extractYoutubeId } from '../../lib/utils';
 import { ImageCropModal } from './ImageCropModal';
 import { getAuthHeaders, safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
 import { clientRewriteArticle, clientGenerateTimeline } from '../../lib/clientAiEngine';
+import { sanitizeAiCopy } from '../../lib/carousel/draft';
+import type { CarouselAiCopy } from '../../lib/carousel/types';
 
 interface ArticleEditorTabProps {
   article: Article | null;
@@ -190,6 +192,17 @@ export function ArticleEditorTab({
   const [adImageUrlState, setAdImageUrlState] = useState('');
   const [adLinkState, setAdLinkState] = useState('');
 
+  /**
+   * Social carousel copy produced by the AI rewriter.
+   *
+   * Held as a loose object rather than pre-sanitised on the way in, because the
+   * raw shape is what `sanitizeAiCopy` is designed to defend against; it is
+   * normalised once at save time.
+   */
+  const [carouselCopy, setCarouselCopy] = useState<CarouselAiCopy>(
+    () => article?.carouselCopy ?? {},
+  );
+
   // AI Article Rewriter State
   const [showAiRewriteModal, setShowAiRewriteModal] = useState(false);
   const [isRewritingWithAi, setIsRewritingWithAi] = useState(false);
@@ -262,6 +275,7 @@ export function ArticleEditorTab({
       setDossier(article.dossier || '');
       setAdImageUrlState(article.adImageUrl || '');
       setAdLinkState(article.adLink || '');
+      setCarouselCopy(article.carouselCopy ?? {});
       
       setTitleFr(stripHtmlTags(article.title?.fr || ''));
       setTitleEn(stripHtmlTags(article.title?.en || ''));
@@ -315,6 +329,9 @@ export function ArticleEditorTab({
       setTags([]);
       setAdImageUrlState('');
       setAdLinkState('');
+// A brand-new article, so social copy carried over from the previously
+      // edited one must not be saved onto this draft.
+      setCarouselCopy({});
       
       setTitleFr('');
       setTitleEn('');
@@ -471,6 +488,19 @@ export function ArticleEditorTab({
 
     setIsSaving(true);
     try {
+      /**
+       * Social copy drafted by the AI alongside the article.
+       *
+       * Sanitized once here so a malformed model response cannot reach
+       * Firestore, and dropped entirely when empty — an article the editor
+       * never gave social copy to keeps whatever it already had rather than
+       * being blanked by a save.
+       */
+      const cleanCarouselCopy = sanitizeAiCopy(carouselCopy);
+      const hasCarouselCopy = Object.values(cleanCarouselCopy).some(
+        value => Array.isArray(value) ? value.length > 0 : Boolean(value),
+      );
+
       const compiled: Article = {
         id: article?.id || slug || 'art-' + Date.now().toString(),
         slug: slug || article?.slug || 'art-' + Date.now().toString(),
@@ -513,7 +543,9 @@ export function ArticleEditorTab({
         },
         relatedArticleIds: relatedIds,
         adImageUrl: adImageUrlState || undefined,
-        adLink: adLinkState || undefined
+        adLink: adLinkState || undefined,
+        // Social copy drafted by the AI alongside the article.
+        carouselCopy: hasCarouselCopy ? cleanCarouselCopy : article?.carouselCopy,
       };
 
       // Auto-fill SEO metadata from article content when the admin hasn't
@@ -803,6 +835,18 @@ export function ArticleEditorTab({
 
       if (Array.isArray(rewritten.tags) && rewritten.tags.length > 0) {
         setTags(rewritten.tags);
+      }
+
+      /**
+       * Carry the social copy the rewriter produced.
+       *
+       * Merged field by field over any copy already on the article: a rewriter
+       * that returns no `carouselCopy` at all leaves the existing social text
+       * alone rather than wiping it, and a partial response only improves the
+       * fields it actually filled in.
+       */
+      if (rewritten.carouselCopy && typeof rewritten.carouselCopy === 'object') {
+        setCarouselCopy(prev => ({ ...prev, ...sanitizeAiCopy(rewritten.carouselCopy) }));
       }
 
       // Apply SEO fields from rewrite

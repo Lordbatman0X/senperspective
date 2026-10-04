@@ -1,4 +1,6 @@
 import {
+  CarouselAiCopy,
+  CarouselCardKind,
   CarouselDraft,
   CarouselSocialLink,
   CAROUSEL_SIZE,
@@ -96,12 +98,72 @@ export function extractParagraphs(body: unknown, limit = MAX_CAROUSEL_PARAGRAPHS
   return out;
 }
 /**
+ * Cleans AI-written card copy so a sloppy model response cannot break a card.
+ *
+ * Everything is coerced to trimmed strings, guillemets are stripped from the
+ * quote (the renderer adds them, so keeping the model's would double them), and
+ * paragraphs are capped and filtered. A model returning `null`, numbers, or
+ * twelve paragraphs yields an empty/short object rather than a broken card.
+ */
+export function sanitizeAiCopy(input: unknown): Required<Omit<CarouselAiCopy, 'paragraphs'>> & { paragraphs: string[] } {
+  const src = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const text = (key: string): string => {
+    const value = src[key];
+    if (typeof value === 'string') return stripHtmlTags(value).replace(/\s+/g, ' ').trim();
+    // Models sometimes wrap a single value in a `{ fr, en }` pair; take French.
+    if (value && typeof value === 'object') {
+      const fr = (value as { fr?: unknown }).fr;
+      if (typeof fr === 'string') return stripHtmlTags(fr).replace(/\s+/g, ' ').trim();
+    }
+    return '';
+  };
+
+  const quote = text('quote').replace(/^«\s*/, '').replace(/\s*»$/, '').trim();
+
+  const paragraphs = Array.isArray(src.paragraphs)
+    ? src.paragraphs
+        .filter((p): p is string => typeof p === 'string')
+        .map(p => stripHtmlTags(p).replace(/\s+/g, ' ').trim())
+        .filter(p => p.length > 0)
+        .slice(0, MAX_CAROUSEL_PARAGRAPHS)
+    : [];
+
+  return {
+    category: text('category'),
+    title: text('title'),
+    lede: text('lede'),
+    bodyHeading: text('bodyHeading'),
+    quote,
+    quoteAttribution: text('quoteAttribution'),
+    paragraphs,
+  };
+}
+
+/**
+ * Resolves the photo that represents an article.
+ *
+ * Checked in order of editorial preference and, importantly, with whitespace
+ * stripped at each step: articles imported from RSS/AI often carry
+ * `featuredImage: " "` (a placeholder that is non-empty but useless), which made
+ * the cover card render its empty grey box even though `imageUrl` held a real
+ * photo. A `trim()`-ed check treats that as absent and moves on.
+ */
+export function pickArticleImage(article: Partial<Article> | undefined): string | undefined {
+  const candidates = [article?.featuredImage, article?.imageUrl, article?.seoOgImage];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return undefined;
+}
+
+/**
  * Builds a carousel draft from an article.
  *
- * This is the whole point of the workflow: the copy already exists in the CMS,
- * so the editor picks an article and gets a complete, correctly-punctuated
- * carousel instead of retyping everything — which is how social copy and
- * article copy used to drift apart.
+ * This is the whole point of the workflow: the copy already exists in the CMS —
+ * and, since the editorial AI now writes `carouselCopy` in the same pass as the
+ * article body, so does the social text — so the editor picks an article and
+ * gets a complete, correctly-punctuated carousel instead of retyping
+ * everything, which is how social copy and article copy used to drift apart.
  */
 export function buildDraftFromArticle(
   article: Article,
@@ -109,41 +171,54 @@ export function buildDraftFromArticle(
   /**
    * Brand assets chosen by the editor, carried across an article change.
    *
-   * The logo and the closing photo belong to the publication, not to the
+   * The logos and the closing photo belong to the publication, not to the
    * article, so picking a new article must not wipe them — that is the kind of
    * silent reset that makes an editor re-upload the same file. The cover photo
    * is deliberately NOT carried over: it comes from the article itself.
    */
-  keep: { logoUrl?: string; closingImage?: string } = {},
+  keep: { logoUrls?: CarouselDraft['logoUrls']; closingImage?: string } = {},
 ): CarouselDraft {
   const title = stripHtmlTags(article.title?.fr || article.title?.en);
   const excerpt = stripHtmlTags(article.excerpt?.fr || article.excerpt?.en);
   const body = stripHtmlTags(article.body?.fr || article.body?.en);
 
+  /**
+   * AI-written card copy wins over the mechanical fallbacks, field by field.
+   *
+   * Deliberately per-field rather than all-or-nothing: a model that returns a
+   * good lede but no paragraphs should still get its lede used, with the
+   * paragraphs falling back to the article's own text.
+   */
+  const ai = sanitizeAiCopy(article.carouselCopy);
+
   // Prefer the article's own lede; fall back to the opening of the body so a
   // thin excerpt still yields a sensible cover line.
-  const lede = excerpt || firstSentence(body);
-  const paragraphs = extractParagraphs(article.body?.fr || article.body?.en);
+  const lede = ai.lede || excerpt || firstSentence(body);
+  const paragraphs = ai.paragraphs.length
+    ? ai.paragraphs
+    : extractParagraphs(article.body?.fr || article.body?.en);
 
   return {
     articleId: article.id,
     articleSlug: article.slug,
-    category: article.category || PLACEHOLDER.category,
-    title: title || PLACEHOLDER.title,
+    category: ai.category || article.category || PLACEHOLDER.category,
+    title: ai.title || title || PLACEHOLDER.title,
     lede: lede || PLACEHOLDER.lede,
-    bodyHeading: PLACEHOLDER.bodyHeading,
+    bodyHeading: ai.bodyHeading || PLACEHOLDER.bodyHeading,
     paragraphs: paragraphs.length ? paragraphs : [PLACEHOLDER.lede],
-    // The quote is editorial, so it is never invented from the body — the
-    // draft starts on the placeholder and the editor writes the real line.
-    quote: PLACEHOLDER.quote,
-    quoteAttribution: PLACEHOLDER.quoteAttribution,
+    // With no AI copy the quote is editorial, so it is never invented from the
+    // body — the draft starts on the placeholder and the editor writes the real
+    // line. An explicit AI quote is the editor's own approved wording, so it is
+    // honoured.
+    quote: ai.quote || PLACEHOLDER.quote,
+    quoteAttribution: ai.quoteAttribution || PLACEHOLDER.quoteAttribution,
     tagline: PLACEHOLDER.tagline,
     socialHeading: PLACEHOLDER.socialHeading,
     socials,
     date: formatCardDate(article.date),
     readingTime: formatReadTime(article),
-    coverImage: article.featuredImage || article.imageUrl,
-    logoUrl: keep.logoUrl,
+    coverImage: pickArticleImage(article),
+    logoUrls: keep.logoUrls,
     closingImage: keep.closingImage,
     accentColor: DEFAULT_ACCENT,
   };
@@ -225,10 +300,38 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
       ) as CarouselDraft['logos']
     : undefined;
 
+  /**
+   * Per-card logo sources, with a one-way migration off the old global field.
+   *
+   * Drafts saved by the previous build carry a single `logoUrl` that applied to
+   * all three cards. Dropping it would silently strip the editor's logo from
+   * every published card on first load, so it is copied onto all three cards
+   * once and then forgotten.
+   */
+  const legacyRaw = (input as Record<string, unknown>).logoUrl;
+  const legacyLogo = typeof legacyRaw === 'string' && legacyRaw.trim()
+    ? legacyRaw.trim()
+    : undefined;
+  const logoKinds: CarouselCardKind[] = ['cover', 'body', 'closing'];
+  const logoUrls = Object.fromEntries(
+    logoKinds
+      .map(kind => {
+        const candidate = input.logoUrls?.[kind] ?? legacyLogo;
+        return typeof candidate === 'string' && candidate.trim()
+          ? [kind, candidate.trim()]
+          : null;
+      })
+      .filter(Boolean),
+  ) as CarouselDraft['logoUrls'];
+  const hasLogoUrls = Object.keys(logoUrls || {}).length > 0;
+
   return {
     ...base,
     ...input,
     logos,
+    // Assigned after the spread so the legacy field cannot win over the
+    // normalized per-card map.
+    logoUrls: hasLogoUrls ? logoUrls : undefined,
     category: input.category?.trim() || base.category,
     title: input.title?.trim() || base.title,
     lede: input.lede?.trim() || base.lede,

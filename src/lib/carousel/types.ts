@@ -82,11 +82,15 @@ export interface CarouselDraft {
   closingImage?: string;
 
   /**
-   * Logo override. When empty the renderer draws the Perspective Group
-   * wordmark, which is the house style; set this only to swap in a partner or
-   * campaign logo.
+   * Per-card logo image, keyed by card.
+   *
+   * Per-card and per-format on purpose: a partner or campaign lockup is often
+   * only valid on one card (a sponsor logo on the closing card, the house
+   * wordmark on the cover). A single global `logoUrl` could not express that, so
+   * each card carries its own source. Absent means "draw the Perspective Group
+   * wordmark", which is the house style.
    */
-  logoUrl?: string;
+  logoUrls?: Partial<Record<CarouselCardKind, string>>;
   /**
    * Per-card logo placement, set when the editor drags or resizes the logo.
    *
@@ -100,6 +104,32 @@ export interface CarouselDraft {
 
 /** How many body paragraphs the fixed template actually shows. */
 export const MAX_CAROUSEL_PARAGRAPHS = 3;
+
+/**
+ * Card copy produced by the editorial AI.
+ *
+ * Stored on the ARTICLE, not on the draft, so the copy is written once when the
+ * article is written and every carousel built from that article starts with
+ * finished, correctly-toned social text. Each field is optional: a model that
+ * returns only some of them still improves the draft, and anything missing
+ * falls back to the article's own excerpt and body.
+ */
+export interface CarouselAiCopy {
+  /** Short uppercase category pill, e.g. "POLITIQUE". */
+  category?: string;
+  /** Cover headline. Punchy, may be uppercased by the model. */
+  title?: string;
+  /** One-sentence cover sub-headline (the card's "lede"). */
+  lede?: string;
+  /** Body card heading, e.g. "Le Brief" or "Ce qu'il faut retenir". */
+  bodyHeading?: string;
+  /** Up to `MAX_CAROUSEL_PARAGRAPHS` key-point paragraphs. */
+  paragraphs?: string[];
+  /** Closing pull-quote. */
+  quote?: string;
+  /** Attribution under the quote. */
+  quoteAttribution?: string;
+}
 
 /** The Perspective Group defaults, as they appear on the closing card. */
 export const DEFAULT_CAROUSEL_SOCIALS: CarouselSocialLink[] = [

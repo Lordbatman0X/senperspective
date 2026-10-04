@@ -27,6 +27,8 @@ import {
   normalizeDraft,
 } from '../src/lib/carousel/draft';
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
+import { collectDraftImages, logoImageKey } from '../src/lib/carousel/images';
+import { G } from '../src/lib/carousel/layout';
 
 let pass = 0;
 const ok = (n) => { console.log(`  PASS  ${n}`); pass++; };
@@ -105,18 +107,98 @@ assert.ok(
 assert.equal(draft.quoteAttribution, 'La r' + String.fromCharCode(233) + 'daction');
 ok('quote is a placeholder, never fabricated from the article body');
 
-// Changing the article must not wipe the editor's brand assets: the logo and
+// Changing the article must not wipe the editor's brand assets: the logos and
 // the closing photo belong to the publication, not to the article. The cover
 // photo DOES change, because it comes from the article.
 const rebranded = buildDraftFromArticle(
   { ...article, id: 'a2', featuredImage: 'https://example.com/other.jpg' },
   undefined,
-  { logoUrl: 'https://example.com/logo.png', closingImage: 'https://example.com/closing.jpg' },
+  {
+    logoUrls: {
+      cover: 'https://example.com/logo-cover.png',
+      closing: 'https://example.com/logo-closing.png',
+    },
+    closingImage: 'https://example.com/closing.jpg',
+  },
 );
-assert.equal(rebranded.logoUrl, 'https://example.com/logo.png');
+assert.equal(rebranded.logoUrls?.cover, 'https://example.com/logo-cover.png');
+assert.equal(rebranded.logoUrls?.closing, 'https://example.com/logo-closing.png');
+assert.equal(rebranded.logoUrls?.body, undefined, 'a card with no upload of its own stays empty');
 assert.equal(rebranded.closingImage, 'https://example.com/closing.jpg');
 assert.equal(rebranded.coverImage, 'https://example.com/other.jpg');
-ok('switching articles keeps the logo and closing photo, refreshes the cover photo');
+ok('switching articles keeps every per-card logo and the closing photo, refreshes the cover photo');
+
+console.log('\n- per-card logos -');
+// Drafts written by the previous build have one global `logoUrl`. It must reach
+// all three cards rather than being dropped, or the editor's logo silently
+// disappears from every published card the first time the tab is opened.
+const legacy = normalizeDraft({
+  articleId: 'a1',
+  title: 'Titre',
+  logoUrl: 'https://example.com/legacy-logo.png',
+});
+assert.equal(legacy.logoUrls?.cover, 'https://example.com/legacy-logo.png');
+assert.equal(legacy.logoUrls?.body, 'https://example.com/legacy-logo.png');
+assert.equal(legacy.logoUrls?.closing, 'https://example.com/legacy-logo.png');
+ok('a legacy global logo migrates onto all three cards');
+
+// ...and that migration must not overwrite a per-card choice made since.
+const mixed = normalizeDraft({
+  articleId: 'a1',
+  title: 'Titre',
+  logoUrl: 'https://example.com/legacy-logo.png',
+  logoUrls: { body: 'https://example.com/new-body-logo.png' },
+});
+assert.equal(mixed.logoUrls?.body, 'https://example.com/new-body-logo.png', 'newer per-card logo wins');
+assert.equal(mixed.logoUrls?.cover, 'https://example.com/legacy-logo.png');
+ok('legacy migration never overwrites an existing per-card logo');
+
+const cleared = normalizeDraft({
+  articleId: 'a1',
+  title: 'Titre',
+  logoUrls: { cover: '   ' },
+});
+assert.equal(cleared.logoUrls?.cover, undefined, 'a blank logo falls back to the drawn wordmark');
+ok('a blank logo URL is normalised away');
+
+console.log('\n- logo image keys -');
+// The renderer, the preview and the exporter must agree on the key a card's
+// logo is stored under, or a logo shows in one and not the other.
+assert.equal(logoImageKey('cover'), 'logo:cover');
+assert.equal(logoImageKey('body'), 'logo:body');
+assert.equal(logoImageKey('closing'), 'logo:closing');
+assert.notEqual(logoImageKey('cover'), logoImageKey('body'), 'each card gets its own key');
+ok('per-card logo image keys are distinct and stable');
+
+const keyed = collectDraftImages({
+  ...normalizeDraft({ articleId: 'a1', title: 'T' }),
+  logoUrls: { cover: 'https://example.com/c.png', body: 'https://example.com/b.png' },
+});
+const keys = keyed.map(([key]) => key);
+assert.ok(keys.includes('logo:cover') && keys.includes('logo:body'));
+assert.ok(!keys.includes('logo:closing'), 'a card with no logo is not requested');
+ok('image collection requests exactly the logos the draft has');
+
+console.log('\n- geometry -');
+// Card 2's paragraphs must start on the body card's own baseline. They used to
+// be clamped to the cover's text-block top, which pushed them into the footer.
+assert.ok(G.bodyTextTop < G.coverBodyTop, 'body text starts well above the cover fold');
+assert.ok(G.bodyTextTop > G.bodyHeadingTop, 'body text starts below the body heading');
+assert.ok(G.photoHeight < CAROUSEL_SIZE, 'the cover photo leaves room for the text block');
+assert.ok(G.coverBodyTop > G.photoHeight, 'the cover text block sits below the photo');
+ok('cover and body geometry are decoupled and both fit the card');
+
+console.log('\n- cover brief is bottom-anchored -');
+// The reference puts the brief in the bottom band of the cover. It used to flow
+// off the headline instead, so a short headline left the brief stranded high up
+// with dead space beneath it.
+assert.ok(G.coverBottomPad > 0 && G.coverBottomPad < CAROUSEL_SIZE / 3, 'the brief sits near the bottom');
+// ...and it must not be pulled up into the headline by that anchoring.
+assert.ok(
+  G.coverBodyTop + 47 + G.coverTitleLead * 2 < CAROUSEL_SIZE - G.coverBottomPad - G.ledeLead * 2,
+  'a two-line headline still leaves room for the brief in the bottom band',
+);
+ok('the brief keeps its bottom position without colliding with the headline');
 
 console.log('\n- thin & bilingual articles -');
 const thin = buildDraftFromArticle({ ...article, excerpt: { fr: '', en: '' }, body: { fr: '', en: '' } });

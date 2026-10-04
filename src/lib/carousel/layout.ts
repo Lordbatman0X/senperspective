@@ -22,20 +22,40 @@ export const SANS = 'Inter, system-ui, sans-serif';
 export const BG = '#0b0b0b';
 export const MUTED = '#cfcfcf';
 
-/** Fixed geometry, in card pixels. Mirrors the approved design 1:1. */
+/**
+ * Fixed geometry, in card pixels. Mirrors the approved design 1:1.
+ *
+ * These were re-measured against the reference cards: the cover photo ends at
+ * ~690px (not 750) and the accent rule above the headline sits at ~708, which
+ * is where the fold between photo and text block falls. `coverBodyTop` is
+ * therefore the COVER's text-block top only — it must never be reused to clamp
+ * card 2's paragraphs, which is exactly the coupling that previously pushed
+ * card 2's body text down into the footer.
+ */
 export const G = {
   margin: 58,
-  photoHeight: 750,
-  coverBodyTop: 360,
+  photoHeight: 690,
+  /** Accent-rule y and top of the cover's text block. */
+  coverBodyTop: 708,
+  /**
+   * Distance from the card's bottom edge up to the BOTTOM of the brief.
+   *
+   * The brief is bottom-anchored rather than stacked under the headline so it
+   * keeps the reference's position whatever the headline length.
+   */
+  coverBottomPad: 96,
   coverTitleSize: 52,
   coverTitleLead: 58,
   ledeSize: 27,
   ledeLead: 38,
   ledeWidth: 900,
+  /** Accent-rule y on card 2, above the body heading. */
   ruleY: 196,
   bodyTitleSize: 66,
   bodyTitleLead: 74,
   bodyHeadingTop: 236,
+  /** First body paragraph's y, independent of the cover's fold. */
+  bodyTextTop: 316,
   paraSize: 29,
   paraLead: 43,
   paraGap: 34,
@@ -198,12 +218,33 @@ export function computeCardLayout(
     });
     fields.push(title);
 
+    /**
+     * The lede is bottom-anchored to the card, not stacked under the title.
+     *
+     * In the reference the brief sits in the bottom band of the cover, a fixed
+     * distance above the footer line. Flowing it off the title instead meant a
+     * short headline left the brief floating high with dead space beneath it, and
+     * a long one pushed it off the card entirely. Anchoring the block's BOTTOM
+     * edge keeps the last line of copy at the same height whatever the headline
+     * length, which is what the reference shows.
+     */
+    const ledeWidth = Math.min(G.ledeWidth, gutter);
+    const ledeLines = wrapText(ctx, draft.lede, ledeWidth);
+    const ledeBlockHeight = ledeLines.length * G.ledeLead;
+
+    // Cap the offset so the title is never drawn on top of the brief when the
+    // headline is very long; the title simply wins and the brief follows it.
+    const ledeTop = Math.max(
+      title.y + title.height + 26,
+      CAROUSEL_SIZE - G.coverBottomPad - ledeBlockHeight,
+    );
+
     fields.push(field(ctx, {
       id: 'lede',
       text: draft.lede,
       x: G.margin,
-      y: title.y + title.height + 26,
-      width: G.ledeWidth,
+      y: ledeTop,
+      width: ledeWidth,
       lineHeight: G.ledeLead,
       font: `${G.ledeSize}px ${SANS}`,
       align: 'left',
@@ -226,7 +267,11 @@ export function computeCardLayout(
     });
     fields.push(heading);
 
-    let y = Math.max(G.coverBodyTop, heading.y + heading.height + 80);
+    // Anchored to the body card's OWN first-paragraph line, not the cover's
+    // text-block top. Clamping to `coverBodyTop` (708) pushed card 2's text
+    // into the footer; the heading's own flow still wins when it is taller
+    // than one line, so a long heading pushes the paragraphs down correctly.
+    let y = Math.max(G.bodyTextTop, heading.y + heading.height + 40);
     draft.paragraphs.forEach((para, i) => {
       const p = field(ctx, {
         id: `paragraph-${i}`,

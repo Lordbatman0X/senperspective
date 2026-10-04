@@ -85,6 +85,15 @@ export interface Article {
   keyActors?: KeyActor[];
   timeline?: TimelineEvent[];
   structuralForces?: StructuralForces;
+
+  /**
+   * Social carousel copy written by the editorial AI alongside the article.
+   *
+   * Kept on the article so the social cards are drafted from the same pass that
+   * writes the piece, instead of being re-derived by string-slicing the body
+   * every time an editor opens the carousel tab.
+   */
+  carouselCopy?: import('./lib/carousel/types').CarouselAiCopy;
   
   relatedArticleIds?: string[]; // IDs of related articles
   

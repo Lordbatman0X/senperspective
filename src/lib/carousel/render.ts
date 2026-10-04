@@ -1,6 +1,7 @@
 import { CarouselCardKind, CarouselDraft, CarouselLogoPlacement, CarouselSocialLink, CAROUSEL_SIZE } from './types';
 import { BG, G, MUTED, SANS, SERIF, computeCardLayout, wrapText, type EditableField } from './layout';
 import { DEFAULT_ACCENT } from './draft';
+import { logoImageKey } from './images';
 
 /**
  * Draws the three approved cards onto a canvas.
@@ -158,13 +159,15 @@ function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: 
   }
 
   // Scrim: dark at the top for the logo, and fading to solid at the fold so
-  // the text block below sits on the flat background, not on the image.
-  const scrim = ctx.createLinearGradient(0, 300, 0, G.coverBodyTop + 60);
+  // the text block below sits on the flat background, not on the image. The
+  // gradient is anchored to the photo's real bottom edge, so it stays correct
+  // if the photo height ever changes again.
+  const scrim = ctx.createLinearGradient(0, G.photoHeight - 330, 0, G.photoHeight + 18);
   scrim.addColorStop(0, 'rgba(11,11,11,0)');
-  scrim.addColorStop(0.55, 'rgba(11,11,11,0.55)');
+  scrim.addColorStop(0.62, 'rgba(11,11,11,0.72)');
   scrim.addColorStop(1, BG);
   ctx.fillStyle = scrim;
-  ctx.fillRect(0, 300, CAROUSEL_SIZE, CAROUSEL_SIZE - 300);
+  ctx.fillRect(0, G.photoHeight - 330, CAROUSEL_SIZE, CAROUSEL_SIZE - G.photoHeight + 330);
 
   const topScrim = ctx.createLinearGradient(0, 0, 0, 260);
   topScrim.addColorStop(0, 'rgba(11,11,11,0.75)');
@@ -172,7 +175,7 @@ function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: 
   ctx.fillStyle = topScrim;
   ctx.fillRect(0, 0, CAROUSEL_SIZE, 260);
 
-  drawLogo(ctx, layout.logo, accent, images.logo);
+  drawLogo(ctx, layout.logo, accent, images[logoImageKey('cover')]);
   drawPill(ctx, draft.category, accent);
 
   drawRule(ctx, G.coverBodyTop, accent);
@@ -194,7 +197,7 @@ function drawBody(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: R
   const accent = draft.accentColor || DEFAULT_ACCENT;
   const layout = computeCardLayout('body', draft);
 
-  drawLogo(ctx, layout.logo, '#fff', images.logo);
+  drawLogo(ctx, layout.logo, '#fff', images[logoImageKey('body')]);
   drawPill(ctx, draft.category, accent);
 
   drawRule(ctx, G.ruleY, accent);
@@ -237,7 +240,7 @@ function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images
 
   drawSocialRow(ctx, draft.socials, layout.socialRowY);
 
-  drawLogo(ctx, layout.logo, '#fff', images.logo);
+  drawLogo(ctx, layout.logo, '#fff', images[logoImageKey('closing')]);
 }
 
 /** The five (or fewer) circular social links on the closing card. */
