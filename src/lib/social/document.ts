@@ -349,6 +349,44 @@ export function migrateSocialDesign(raw: any, fallbackNetwork: SocialNetwork = '
   };
 }
 
+/**
+ * Move a layer to a frame-relative position.
+ *
+ * Kept pure and here rather than in the component so the geometry is unit
+ * tested — alignment is the most-used control in the editor and "align centre"
+ * being off by the gutter would be very visible.
+ *
+ * `gutter*` snaps to the same 6.2% inner margin the templates use, which is what
+ * makes a hand-placed element line up with a templated one.
+ */
+export type AlignMode =
+  | 'left' | 'centerH' | 'right'
+  | 'top' | 'centerV' | 'bottom'
+  | 'gutterH' | 'gutterV';
+
+/** The templates' inner margin, as a fraction of the card. */
+export const GUTTER_RATIO = 0.062;
+
+export function alignLayerPosition(
+  layer: { x: number; y: number; w: number; h: number },
+  mode: AlignMode,
+  format: { width: number; height: number },
+): { x?: number; y?: number } {
+  const gx = Math.round(format.width * GUTTER_RATIO);
+  const gy = Math.round(format.height * GUTTER_RATIO);
+
+  switch (mode) {
+    case 'left': return { x: 0 };
+    case 'centerH': return { x: (format.width - layer.w) / 2 };
+    case 'right': return { x: format.width - layer.w };
+    case 'top': return { y: 0 };
+    case 'centerV': return { y: (format.height - layer.h) / 2 };
+    case 'bottom': return { y: format.height - layer.h };
+    case 'gutterH': return { x: gx };
+    case 'gutterV': return { y: gy };
+  }
+}
+
 /** Human summary line for the studio header. */
 export function describeDesign(design: SocialDesign): string {
   const fmt = getFormat(design.network, design.formatId);

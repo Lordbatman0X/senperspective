@@ -16,7 +16,7 @@ const {
   fitTextLayer, wrapText, fontString,
   buildFilterString,
   chooseLogoTone, colorLuminance, contrastRatio, relativeLuminance,
-  migrateSocialDesign, createText,
+  migrateSocialDesign, createText, createLogo, alignLayerPosition,
   computeImageRect,
   buildCoverCard, buildBriefCard, buildClosingCard,
 } = await import('../.socialtest.mjs');
@@ -274,5 +274,44 @@ assert.equal(coverCard.layers.find(l => l.name === 'Titre').binding.field, 'titl
 ok('the cover headline is bound to the live article title');
 assert.equal(buildClosingCard(opts).layers.find(l => l.name === 'Signature').binding.field, 'author');
 ok('the closing byline is bound to the live author');
+
+console.log('Alignment geometry');
+const alignFmt = { width: 1080, height: 1350 };
+const alignBox = { x: 999, y: 999, w: 200, h: 100 };
+assert.deepEqual(alignLayerPosition(alignBox, 'left', alignFmt), { x: 0 });
+ok('align left puts the layer on the frame edge');
+assert.deepEqual(alignLayerPosition(alignBox, 'right', alignFmt), { x: 880 });
+ok('align right flushes the trailing edge');
+assert.deepEqual(alignLayerPosition(alignBox, 'centerH', alignFmt), { x: 440 });
+ok('align centre H centres on the frame, not the layer origin');
+assert.deepEqual(alignLayerPosition(alignBox, 'top', alignFmt), { y: 0 });
+assert.deepEqual(alignLayerPosition(alignBox, 'bottom', alignFmt), { y: 1250 });
+assert.deepEqual(alignLayerPosition(alignBox, 'centerV', alignFmt), { y: 625 });
+ok('vertical alignment mirrors the horizontal behaviour');
+// A vertical align must never disturb x, and vice versa.
+assert.equal(alignLayerPosition(alignBox, 'top', alignFmt).x, undefined);
+assert.equal(alignLayerPosition(alignBox, 'left', alignFmt).y, undefined);
+ok('alignment only touches the axis it was asked about');
+// The gutter is what makes a hand-placed element line up with the templates.
+assert.deepEqual(alignLayerPosition(alignBox, 'gutterH', alignFmt), { x: 67 });
+assert.deepEqual(alignLayerPosition(alignBox, 'gutterV', alignFmt), { y: 84 });
+ok('gutter alignment snaps to the template inner margin');
+// Centring is frame-relative on x, so a taller frame must not shift it.
+assert.deepEqual(
+  alignLayerPosition(alignBox, 'centerH', { width: 1080, height: 1920 }),
+  { x: 440 },
+);
+ok('horizontal centring is unaffected by the frame height');
+
+console.log('Logo layer');
+const logo = createLogo({ src: 'data:image/png;base64,AAA', tone: 'custom' });
+assert.equal(logo.kind, 'logo');
+assert.equal(logo.lockAspect, true);
+ok('a new logo keeps its aspect ratio by default');
+assert.ok(logo.w > 0 && logo.h > 0);
+ok('a new logo has a real, grabbable size');
+const builtLogo = createLogo({ x: 64, y: 64, w: 240, h: 40 });
+assert.deepEqual([builtLogo.x, builtLogo.y, builtLogo.w, builtLogo.h], [64, 64, 240, 40]);
+ok('logo geometry is settable, so a new logo can be placed immediately');
 
 console.log(`\n${pass} checks passed.`);

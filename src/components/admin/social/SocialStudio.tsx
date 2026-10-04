@@ -1,7 +1,7 @@
-/**
+﻿/**
  * The Social Studio.
  *
- * A full-screen modal that turns an article — or ad hoc content — into editable
+ * A full-screen modal that turns an article â€” or ad hoc content â€” into editable
  * cards and bilingual captions.
  *
  * State ownership:
@@ -44,7 +44,7 @@ import type {
 import { DEFAULT_FORMAT_ID, getFormat, getNetwork, MAX_CARDS, NETWORK_ORDER, resolveCaptionSlot } from '../../../lib/social/networks';
 import { resolveContent, type SocialSource } from '../../../lib/social/content';
 import { generateBothCaptions } from '../../../lib/social/captions';
-import { createImage, createShape, createText, migrateSocialDesign, uid } from '../../../lib/social/document';
+import { alignLayerPosition, createImage, createLogo, createShape, createText, migrateSocialDesign, uid, type AlignMode } from '../../../lib/social/document';
 import { buildCard, buildInitialCards, syncAllDots } from '../../../lib/social/templates';
 import { downloadCanvasAsPng, downloadTextFile, exportFilename, renderCardToCanvas } from '../../../lib/social/renderer';
 import { preloadAssets, ensureFontsReady } from '../../../lib/social/imageLoader';
@@ -54,13 +54,14 @@ import { FiltersPanel } from './FiltersPanel';
 import { InspectorPanel } from './InspectorPanel';
 import { CaptionPanel } from './CaptionPanel';
 import { CardThumbnail } from './CardThumbnail';
+import { InsertBar, AlignBar } from './CanvasToolbar';
 import { GhostButton } from './StudioPrimitives';
 import { MediaSelector } from '../components/MediaSelector';
 
 const TEMPLATES: Array<{ id: TemplateId; labelFr: string; labelEn: string }> = [
   { id: 'cover', labelFr: 'Couverture', labelEn: 'Cover' },
   { id: 'brief', labelFr: 'Le Brief', labelEn: 'Brief' },
-  { id: 'closing', labelFr: 'Clôture', labelEn: 'Closing' },
+  { id: 'closing', labelFr: 'ClÃ´ture', labelEn: 'Closing' },
   { id: 'blank', labelFr: 'Vierge', labelEn: 'Blank' },
 ];
 
@@ -76,6 +77,7 @@ export interface SocialStudioProps {
 }
 
 type RightTab = 'design' | 'filters' | 'captions' | 'export';
+
 
 export function SocialStudio({
   article,
@@ -128,7 +130,7 @@ export function SocialStudio({
   /**
    * Apply a design change and record one undo entry.
    *
-   * Consecutive changes within 500 ms — a drag, a slider, a held arrow key —
+   * Consecutive changes within 500 ms â€” a drag, a slider, a held arrow key â€”
    * collapse into a single entry, so undo steps out of the gesture rather than
    * back through every intermediate pixel.
    */
@@ -188,10 +190,22 @@ export function SocialStudio({
     }));
   }, [activeCard, design.cards.length, updateCard]);
 
-  const addLayer = useCallback((kind: 'text' | 'shape' | 'image') => {
+  const addLayer = useCallback((kind: 'text' | 'shape' | 'image' | 'logo') => {
     if (!card) return;
     const newLayer: SocialLayer =
-      kind === 'text'
+      kind === 'logo'
+        ? createLogo({
+            name: 'Logo',
+            x: Math.round(format.width * 0.06),
+            y: Math.round(format.height * 0.05),
+            w: Math.round(format.width * 0.22),
+            h: Math.round(format.height * 0.045),
+            // Seed from the site logo when there is one, so the new layer is
+            // immediately visible and can then be replaced by an upload.
+            src: logoSrc || '',
+            toneSrc: { light: logoLight || logoSrc || undefined, dark: logoDark || logoSrc || undefined },
+          })
+        : kind === 'text'
         ? createText({
             name: 'Nouveau texte',
             text: 'Votre texte',
@@ -219,7 +233,29 @@ export function SocialStudio({
     // New layers land on top, where an editor expects to grab them.
     updateCard(activeCard, c => ({ ...c, layers: [...c.layers, newLayer] }));
     setSelectedId(newLayer.id);
-  }, [card, format, activeCard, updateCard]);
+  }, [card, format, activeCard, updateCard, logoSrc, logoLight, logoDark]);
+
+  /**
+   * Align the selection to the card, Canva-style.
+   *
+   * Alignment is to the FRAME, not to a multi-selection: "align left" in a
+   * design tool means the frame edge unless several objects are selected, and
+   * this editor has single selection only. The geometry itself lives in
+   * `alignLayerPosition`, where it is unit tested.
+   */
+  const alignSelection = useCallback((mode: AlignMode) => {
+    if (!selectedId || activeCard >= design.cards.length) return;
+    updateCard(activeCard, c => {
+      const layer = c.layers.find(l => l.id === selectedId);
+      if (!layer) return c;
+
+      const next = alignLayerPosition(layer, mode, format);
+      return {
+        ...c,
+        layers: c.layers.map(l => (l.id === selectedId ? ({ ...l, ...next } as SocialLayer) : l)),
+      };
+    });
+  }, [selectedId, activeCard, design.cards.length, updateCard, format]);
 
   const reorderLayer = useCallback((id: string, direction: 'up' | 'down' | 'front' | 'back') => {
     updateCard(activeCard, c => {
@@ -301,7 +337,7 @@ export function SocialStudio({
 
   // A network-specific caption wins; otherwise the shared one is edited, so an
   // editor working in two platforms does not have to write the same text twice
-  // — and can override one platform without touching the other.
+  // â€” and can override one platform without touching the other.
   const captionSlotKey: 'universal' | SocialNetwork = design.captions[design.network]
     ? design.network
     : 'universal';
@@ -323,24 +359,52 @@ export function SocialStudio({
 
   // ---- Assets --------------------------------------------------------------
 
+  /**
+   * Send an asset to the selected layer.
+   *
+   * The previous version returned silently when nothing suitable was selected,
+   * which is exactly why the logo appeared un-uploadable: the only way to reach
+   * an asset input was from inside the logo inspector, so an editor who had not
+   * first created and selected a logo layer got no feedback and no upload.
+   * Now a logo layer can be created from the toolbar, and an incompatible
+   * target reports why instead of failing quietly.
+   */
   const applyAsset = useCallback(async (src: string) => {
     const layer = card?.layers.find(l => l.id === selectedId);
-    if (!layer) return;
+    if (!layer) {
+      setStatus(t(
+        'SÃ©lectionnez dâ€™abord un calque image, fond ou logo.',
+        'Select an image, background or logo layer first.',
+      ));
+      return;
+    }
+
     if (layer.kind === 'logo') {
-      patchLayer(selectedId!, {
+      // A logo is the one kind that must fill its box exactly, so replacing the
+      // file also resets any manual stretch rather than inheriting it.
+      patchLayer(layer.id, {
         src,
-        toneSrc: { light: layer.toneSrc?.light || src, dark: layer.toneSrc?.dark || src },
+        tone: 'custom',
+        toneSrc: { light: src, dark: src },
       } as Partial<SocialLayer>);
     } else if (layer.kind === 'background' || layer.kind === 'image') {
-      patchLayer(selectedId!, { src } as Partial<SocialLayer>);
+      patchLayer(layer.id, { src } as Partial<SocialLayer>);
+    } else {
+      setStatus(t(
+        `Un calque Â« ${layer.name} Â» ne peut pas recevoir une image.`,
+        `A â€œ${layer.name}â€ layer cannot take an image.`,
+      ));
+      return;
     }
+
     await preloadAssets([src]);
-  }, [selectedId, card, patchLayer]);
+    setStatus(t('Image appliquÃ©e.', 'Image applied.'));
+  }, [selectedId, card, patchLayer, t]);
 
   /** Device uploads become data URLs so they travel inside the saved document. */
   const handleDeviceFile = useCallback(async (file: File) => {
     if (!file.type.startsWith('image/')) {
-      setStatus(t('Ce fichier n’est pas une image.', 'That file is not an image.'));
+      setStatus(t('Ce fichier nâ€™est pas une image.', 'That file is not an image.'));
       return;
     }
     const reader = new FileReader();
@@ -351,6 +415,75 @@ export function SocialStudio({
     reader.onerror = () => setStatus(t('Lecture du fichier impossible.', 'Could not read that file.'));
     reader.readAsDataURL(file);
   }, [applyAsset, t]);
+
+  /**
+   * Put a logo file onto the card, creating the layer if necessary.
+   *
+   * This is the fix for "I can't upload my logo". The toolbar button has to work
+   * on its own: an editor must not first have to know that a logo layer must
+   * exist and be selected. If a logo layer is already selected or present it is
+   * reused, otherwise one is created carrying the file.
+   */
+  const applyLogoAsset = useCallback(async (src: string) => {
+    const target =
+      (selectedId && card?.layers.find(l => l.id === selectedId && l.kind === 'logo'))
+      || card?.layers.find(l => l.kind === 'logo');
+
+    if (target) {
+      patchLayer(target.id, {
+        src,
+        tone: 'custom',
+        toneSrc: { light: src, dark: src },
+      } as Partial<SocialLayer>);
+    } else {
+      // Create the layer already carrying the file, so there is never a frame in
+      // which an empty logo exists and an upload appears to have been lost.
+      const newLogo: SocialLayer = createLogo({
+        name: 'Logo',
+        x: Math.round(format.width * 0.06),
+        y: Math.round(format.height * 0.05),
+        w: Math.round(format.width * 0.22),
+        h: Math.round(format.height * 0.045),
+        src,
+        tone: 'custom',
+        toneSrc: { light: src, dark: src },
+      });
+      updateCard(activeCard, c => ({ ...c, layers: [...c.layers, newLogo] }));
+      setSelectedId(newLogo.id);
+    }
+    await preloadAssets([src]);
+  }, [selectedId, card, patchLayer, updateCard, activeCard, format]);
+
+  const handleLogoUpload = useCallback((file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setStatus(t('Ce fichier nâ€™est pas une image.', 'That file is not an image.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      if (dataUrl) applyLogoAsset(dataUrl);
+    };
+    reader.onerror = () => setStatus(t('Lecture du fichier impossible.', 'Could not read that file.'));
+    reader.readAsDataURL(file);
+  }, [applyLogoAsset, t]);
+
+  /**
+   * Apply an asset chosen in the media library.
+   *
+   * Opened from the toolbar's "MÃ©diathÃ¨que" button while a non-asset layer is
+   * selected, the intent is clearly "use this as the logo", so a logo layer is
+   * created rather than refusing the action.
+   */
+  const applyLibraryAsset = useCallback(async (src: string) => {
+    const selected = card?.layers.find(l => l.id === selectedId);
+    const compatible = selected && (selected.kind === 'logo' || selected.kind === 'background' || selected.kind === 'image');
+    if (!compatible) {
+      await applyLogoAsset(src);
+      return;
+    }
+    await applyAsset(src);
+  }, [card, selectedId, applyAsset, applyLogoAsset]);
 
   // ---- Persistence ---------------------------------------------------------
 
@@ -376,8 +509,8 @@ export function SocialStudio({
     setSaving(false);
     setDirty(false);
     setStatus(result?.success
-      ? t('Design enregistré sur l’article.', 'Design saved to the article.')
-      : t('Échec de l’enregistrement.', 'Save failed.'));
+      ? t('Design enregistrÃ© sur lâ€™article.', 'Design saved to the article.')
+      : t('Ã‰chec de lâ€™enregistrement.', 'Save failed.'));
   }, [article, design, onSave, t]);
 
   // ---- Export --------------------------------------------------------------
@@ -388,13 +521,13 @@ export function SocialStudio({
     return [
       content.title,
       '',
-      `${fmt.width}x${fmt.height} — ${getNetwork(design.network).label}`,
+      `${fmt.width}x${fmt.height} â€” ${getNetwork(design.network).label}`,
       '',
-      'FRANÇAIS',
-      slot.fr || '(aucune légende)',
+      'FRANÃ‡AIS',
+      slot.fr || '(aucune lÃ©gende)',
       '',
       'ENGLISH',
-      slot.en || '(aucune légende)',
+      slot.en || '(aucune lÃ©gende)',
       '',
       content.url,
     ].filter(line => line !== undefined).join('\n');
@@ -407,7 +540,7 @@ export function SocialStudio({
       const canvas = await renderCardToCanvas(design.cards[index], format, { content });
       const name = exportFilename(content.slug, design.network, index, design.cards.length);
       await downloadCanvasAsPng(canvas, name);
-      setStatus(t('Image exportée.', 'Image exported.'));
+      setStatus(t('Image exportÃ©e.', 'Image exported.'));
     } catch (err) {
       setStatus(err instanceof Error ? err.message : t('Export impossible.', 'Export failed.'));
     } finally {
@@ -429,7 +562,7 @@ export function SocialStudio({
         <div className="bg-zinc-900 border border-zinc-800 p-6 max-w-md text-center">
           <p className="text-sm font-bold text-zinc-200 mb-2">{t('Aucun contenu source.', 'No source content.')}</p>
           <p className="text-xs text-zinc-500 mb-4">
-            {t('Sélectionnez un article ou fournissez un contenu ad hoc.', 'Pick an article or supply ad hoc content.')}
+            {t('SÃ©lectionnez un article ou fournissez un contenu ad hoc.', 'Pick an article or supply ad hoc content.')}
           </p>
           <GhostButton onClick={onClose} tone="accent">{t('Fermer', 'Close')}</GhostButton>
         </div>
@@ -456,7 +589,7 @@ export function SocialStudio({
         <GhostButton onClick={undo} disabled={history.current.length === 0} title={t('Annuler (Ctrl+Z)', 'Undo (Ctrl+Z)')}>
           <Undo2 size={12} />
         </GhostButton>
-        <GhostButton onClick={redo} disabled={future.current.length === 0} title={t('Rétablir', 'Redo')}>
+        <GhostButton onClick={redo} disabled={future.current.length === 0} title={t('RÃ©tablir', 'Redo')}>
           <Redo2 size={12} />
         </GhostButton>
 
@@ -467,7 +600,7 @@ export function SocialStudio({
             className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider border border-[#E85D42] text-[#E85D42] hover:bg-[#E85D42] hover:text-white transition-colors disabled:opacity-40"
           >
             <Save size={12} className="inline mr-1" />
-            {saving ? t('Enregistrement…', 'Saving…') : t('Enregistrer', 'Save')}
+            {saving ? t('Enregistrementâ€¦', 'Savingâ€¦') : t('Enregistrer', 'Save')}
           </button>
         )}
         <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-white transition-colors" title={t('Fermer', 'Close')}>
@@ -505,7 +638,7 @@ export function SocialStudio({
                 // nothing to TikTok.
                 applyChange(d => ({ ...d, network: n, formatId: DEFAULT_FORMAT_ID[n] }));
                 setStatus(t(
-                  `Passé sur ${getNetwork(n).label} : la mise en page est conservée, les formats disponibles changent.`,
+                  `PassÃ© sur ${getNetwork(n).label} : la mise en page est conservÃ©e, les formats disponibles changent.`,
                   `Switched to ${getNetwork(n).label}: the layout is kept, the available formats change.`,
                 ));
               }}
@@ -535,17 +668,35 @@ export function SocialStudio({
         <GhostButton
           onClick={() => setShowSafeZones(v => !v)}
           tone={showSafeZones ? 'accent' : 'default'}
-          title={t('Zones couvertes par l’interface de la plateforme', 'Regions the platform UI covers')}
+          title={t('Zones couvertes par lâ€™interface de la plateforme', 'Regions the platform UI covers')}
         >
-          <Eye size={12} /> {t('Zones sûres', 'Safe zones')}
+          <Eye size={12} /> {t('Zones sÃ»res', 'Safe zones')}
         </GhostButton>
       </div>
+      {/* Insert + Align toolbars, directly above the canvas (Canva/Figma pattern) */}
+      <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-zinc-800 bg-zinc-900/40 shrink-0 flex-wrap">
+        <InsertBar
+          disabled={!card}
+          hasLogo={Boolean(card?.layers.some(l => l.kind === 'logo'))}
+          onAddText={() => addLayer('text')}
+          onAddShape={() => addLayer('shape')}
+          onAddImage={() => addLayer('image')}
+          onAddLogo={() => addLayer('logo')}
+          onUploadLogo={handleLogoUpload}
+          onOpenLibraryForLogo={() => setMediaOpen(true)}
+        />
+        <AlignBar
+          selectedName={selectedLayer?.name}
+          onAlign={(mode) => alignSelection(mode)}
+        />
+      </div>
+
       <div className="flex-1 min-h-0 flex">
         {/* Left: templates and the card strip */}
         <aside className="w-56 shrink-0 border-r border-zinc-800 bg-zinc-900/40 flex flex-col">
           <div className="p-3 border-b border-zinc-800">
             <h4 className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-2">
-              {t('Modèles', 'Templates')}
+              {t('ModÃ¨les', 'Templates')}
             </h4>
             <div className="grid grid-cols-2 gap-1">
               {TEMPLATES.map(tpl => (
@@ -564,7 +715,7 @@ export function SocialStudio({
             </div>
             <p className="text-[9px] text-zinc-600 mt-2 leading-relaxed">
               {t(
-                'Appliquer un modèle reconstruit les cartes et écrase les modifications en cours.',
+                'Appliquer un modÃ¨le reconstruit les cartes et Ã©crase les modifications en cours.',
                 'Applying a template rebuilds the cards and discards current edits.',
               )}
             </p>
@@ -596,7 +747,7 @@ export function SocialStudio({
                       {index + 1}.{' '}
                       {c.templateId === 'cover' ? t('Couverture', 'Cover')
                         : c.templateId === 'brief' ? t('Brief', 'Brief')
-                        : c.templateId === 'closing' ? t('Clôture', 'Closing') : t('Vierge', 'Blank')}
+                        : c.templateId === 'closing' ? t('ClÃ´ture', 'Closing') : t('Vierge', 'Blank')}
                     </span>
                     <span className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
@@ -650,7 +801,7 @@ export function SocialStudio({
         ) : (
           <div className="flex-1 grid place-items-center text-xs text-zinc-500 text-center px-6">
             {t(
-              'Aucune carte. Choisissez un modèle à gauche pour commencer.',
+              'Aucune carte. Choisissez un modÃ¨le Ã  gauche pour commencer.',
               'No cards yet. Pick a template on the left to begin.',
             )}
           </div>
@@ -662,7 +813,7 @@ export function SocialStudio({
             {([
               ['design', t('Calques', 'Layers'), LayersIcon],
               ['filters', t('Effets', 'Filters'), Grid3x3],
-              ['captions', t('Légendes', 'Captions'), FileText],
+              ['captions', t('LÃ©gendes', 'Captions'), FileText],
               ['export', t('Export', 'Export'), Download],
             ] as const).map(([id, label, Icon]) => (
               <button
@@ -717,7 +868,7 @@ export function SocialStudio({
                 network={design.network}
                 captions={captionSlot}
                 slotLabel={captionSlotKey === 'universal'
-                  ? t('Légende commune', 'Shared caption')
+                  ? t('LÃ©gende commune', 'Shared caption')
                   : getNetwork(design.network).label}
                 generatedAt={design.generatedAt}
                 onChange={setCaptions}
@@ -728,7 +879,7 @@ export function SocialStudio({
                 }))}
                 onConfirmRegenerate={() => {
                   if (window.confirm(t(
-                    'Régénérer les deux légendes ? Vos modifications seront remplacées.',
+                    'RÃ©gÃ©nÃ©rer les deux lÃ©gendes ? Vos modifications seront remplacÃ©es.',
                     'Regenerate both captions? Your edits will be replaced.',
                   ))) regenerateBoth();
                 }}
@@ -742,8 +893,8 @@ export function SocialStudio({
                   </h4>
                   <p className="text-[9px] text-zinc-500 mb-3 leading-relaxed">
                     {t(
-                      `Chaque carte est exportée à la taille native ${format.width}×${format.height}, identique à l’aperçu.`,
-                      `Each card exports at the native ${format.width}×${format.height} size, identical to the preview.`,
+                      `Chaque carte est exportÃ©e Ã  la taille native ${format.width}Ã—${format.height}, identique Ã  lâ€™aperÃ§u.`,
+                      `Each card exports at the native ${format.width}Ã—${format.height} size, identical to the preview.`,
                     )}
                   </p>
                   <div className="flex flex-col gap-1">
@@ -760,12 +911,12 @@ export function SocialStudio({
 
                 <div className="border border-zinc-800 bg-zinc-950 p-3">
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-[#E85D42] mb-2">
-                    {t('Légendes', 'Captions')}
+                    {t('LÃ©gendes', 'Captions')}
                   </h4>
                   <GhostButton
                     onClick={() => downloadTextFile(captionText(), exportFilename(content.slug, design.network, 0, 1))}
                   >
-                    {t('Télécharger les deux langues', 'Download both languages')}
+                    {t('TÃ©lÃ©charger les deux langues', 'Download both languages')}
                   </GhostButton>
                 </div>
 
@@ -774,7 +925,7 @@ export function SocialStudio({
                     <AlertTriangle size={12} className="text-amber-400 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-amber-200 leading-relaxed">
                       {t(
-                        'Contenu ad hoc : rien n’est enregistré. Exportez les images avant de fermer.',
+                        'Contenu ad hoc : rien nâ€™est enregistrÃ©. Exportez les images avant de fermer.',
                         'Ad hoc content: nothing is saved. Export the images before closing.',
                       )}
                     </p>
@@ -787,7 +938,7 @@ export function SocialStudio({
       </div>
 
       {mediaOpen && (
-        <MediaSelector onSelect={url => applyAsset(url)} onClose={() => setMediaOpen(false)} />
+        <MediaSelector onSelect={url => applyLibraryAsset(url)} onClose={() => setMediaOpen(false)} />
       )}
     </div>
   );

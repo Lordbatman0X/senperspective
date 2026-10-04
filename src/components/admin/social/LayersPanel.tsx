@@ -1,4 +1,4 @@
-export function LayersPanel({
+﻿export function LayersPanel({
   layers,
   selectedId,
   onSelect,
@@ -17,15 +17,14 @@ export function LayersPanel({
         <h4 className="text-[10px] font-black uppercase tracking-widest text-[#E85D42]">
           Calques ({layers.length})
         </h4>
-        <div className="flex gap-1">
-          <GhostButton onClick={() => onAdd('text')} title="Ajouter un bloc de texte">+ Texte</GhostButton>
-          <GhostButton onClick={() => onAdd('shape')} title="Ajouter une forme">+ Forme</GhostButton>
-          <GhostButton onClick={() => onAdd('image')} title="Ajouter une image">+ Image</GhostButton>
-        </div>
       </div>
+      <p className="text-[9px] text-zinc-600 leading-relaxed">
+        Cliquez sur un élément de la carte pour le sélectionner. Double-cliquez sur un texte
+        pour le modifier directement.
+      </p>
 
       {layers.length === 0 && (
-        <EmptyHint>Cette carte n’a aucun calque. Ajoutez-en un pour commencer.</EmptyHint>
+        <EmptyHint>Cette carte nâ€™a aucun calque. Ajoutez-en un pour commencer.</EmptyHint>
       )}
 
       <div className="flex flex-col gap-1">
@@ -60,7 +59,7 @@ export function LayersPanel({
               {layer.filters.length + layer.effects.length > 0 && (
                 <span
                   className="text-[9px] font-mono text-zinc-500 shrink-0"
-                  title="Filtres et effets appliqués"
+                  title="Filtres et effets appliquÃ©s"
                 >
                   fx{layer.filters.length + layer.effects.length}
                 </span>
@@ -68,7 +67,7 @@ export function LayersPanel({
 
               <button
                 type="button"
-                title={layer.locked ? 'Déverrouiller' : 'Verrouiller'}
+                title={layer.locked ? 'DÃ©verrouiller' : 'Verrouiller'}
                 onClick={(e) => { e.stopPropagation(); onPatch(layer.id, { locked: !layer.locked }); }}
                 className={`shrink-0 ${layer.locked ? 'text-amber-400' : 'text-zinc-500 hover:text-zinc-200'}`}
               >
@@ -85,13 +84,13 @@ export function LayersPanel({
             <GhostButton onClick={() => onReorder(selected.id, 'front')} title="Mettre tout devant">
               <ArrowUpToLine size={12} />
             </GhostButton>
-            <GhostButton onClick={() => onReorder(selected.id, 'up')} title="Avancer d’un rang">
+            <GhostButton onClick={() => onReorder(selected.id, 'up')} title="Avancer dâ€™un rang">
               <ArrowUp size={12} />
             </GhostButton>
-            <GhostButton onClick={() => onReorder(selected.id, 'down')} title="Reculer d’un rang">
+            <GhostButton onClick={() => onReorder(selected.id, 'down')} title="Reculer dâ€™un rang">
               <ArrowDown size={12} />
             </GhostButton>
-            <GhostButton onClick={() => onReorder(selected.id, 'back')} title="Mettre tout derrière">
+            <GhostButton onClick={() => onReorder(selected.id, 'back')} title="Mettre tout derriÃ¨re">
               <ArrowDownToLine size={12} />
             </GhostButton>
             <GhostButton onClick={() => onDuplicate(selected.id)} title="Dupliquer">
@@ -129,7 +128,7 @@ export function LayersPanel({
 /**
  * The ordered layer list.
  *
- * Shown TOP-FIRST — the reverse of `card.layers`, which is stored bottom-to-top —
+ * Shown TOP-FIRST â€” the reverse of `card.layers`, which is stored bottom-to-top â€”
  * because that is how a designer reads a stack: whatever is painted last sits at
  * the top of the list and can be picked without hunting.
  */
@@ -160,7 +159,7 @@ const BLEND_OPTIONS: Array<{ value: LayerBlend; label: string }> = [
   { value: 'screen', label: 'Incrustation' },
   { value: 'overlay', label: 'Superposition' },
   { value: 'color', label: 'Couleur' },
-  { value: 'luminosity', label: 'Luminosité' },
+  { value: 'luminosity', label: 'LuminositÃ©' },
 ];
 
 export interface LayersPanelProps {
@@ -171,7 +170,7 @@ export interface LayersPanelProps {
   onReorder: (id: string, direction: 'up' | 'down' | 'front' | 'back') => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
-  onAdd: (kind: 'text' | 'shape' | 'image') => void;
+  onAdd: (kind: 'text' | 'shape' | 'image' | 'logo') => void;
 }
 
 function kindIcon(layer: SocialLayer) {

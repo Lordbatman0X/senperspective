@@ -72,6 +72,24 @@ export function StudioStage({
   const [zoom, setZoom] = useState(0.42);
   const [drag, setDrag] = useState<DragMode | null>(null);
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
+  /**
+   * Double-click a text layer to edit it in place.
+   *
+   * This is the single biggest difference from the first build: an editor
+   * changes a headline by double-clicking it and typing, not by finding the
+   * layer in a list and then finding the text box in a properties panel. The
+   * rendered canvas text is hidden while editing so the caret is not doubled up.
+   */
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Focus the editor as soon as it mounts, so typing can start immediately.
+  useEffect(() => {
+    if (editingTextId && editRef.current) {
+      editRef.current.focus();
+      editRef.current.select();
+    }
+  }, [editingTextId]);
 
   // Preload every asset this card references, including the article image used
   // by the template backgrounds.
@@ -249,6 +267,36 @@ const SNAP = 6;
     onChangeLayer(layer.id, { x: layer.x + move[0], y: layer.y + move[1] });
   };
 
+  // Fit the card to the available area whenever the format changes.
+  //
+  // Without this, switching Instagram 4:5 -> TikTok 9:16 leaves the tall card
+  // running off the bottom of the screen, and the editor has to hunt for the
+  // zoom slider to find it again. This is the single biggest "where did my card
+  // go" fix in this revision.
+  const fitRef = useRef<HTMLDivElement>(null);
+  const fitToView = useCallback(() => {
+    const host = fitRef.current?.parentElement;
+    if (!host) return;
+    const pad = 64;
+    const w = host.clientWidth - pad;
+    const h = host.clientHeight - pad;
+    if (w <= 0 || h <= 0) return;
+    const next = Math.min(w / format.width, h / format.height, 1);
+    setZoom(Math.max(0.1, Math.min(1, Math.round(next * 100) / 100)));
+  }, [format.width, format.height]);
+
+  useEffect(() => {
+    fitToView();
+  }, [fitToView]);
+
+  // Ctrl/Cmd+wheel zooms, as in every design tool. Plain wheel is left alone so
+  // the page still scrolls normally.
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    setZoom(z => Math.max(0.1, Math.min(1, z - e.deltaY * 0.0015)));
+  }, []);
+
   const selected = card.layers.find(l => l.id === selectedId) ?? null;
   const displayW = Math.round(format.width * zoom);
   const displayH = Math.round(format.height * zoom);
@@ -270,11 +318,19 @@ const SNAP = 6;
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={fitToView}
+            title="Ajuster la carte à l’écran"
+            className="px-2 py-0.5 text-[10px] font-mono text-zinc-400 hover:text-[#E85D42] border border-zinc-800 hover:border-[#E85D42] transition-colors"
+          >
+            AJUSTER
+          </button>
           <span className="text-[10px] font-mono text-zinc-500">ZOOM</span>
           <input
             type="range"
-            min={15}
-            max={100}
+            min={10}
+            max={150}
             value={Math.round(zoom * 100)}
             onChange={(e) => setZoom(Number(e.target.value) / 100)}
             className="w-24 accent-[#E85D42]"
@@ -285,15 +341,23 @@ const SNAP = 6;
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto grid place-items-center p-8">
+      <div ref={fitRef} className="flex-1 min-h-0 overflow-auto grid place-items-center p-8" onWheel={onWheel}>
         <div
           ref={wrapRef}
           tabIndex={0}
-          onKeyDown={onKeyDown}
+          onKeyDown={(e) => {
+            if (editingTextId) return;
+            onKeyDown(e);
+          }}
           onPointerMove={onPointerMove}
           onPointerUp={endDrag}
           onPointerCancel={endDrag}
-          onPointerDown={() => onSelect(null)}
+          onPointerDown={(e) => {
+            // A click on empty canvas exits text editing, the way clicking away
+            // does in every other editor.
+            if (editingTextId) setEditingTextId(null);
+            onSelect(null);
+          }}
           className="relative shrink-0 outline-none shadow-2xl"
           style={{ width: displayW, height: displayH }}
         >
@@ -333,10 +397,22 @@ const SNAP = 6;
           {[...card.layers].reverse().map(layer => {
             if (!layer.visible) return null;
             const isSelected = layer.id === selectedId;
+            const isEditing = layer.id === editingTextId;
             return (
               <div
                 key={layer.id}
-                onPointerDown={(e) => onPointerDown(e, layer)}
+                onPointerDown={(e) => {
+                  // While editing text, clicks belong to the textarea.
+                  if (isEditing) return;
+                  onPointerDown(e, layer);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (layer.kind !== 'text' || layer.locked) return;
+                  onSelect(layer.id);
+                  setEditingTextId(layer.id);
+                }}
+                title={layer.locked ? 'Calque verrouillé' : undefined}
                 className={`absolute ${layer.locked ? 'cursor-not-allowed' : 'cursor-move'}`}
                 style={{
                   left: layer.x * zoom,
@@ -348,15 +424,53 @@ const SNAP = 6;
               >
                 <div
                   className={`w-full h-full border transition-colors ${
-                    isSelected
+                    isSelected || isEditing
                       ? 'border-[#E85D42] bg-[#E85D42]/5'
-                      : 'border-transparent hover:border-white/25'
+                      : 'border-transparent hover:border-white/40'
                   }`}
                 />
                 {layer.locked && (
                   <span className="absolute top-0 right-0 text-[8px] font-mono bg-zinc-900 text-amber-400 px-1 pointer-events-none">
                     LOCK
                   </span>
+                )}
+                {/* A small badge tells the editor that a double-click edits text,
+                    instead of leaving it to be discovered. */}
+                {layer.kind === 'text' && isSelected && !isEditing && (
+                  <span className="absolute -top-5 left-0 text-[9px] font-mono bg-[#E85D42] text-white px-1.5 py-0.5 pointer-events-none whitespace-nowrap">
+                    double-clic pour modifier
+                  </span>
+                )}
+
+                {/* In-place text editor */}
+                {isEditing && (
+                  <textarea
+                    ref={editRef}
+                    value={layer.kind === 'text' ? layer.text : ''}
+                    onChange={(e) => onChangeLayer(layer.id, { text: e.target.value, binding: undefined } as Partial<SocialLayer>)}
+                    onBlur={() => setEditingTextId(null)}
+                    onKeyDown={(e) => {
+                      // Escape leaves editing without moving the layer.
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setEditingTextId(null);
+                      }
+                      // Enter inserts a newline; the block is multi-line.
+                      e.stopPropagation();
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="absolute inset-0 w-full h-full bg-zinc-950/80 border border-[#E85D42] px-2 py-1 text-white resize-none outline-none"
+                    style={{
+                      // Match the rendered face and size, scaled to the zoom, so
+                      // the text does not jump when the editor opens.
+                      fontFamily: layer.kind === 'text' ? layer.fontFamily : undefined,
+                      fontStyle: layer.kind === 'text' ? layer.fontStyle : undefined,
+                      fontWeight: layer.kind === 'text' ? layer.fontWeight : undefined,
+                      fontSize: layer.kind === 'text' ? Math.max(8, layer.fontSize * zoom) : undefined,
+                      lineHeight: layer.kind === 'text' ? layer.lineHeight : undefined,
+                      textAlign: layer.kind === 'text' ? layer.align : undefined,
+                    }}
+                  />
                 )}
               </div>
             );
