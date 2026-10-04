@@ -5,7 +5,7 @@ import { fetchUserProfile } from '../firebase/auth';
 import { 
   LogOut, LayoutDashboard, FileText, Settings, Plus, Edit2, Trash2, Trophy, Clock, Tag,
   Image as ImageIcon, MessageSquare, Users, Megaphone, Menu, X, ArrowUpRight, Search, Upload, Sun, Moon, Shield, ShieldCheck, Eye, EyeOff,
-  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud, Server, Share2
+  Home, Bell, BarChart2, Mail, DollarSign, Palette, Compass, Globe, History, Zap, Ship, Quote, Wrench, Database, Bot, Cloud, Server
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSEO } from '../hooks/useSEO';
@@ -21,7 +21,6 @@ import { SubscriberTab } from '../components/admin/SubscriberTab';
 import { AdManagerTab } from '../components/admin/AdManagerTab';
 import { ArticleEditorTab } from '../components/admin/ArticleEditorTab';
 import { MediaSelector } from '../components/admin/components/MediaSelector';
-import { SocialStudio } from '../components/admin/social/SocialStudio';
 import { CustomizerTab } from '../components/admin/CustomizerTab';
 import { GoogleIntegrationsTab } from '../components/admin/GoogleIntegrationsTab';
 import { TaxonomyTab } from '../components/admin/TaxonomyTab';
@@ -436,12 +435,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     setMobileMenuOpen(false);
   };
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
-  /**
-   * Which article the Social Studio is open on. Held separately from
-   * `editingArticle` so the Studio can be launched straight from the content
-   * list without switching the page to the editor tab first.
-   */
-  const [socialStudioArticle, setSocialStudioArticle] = useState<Article | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [articleFilter, setArticleFilter] = useState('all');
   const [articleSearch, setArticleSearch] = useState('');
@@ -3332,13 +3325,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
                           </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex justify-end items-center gap-2">
-                              <button
-                                onClick={() => setSocialStudioArticle(a)}
-                                className="p-1.5 text-zinc-400 hover:text-[#E85D42] hover:bg-[#E85D42]/10 transition-colors rounded-md cursor-pointer"
-                                title={language === 'fr' ? 'Créer les visuels et légendes sociaux' : 'Design social cards and captions'}
-                              >
-                                <Share2 size={15} />
-                              </button>
                               <button 
                                 onClick={() => handleEdit(a)} 
                                 className="p-1.5 text-zinc-400 hover:text-[#E85D42] hover:bg-[#E85D42]/10 transition-colors rounded-md cursor-pointer" 
@@ -3394,37 +3380,6 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           </div>
         )}
       </main>
-
-      {/* Social Studio modal */}
-      {socialStudioArticle && (
-        <SocialStudio
-          article={socialStudioArticle}
-          // The publication's own logo, NOT boukariCorpLogo: that is the parent
-          // company's footer mark and using it here was showing the wrong brand.
-          logoSrc={(siteSettings as any)?.socialLogo}
-          logoLight={(siteSettings as any)?.socialLogoLight}
-          logoDark={(siteSettings as any)?.socialLogoDark}
-          language={language}
-          onSaveBrandLogo={async (brand) => {
-            // Saved once, site-wide. Every card — existing ones included —
-            // renders it, so it is never copied into individual documents.
-            updateSiteSettings({
-              socialLogo: brand.src,
-              socialLogoLight: brand.light,
-              socialLogoDark: brand.dark,
-            });
-          }}
-          onSave={async (design) => {
-            // Only the `social` field is written back. Every other field of the
-            // article is left exactly as it was, so the Studio can never
-            // overwrite the article's own copy.
-            const result = await updateArticle({ ...socialStudioArticle, social: design });
-            if (result?.success !== false) setSocialStudioArticle({ ...socialStudioArticle, social: design });
-            return result;
-          }}
-          onClose={() => setSocialStudioArticle(null)}
-        />
-      )}
 
       {/* Media Library pop-up Selector overlay portal */}
       {mediaSelectorOpen && (
