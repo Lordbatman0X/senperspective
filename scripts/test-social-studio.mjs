@@ -17,6 +17,12 @@ const {
   buildFilterString,
   chooseLogoTone, colorLuminance, contrastRatio, relativeLuminance,
   migrateSocialDesign, createText, createLogo, alignLayerPosition,
+  marqueeSelection, normalizeRect, hitTest,
+  boundsOf, computeSnap,
+  resizeBox, translateBox, rotatePoint, angleFrom,
+  alignBoxes, distributeBoxes,
+  groupLayers, ungroupLayers, expandToGroups,
+  toggleSelection, addToSelection,
   computeImageRect, resolveLogoSrc,
   buildCoverCard, buildBriefCard, buildClosingCard,
 } = await import('../.socialtest.mjs');
@@ -334,5 +340,192 @@ ok('explicit light/dark tones read the brand variants');
 // A brand-linked layer is never left claiming a file it does not have.
 assert.equal(resolveLogoSrc(brandLinked, undefined, brand).tone, 'auto');
 ok('a brand-linked layer reports auto tone, not a false custom override');
+
+console.log('Marquee and hit testing');
+const boxes = [
+  { id: 'bg', x: 0, y: 0, w: 1080, h: 1350 },
+  { id: 'title', x: 100, y: 200, w: 400, h: 100 },
+  { id: 'logo', x: 700, y: 60, w: 200, h: 60 },
+  // The CTA straddles the marquee's lower edge (150..190 against a marquee ending
+// at 180), so touch captures it and enclosed does not.
+{ id: 'cta', x: 700, y: 150, w: 300, h: 40 },
+];
+// x 650..1050, y 40..180.
+const m1 = { x: 650, y: 40, w: 400, h: 140 };
+assert.deepEqual(marqueeSelection(m1, boxes, 'touch').sort(), ['bg', 'cta', 'logo']);
+ok('touch marquee captures anything the box crosses');
+// Enclosed mode drops the background, which the marquee cannot fully contain.
+assert.deepEqual(marqueeSelection(m1, boxes, 'enclosed'), ['logo']);
+ok('enclosed marquee requires full containment');
+assert.deepEqual(normalizeRect({ x: 200, y: 200 }, { x: 50, y: 50 }), { x: 50, y: 50, w: 150, h: 150 });
+ok('a backwards drag is normalised rather than inverted');
+// The largest hit wins, so a small element on a full-bleed background is pickable.
+// (750, 80) is inside the logo only; the CTA sits lower at y=150..190.
+assert.equal(hitTest(boxes, { x: 750, y: 80 }), 'logo');
+assert.equal(hitTest(boxes, { x: 500, y: 700 }), 'bg');
+ok('hit testing picks the topmost smallest element, not the card');
+assert.equal(hitTest(boxes, { x: 5000, y: 5000 }), null);
+ok('a point outside every box hits nothing');
+// A hidden layer must not be picked.
+assert.equal(hitTest([...boxes, { id: 'x', x: 700, y: 40, w: 300, h: 100, visible: false }], { x: 750, y: 80 }), 'logo');
+ok('a hidden layer is not hit-testable');
+
+console.log('Bounds');
+assert.deepEqual(boundsOf([{ x: 10, y: 20, w: 30, h: 40 }, { x: 100, y: 5, w: 10, h: 10 }]), {
+  x: 10, y: 5, w: 100, h: 55,
+});
+ok('bounds span every box');
+assert.equal(boundsOf([]), null);
+ok('empty input has no bounds');
+
+console.log('Object snapping');
+const frame = { width: 1080, height: 1350 };
+const others = [{ id: 'a', x: 100, y: 300, w: 200, h: 100 }];
+const snapLeft = computeSnap({ x: 105, y: 700, w: 200, h: 100 }, { threshold: 6, others, frame });
+assert.equal(snapLeft.dx, -5);
+ok('a box snaps to another object edge within the threshold');
+const noSnap = computeSnap({ x: 130, y: 700, w: 200, h: 100 }, { threshold: 6, others, frame });
+assert.equal(noSnap.dx, 0);
+ok('outside the threshold nothing snaps');
+const snapFrame = computeSnap({ x: 4, y: 700, w: 200, h: 100 }, { threshold: 6, others, frame });
+assert.equal(snapFrame.dx, -4);
+ok('the card edge attracts like any other edge');
+// Box left at 196 sits 4px from object 'a''s centre at 200 (a: x 100..300), which
+// is inside the 6px threshold and far from every frame target.
+const snapCentre = computeSnap({ x: 196, y: 700, w: 200, h: 100 }, { threshold: 6, others, frame });
+assert.equal(snapCentre.dx, 4);
+ok('object centres are snap targets too');
+// Nothing within the threshold leaves the box exactly where it was.
+const noTarget = computeSnap({ x: 500, y: 700, w: 200, h: 100 }, { threshold: 6, others, frame });
+assert.equal(noTarget.dx, 0);
+assert.equal(noTarget.dy, 0);
+ok('a box far from every candidate is left untouched');
+// A tie between an object and the frame resolves to the frame (higher weight),
+// so the card's outer margin stays authoritative for edge placement.
+// Box left at 300 is 4px from the object's left edge at 304. The frame centre
+// (540) is far away, so it cannot contest the snap.
+const tie = computeSnap({ x: 300, y: 700, w: 40, h: 40 }, {
+  threshold: 6,
+  others: [{ id: 'a', x: 304, y: 300, w: 100, h: 100 }],
+  frame,
+});
+assert.equal(tie.dx, 4);
+ok('a nearby object edge snaps the dragged box onto it');
+// A guide with value 0 is a neutral pass-through (already aligned), reported so
+// the canvas can still draw the alignment line.
+const aligned = computeSnap({ x: 540, y: 700, w: 40, h: 40 }, { threshold: 6, others: [], frame });
+assert.equal(aligned.dx, 0);
+assert.ok(aligned.guides.some(g => g.axis === 'x' && g.snapped === 540));
+ok('an already-aligned box reports a guide even with no movement');
+assert.ok(snapLeft.guides.filter(g => g.axis === 'x').length <= 1);
+ok('at most one snap guide per axis');
+const frameOnly = computeSnap({ x: 105, y: 700, w: 200, h: 100 }, { threshold: 6, others, frame, toObjects: false });
+assert.equal(frameOnly.dx, 0);
+ok('object snapping can be disabled independently');
+console.log('Resize and move');
+assert.deepEqual(resizeBox({ x: 0, y: 0, w: 100, h: 100 }, 'se', { x: 50, y: 20 }), { x: 0, y: 0, w: 150, h: 120 });
+ok('the south-east handle grows right and down');
+assert.deepEqual(resizeBox({ x: 0, y: 0, w: 100, h: 100 }, 'nw', { x: 20, y: 0 }), { x: 20, y: 0, w: 80, h: 100 });
+ok('the north-west handle keeps the opposite corner anchored');
+const ratio = resizeBox({ x: 0, y: 0, w: 100, h: 100 }, 'se', { x: 50, y: 200 }, { keepRatio: true });
+assert.ok(Math.abs(ratio.w / ratio.h - 1) < 0.01, 'corner drag keeps the aspect ratio');
+ok('a locked aspect ratio survives a corner drag');
+assert.deepEqual(
+  resizeBox({ x: 0, y: 0, w: 100, h: 100 }, 'se', { x: 50, y: 50 }, { fromCentre: true }),
+  { x: -25, y: -25, w: 150, h: 150 },
+);
+ok('alt-drag resizes symmetrically about the centre');
+const floored = resizeBox({ x: 0, y: 0, w: 100, h: 100 }, 'se', { x: -500, y: -500 });
+assert.ok(floored.w >= 4 && floored.h >= 4);
+ok('a resize cannot collapse the box to nothing');
+assert.deepEqual(
+  translateBox({ x: 10, y: 10, w: 100, h: 100 }, { x: 5, y: -5 }),
+  { x: 15, y: 5, w: 100, h: 100 },
+);
+ok('a move translates without resizing');
+const kept = translateBox({ x: 10, y: 10, w: 100, h: 100 }, { x: 99999, y: 99999 }, frame);
+assert.ok(kept.x < frame.width && kept.y < frame.height);
+ok('a layer cannot be dragged entirely off the card');
+
+console.log('Rotation');
+const p = rotatePoint({ x: 100, y: 0 }, { x: 50, y: 0 }, 90);
+assert.ok(Math.abs(p.x - 50) < 0.01 && Math.abs(p.y - 50) < 0.01);
+ok('a 90 degree rotation moves the point off the horizontal axis');
+assert.equal(angleFrom({ x: 0, y: 0 }, { x: 100, y: 0 }), 0);
+assert.equal(angleFrom({ x: 0, y: 0 }, { x: 0, y: 100 }), 90);
+assert.equal(angleFrom({ x: 0, y: 0 }, { x: 0, y: -100 }), -90);
+ok('angles are measured from the positive x axis');
+
+console.log('Align and distribute');
+const row = [
+  { x: 0, y: 0, w: 100, h: 50 },
+  { x: 200, y: 100, w: 100, h: 50 },
+];
+const toLeft = alignBoxes(row, 'left', frame);
+assert.equal(toLeft[0].dx, 0);
+assert.equal(toLeft[1].dx, -200);
+ok('aligning a selection left flushes to the shared edge');
+const toCentre = alignBoxes(row, 'centerH', frame);
+assert.equal(toCentre[0].dx + 50, toCentre[1].dx + 250);
+ok('aligning a selection centres on the shared axis');
+const single = alignBoxes([{ x: 999, y: 999, w: 100, h: 50 }], 'left', frame);
+assert.equal(single[0].dx, -999);
+ok('a lone box aligns to the frame, not to itself');
+assert.deepEqual(distributeBoxes([{ x: 0, y: 0, w: 50, h: 10 }], 'x'), [{ dx: 0, dy: 0 }]);
+ok('distributing fewer than three boxes is a no-op');
+const spread = distributeBoxes([
+  { x: 0, y: 0, w: 100, h: 10 },
+  { x: 110, y: 0, w: 100, h: 10 },
+  { x: 500, y: 0, w: 100, h: 10 },
+], 'x');
+// The two outer boxes are already where they should be; the middle one moves to
+// make both gaps equal (150 and 150).
+assert.equal(spread[0].dx, 0);
+assert.equal(spread[2].dx, 0);
+assert.equal(spread[1].dx, 140);
+const after = [
+  { x: 0, dx: spread[0].dx },
+  { x: 110, dx: spread[1].dx },
+  { x: 500, dx: spread[2].dx },
+].map(b => b.x + b.dx + 100);
+assert.equal(after[1] - after[0], after[2] - after[1], 'the gaps are equal after distributing');
+ok('distribute evenises the gaps between three boxes');
+
+console.log('Groups');
+const layers = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+const grouped = groupLayers(layers, ['a', 'b']);
+assert.equal(grouped.layers.filter(l => l.group).length, 2);
+assert.equal(grouped.layers.find(l => l.id === 'c').group, undefined);
+ok('grouping tags only the chosen layers');
+assert.equal(groupLayers(layers, ['a']).groupId, '');
+ok('a single layer cannot form a group');
+assert.deepEqual(expandToGroups(grouped.layers, ['a']), ['a', 'b']);
+ok('selecting any member selects the whole group');
+assert.equal(ungroupLayers(grouped.layers, ['a']).find(l => l.id === 'a').group, undefined);
+ok('a single member can be released from its group');
+assert.ok(ungroupLayers(grouped.layers).every(l => !l.group));
+ok('ungrouping everything clears every tag');
+// Grouping a SUBSET of an existing group forms a new group and leaves the rest
+// alone: a stays in the original group while b and c move to the new one. This
+// matches how a group behaves in any editor — a remainder is not silently swept
+// into the new group.
+const merged = groupLayers(groupLayers(layers, ['a', 'b']).layers, ['b', 'c']);
+const tags = new Set(merged.layers.map(l => l.group).filter(Boolean));
+assert.equal(tags.size, 2, 'the subset forms its own group, leaving a remainder');
+assert.equal(merged.layers.find(l => l.id === 'c').group, merged.layers.find(l => l.id === 'b').group);
+ok('a subset group does not swallow the rest of its former group');
+// The new group id is derived from its members, so it is stable across runs.
+assert.equal(
+  groupLayers(layers, ['b', 'a']).groupId,
+  groupLayers(layers, ['a', 'b']).groupId,
+);
+ok('a group id does not depend on the order the members were selected');
+
+console.log('Selection');
+assert.deepEqual(toggleSelection(['a'], 'b'), ['a', 'b']);
+assert.deepEqual(toggleSelection(['a', 'b'], 'a'), ['b']);
+ok('shift-click adds, clicking again removes');
+assert.deepEqual(addToSelection(['a'], ['a', 'b']), ['a', 'b']);
+ok('adding to a selection never duplicates');
 
 console.log(`\n${pass} checks passed.`);

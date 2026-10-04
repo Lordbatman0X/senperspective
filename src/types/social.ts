@@ -25,6 +25,15 @@ export interface LayerBase {
   opacity: number;
   visible: boolean;
   locked: boolean;
+  /**
+   * Group membership.
+   *
+   * Groups are a flat membership tag rather than a nested tree. Nesting looks
+   * tidier in the model but costs a recursive renderer, a recursive hit-test and
+   * a recursive panel, all to express something a flat list already handles.
+   * A layer with no group is top-level; layers sharing a `group` id move together.
+   */
+  group?: string;
   blend: LayerBlend;
   filters: FilterEntry[];
   effects: EffectEntry[];

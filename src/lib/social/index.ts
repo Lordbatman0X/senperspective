@@ -8,6 +8,17 @@
  */
 
 export * from './networks';
+// `canvasOps` also exports `Rect`; renderer.ts owns the canonical one used by
+// the public API, so canvasOps is re-exported without its duplicate.
+export {
+  rectsIntersect, rectContains, boundsOf, normalizeRect,
+  marqueeSelection, hitTest, computeSnap,
+  resizeBox, translateBox, rotatePoint, angleFrom,
+  alignBoxes, distributeBoxes,
+  groupLayers, ungroupLayers, expandToGroups, groupIdsOf,
+  toggleSelection, addToSelection,
+} from './canvasOps';
+export type { SnapCandidate, SnapOptions, ResizeHandle, Groupable } from './canvasOps';
 export * from './captions';
 export * from './content';
 export * from './fit';
