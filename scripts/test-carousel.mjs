@@ -30,6 +30,7 @@ import {
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
 import { collectDraftImages, logoImageKey, socialIconKey } from '../src/lib/carousel/images';
 import { G } from '../src/lib/carousel/layout';
+import { logoImageRect } from '../src/lib/carousel/render';
 
 let pass = 0;
 const ok = (n) => { console.log(`  PASS  ${n}`); pass++; };
@@ -271,6 +272,29 @@ ok('out-of-range and NaN logo values are clamped into the card');
 
 assert.equal(normalizeDraft({}).logos, undefined);
 ok('a draft with no dragged logo keeps the approved default position');
+
+// The handle and the renderer must agree on where the logo IS: the image is
+// top-aligned in its placement box, so `top` is the logo's top edge — the
+// property the upward-drag complaint ("the frame stops before my logo does")
+// depends on. The old vertical centring left the ink floating a box-height
+// below the frame, so the drag clamp hit the card's edge while the mark
+// stayed visibly low.
+const wideLogo = { naturalWidth: 400, naturalHeight: 100 };
+const logoAt = { cx: 540, top: 46, size: 100 };
+const wideRect = logoImageRect(logoAt, wideLogo);
+assert.equal(wideRect.top, 46, 'the image starts at `top`, not below it');
+assert.ok(Math.abs(wideRect.left + wideRect.width / 2 - 540) < 1e-6, 'the image stays centred on cx');
+assert.ok(Math.abs(wideRect.width - 4.6 * 100) < 1e-6, 'a wide logo fills the box width, keeping its ratio');
+assert.ok(wideRect.height < 1.6 * 100, 'and is shorter than the box, with no centring gap');
+ok('the uploaded logo is top-aligned with its placement box');
+
+const boxRect = logoImageRect(logoAt);
+assert.equal(boxRect.top, 46);
+assert.ok(
+  Math.abs(boxRect.width - 4.6 * 100) < 1e-6 && Math.abs(boxRect.height - 1.6 * 100) < 1e-6,
+  'the full placement box is returned without an image',
+);
+ok('without an image the full placement box is the handle');
 
 console.log('\n- normalisation of stored drafts -');
 assert.equal(normalizeDraft(null).title, emptyDraft().title);

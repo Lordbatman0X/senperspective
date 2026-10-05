@@ -7,11 +7,11 @@ import { buildDraftFromArticle, emptyDraft, normalizeDraft } from '../../../lib/
 import { defaultFontSize, textSizeRange } from '../../../lib/carousel/layout';
 import { renderCardToDataUrl } from '../../../lib/carousel/render';
 import { collectDraftImages, loadCardImages } from '../../../lib/carousel/images';
-import { compressImageFile } from '../../../lib/imageUtils';
+import { compressImageFile, trimTransparentLogo } from '../../../lib/imageUtils';
 import { CarouselPreview } from './CarouselPreview';
 import { ArticlePicker } from '../ArticlePicker';
 import {
-  AlertTriangle, Check, Download, Image as ImageIcon,
+  AlertTriangle, Check, Crop, Download, Image as ImageIcon,
   Loader2, Plus, RotateCcw, Save, Share2, Trash2, Type, Upload, X,
 } from 'lucide-react';
 
@@ -174,7 +174,7 @@ function FitToggle({
  * only ever draws it at 1080px.
  */
 function ImagePicker({
-  label, value, media, onChange, transparent, maxSize,
+  label, value, media, onChange, transparent, maxSize, trim,
 }: {
   label: string;
   value?: string;
@@ -188,9 +188,18 @@ function ImagePicker({
   transparent?: boolean;
   /** Longest edge the upload is scaled to before storage (default 1080). */
   maxSize?: number;
+  /**
+   * Logo slots: uploads are cropped to their non-transparent bounds so the
+   * stored image IS the mark — the placement box, the drag handle and the
+   * exported pixels then agree, and the logo can be dragged flush to the
+   * card's edge. Also offers a "Rogner" button that applies the same crop to
+   * an already-stored logo, so existing files benefit without a re-upload.
+   */
+  trim?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [note, setNote] = useState('');
   const [showLibrary, setShowLibrary] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -198,11 +207,34 @@ function ImagePicker({
     if (!file) return;
     setBusy(true);
     setError('');
+    setNote('');
     try {
-      const url = await compressImageFile(file, maxSize ?? CAROUSEL_SIZE, maxSize ?? CAROUSEL_SIZE, 0.82);
+      let url = await compressImageFile(file, maxSize ?? CAROUSEL_SIZE, maxSize ?? CAROUSEL_SIZE, 0.82);
+      if (trim) url = await trimTransparentLogo(url);
       onChange(url);
     } catch {
       setError('Image illisible. Réessayez avec un autre fichier.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Crops an already-stored logo, so the current file benefits without a re-upload. */
+  const handleTrim = async () => {
+    if (!value) return;
+    setBusy(true);
+    setError('');
+    setNote('');
+    try {
+      const trimmed = await trimTransparentLogo(value);
+      if (trimmed === value) {
+        setNote('Rien à rogner : les marges sont déjà serrées.');
+      } else {
+        onChange(trimmed);
+        setNote('Marges transparentes rognées.');
+      }
+    } catch {
+      setError('Le rognage a échoué. Réessayez avec un autre fichier.');
     } finally {
       setBusy(false);
     }
@@ -255,6 +287,17 @@ function ImagePicker({
                 <X size={14} />
               </button>
             )}
+            {trim && value?.startsWith('data:') && (
+              <button
+                type="button"
+                onClick={handleTrim}
+                disabled={busy}
+                title="Rogner les marges transparentes du logo"
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-md transition-colors cursor-pointer"
+              >
+                {busy ? <Loader2 size={13} className="animate-spin" /> : <Crop size={13} />} Rogner
+              </button>
+            )}
           </div>
           <input
             ref={fileRef}
@@ -264,6 +307,7 @@ function ImagePicker({
             onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }}
           />
           {error ? <p className="text-[10px] text-red-400 flex items-center gap-1"><AlertTriangle size={11} />{error}</p> : null}
+          {note ? <p className="text-[10px] text-zinc-400">{note}</p> : null}
           {showLibrary && (
             <div className="max-h-40 overflow-y-auto grid grid-cols-4 gap-1.5 bg-zinc-950 border border-zinc-800 rounded-md p-2">
               {media.length === 0 ? (
@@ -791,15 +835,20 @@ export function CarouselStudioTab() {
                   value={draft.logoUrls?.[kind]}
                   media={media}
                   onChange={url => setCardLogo(kind, url)}
+                  transparent
+                  trim
                 />
               </div>
             </div>
           ))}
           <p className="text-[10px] text-zinc-500 leading-relaxed">
-            Chaque carte a son propre logo. Les PNG transparents sont conservés tels
-            quels&nbsp;; laissez le champ vide pour utiliser le logo «&nbsp;Perspective&nbsp;» dessiné.
-            Le logo se positionne et se redimensionne directement sur la carte&nbsp;: glissez-le,
-            puis utilisez le curseur «&nbsp;Taille&nbsp;».
+            Chaque carte a son propre logo. Les PNG transparents gardent leur
+            transparence&nbsp;; leurs marges vides sont rognées au téléversement (bouton
+            «&nbsp;Rogner&nbsp;» pour un logo déjà enregistré), pour que le logo puisse
+            toucher le bord de la carte. Laissez le champ vide pour utiliser le logo
+            «&nbsp;Perspective&nbsp;» dessiné. Le logo se positionne et se redimensionne
+            directement sur la carte&nbsp;: glissez-le, puis utilisez le curseur
+            «&nbsp;Taille&nbsp;».
             {uploadedCardCount > 0 && (
               <span className="block mt-1 text-zinc-400">
                 {uploadedCardCount} carte{uploadedCardCount > 1 ? 's' : ''} sur 3 utilise

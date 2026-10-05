@@ -313,7 +313,8 @@ export function fieldWidthScale(draft: CarouselDraft, id: string): number {
  * The logo's snap guides, as axis + position pairs (card px).
  *
  * Vertical anchors are the columns the reference aligns to: the 78/1002
- * gutters and the card centre. Horizontal anchors are the rows: 46 (the
+ * gutters and the card centre. Horizontal anchors are the rows: 0 (the card's
+ * top edge — where an uploaded logo's ink stops), 46 (the
  * approved default top), `pillY` (the category pill's top line — aligning an
  * uploaded logo's row with this is exactly how you line the two up) and 928
  * (the closing card's bottom wordmark). The preview draws whichever are
@@ -326,7 +327,9 @@ export function logoSnapGuides(at: Required<CarouselLogoPlacement>): { axis: 'x'
   for (const ax of columns) {
     if (Math.abs(at.cx - ax) <= 14) guides.push({ axis: 'x', pos: ax, label: `x ${Math.round(ax)}` });
   }
-  const rows = [46, G.pillY, 928];
+  // y0 is the card's top edge: the highest an uploaded logo can sit, and the
+  // row the editor needs to see to know the logo has gone as far up as it can.
+  const rows = [0, 46, G.pillY, 928];
   for (const ay of rows) {
     if (Math.abs(at.top - ay) <= 14) guides.push({ axis: 'y', pos: ay, label: `y ${Math.round(ay)}` });
   }

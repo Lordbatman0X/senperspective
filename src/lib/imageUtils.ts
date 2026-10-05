@@ -143,6 +143,89 @@ export async function compressDataUrl(
 }
 
 /**
+ * Crops a logo to its non-transparent bounds, keeping the alpha channel.
+ *
+ * An uploaded logo often sits in the middle of a much larger transparent
+ * canvas — a square export, a screenshot margin, padding left by the design
+ * tool. Contain-fitted onto the card that padding is invisible but very real:
+ * the placement box reaches the card's top edge while the visible mark still
+ * floats below it, so the editor drags "as high as it goes" and the logo
+ * refuses to go higher. Trimming at upload makes the stored image BE the mark,
+ * so the placement box, the drag handle and the exported pixels all agree —
+ * the logo can be dragged flush to the card's edge.
+ *
+ * Anything unexpected (a non-data source, a cross-origin source that taints
+ * the canvas, an unreadable decode, an image with no transparency at all)
+ * resolves to the original untouched: an untrimmed logo still works, it just
+ * carries its margins.
+ */
+export function trimTransparentLogo(dataUrl: string): Promise<string> {
+  if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/')) {
+    return Promise.resolve(dataUrl);
+  }
+  return new Promise(resolve => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve(dataUrl), 3000);
+    img.onload = () => {
+      clearTimeout(timer);
+      try {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (!w || !h) return resolve(dataUrl);
+        const src = document.createElement('canvas');
+        src.width = w;
+        src.height = h;
+        const sctx = src.getContext('2d');
+        if (!sctx) return resolve(dataUrl);
+        sctx.drawImage(img, 0, 0);
+        const { data } = sctx.getImageData(0, 0, w, h);
+        // Threshold above near-invisible noise so a semi-transparent halo
+        // cannot pad the crop straight back out.
+        const ALPHA = 16;
+        let minX = w - 1;
+        let minY = h - 1;
+        let maxX = 0;
+        let maxY = 0;
+        let found = false;
+        for (let y = 0; y < h; y++) {
+          const row = y * w * 4;
+          for (let x = 0; x < w; x++) {
+            if (data[row + x * 4 + 3] >= ALPHA) {
+              found = true;
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+        // Nothing visible, or nothing to gain: keep the original file rather
+        // than re-encoding it for no reason.
+        if (!found || (minX <= 0 && minY <= 0 && maxX >= w - 1 && maxY >= h - 1)) {
+          return resolve(dataUrl);
+        }
+        const out = document.createElement('canvas');
+        out.width = maxX - minX + 1;
+        out.height = maxY - minY + 1;
+        const octx = out.getContext('2d');
+        if (!octx) return resolve(dataUrl);
+        octx.drawImage(src, -minX, -minY);
+        // Always PNG: the whole point is the alpha we just preserved.
+        resolve(out.toDataURL('image/png'));
+      } catch {
+        // Tainted canvas or a decode hiccup: the untrimmed logo still works.
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => {
+      clearTimeout(timer);
+      resolve(dataUrl);
+    };
+    img.src = dataUrl;
+  });
+}
+
+/**
  * Sanitizes an object before sending to Firestore to ensure no single field or total payload exceeds safe limits.
  */
 export async function sanitizeFirestorePayload<T extends Record<string, any>>(

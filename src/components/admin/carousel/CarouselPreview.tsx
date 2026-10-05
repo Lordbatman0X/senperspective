@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CarouselCardKind, CarouselDraft, CarouselLogoPlacement } from '../../../lib/carousel/types';
 import { CAROUSEL_SIZE } from '../../../lib/carousel/types';
-import { renderCard } from '../../../lib/carousel/render';
+import { logoImageRect, renderCard } from '../../../lib/carousel/render';
 import { computeCardLayout, G, logoSnapGuides, type EditableField } from '../../../lib/carousel/layout';
-import { collectDraftImages, loadCardImages } from '../../../lib/carousel/images';
+import { collectDraftImages, loadCardImages, logoImageKey } from '../../../lib/carousel/images';
 import { AlertTriangle } from 'lucide-react';
 
 interface CarouselPreviewProps {
@@ -66,6 +66,17 @@ export function CarouselPreview({
    */
   const [imageError, setImageError] = useState('');
 
+  /**
+   * Bumped whenever the loaded image set changes.
+   *
+   * The images live in a ref (the canvas painter reads them without
+   * re-running the load effect), but the logo handle's rect is computed from
+   * that ref during render — so without this tick a logo that finished
+   * loading would keep showing the placement-box handle until the next
+   * unrelated re-render.
+   */
+  const [imagesTick, setImagesTick] = useState(0);
+
   // Images are loaded in an effect so a slow network repaints the card when
   // they arrive, instead of rendering a card with its photo missing.
   const imagesRef = useRef<Record<string, CanvasImageSource>>({});
@@ -103,6 +114,7 @@ export function CarouselPreview({
 
     if (!sources.length) {
       imagesRef.current = {};
+      setImagesTick(v => v + 1);
       setImageError('');
       paint();
       return () => { cancelled = true; };
@@ -121,6 +133,7 @@ export function CarouselPreview({
     loadCardImages(sources).then(({ images, failed }) => {
       if (cancelled) return;
       imagesRef.current = images;
+      setImagesTick(v => v + 1);
       setImageError(
         failed.length
           ? `${failed.length} image(s) n'a pas pu être chargée. Vérifiez l'URL ou téléversez-la depuis l'appareil.`
@@ -144,13 +157,15 @@ export function CarouselPreview({
     else if (Math.abs(next.cx - 1002) < SNAP) next = { ...next, cx: 1002 };
     // Vertical movement is FREE — the logo can be raised all the way to the
     // card's top edge, which is what aligning an uploaded logo with the
-    // category pill requires. Only three alignment rows attract it, and only
+    // category pill requires. Only the alignment rows attract it, and only
     // within 6px: the pill's top line (checked first, so the two rows never
-    // fight), the approved default top, and the closing card's wordmark row.
+    // fight), the approved default top, the closing card's wordmark row, and
+    // y0 — the top edge itself, so the last few pixels of an upward drag land
+    // exactly on the edge instead of stopping just short of it.
     // The previous rule — "anything above y60 snaps back to 46" — made
     // raising the logo past the default impossible however carefully it was
     // dragged, which is exactly the complaint this replaces.
-    const rows = [G.pillY, 46, 928];
+    const rows = [G.pillY, 46, 928, 0];
     const near = rows.find(row => Math.abs(next.top - row) < 6);
     if (near !== undefined) next = { ...next, top: near };
     onChange?.({ logos: { ...(draft.logos || {}), [kind]: next } });
@@ -179,7 +194,10 @@ export function CarouselPreview({
     if (!drag) return;
     const scale = width / CAROUSEL_SIZE;
     // Clamped to the card so the logo can never be dragged out of frame and
-    // silently disappear from the exported PNG.
+    // silently disappear from the exported PNG. With the handle on the logo's
+    // real bounds (logoImageRect, top-aligned), `top = 0` is where the logo's
+    // ink touches the card's edge — the highest export-safe position — and
+    // the snap in commitLogo settles the last few pixels exactly onto y0.
     const cx = drag.origin.cx + (e.clientX - drag.startX) / scale;
     const top = drag.origin.top + (e.clientY - drag.startY) / scale;
     commitLogo({
@@ -195,7 +213,20 @@ export function CarouselPreview({
   };
 
   const logoAt = layout.logo;
-  const logoWidth = logoAt.size * 3.2;
+  /**
+   * The handle sits on the logo's REAL bounds: the contain-fitted image once
+   * it has loaded, the placement box for the drawn wordmark or while the
+   * source is still in flight. It used to be a hand-tuned size·3.2 × size·1.2
+   * box frozen in the first drag commit while the renderer's box moved to
+   * 4.6 × 1.6 — the frame would hit the card's top edge while the logo's ink
+   * still floated below it, which reads as "the frame is stopping me from
+   * raising the logo". `imagesTick` is read here so a freshly loaded image
+   * recomputes the rect without waiting for an unrelated re-render.
+   */
+  const logoRect = useMemo(
+    () => logoImageRect(logoAt, imagesRef.current[logoImageKey(kind)]),
+    [logoAt, kind, imagesTick],
+  );
 
   return (
     <div className={className} style={{ width, height: width, position: 'relative' }}>
@@ -240,10 +271,10 @@ export function CarouselPreview({
             onPointerCancel={onLogoPointerUp}
             className="absolute cursor-move border-2 border-dashed border-[#B8471F] bg-[#B8471F]/5 rounded-sm touch-none"
             style={{
-              left: logoAt.cx - logoWidth / 2,
-              top: logoAt.top,
-              width: logoWidth,
-              height: logoAt.size * 1.2,
+              left: logoRect.left,
+              top: logoRect.top,
+              width: logoRect.width,
+              height: logoRect.height,
             }}
           />
 
@@ -270,8 +301,8 @@ export function CarouselPreview({
             <div
               className="absolute flex items-center gap-2 bg-black/70 text-white px-3 py-2 rounded-md"
               style={{
-                left: logoAt.cx - logoWidth / 2,
-                top: logoAt.top + logoAt.size * 1.2 + 12,
+                left: logoRect.left,
+                top: logoRect.top + logoRect.height + 12,
               }}
               onPointerDown={e => e.stopPropagation()}
             >

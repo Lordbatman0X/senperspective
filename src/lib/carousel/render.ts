@@ -117,7 +117,7 @@ function drawImageFitted(
 /**
  * The placement box a logo occupies, in card coordinates.
  *
- * `size` scales both axes: the box keeps the reference wordmark's 3.2:1.2
+ * `size` scales both axes: the box keeps the reference wordmark's 4.6:1.6
  * proportion, so the size slider resizes logos predictably whatever their
  * artwork's shape.
  */
@@ -126,7 +126,16 @@ const LOGO_BOX_H = 1.6;
 
 /**
  * The box a custom logo image is ACTUALLY drawn into: its own aspect ratio
- * contain-fitted inside the placement box, centred.
+ * contain-fitted inside the placement box, TOP-ALIGNED with it.
+ *
+ * Top-aligned on purpose: `top` then means the logo's top edge for the drawn
+ * wordmark (whose text starts at `top`) and for an uploaded image alike. That
+ * is what makes the snap rows (the pill line, 46, 928) line up with the mark
+ * the editor can actually see, and what lets the drag clamp at y0 stop the
+ * logo's *ink* at the card's edge instead of a box-height below it. The
+ * previous vertical centring left the ink floating inside the box, so the
+ * frame hit the card's top edge while the logo visibly refused to rise
+ * further — which reads as "the frame is preventing me from moving it up".
  *
  * The editor's drag handle and size readouts use this, so what the editor
  * measures is the logo's real bounds — grabbing the logo means grabbing the
@@ -146,7 +155,7 @@ export function logoImageRect(
   const scale = Math.min(boxW / nat.w, boxH / nat.h);
   const w = nat.w * scale;
   const h = nat.h * scale;
-  return { left: at.cx - w / 2, top: at.top + (boxH - h) / 2, width: w, height: h };
+  return { left: at.cx - w / 2, top: at.top, width: w, height: h };
 }
 
 /** Draws the Perspective wordmark, or a custom logo image when one is set. */
@@ -158,8 +167,9 @@ function drawLogo(
 ): void {
   const { cx, top, size } = at;
   if (image) {
-    // Contain-fit inside the placement box — the image keeps its own aspect
-    // ratio, so a wide wordmark and a square badge both land undistorted.
+    // Contain-fit inside the placement box, top-aligned — the image keeps its
+    // own aspect ratio, so a wide wordmark and a square badge both land
+    // undistorted, with `top` always marking where the logo starts.
     const rect = logoImageRect(at, image);
     ctx.drawImage(image, rect.left, rect.top, rect.width, rect.height);
     return;
