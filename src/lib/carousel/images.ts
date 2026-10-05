@@ -5,6 +5,11 @@ export function logoImageKey(kind: CarouselCardKind): string {
   return `logo:${kind}`;
 }
 
+/** The renderer key a social row's editor-supplied icon is stored under. */
+export function socialIconKey(index: number): string {
+  return `socialIcon:${index}`;
+}
+
 /**
  * Every image a draft references, keyed exactly as the renderer expects.
  *
@@ -22,6 +27,13 @@ export function collectDraftImages(draft: CarouselDraft): Array<[string, string]
   (['cover', 'body', 'closing'] as CarouselCardKind[]).forEach(kind => {
     const url = draft.logoUrls?.[kind];
     if (url) sources.push([logoImageKey(kind), url]);
+  });
+
+  // Editor-supplied social icons, keyed by row index so reordering or
+  // removing a row re-requests exactly the artwork the draft still shows.
+  draft.socials.forEach((social, index) => {
+    const url = social.iconImage;
+    if (url) sources.push([socialIconKey(index), url]);
   });
 
   return sources;

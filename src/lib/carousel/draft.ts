@@ -317,7 +317,16 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
   // the closing card instead of the house defaults — the exact "half-broken
   // card" this function exists to prevent.
   const filteredSocials = Array.isArray(input.socials)
-    ? input.socials.filter(s => s && typeof s.label === 'string' && s.label.trim().length > 0 && typeof s.url === 'string')
+    ? input.socials
+        .filter(s => s && typeof s.label === 'string' && s.label.trim().length > 0 && typeof s.url === 'string')
+        .map(s => {
+          // Per-row uploaded icon: trimmed when a usable string, dropped
+          // otherwise, so a hand-edited draft can never hand the renderer a
+          // non-string or a whitespace-only URL.
+          const { iconImage, ...rest } = s;
+          const iconUrl = typeof iconImage === 'string' ? iconImage.trim() : '';
+          return iconUrl ? { ...rest, iconImage: iconUrl } : rest;
+        })
     : [];
   const socials = filteredSocials.length ? filteredSocials : base.socials;
 

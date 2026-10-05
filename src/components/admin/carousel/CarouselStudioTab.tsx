@@ -174,12 +174,20 @@ function FitToggle({
  * only ever draws it at 1080px.
  */
 function ImagePicker({
-  label, value, media, onChange,
+  label, value, media, onChange, transparent, maxSize,
 }: {
   label: string;
   value?: string;
   media: { id: string; url: string; name: string }[];
   onChange: (url: string) => void;
+  /**
+   * Cut-out artwork (brand logos, social icons): the preview sits on a
+   * checkerboard and contain-fits, so transparency reads as transparency
+   * instead of being mistaken for a solid fill.
+   */
+  transparent?: boolean;
+  /** Longest edge the upload is scaled to before storage (default 1080). */
+  maxSize?: number;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -191,7 +199,7 @@ function ImagePicker({
     setBusy(true);
     setError('');
     try {
-      const url = await compressImageFile(file, CAROUSEL_SIZE, CAROUSEL_SIZE, 0.82);
+      const url = await compressImageFile(file, maxSize ?? CAROUSEL_SIZE, maxSize ?? CAROUSEL_SIZE, 0.82);
       onChange(url);
     } catch {
       setError('Image illisible. Réessayez avec un autre fichier.');
@@ -204,9 +212,19 @@ function ImagePicker({
     <div>
       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">{label}</label>
       <div className="flex items-start gap-3">
-        <div className="w-20 h-20 shrink-0 bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden flex items-center justify-center">
+        <div
+          className="w-20 h-20 shrink-0 bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden flex items-center justify-center"
+          style={transparent ? {
+            // Checkerboard behind cut-out artwork, same trick the Logo panel
+            // uses: a transparent PNG must not read as a black square here.
+            backgroundImage:
+              'linear-gradient(45deg, #27272a 25%, transparent 25%), linear-gradient(-45deg, #27272a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #27272a 75%), linear-gradient(-45deg, transparent 75%, #27272a 75%)',
+            backgroundSize: '12px 12px',
+            backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+          } : undefined}
+        >
           {value
-            ? <img src={value} alt="" className="w-full h-full object-cover" />
+            ? <img src={value} alt="" className={`w-full h-full ${transparent ? 'object-contain p-1' : 'object-cover'}`} />
             : <ImageIcon size={18} className="text-zinc-600" />}
         </div>
         <div className="flex-1 space-y-2">
@@ -394,8 +412,8 @@ export function CarouselStudioTab() {
             { id: 'socialHeading', label: 'Rangée sociale' },
           ];
 
-  /** Rewrites one cell of the social row (the labels shown under the icons). */
-  const setSocial = (index: number, field: 'label' | 'url', value: string) => {
+  /** Rewrites one cell of a social row (label, URL, or the uploaded icon). */
+  const setSocial = (index: number, field: 'label' | 'url' | 'iconImage', value: string) => {
     setDraft(prev => ({
       ...prev,
       socials: prev.socials.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
@@ -674,36 +692,53 @@ export function CarouselStudioTab() {
 
         {activeCard === 'closing' && (
           <div className="space-y-3 pt-4 border-t border-zinc-800">
-            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-              Réseaux sociaux — libellés sous les icônes
-            </p>
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                Réseaux sociaux — icônes personnalisées + libellés
+              </p>
+              <p className="text-[11px] text-zinc-500">
+                Téléversez votre logo (PNG transparent conseillé) : il remplace
+                l'icône dessinée sur la carte de clôture. Sans logo, l'icône du
+                modèle s'affiche.
+              </p>
+            </div>
             {draft.socials.map((social, i) => (
-              <div key={i} className="flex items-end gap-2">
-                <div className="flex-1 min-w-0">
-                  <Field
-                    label={`Libellé ${i + 1}`}
-                    value={social.label}
-                    onChange={v => setSocial(i, 'label', v)}
-                    maxLength={40}
-                  />
+              <div key={i} className="border border-zinc-800 rounded-md p-3 space-y-3">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 min-w-0">
+                    <Field
+                      label={`Libellé ${i + 1}`}
+                      value={social.label}
+                      onChange={v => setSocial(i, 'label', v)}
+                      maxLength={40}
+                    />
+                  </div>
+                  <div className="flex-[1.4] min-w-0">
+                    <Field
+                      label="URL"
+                      value={social.url}
+                      onChange={v => setSocial(i, 'url', v)}
+                      maxLength={300}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeSocial(i)}
+                    disabled={draft.socials.length <= 1}
+                    aria-label={`Retirer le réseau ${i + 1}`}
+                    className="p-2.5 text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
-                <div className="flex-[1.4] min-w-0">
-                  <Field
-                    label="URL"
-                    value={social.url}
-                    onChange={v => setSocial(i, 'url', v)}
-                    maxLength={300}
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeSocial(i)}
-                  disabled={draft.socials.length <= 1}
-                  aria-label={`Retirer le réseau ${i + 1}`}
-                  className="p-2.5 text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <ImagePicker
+                  label={`Icône ${i + 1} (PNG transparent conseillé)`}
+                  value={social.iconImage}
+                  media={media}
+                  onChange={url => setSocial(i, 'iconImage', url)}
+                  transparent
+                  maxSize={512}
+                />
               </div>
             ))}
             <button

@@ -28,7 +28,7 @@ import {
   normalizeDraft,
 } from '../src/lib/carousel/draft';
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
-import { collectDraftImages, logoImageKey } from '../src/lib/carousel/images';
+import { collectDraftImages, logoImageKey, socialIconKey } from '../src/lib/carousel/images';
 import { G } from '../src/lib/carousel/layout';
 
 let pass = 0;
@@ -179,6 +179,38 @@ const keys = keyed.map(([key]) => key);
 assert.ok(keys.includes('logo:cover') && keys.includes('logo:body'));
 assert.ok(!keys.includes('logo:closing'), 'a card with no logo is not requested');
 ok('image collection requests exactly the logos the draft has');
+
+console.log('\n- social icon images -');
+// Each social row can carry the editor's own transparent PNG, keyed by index
+// exactly as the renderer looks it up — a key mismatch would silently fall
+// back to the drawn glyph with no error anywhere.
+assert.equal(socialIconKey(0), 'socialIcon:0');
+assert.notEqual(socialIconKey(0), socialIconKey(1), 'each row gets its own key');
+ok('social icon keys are stable and distinct');
+
+const withIcons = collectDraftImages({
+  ...normalizeDraft({ articleId: 'a1', title: 'T' }),
+  socials: [
+    { label: 'a', url: 'https://a.test', icon: 'globe', iconImage: 'https://x.test/ig.png' },
+    { label: 'b', url: 'https://b.test', icon: 'x' },
+  ],
+});
+const iconKeys = withIcons.map(([key]) => key);
+assert.ok(iconKeys.includes('socialIcon:0'), 'an uploaded social icon is requested for the export');
+assert.ok(!iconKeys.includes('socialIcon:1'), 'a row with no upload requests nothing');
+ok('social icon images are collected under the renderer keys');
+
+const iconSanitized = normalizeDraft({
+  socials: [
+    { label: 'a', url: 'https://a.test', icon: 'globe', iconImage: '  https://x.test/ig.png  ' },
+    { label: 'b', url: 'https://b.test', icon: 'x', iconImage: 42 },
+    { label: 'c', url: 'https://c.test', icon: 'x', iconImage: '   ' },
+  ],
+});
+assert.equal(iconSanitized.socials[0].iconImage, 'https://x.test/ig.png', 'icon URLs are trimmed');
+assert.equal(iconSanitized.socials[1].iconImage, undefined, 'non-string icon values are dropped');
+assert.equal(iconSanitized.socials[2].iconImage, undefined, 'blank icon URLs are dropped');
+ok('social icon images are sanitised on load');
 
 console.log('\n- geometry -');
 // Card 2's paragraphs must start on the body card's own baseline. They used to

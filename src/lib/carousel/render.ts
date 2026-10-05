@@ -1,7 +1,7 @@
 import { CarouselCardKind, CarouselDraft, CarouselLogoPlacement, CarouselSocialLink, CAROUSEL_SIZE } from './types';
 import { BG, G, MUTED, RUST, SANS, SERIF, computeCardLayout, wrapText, type EditableField } from './layout';
 import { DEFAULT_ACCENT } from './draft';
-import { logoImageKey } from './images';
+import { logoImageKey, socialIconKey } from './images';
 
 /**
  * Draws the three approved cards onto a canvas.
@@ -423,7 +423,7 @@ function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images
 
   for (const f of layout.fields) drawField(ctx, f);
 
-  drawSocialRow(ctx, draft.socials, layout.socialRowY);
+  drawSocialRow(ctx, draft.socials, layout.socialRowY, images);
 
   drawLogo(ctx, layout.logo, '#fff', images[logoImageKey('closing')]);
 }
@@ -437,8 +437,19 @@ function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images
  * draft carries. The outer shape is drawn by `drawSocialGlyph` — the reference
  * uses a circle for most icons but a screen (YouTube) and a rounded square
  * (Instagram) for two of them.
+ *
+ * A row carrying `iconImage` draws the editor's uploaded artwork instead:
+ * contain-fitted into the same 88px badge box, with NO plate behind it, so a
+ * transparent PNG stays transparent and the fan keeps its rhythm. Rows without
+ * artwork fall back to the drawn glyph, so removing an upload restores the
+ * reference look rather than leaving a hole.
  */
-function drawSocialRow(ctx: CanvasRenderingContext2D, socials: CarouselSocialLink[], y: number): void {
+function drawSocialRow(
+  ctx: CanvasRenderingContext2D,
+  socials: CarouselSocialLink[],
+  y: number,
+  images: Record<string, CanvasImageSource>,
+): void {
   if (!socials.length) return;
   const pad = 78;
   const cell = 168;
@@ -453,7 +464,12 @@ function drawSocialRow(ctx: CanvasRenderingContext2D, socials: CarouselSocialLin
     const cx = socials.length > 1 ? pad + cell / 2 + step * i : CAROUSEL_SIZE / 2;
     const cy = y + r;
 
-    drawSocialGlyph(ctx, social.icon, cx, cy);
+    const custom = images[socialIconKey(i)];
+    if (custom) {
+      drawImageFitted(ctx, custom, cx - r, cy - r, r * 2, r * 2, 'contain');
+    } else {
+      drawSocialGlyph(ctx, social.icon, cx, cy);
+    }
 
     ctx.fillStyle = '#fff';
     ctx.font = `700 19px ${SANS}`;

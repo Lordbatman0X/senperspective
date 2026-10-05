@@ -30,8 +30,19 @@ export interface CarouselSocialLink {
    * Icon key understood by the renderer. Deliberately a closed union: the
    * closing card has a fixed set of circles, so an unknown icon would render as
    * a blank circle and look like a bug.
+   *
+   * Only used when `iconImage` is absent — the drawn glyph is the fallback
+   * for rows the editor has not supplied artwork for.
    */
   icon: 'globe' | 'youtube' | 'x' | 'tiktok' | 'facebook' | 'instagram';
+  /**
+   * Editor-supplied icon image for this row, which REPLACES the drawn glyph
+   * (outline included) on the closing card. Transparent PNG/WebP cut-outs are
+   * the intended input — the upload path inspects the file and re-encodes to
+   * PNG whenever any pixel is transparent, so a background-less logo stays
+   * background-less. Absent/blank means "draw the reference glyph".
+   */
+  iconImage?: string;
 }
 
 /**
