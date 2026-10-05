@@ -678,7 +678,7 @@ ${prompt || 'Réécriture intégrale avec dossier analytique, Perspective Brief,
 CATÉGORIE CIBLE : ${category}
 FORMAT / TYPE D'ARTICLE : ${type}
 
-RÈGLES POUR LE BLOC "carouselCopy" (réseaux sociaux) :
+RÈGLES POUR LE BLOC "carouselCopy { fr: {category,title,lede,bodyHeading,paragraphs[3],quote,quoteAttribution}, en: {same fields in English} }" (réseaux sociaux) :
 - Rédige ces textes pour les cartes du carrousel social 1080x1080 de Perspective.
 - Français uniquement, sans guillemets autour de la citation, sans emoji, sans hashtag.
 - Respecte strictement les longueurs : un texte trop long déborde du gabarit.
@@ -714,7 +714,7 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     "international": { "fr": "Dimensions régionales et diplomatiques", "en": "Diplomatic & international angles" }
   },
   "tags": ["Tag1", "Tag2", "Tag3"],
-  "carouselCopy": {
+  "carouselCopy { fr: {category,title,lede,bodyHeading,paragraphs[3],quote,quoteAttribution}, en: {same fields in English} }": {
     "category": "POLITIQUE",
     "title": "Titre choc pour la carte de couverture, 6 mots maximum, percutant",
     "lede": "Une seule phrase de resume qui decrit l'enjeu, 140 caracteres maximum",

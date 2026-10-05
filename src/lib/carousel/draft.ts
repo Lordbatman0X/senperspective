@@ -6,13 +6,14 @@ import {
   CAROUSEL_SIZE,
   DEFAULT_CAROUSEL_SOCIALS,
   MAX_CAROUSEL_PARAGRAPHS,
+  CarouselAiCopyLang,
 } from './types';
 import type { Article } from '../../types';
 import { sanitizeTextSizes } from './layout';
 import { stripHtmlTags } from '../utils';
 
 /** The Perspective accent, as used by the approved design. */
-export const DEFAULT_ACCENT = '#FF4B1F';
+export const DEFAULT_ACCENT = '#B8471F';
 
 /** Fallback copy so a carousel is never published half-empty. */
 const PLACEHOLDER = {
@@ -106,38 +107,42 @@ export function extractParagraphs(body: unknown, limit = MAX_CAROUSEL_PARAGRAPHS
  * paragraphs are capped and filtered. A model returning `null`, numbers, or
  * twelve paragraphs yields an empty/short object rather than a broken card.
  */
-export function sanitizeAiCopy(input: unknown): Required<Omit<CarouselAiCopy, 'paragraphs'>> & { paragraphs: string[] } {
+export function sanitizeAiCopy(input: unknown): { fr: Required<Omit<CarouselAiCopyLang, 'paragraphs'>> & { paragraphs: string[] }; en: Required<Omit<CarouselAiCopyLang, 'paragraphs'>> & { paragraphs: string[] } } {
   const src = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
-  const text = (key: string): string => {
-    const value = src[key];
-    if (typeof value === 'string') return stripHtmlTags(value).replace(/\s+/g, ' ').trim();
-    // Models sometimes wrap a single value in a `{ fr, en }` pair; take French.
-    if (value && typeof value === 'object') {
-      const fr = (value as { fr?: unknown }).fr;
-      if (typeof fr === 'string') return stripHtmlTags(fr).replace(/\s+/g, ' ').trim();
-    }
-    return '';
-  };
-
-  const quote = text('quote').replace(/^«\s*/, '').replace(/\s*»$/, '').trim();
-
-  const paragraphs = Array.isArray(src.paragraphs)
-    ? src.paragraphs
+  // Legacy flat shape (pre-bilingual): treat as the French block.
+  const hasLangBlocks = src.fr && typeof src.fr === 'object' || src.en && typeof src.en === 'object';
+  const frSrc = (hasLangBlocks ? (src.fr as Record<string, unknown>) : src) || {};
+  const enSrc = (hasLangBlocks ? (src.en as Record<string, unknown>) : {}) as Record<string, unknown>;
+  const one = (block: Record<string, unknown>): Required<Omit<CarouselAiCopyLang, 'paragraphs'>> & { paragraphs: string[] } => {
+    const text = (key: string): string => {
+      const value = block[key];
+      if (typeof value === 'string') return stripHtmlTags(value).replace(/\s+/g, ' ').trim();
+      // Models sometimes wrap a single value in a `{ fr, en }` pair; take French.
+      if (value && typeof value === 'object') {
+        const fr = (value as { fr?: unknown }).fr;
+        if (typeof fr === 'string') return stripHtmlTags(fr).replace(/\s+/g, ' ').trim();
+      }
+      return '';
+    };
+    const quote = text('quote').replace(/^«\s*/, '').replace(/\s*»$/, '').trim();
+    const paragraphs = Array.isArray(block.paragraphs)
+      ? block.paragraphs
         .filter((p): p is string => typeof p === 'string')
         .map(p => stripHtmlTags(p).replace(/\s+/g, ' ').trim())
         .filter(p => p.length > 0)
         .slice(0, MAX_CAROUSEL_PARAGRAPHS)
-    : [];
-
-  return {
-    category: text('category'),
-    title: text('title'),
-    lede: text('lede'),
-    bodyHeading: text('bodyHeading'),
-    quote,
-    quoteAttribution: text('quoteAttribution'),
-    paragraphs,
+      : [];
+    return {
+      category: text('category'),
+      title: text('title'),
+      lede: text('lede'),
+      bodyHeading: text('bodyHeading'),
+      quote,
+      quoteAttribution: text('quoteAttribution'),
+      paragraphs,
+    };
   };
+  return { fr: one(frSrc), en: one(enSrc) };
 }
 
 /**
@@ -178,10 +183,29 @@ export function buildDraftFromArticle(
    * is deliberately NOT carried over: it comes from the article itself.
    */
   keep: { logoUrls?: CarouselDraft['logoUrls']; closingImage?: string } = {},
+  /**
+   * Language of the card copy. One article yields both the FR and the EN
+   * carousel: every text field resolves in this language first and falls back
+   * to the other language, so an English-only article still builds a complete
+   * draft and vice versa.
+   */
+  lang: 'fr' | 'en' = 'fr',
 ): CarouselDraft {
-  const title = stripHtmlTags(article.title?.fr || article.title?.en);
-  const excerpt = stripHtmlTags(article.excerpt?.fr || article.excerpt?.en);
-  const body = stripHtmlTags(article.body?.fr || article.body?.en);
+  const other = lang === 'fr' ? 'en' : 'fr';
+  const pickLang = (v: unknown): string => {
+    if (typeof v === 'string') return stripHtmlTags(v);
+    if (v && typeof v === 'object') {
+      const b = v as { fr?: unknown; en?: unknown };
+      const a = typeof b[lang] === 'string' ? stripHtmlTags(b[lang] as string) : '';
+      if (a.trim()) return a;
+      const c = typeof b[other] === 'string' ? stripHtmlTags(b[other] as string) : '';
+      return c;
+    }
+    return '';
+  };
+  const title = pickLang(article.title);
+  const excerpt = pickLang(article.excerpt);
+  const body = pickLang(article.body);
 
   /**
    * AI-written card copy wins over the mechanical fallbacks, field by field.
@@ -190,14 +214,29 @@ export function buildDraftFromArticle(
    * good lede but no paragraphs should still get its lede used, with the
    * paragraphs falling back to the article's own text.
    */
-  const ai = sanitizeAiCopy(article.carouselCopy);
+  const copy = sanitizeAiCopy(article.carouselCopy);
+  /**
+   * Per-field language resolution: use the requested language's wording when it
+   * exists, otherwise borrow the other language's field rather than dropping it.
+   * `copy[lang]`/`copy[other]` are always complete shapes (sanitizeAiCopy
+   * guarantees strings), so a French-only model still fills every EN slot.
+   */
+  const ai = {
+    category: copy[lang].category || copy[other].category,
+    title: copy[lang].title || copy[other].title,
+    lede: copy[lang].lede || copy[other].lede,
+    bodyHeading: copy[lang].bodyHeading || copy[other].bodyHeading,
+    paragraphs: copy[lang].paragraphs.length ? copy[lang].paragraphs : copy[other].paragraphs,
+    quote: copy[lang].quote || copy[other].quote,
+    quoteAttribution: copy[lang].quoteAttribution || copy[other].quoteAttribution,
+  };
 
   // Prefer the article's own lede; fall back to the opening of the body so a
   // thin excerpt still yields a sensible cover line.
   const lede = ai.lede || excerpt || firstSentence(body);
   const paragraphs = ai.paragraphs.length
     ? ai.paragraphs
-    : extractParagraphs(article.body?.fr || article.body?.en);
+    : extractParagraphs(body || excerpt || title);
 
   return {
     articleId: article.id,
@@ -221,6 +260,7 @@ export function buildDraftFromArticle(
     coverImage: pickArticleImage(article),
     logoUrls: keep.logoUrls,
     closingImage: keep.closingImage,
+    closingTint: 0.85,
     accentColor: DEFAULT_ACCENT,
   };
 }
@@ -295,7 +335,7 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
             return [kind, {
               cx: clamp(at.cx, 0, CAROUSEL_SIZE, CAROUSEL_SIZE / 2),
               top: clamp(at.top, 0, CAROUSEL_SIZE - 40, 46),
-              size: clamp(at.size, 24, 150, 56),
+              size: clamp(at.size, 32, 220, 84),
             }];
           }),
       ) as CarouselDraft['logos']

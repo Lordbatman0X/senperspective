@@ -23,6 +23,23 @@ export const BG = '#0b0b0b';
 export const MUTED = '#cfcfcf';
 
 /**
+ * True reference colours, sampled from the approved cards.
+ *
+ * `ink` is the near-black card field (warm, not pure black), `rust` the
+ * burnt-orange wash of the closing card, `ember` the bright accent of the
+ * rule, the logo and the active pagination dot.
+ */
+export const REF = {
+  ink: '#100d0c',
+  inkWarm: '#17120f',
+  rust: '#a23c14',
+  rustDeep: '#7c2a0e',
+  ember: '#e8490f',
+  bone: '#f5ede4',
+  stone: '#d8cfc4',
+};
+
+/**
  * Fixed geometry, in card pixels. Mirrors the approved design 1:1.
  *
  * These were re-measured against the reference cards: the cover photo ends at
@@ -71,10 +88,10 @@ export const G = {
   taglineInset: 120,
   followSize: 28,
   followGap: 52,
-  iconSize: 62,
+  iconSize: 88,
   footerSize: 21,
-  logoSize: 56,
-  endLogoSize: 70,
+  logoSize: 84,
+  endLogoSize: 128,
 };
 
 /** Where the wordmark sits on each card until the editor drags it. */
@@ -176,6 +193,10 @@ export interface EditableField {
   align: 'left' | 'center';
   color: string;
   height: number;
+  /** Rendered size after auto-fit (equals requested size when it fit). */
+  fontSize: number;
+  /** True when auto-fit shrank the block to stay inside its frame. */
+  fitted?: boolean;
 }
 
 /** Everything needed to place the editor's handles for one card. */
@@ -245,14 +266,61 @@ function measure(font: string, text: string, maxWidth: number): string[] {
 
 function field(
   ctx: CanvasRenderingContext2D,
-  spec: Omit<EditableField, 'lines' | 'height'>,
+  spec: Omit<EditableField, 'lines' | 'height' | 'fontSize' | 'fitted'> & { fontSize: number; maxHeight?: number },
 ): EditableField {
-  const lines = measure(spec.font, spec.text, spec.width);
-  return {
-    ...spec,
-    lines,
-    height: Math.max(lines.length * spec.lineHeight, spec.lineHeight),
+  void ctx;
+  const attempt = (size: number) => {
+    const lead = Math.max(10, Math.round(spec.lineHeight * size / spec.fontSize));
+    const font = spec.font.replace(/(\d+)px/, String(size) + 'px');
+    const lines = measure(font, spec.text, spec.width);
+    return { font, lead, lines, height: Math.max(lines.length * lead, lead) };
   };
+  const maxH = spec.maxHeight || 0;
+  let size = spec.fontSize;
+  let r = attempt(size);
+  if (maxH > 0 && r.height > maxH) {
+    const floor = Math.max(12, Math.round(spec.fontSize * 0.45));
+    while (size > floor) {
+      size -= 1;
+      r = attempt(size);
+      if (r.height <= maxH) break;
+    }
+  }
+  return {
+    id: spec.id, text: spec.text, x: spec.x, y: spec.y, width: spec.width,
+    lines: r.lines, lineHeight: r.lead, font: r.font, align: spec.align,
+    color: spec.color, height: r.height, fontSize: size, fitted: size < spec.fontSize,
+  };
+}
+
+/** Per-block text-box width scale (1 = full gutter). Clamped 0.5-1. */
+export function fieldWidthScale(draft: CarouselDraft, id: string): number {
+  const v = (draft as { textWidths?: Record<string, unknown> }).textWidths?.[id];
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1, Math.max(0.5, Math.round(n * 100) / 100));
+}
+
+/** Closing-card orange intensity 0-100 (default 65). */
+export function closingTintValue(draft: CarouselDraft): number {
+  const v = (draft as { closingTint?: unknown }).closingTint;
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return 65;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+/** Logo snap guides: anchors, centre lines, spacing readout (card px). */
+export function logoSnapGuides(at: Required<CarouselLogoPlacement>): { x: number; y: number; label: string }[] {
+  const guides: { x: number; y: number; label: string }[] = [];
+  const anchors = [G.margin, CAROUSEL_SIZE / 2, CAROUSEL_SIZE - G.margin];
+  for (const ax of anchors) {
+    if (Math.abs(at.cx - ax) <= 12) guides.push({ x: ax, y: at.top, label: `x ${Math.round(ax)}` });
+  }
+  const lines = [46, 928, CAROUSEL_SIZE / 2];
+  for (const ay of lines) {
+    if (Math.abs(at.top - ay) <= 12) guides.push({ x: at.cx, y: ay, label: `y ${Math.round(ay)}` });
+  }
+  return guides;
 }
 
 /**
@@ -279,16 +347,20 @@ export function computeCardLayout(
   if (kind === 'cover') {
     const titleSize = fieldFontSize(draft, 'title');
     const titleLead = Math.round(titleSize * G.coverTitleLead / G.coverTitleSize);
+    const titleW = Math.round(gutter * fieldWidthScale(draft, 'title'));
     const title = field(ctx, {
       id: 'title',
       text: draft.title,
       x: G.margin,
       y: G.coverBodyTop + 47,
-      width: gutter,
+      width: titleW,
       lineHeight: titleLead,
       font: `italic 700 ${titleSize}px ${SERIF}`,
       align: 'left',
       color: '#ffffff',
+      fontSize: titleSize,
+      // Title band ends where the bottom-anchored lede zone begins.
+      maxHeight: Math.max(80, CAROUSEL_SIZE - G.coverBottomPad - 200 - (G.coverBodyTop + 47)),
     });
     fields.push(title);
 
@@ -305,7 +377,8 @@ export function computeCardLayout(
     const ledeWidth = Math.min(G.ledeWidth, gutter);
     const ledeSize = fieldFontSize(draft, 'lede');
     const ledeLead = Math.round(ledeSize * G.ledeLead / G.ledeSize);
-    const ledeLines = wrapText(ctx, draft.lede, ledeWidth);
+    const ledeW = Math.round(ledeWidth * fieldWidthScale(draft, 'lede'));
+    const ledeLines = wrapText(ctx, draft.lede, ledeW);
     const ledeBlockHeight = ledeLines.length * ledeLead;
 
     // Cap the offset so the title is never drawn on top of the brief when the
@@ -320,11 +393,13 @@ export function computeCardLayout(
       text: draft.lede,
       x: G.margin,
       y: ledeTop,
-      width: ledeWidth,
+      width: ledeW,
       lineHeight: ledeLead,
       font: `${ledeSize}px ${SANS}`,
       align: 'left',
       color: MUTED,
+      fontSize: ledeSize,
+      maxHeight: Math.max(60, CAROUSEL_SIZE - G.coverBottomPad - ledeTop),
     }));
     return { fields, logo, socialRowY: 0 };
   }
@@ -337,11 +412,13 @@ export function computeCardLayout(
       text: draft.bodyHeading,
       x: G.margin,
       y: G.bodyHeadingTop,
-      width: gutter,
+      width: Math.round(gutter * fieldWidthScale(draft, 'bodyHeading')),
       lineHeight: headingLead,
       font: `italic 700 ${headingSize}px ${SERIF}`,
       align: 'left',
       color: '#ffffff',
+      fontSize: headingSize,
+      maxHeight: 220,
     });
     fields.push(heading);
 
@@ -360,11 +437,13 @@ export function computeCardLayout(
         text: para,
         x: G.margin,
         y,
-        width: gutter,
+        width: Math.round(gutter * fieldWidthScale(draft, `paragraph-${i}`)),
         lineHeight: pLead,
         font: `${pSize}px ${SANS}`,
         align: 'left',
         color: '#d6d6d6',
+        fontSize: pSize,
+        maxHeight: Math.max(60, CAROUSEL_SIZE - 130 - y),
       });
       fields.push(p);
       y = p.y + p.height + G.paraGap;
@@ -383,11 +462,13 @@ export function computeCardLayout(
     text: `« ${draft.quote} »`,
     x: G.endPad,
     y: G.endTop,
-    width: quoteWidth,
+    width: Math.round(quoteWidth * fieldWidthScale(draft, 'quote')),
     lineHeight: quoteLead,
     font: `italic 600 ${quoteSize}px ${SERIF}`,
     align: 'left',
     color: '#ffffff',
+    fontSize: quoteSize,
+    maxHeight: 330,
   });
   fields.push(quote);
 
@@ -402,6 +483,7 @@ export function computeCardLayout(
     font: `italic ${bySize}px ${SERIF}`,
     align: 'left',
     color: 'rgba(255,255,255,0.92)',
+    fontSize: bySize,
   });
   fields.push(by);
 
@@ -412,11 +494,13 @@ export function computeCardLayout(
     text: draft.tagline,
     x: CAROUSEL_SIZE / 2,
     y: by.y + by.height + 56,
-    width: CAROUSEL_SIZE - G.taglineInset * 2,
+    width: Math.round((CAROUSEL_SIZE - G.taglineInset * 2) * fieldWidthScale(draft, 'tagline')),
     lineHeight: tagLead,
     font: `italic 700 ${tagSize}px ${SERIF}`,
     align: 'center',
     color: '#ffffff',
+    fontSize: tagSize,
+    maxHeight: 150,
   });
   fields.push(tagline);
 
@@ -431,6 +515,7 @@ export function computeCardLayout(
     font: `italic ${followSize}px ${SERIF}`,
     align: 'center',
     color: '#ffffff',
+    fontSize: followSize,
   });
   fields.push(follow);
 

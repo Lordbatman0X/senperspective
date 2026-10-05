@@ -121,8 +121,8 @@ function drawImageFitted(
  * proportion, so the size slider resizes logos predictably whatever their
  * artwork's shape.
  */
-const LOGO_BOX_W = 3.2;
-const LOGO_BOX_H = 1.2;
+const LOGO_BOX_W = 4.6;
+const LOGO_BOX_H = 1.6;
 
 /**
  * The box a custom logo image is ACTUALLY drawn into: its own aspect ratio
@@ -323,14 +323,17 @@ function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images
     drawImageFitted(ctx, photo, 0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE, draft.closingImageFit ?? 'cover');
   }
 
-  // The reference's tint is a vertical gradient of the accent — denser at the
-  // edges, lighter through the middle so the photo still reads — not the flat
-  // 55% wash that used to flatten every closing card.
+  // Tint strength is editor-controlled (0 = photo untouched, 1 = full brand wash),
+  // defaulting to the reference's strong terracotta. Scaled from the three
+  // reference stops so lighter settings still keep the edge-dense shape.
+  const strength = typeof draft.closingTint === 'number' && Number.isFinite(draft.closingTint)
+    ? Math.min(1, Math.max(0, draft.closingTint))
+    : 0.85;
   ctx.save();
   const tint = ctx.createLinearGradient(0, 0, 0, CAROUSEL_SIZE);
-  tint.addColorStop(0, withAlpha(accent, 0.52));
-  tint.addColorStop(0.4, withAlpha(accent, 0.30));
-  tint.addColorStop(1, withAlpha(accent, 0.62));
+  tint.addColorStop(0, withAlpha(accent, 0.62 * strength + 0.08));
+  tint.addColorStop(0.4, withAlpha(accent, 0.36 * strength + 0.05));
+  tint.addColorStop(1, withAlpha(accent, 0.72 * strength + 0.08));
   ctx.fillStyle = tint;
   ctx.fillRect(0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE);
   ctx.restore();
@@ -360,7 +363,8 @@ function drawSocialRow(ctx: CanvasRenderingContext2D, socials: CarouselSocialLin
   const pad = 78;
   const cell = 168;
   const step = socials.length > 1 ? (CAROUSEL_SIZE - pad * 2 - cell) / (socials.length - 1) : 0;
-  const r = G.iconSize / 2;
+  // 88px icons mirror the reference's large outlined badges; labels sit below.
+  const r = 44;
 
   ctx.save();
   ctx.textAlign = 'center';
@@ -372,8 +376,8 @@ function drawSocialRow(ctx: CanvasRenderingContext2D, socials: CarouselSocialLin
     drawSocialGlyph(ctx, social.icon, cx, cy);
 
     ctx.fillStyle = '#fff';
-    ctx.font = `700 16px ${SANS}`;
-    ctx.fillText(social.label, cx, cy + r + 24, cell);
+    ctx.font = `700 19px ${SANS}`;
+    ctx.fillText(social.label, cx, cy + r + 26, cell + 20);
   });
   ctx.restore();
 }
@@ -396,9 +400,13 @@ function drawSocialRow(ctx: CanvasRenderingContext2D, socials: CarouselSocialLin
  */
 function drawSocialGlyph(ctx: CanvasRenderingContext2D, icon: string, cx: number, cy: number): void {
   ctx.save();
+  // Scale the reference's 62-box geometry up to the 88px badges (≈1.42x).
+  ctx.translate(cx, cy);
+  ctx.scale(1.42, 1.42);
+  ctx.translate(-cx, -cy);
   ctx.strokeStyle = '#fff';
   ctx.fillStyle = '#fff';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.6;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   const circle = (r: number): void => {

@@ -31,7 +31,7 @@ export interface CarouselSocialLink {
    * closing card has a fixed set of circles, so an unknown icon would render as
    * a blank circle and look like a bug.
    */
-  icon: 'globe' | 'youtube' | 'tiktok' | 'facebook' | 'instagram';
+  icon: 'globe' | 'youtube' | 'x' | 'tiktok' | 'facebook' | 'instagram';
 }
 
 /**
@@ -60,6 +60,12 @@ export interface CarouselDraft {
   /** Article this carousel promotes, when it was built from one. */
   articleId?: string;
   articleSlug?: string;
+  /**
+   * Language of the visible copy. Rebuilding from the same article in the
+   * other language swaps every text field to that language's version, so one
+   * article yields both the FR and the EN carousel without retyping.
+   */
+  lang?: 'fr' | 'en';
 
   /** Category pill on cards 1 and 2, e.g. "POLITIQUE". */
   category: string;
@@ -107,8 +113,27 @@ export interface CarouselDraft {
    * a freshly built draft looking like the design. Values are clamped by
    * `normalizeDraft`, so raw slider output can never shrink a headline to 1px
    * or blow it off the card.
+   *
+   * The layout ALSO auto-shrinks a block when its text is too long for its
+   * band (see `fitFieldToHeight` in layout.ts): the slider sets the *desired*
+   * size, the auto-fit guarantees it never paints outside the frame.
    */
   textSizes?: Record<string, number>;
+  /**
+   * Per-block text-box width scale, keyed by layout field id (same keys as
+   * `textSizes`). `1` (absent) means the approved full gutter width;
+   * `0.6` narrows the box to 60% so a long text wraps earlier instead of
+   * colliding with the card edge. Clamped to 0.5–1.0 by `normalizeDraft`.
+   */
+  textWidths?: Record<string, number>;
+  /**
+   * Closing-card orange intensity, 0–100 (default 65).
+   *
+   * 0 keeps the card almost black-brown with a whisper of rust; 100 pushes
+   * the full burnt-orange wash from the reference. Stored so the editor's
+   * choice survives a reload and the PNG export matches the preview.
+   */
+  closingTint?: number;
 
   /**
    * Per-card logo image, keyed by card.
@@ -139,11 +164,29 @@ export const MAX_CAROUSEL_PARAGRAPHS = 3;
  *
  * Stored on the ARTICLE, not on the draft, so the copy is written once when the
  * article is written and every carousel built from that article starts with
- * finished, correctly-toned social text. Each field is optional: a model that
- * returns only some of them still improves the draft, and anything missing
- * falls back to the article's own excerpt and body.
+ * finished, correctly-toned social text. Each language block is optional: a
+ * model that returns only French still improves the draft, and anything missing
+ * falls back to the article's own excerpt and body in that language.
  */
 export interface CarouselAiCopy {
+  fr?: CarouselAiCopyLang;
+  en?: CarouselAiCopyLang;
+  /**
+   * Legacy flat shape (fields directly on the object, French-only). Read for
+   * backward compatibility with articles saved before the bilingual pass, and
+   * treated as the French block.
+   */
+  category?: string;
+  title?: string;
+  lede?: string;
+  bodyHeading?: string;
+  paragraphs?: string[];
+  quote?: string;
+  quoteAttribution?: string;
+}
+
+/** One language's worth of AI-written card copy. */
+export interface CarouselAiCopyLang {
   /** Short uppercase category pill, e.g. "POLITIQUE". */
   category?: string;
   /** Cover headline. Punchy, may be uppercased by the model. */

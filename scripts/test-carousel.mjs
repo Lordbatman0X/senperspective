@@ -228,9 +228,9 @@ const clamped = normalizeDraft({
 });
 assert.equal(clamped.logos?.cover.cx, CAROUSEL_SIZE);
 assert.equal(clamped.logos?.cover.top, 0);
-assert.equal(clamped.logos?.cover.size, 24);
+assert.equal(clamped.logos?.cover.size, 32);
 assert.equal(clamped.logos?.body.cx, CAROUSEL_SIZE / 2);
-assert.equal(clamped.logos?.body.size, 150);
+assert.equal(clamped.logos?.body.size, 220);
 ok('out-of-range and NaN logo values are clamped into the card');
 
 assert.equal(normalizeDraft({}).logos, undefined);

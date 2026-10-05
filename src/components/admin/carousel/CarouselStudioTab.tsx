@@ -46,7 +46,7 @@ function Field({
   maxLength?: number;
   hint?: string;
 }) {
-  const shared = 'w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm p-2.5 rounded-md focus:border-[#E85D42] focus:outline-none';
+  const shared = 'w-full bg-zinc-950 border border-zinc-800 text-zinc-100 text-sm p-2.5 rounded-md focus:border-[#B8471F] focus:outline-none';
   return (
     <div>
       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
@@ -120,7 +120,7 @@ function SizeSlider({
         max={max}
         value={Math.round(value)}
         onChange={e => onChange({ textSizes: { ...(draft.textSizes ?? {}), [fieldId]: Number(e.target.value) } })}
-        className="w-full accent-[#E85D42]"
+        className="w-full accent-[#B8471F]"
         aria-label={`${label} size in pixels`}
       />
     </div>
@@ -149,7 +149,7 @@ function FitToggle({
       onClick={() => onChange(fit)}
       aria-pressed={current === fit}
       className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
-        current === fit ? 'bg-[#E85D42] text-white' : 'text-zinc-400 hover:text-white'
+        current === fit ? 'bg-[#B8471F] text-white' : 'text-zinc-400 hover:text-white'
       }`}
     >
       {text}
@@ -256,7 +256,7 @@ function ImagePicker({
                   type="button"
                   onClick={() => { onChange(item.url); setShowLibrary(false); }}
                   title={item.name}
-                  className="aspect-square rounded overflow-hidden hover:ring-2 hover:ring-[#E85D42] cursor-pointer"
+                  className="aspect-square rounded overflow-hidden hover:ring-2 hover:ring-[#B8471F] cursor-pointer"
                 >
                   <img src={item.url} alt={item.name} className="w-full h-full object-cover" />
                 </button>
@@ -404,7 +404,7 @@ export function CarouselStudioTab() {
             <button
               type="button"
               onClick={handleDownloadAll}
-              className="flex items-center gap-1.5 bg-[#E85D42] hover:bg-[#c94931] text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-all cursor-pointer"
             >
               <Download size={13} /> Télécharger les 3 PNG
             </button>
@@ -464,7 +464,7 @@ export function CarouselStudioTab() {
                 type="button"
                 onClick={() => setActiveCard(kind)}
                 className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer ${
-                  activeCard === kind ? 'bg-[#E85D42] text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  activeCard === kind ? 'bg-[#B8471F] text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
                 }`}
               >
                 {CARD_LABELS[kind]}
@@ -519,7 +519,7 @@ export function CarouselStudioTab() {
                 onClick={() => setActiveCard(kind)}
                 className="text-left cursor-pointer group"
               >
-                <CarouselPreview kind={kind} draft={draft} width={168} className="rounded-md ring-1 ring-white/10 group-hover:ring-[#E85D42]" />
+                <CarouselPreview kind={kind} draft={draft} width={168} className="rounded-md ring-1 ring-white/10 group-hover:ring-[#B8471F]" />
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-2 text-center group-hover:text-white">
                   {CARD_LABELS[kind]}
                 </p>
@@ -598,7 +598,18 @@ export function CarouselStudioTab() {
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <Share2 size={13} /> Pied de page & paragraphes
           </div>
-          <Field label="Catégorie" value={draft.category} onChange={v => patch({ category: v })} maxLength={24} />
+          <label className="block text-[10px] text-zinc-400 uppercase tracking-wider">
+              Intensité du voile orange — {Math.round((draft.closingTint ?? 0.85) * 100)}%
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round((draft.closingTint ?? 0.85) * 100)}
+                onChange={e => patch({ closingTint: Number(e.target.value) / 100 })}
+                className="w-full accent-[#B8471F]"
+              />
+            </label>
+            <Field label="Catégorie" value={draft.category} onChange={v => patch({ category: v })} maxLength={24} />
           <div className="space-y-3">
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
               Paragraphes (carte 2) — {MAX_CAROUSEL_PARAGRAPHS} maximum

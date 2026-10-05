@@ -134,7 +134,13 @@ export function CarouselPreview({
     onChange?.(applyFieldValue(draft, id, value));
   }, [draft, onChange]);
 
+  const SNAP = 14;
   const commitLogo = useCallback((next: Required<CarouselLogoPlacement>) => {
+    // Assisted movement: snap to the card centre, the 78px gutters and the top margin.
+    if (Math.abs(next.cx - 540) < SNAP) next = { ...next, cx: 540 };
+    else if (Math.abs(next.cx - 78) < SNAP) next = { ...next, cx: 78 };
+    else if (Math.abs(next.cx - 1002) < SNAP) next = { ...next, cx: 1002 };
+    if (next.top < 46 + SNAP) next = { ...next, top: 46 };
     onChange?.({ logos: { ...(draft.logos || {}), [kind]: next } });
   }, [draft.logos, kind, onChange]);
 
@@ -220,7 +226,7 @@ export function CarouselPreview({
             onPointerMove={onLogoPointerMove}
             onPointerUp={onLogoPointerUp}
             onPointerCancel={onLogoPointerUp}
-            className="absolute cursor-move border-2 border-dashed border-[#E85D42] bg-[#E85D42]/5 rounded-sm touch-none"
+            className="absolute cursor-move border-2 border-dashed border-[#B8471F] bg-[#B8471F]/5 rounded-sm touch-none"
             style={{
               left: logoAt.cx - logoWidth / 2,
               top: logoAt.top,
@@ -246,7 +252,7 @@ export function CarouselPreview({
                 max={MAX_LOGO_SIZE}
                 value={Math.round(logoAt.size)}
                 onChange={e => commitLogo({ ...logoAt, size: Number(e.target.value) })}
-                className="w-40 accent-[#E85D42]"
+                className="w-40 accent-[#B8471F]"
               />
               <span className="text-[11px] tabular-nums w-8">{Math.round(logoAt.size)}</span>
             </div>
@@ -330,10 +336,10 @@ function EditableText({
         color: 'transparent',
         textAlign: field.align,
         background: active ? 'rgba(232,93,66,0.14)' : 'transparent',
-        outline: active ? '2px solid #E85D42' : 'none',
+        outline: active ? '2px solid #B8471F' : 'none',
         borderRadius: 2,
         whiteSpace: 'pre-wrap',
-        caretColor: '#E85D42',
+        caretColor: '#B8471F',
       }}
     >
       {/* The text lives in the DOM while editing so the caret has something to
