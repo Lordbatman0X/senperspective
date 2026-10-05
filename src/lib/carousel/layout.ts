@@ -84,6 +84,78 @@ const DEFAULT_LOGO: Record<CarouselCardKind, Required<CarouselLogoPlacement>> = 
   closing: { cx: CAROUSEL_SIZE / 2, top: 928, size: G.endLogoSize },
 };
 
+/* ------------------------------------------------------------------ *
+ * Per-block typography overrides
+ *
+ * The editor may resize a text block (the artifact's size slider), but the
+ * APPROVED size remains the default and every override is clamped to a sane
+ * range for that block — so a slider can fine-tune a headline without ever
+ * publishing a 2px or 900px one. `layout.ts` owns the ranges because it owns
+ * the design; the renderer, the overlay and `normalizeDraft` all read them here.
+ * ------------------------------------------------------------------ */
+
+/** Absolute floor/ceiling for any block size override, in card pixels. */
+export const TEXT_SIZE_MIN = 14;
+export const TEXT_SIZE_MAX = 160;
+
+/** The approved font size (px) of one field id, taken from `G`. */
+export function defaultFontSize(id: string): number {
+  switch (id.replace(/-\d+$/, '')) {
+    case 'title': return G.coverTitleSize;
+    case 'lede': return G.ledeSize;
+    case 'bodyHeading': return G.bodyTitleSize;
+    case 'paragraph': return G.paraSize;
+    case 'quote': return G.quoteSize;
+    case 'quoteAttribution': return G.bySize;
+    case 'tagline': return G.taglineSize;
+    case 'socialHeading': return G.followSize;
+    default: return G.paraSize;
+  }
+}
+
+/** Slider bounds for one field: 60%–160% of the approved size. */
+export function textSizeRange(id: string): { min: number; max: number } {
+  const def = defaultFontSize(id);
+  return {
+    min: Math.max(TEXT_SIZE_MIN, Math.round(def * 0.6)),
+    max: Math.min(TEXT_SIZE_MAX, Math.max(TEXT_SIZE_MIN + 8, Math.round(def * 1.6))),
+  };
+}
+
+/** Field ids that may carry an override — exactly the editable runs of the template. */
+const TEXT_SIZE_ID =
+  /^(title|lede|bodyHeading|paragraph-\d+|quote|quoteAttribution|tagline|socialHeading)$/;
+
+/**
+ * Clamps a stored override map into this card's legal ranges.
+ *
+ * Shared by `normalizeDraft` (so nothing invalid reaches the canvas) and the
+ * tests. Unknown ids, NaN and non-numbers are dropped rather than guessed at;
+ * every kept value lands inside its own field's slider range.
+ */
+export function sanitizeTextSizes(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const out: Record<string, number> = {};
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!TEXT_SIZE_ID.test(id)) continue;
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) continue;
+    const { min, max } = textSizeRange(id);
+    out[id] = Math.min(max, Math.max(min, Math.round(n)));
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** The effective size of one block: a valid stored override, else the approved default. */
+export function fieldFontSize(draft: CarouselDraft, id: string): number {
+  const stored = draft.textSizes?.[id];
+  if (typeof stored === 'number' && Number.isFinite(stored)) {
+    const { min, max } = textSizeRange(id);
+    return Math.min(max, Math.max(min, Math.round(stored)));
+  }
+  return defaultFontSize(id);
+}
+
 /**
  * One editable text run.
  *
@@ -205,14 +277,16 @@ export function computeCardLayout(
   const gutter = CAROUSEL_SIZE - G.margin * 2;
 
   if (kind === 'cover') {
+    const titleSize = fieldFontSize(draft, 'title');
+    const titleLead = Math.round(titleSize * G.coverTitleLead / G.coverTitleSize);
     const title = field(ctx, {
       id: 'title',
       text: draft.title,
       x: G.margin,
       y: G.coverBodyTop + 47,
       width: gutter,
-      lineHeight: G.coverTitleLead,
-      font: `italic 700 ${G.coverTitleSize}px ${SERIF}`,
+      lineHeight: titleLead,
+      font: `italic 700 ${titleSize}px ${SERIF}`,
       align: 'left',
       color: '#ffffff',
     });
@@ -229,8 +303,10 @@ export function computeCardLayout(
      * length, which is what the reference shows.
      */
     const ledeWidth = Math.min(G.ledeWidth, gutter);
+    const ledeSize = fieldFontSize(draft, 'lede');
+    const ledeLead = Math.round(ledeSize * G.ledeLead / G.ledeSize);
     const ledeLines = wrapText(ctx, draft.lede, ledeWidth);
-    const ledeBlockHeight = ledeLines.length * G.ledeLead;
+    const ledeBlockHeight = ledeLines.length * ledeLead;
 
     // Cap the offset so the title is never drawn on top of the brief when the
     // headline is very long; the title simply wins and the brief follows it.
@@ -245,8 +321,8 @@ export function computeCardLayout(
       x: G.margin,
       y: ledeTop,
       width: ledeWidth,
-      lineHeight: G.ledeLead,
-      font: `${G.ledeSize}px ${SANS}`,
+      lineHeight: ledeLead,
+      font: `${ledeSize}px ${SANS}`,
       align: 'left',
       color: MUTED,
     }));
@@ -254,14 +330,16 @@ export function computeCardLayout(
   }
 
   if (kind === 'body') {
+    const headingSize = fieldFontSize(draft, 'bodyHeading');
+    const headingLead = Math.round(headingSize * G.bodyTitleLead / G.bodyTitleSize);
     const heading = field(ctx, {
       id: 'bodyHeading',
       text: draft.bodyHeading,
       x: G.margin,
       y: G.bodyHeadingTop,
       width: gutter,
-      lineHeight: G.bodyTitleLead,
-      font: `italic 700 ${G.bodyTitleSize}px ${SERIF}`,
+      lineHeight: headingLead,
+      font: `italic 700 ${headingSize}px ${SERIF}`,
       align: 'left',
       color: '#ffffff',
     });
@@ -271,16 +349,20 @@ export function computeCardLayout(
     // text-block top. Clamping to `coverBodyTop` (708) pushed card 2's text
     // into the footer; the heading's own flow still wins when it is taller
     // than one line, so a long heading pushes the paragraphs down correctly.
-    let y = Math.max(G.bodyTextTop, heading.y + heading.height + 40);
+    // The 50px lead matches the reference's `.c-text .body` top of 360 for a
+    // one-line heading (236 + 74 + 50).
+    let y = Math.max(G.bodyTextTop, heading.y + heading.height + 50);
     draft.paragraphs.forEach((para, i) => {
+      const pSize = fieldFontSize(draft, `paragraph-${i}`);
+      const pLead = Math.round(pSize * G.paraLead / G.paraSize);
       const p = field(ctx, {
         id: `paragraph-${i}`,
         text: para,
         x: G.margin,
         y,
         width: gutter,
-        lineHeight: G.paraLead,
-        font: `${G.paraSize}px ${SANS}`,
+        lineHeight: pLead,
+        font: `${pSize}px ${SANS}`,
         align: 'left',
         color: '#d6d6d6',
       });
@@ -291,58 +373,68 @@ export function computeCardLayout(
   }
 
   // Closing: quote, attribution, tagline and the social label all flow downward.
+  // Gaps mirror the reference's `.c-end` margins: quote top 88, by +30,
+  // tagline +56, follow +64, social row +46 below the follow line's own height.
   const quoteWidth = CAROUSEL_SIZE - G.endPad * 2;
+  const quoteSize = fieldFontSize(draft, 'quote');
+  const quoteLead = Math.round(quoteSize * G.quoteLead / G.quoteSize);
   const quote = field(ctx, {
     id: 'quote',
     text: `« ${draft.quote} »`,
     x: G.endPad,
     y: G.endTop,
     width: quoteWidth,
-    lineHeight: G.quoteLead,
-    font: `italic 600 ${G.quoteSize}px ${SERIF}`,
+    lineHeight: quoteLead,
+    font: `italic 600 ${quoteSize}px ${SERIF}`,
     align: 'left',
     color: '#ffffff',
   });
   fields.push(quote);
 
+  const bySize = fieldFontSize(draft, 'quoteAttribution');
   const by = field(ctx, {
     id: 'quoteAttribution',
     text: draft.quoteAttribution,
     x: G.endPad + 4,
     y: quote.y + quote.height + G.byGap,
     width: quoteWidth,
-    lineHeight: G.bySize,
-    font: `italic ${G.bySize}px ${SERIF}`,
+    lineHeight: bySize,
+    font: `italic ${bySize}px ${SERIF}`,
     align: 'left',
     color: 'rgba(255,255,255,0.92)',
   });
   fields.push(by);
 
+  const tagSize = fieldFontSize(draft, 'tagline');
+  const tagLead = Math.round(tagSize * G.taglineLead / G.taglineSize);
   const tagline = field(ctx, {
     id: 'tagline',
     text: draft.tagline,
     x: CAROUSEL_SIZE / 2,
-    y: by.y + by.height + 60,
+    y: by.y + by.height + 56,
     width: CAROUSEL_SIZE - G.taglineInset * 2,
-    lineHeight: G.taglineLead,
-    font: `italic 700 ${G.taglineSize}px ${SERIF}`,
+    lineHeight: tagLead,
+    font: `italic 700 ${tagSize}px ${SERIF}`,
     align: 'center',
     color: '#ffffff',
   });
   fields.push(tagline);
 
+  const followSize = fieldFontSize(draft, 'socialHeading');
   const follow = field(ctx, {
     id: 'socialHeading',
     text: draft.socialHeading,
     x: CAROUSEL_SIZE / 2,
     y: tagline.y + tagline.height + G.taglineGap,
     width: gutter,
-    lineHeight: G.followSize,
-    font: `italic ${G.followSize}px ${SERIF}`,
+    lineHeight: followSize,
+    font: `italic ${followSize}px ${SERIF}`,
     align: 'center',
     color: '#ffffff',
   });
   fields.push(follow);
 
-  return { fields, logo, socialRowY: follow.y + G.followGap };
+  // The reference's `.row` sits 46px below the follow line's own height: it is
+  // a block margin in the flow, not a distance measured from the text's top.
+  return { fields, logo, socialRowY: follow.y + follow.height + 46 };
 }

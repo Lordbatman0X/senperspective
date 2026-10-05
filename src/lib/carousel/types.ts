@@ -10,6 +10,16 @@
 /** The three approved card formats. There is no fourth and no free-form mode. */
 export type CarouselCardKind = 'cover' | 'body' | 'closing';
 
+/**
+ * How a background photo fills its card box.
+ *
+ * Mirrors CSS `object-fit`: `'cover'` crops the photo to fill the box without
+ * distortion (the default, and what the reference design uses), `'contain'`
+ * letterboxes the whole photo instead — the escape hatch for a source image
+ * whose important subject sits off-centre or in a very wide format.
+ */
+export type CarouselImageFit = 'cover' | 'contain';
+
 /** One social link rendered as a circle on the closing card. */
 export interface CarouselSocialLink {
   /** Short label shown under the icon, e.g. "@SenPerspective". */
@@ -80,6 +90,25 @@ export interface CarouselDraft {
   coverImage?: string;
   /** Photo behind the closing card (shown through the orange tint). */
   closingImage?: string;
+  /**
+   * Fit mode for the cover photo. Absent means `'cover'` (crop to fill).
+   */
+  coverImageFit?: CarouselImageFit;
+  /**
+   * Fit mode for the closing photo. Absent means `'cover'` (crop to fill).
+   */
+  closingImageFit?: CarouselImageFit;
+  /**
+   * Per-block font sizes, in card pixels, keyed by layout field id
+   * (`title`, `lede`, `bodyHeading`, `paragraph-0`…, `quote`,
+   * `quoteAttribution`, `tagline`, `socialHeading`).
+   *
+   * Absent means "use the approved size from `layout.ts`", which is what keeps
+   * a freshly built draft looking like the design. Values are clamped by
+   * `normalizeDraft`, so raw slider output can never shrink a headline to 1px
+   * or blow it off the card.
+   */
+  textSizes?: Record<string, number>;
 
   /**
    * Per-card logo image, keyed by card.

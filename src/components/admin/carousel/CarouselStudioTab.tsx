@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { useStore } from '../../../store';
 import type { Article } from '../../../types';
-import type { CarouselCardKind, CarouselDraft } from '../../../lib/carousel/types';
+import type { CarouselCardKind, CarouselDraft, CarouselImageFit } from '../../../lib/carousel/types';
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../../../lib/carousel/types';
 import { buildDraftFromArticle, emptyDraft, normalizeDraft } from '../../../lib/carousel/draft';
+import { defaultFontSize, textSizeRange } from '../../../lib/carousel/layout';
 import { renderCardToDataUrl } from '../../../lib/carousel/render';
 import { collectDraftImages, loadCardImages } from '../../../lib/carousel/images';
 import { compressImageFile } from '../../../lib/imageUtils';
@@ -70,6 +71,97 @@ function Field({
         />
       )}
       {hint ? <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">{hint}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * One per-block font-size slider, bounded by the approved geometry.
+ *
+ * Bounds come from `textSizeRange` — the same ranges the renderer clamps to —
+ * so the slider can never offer a value the canvas would reject. Clearing the
+ * override (reset button) returns the block to its approved size, which is the
+ * default for a freshly built draft.
+ */
+function SizeSlider({
+  label, fieldId, draft, onChange,
+}: {
+  label: string;
+  fieldId: string;
+  draft: CarouselDraft;
+  onChange: (patch: Partial<CarouselDraft>) => void;
+}) {
+  const { min, max } = textSizeRange(fieldId);
+  const approved = defaultFontSize(fieldId);
+  const value = draft.textSizes?.[fieldId] ?? approved;
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+          {label} <span className="text-zinc-600 normal-case tracking-normal ml-1">({Math.round(value)}px)</span>
+        </label>
+        {draft.textSizes?.[fieldId] !== undefined && (
+          <button
+            type="button"
+            onClick={() => {
+              const next = { ...(draft.textSizes ?? {}) };
+              delete next[fieldId];
+              onChange({ textSizes: Object.keys(next).length ? next : undefined });
+            }}
+            className="text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={Math.round(value)}
+        onChange={e => onChange({ textSizes: { ...(draft.textSizes ?? {}), [fieldId]: Number(e.target.value) } })}
+        className="w-full accent-[#E85D42]"
+        aria-label={`${label} size in pixels`}
+      />
+    </div>
+  );
+}
+
+/**
+ * Cover/contain switch for a background photo.
+ *
+ * Mirrors CSS `object-fit`: fill crops to fill the box (the reference look),
+ * fit letterboxes the whole photo. Unset behaves as fill, which is the
+ * approved default a fresh draft uses.
+ */
+function FitToggle({
+  label, value, onChange,
+}: {
+  label: string;
+  value?: CarouselImageFit;
+  onChange: (fit: CarouselImageFit) => void;
+}) {
+  const current = value ?? 'cover';
+  const btn = (fit: CarouselImageFit, text: string) => (
+    <button
+      key={fit}
+      type="button"
+      onClick={() => onChange(fit)}
+      aria-pressed={current === fit}
+      className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+        current === fit ? 'bg-[#E85D42] text-white' : 'text-zinc-400 hover:text-white'
+      }`}
+    >
+      {text}
+    </button>
+  );
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">{label}</span>
+      <div className="flex gap-1 bg-zinc-950 border border-zinc-800 rounded-md p-0.5" role="group" aria-label={label}>
+        {btn('cover', 'Fill')}
+        {btn('contain', 'Fit')}
+      </div>
     </div>
   );
 }
@@ -406,12 +498,14 @@ export function CarouselStudioTab() {
             media={media}
             onChange={url => patch({ coverImage: url })}
           />
+          <FitToggle label="Cover photo fit" value={draft.coverImageFit} onChange={fit => patch({ coverImageFit: fit })} />
           <ImagePicker
             label="Photo — carte 3 · Clôture (fond)"
             value={draft.closingImage}
             media={media}
             onChange={url => patch({ closingImage: url })}
           />
+          <FitToggle label="Closing photo fit" value={draft.closingImageFit} onChange={fit => patch({ closingImageFit: fit })} />
         </div>
 
         {/* Read-only thumbnails of the other two cards. */}

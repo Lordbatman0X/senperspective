@@ -8,6 +8,7 @@ import {
   MAX_CAROUSEL_PARAGRAPHS,
 } from './types';
 import type { Article } from '../../types';
+import { sanitizeTextSizes } from './layout';
 import { stripHtmlTags } from '../utils';
 
 /** The Perspective accent, as used by the approved design. */
@@ -325,6 +326,18 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
   ) as CarouselDraft['logoUrls'];
   const hasLogoUrls = Object.keys(logoUrls || {}).length > 0;
 
+  /**
+   * Per-block font sizes and photo fit modes.
+   *
+   * Slider output and hand-edited Firestore docs are untrusted input: every
+   * size is re-clamped to its own field's range by `sanitizeTextSizes`, and a
+   * fit value that is not exactly `'cover'`/`'contain'` becomes "unset" (the
+   * approved default), never an arbitrary string reaching `drawImage`.
+   */
+  const textSizes = sanitizeTextSizes(input.textSizes);
+  const fitOf = (v: unknown): CarouselDraft['coverImageFit'] =>
+    v === 'contain' || v === 'cover' ? v : undefined;
+
   return {
     ...base,
     ...input,
@@ -345,5 +358,10 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
     date: input.date?.trim() || base.date,
     readingTime: input.readingTime?.trim() || base.readingTime,
     accentColor: input.accentColor?.trim() || base.accentColor,
+    // Assigned after the spread: the sanitized forms must win over whatever
+    // raw values arrived in `input`.
+    textSizes,
+    coverImageFit: fitOf(input.coverImageFit),
+    closingImageFit: fitOf(input.closingImageFit),
   };
 }
