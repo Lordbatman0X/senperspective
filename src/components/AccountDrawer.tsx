@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ConnectionsAndProfile } from "./ConnectionsAndProfile";
 import { SharedItemCard } from "./SharedItemCard";
 import { InternalShareModal } from "./InternalShareModal";
-import { fetchUserProfile, saveUserProfileFields, syncUserProfile } from '../firebase/auth';
+import { fetchUserProfile, saveUserProfileFields, syncUserProfile, canAccessAdmin } from '../firebase/auth';
 // NOTE: relationship keys, writes and deletes now live in firebase/social.ts.
 // Only generic document helpers remain here; importing the old relation key
 // helpers would risk reintroducing the split-brain key formats.
@@ -280,13 +280,15 @@ export function AccountDrawer({
   const [passwordChangeSuccess, setPasswordChangeSuccess] = useState("");
   const [passwordChangeError, setPasswordChangeError] = useState("");
 
-  const isAdmin = Boolean(
-    readerProfile?.role === "Admin" ||
-    readerProfile?.role === "Éditeur" ||
-    user?.email === "kadersdiaz3@gmail.com" ||
-    user?.email === "admin@senperspective.com" ||
-    sessionStorage.getItem("perspective-temp-admin-session") === "authenticated"
-  );
+  const isAdmin = canAccessAdmin({
+    profile: readerProfile,
+    email: user?.email,
+    allowTempSession:
+      typeof window !== "undefined" && (
+        sessionStorage.getItem("perspective-temp-admin-session") === "authenticated" ||
+        sessionStorage.getItem("perspective_admin_session") === "authenticated"
+      )
+  });
 
   const clearNotifications = useStore(s => s.clearNotifications);
   const markNotificationRead = useStore(s => s.markNotificationRead);

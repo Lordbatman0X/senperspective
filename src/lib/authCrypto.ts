@@ -98,6 +98,51 @@ if (typeof console !== "undefined") {
 }
 
 /**
+ * Canonical username-to-email resolver.
+ * Handles single-word usernames entered on phone or desktop so users can sign in
+ * with shortcuts like "kadersdiaz", "kader", "admin", etc.
+ */
+export function resolveLoginIdentifier(input: string): string {
+  const raw = (input || "").trim();
+  if (!raw) return "";
+  const lower = raw.toLowerCase();
+
+  // If already contains @, check known email aliases or return normalized email
+  if (lower.includes("@")) {
+    if (lower === "kadersdiaz@gmail.com" || lower === "kader@gmail.com" || lower === "kadersdiaz3@gmail.com") {
+      return "kadersdiaz3@gmail.com";
+    }
+    return lower;
+  }
+
+  // Kader Diaz shortcuts (including kadersdiaz without domain)
+  if (
+    lower === "kadersdiaz" ||
+    lower === "kadersdiaz3" ||
+    lower === "kader" ||
+    lower === "kaders" ||
+    lower === "kaders_diaz" ||
+    lower === "kader diaz" ||
+    lower === "kader.diaz" ||
+    lower === "kadersdiaz_"
+  ) {
+    return "kadersdiaz3@gmail.com";
+  }
+
+  // Administrative aliases
+  if (lower === "admin" || lower === "superadmin" || lower === "administrateur" || lower === "perspective") {
+    return "admin@senperspective.com";
+  }
+
+  if (lower === "editor" || lower === "editeur") {
+    return "editor@senperspective.com";
+  }
+
+  // Fallback domain
+  return `${lower}@senperspective.com`;
+}
+
+/**
  * Deterministic, cross-device stable user ID derived from the email address.
  * Guarantees that the SAME user always gets the exact SAME ID on phone, desktop, or tablet.
  */

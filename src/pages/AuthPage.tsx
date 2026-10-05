@@ -396,16 +396,21 @@ export const AuthPage: React.FC = () => {
 
           <div>
             <label className="block text-[10px] font-mono uppercase tracking-widest text-zinc-400 mb-1.5">
-              {language === 'fr' ? 'Adresse E-mail' : 'Email Address'}
+              {authTab === 'login'
+                ? (language === 'fr' ? 'Adresse E-mail ou Identifiant' : 'Email Address or Username')
+                : (language === 'fr' ? 'Adresse E-mail' : 'Email Address')}
             </label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
               <input
-                type="email"
+                type={authTab === 'login' ? 'text' : 'email'}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="nom@exemple.com"
+                placeholder={authTab === 'login' ? (language === 'fr' ? 'kadersdiaz ou nom@exemple.com' : 'kadersdiaz or name@domain.com') : 'nom@exemple.com'}
                 className="w-full bg-zinc-950 border border-zinc-800 text-white pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-[#E85D42]/70 transition-colors"
               />
             </div>

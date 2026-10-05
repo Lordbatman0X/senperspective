@@ -83,8 +83,28 @@ function attempt(url: string, crossOrigin: boolean): Promise<HTMLImageElement | 
  */
 export async function loadCardImage(url: string): Promise<LoadedCardImage | null> {
   if (!url) return null;
+  // Same-origin data: and blob: URLs skip cross-origin restrictions completely
+  if (url.startsWith('data:') || url.startsWith('blob:')) {
+    const direct = await attempt(url, false);
+    return direct ? { image: direct, tainted: false } : null;
+  }
+
+  // 1. Try standard CORS-enabled load
   const cors = await attempt(url, true);
   if (cors) return { image: cors, tainted: false };
+
+  // 2. If direct CORS fails, attempt CORS-enabled image proxy to keep canvas clean
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(url)}&output=png`;
+      const proxied = await attempt(proxyUrl, true);
+      if (proxied) return { image: proxied, tainted: false };
+    } catch {
+      // Fall through to plain
+    }
+  }
+
+  // 3. Fall back to plain load (usable for preview, flagged tainted for export)
   const plain = await attempt(url, false);
   return plain ? { image: plain, tainted: true } : null;
 }

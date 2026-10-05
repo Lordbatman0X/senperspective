@@ -662,5 +662,14 @@ export function renderCardToDataUrl(
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas 2D context unavailable');
   renderCard(ctx, { kind, draft, images });
-  return canvas.toDataURL('image/png');
+  try {
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    // If the canvas was tainted by an un-proxied cross-origin image,
+    // clear and re-render without remote tainted images so export always succeeds
+    console.warn('[Carousel Export] Tainted canvas detected, re-rendering with clean fallback:', err);
+    ctx.clearRect(0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE);
+    renderCard(ctx, { kind, draft, images: {} });
+    return canvas.toDataURL('image/png');
+  }
 }

@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import { FALLBACK_TAXONOMY } from './lib/siteTaxonomy';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Article, Language, Match } from './types';
@@ -701,7 +701,9 @@ interface AppState {
   purgeAllArticles: () => Promise<void>;
   media: MediaItem[];
   addMedia: (m: MediaItem) => void;
+  addMediaBatch: (items: MediaItem[]) => Promise<void>;
   deleteMedia: (id: string) => void;
+  deleteMediaBatch: (ids: string[]) => void;
   updateMediaName: (id: string, name: string) => void;
   ads: AdItem[];
   loadAds: () => Promise<void>;
@@ -1371,9 +1373,27 @@ export const useStore = create<AppState>()(
           console.error("[Supabase notice] Error adding media:", err);
         }
       },
+      addMediaBatch: async (items: MediaItem[]) => {
+        if (!items || items.length === 0) return;
+        set({ media: [...items, ...(get().media || [])] });
+        try {
+          if (supabase) {
+            const cleanItems = await Promise.all(items.map(m => sanitizeFirestorePayload(m as any)));
+            await supabase.from('media').upsert(cleanItems).catch(() => {});
+          }
+        } catch (err) {
+          console.error("[Supabase notice] Error adding media batch:", err);
+        }
+      },
       deleteMedia: (id) => {
         set({ media: (get().media || []).filter(m => m.id !== id) });
         if (supabase) { supabase.from('media').delete().eq('id', id).catch(() => {}); }
+      },
+      deleteMediaBatch: (ids: string[]) => {
+        if (!ids || ids.length === 0) return;
+        const idSet = new Set(ids);
+        set({ media: (get().media || []).filter(m => !idSet.has(m.id)) });
+        if (supabase) { supabase.from('media').delete().in('id', ids).catch(() => {}); }
       },
       updateMediaName: (id, name) => {
         set({ media: (get().media || []).map(m => m.id === id ? { ...m, name } : m) });

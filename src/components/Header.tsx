@@ -5,7 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 
 import { compressImageFile } from "../lib/imageUtils";
 import { getSafeText } from "../lib/utils";
-import { isAdminProfile, canAccessAdmin, saveUserProfileFields } from "../firebase/auth";
+import { isAdminProfile, canAccessAdmin, saveUserProfileFields, resolveLoginIdentifier } from "../firebase/auth";
 import { resolveNavItems } from "../lib/siteTaxonomy";
 import {
   Search,
@@ -349,7 +349,7 @@ export function Header() {
         return;
       }
 
-      const cleanEmail = loginEmail.trim().toLowerCase();
+      const cleanEmail = resolveLoginIdentifier(loginEmail.trim());
 
       try {
         await loginWithEmail(cleanEmail, loginCredential, rememberMe);
@@ -359,7 +359,7 @@ export function Header() {
           setAuthSuccess("");
           setLoginEmail("");
           setLoginCredential("");
-        }, 800);
+        }, 500);
       } catch (err: any) {
         console.error("Firebase Auth login error:", err);
         let errorMsg = language === "fr" ? "Identifiants incorrects." : "Invalid email or password.";
@@ -1458,14 +1458,17 @@ export function Header() {
                       {/* Login tab inputs */}
                       <div>
                         <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-400 mb-1">
-                          {language === "fr" ? "Adresse E-mail :" : "Email Address:"}
+                          {language === "fr" ? "E-mail ou Identifiant :" : "Email or Username:"}
                         </label>
                         <input
-                          type="email"
+                          type="text"
+                          autoCapitalize="none"
+                          autoCorrect="off"
+                          spellCheck={false}
                           required
                           value={loginEmail}
                           onChange={(e) => setLoginEmail(e.target.value)}
-                          placeholder="contact@senperspective.com"
+                          placeholder={language === "fr" ? "kadersdiaz ou nom@exemple.com" : "kadersdiaz or name@domain.com"}
                           className="w-full bg-zinc-900 border border-zinc-800 focus:outline-none focus:border-[#E85D42] text-sm text-white p-3 font-semibold shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] placeholder-zinc-600 rounded-none"
                         />
                       </div>

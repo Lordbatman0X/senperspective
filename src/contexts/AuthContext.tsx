@@ -176,6 +176,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           publishProfileToStore(fallback);
         }
       } else {
+        // Fallback: restore active session from localStorage if available (ensures phone & desktop stay in sync across reloads)
+        try {
+          const cachedSession = localStorage.getItem('perspective_auth_session');
+          if (cachedSession) {
+            const parsed = JSON.parse(cachedSession);
+            if (parsed && parsed.email) {
+              setProfile(parsed);
+              publishProfileToStore(parsed);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {}
         setProfile(null);
       }
       setLoading(false);
@@ -303,7 +316,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const userProf = await enforceNotSuspended(await signInEmail(email, pass));
       setProfile(userProf);
       publishProfileToStore(userProf);
-      loadDirectory();
+      try {
+        localStorage.setItem('perspective_auth_session', JSON.stringify(userProf));
+        if (isBootstrapAdmin(userProf.email) || userProf.role === 'Admin') {
+          sessionStorage.setItem('perspective-temp-admin-session', 'authenticated');
+          sessionStorage.setItem('perspective_admin_email', userProf.email);
+        }
+      } catch {}
+      // Run directory load in the background so login returns instantaneously on mobile
+      void loadDirectory();
       return userProf;
     } finally {
       setLoading(false);

@@ -24,14 +24,53 @@ const CARD_LABELS: Record<CarouselCardKind, string> = {
   closing: '3 · Clôture',
 };
 
-/** Turns a data URL into a downloadable PNG. */
-function downloadPng(dataUrl: string, filename: string): void {
-  const link = document.createElement('a');
-  link.href = dataUrl;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+/**
+ * Saves a PNG data URL to the user's device.
+ * Handles both desktop (blob download) and mobile (Web Share API to Camera Roll/Files).
+ */
+async function savePngToDevice(dataUrl: string, filename: string): Promise<boolean> {
+  try {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    const file = new File([blob], filename, { type: 'image/png' });
+
+    // On mobile devices, native Web Share allows saving directly to Photos / Gallery
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: filename,
+        });
+        return true;
+      } catch (shareErr: any) {
+        if (shareErr.name === 'AbortError') return true;
+      }
+    }
+
+    // Standard Blob URL download for desktop / web browsers
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+    return true;
+  } catch {
+    // Fallback direct anchor click
+    try {
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 /** A small labelled field, matching the admin's uppercase-label style. */
@@ -376,7 +415,7 @@ function pickerArticles(articles: Article[]) {
  * the next session starts from the same content.
  */
 export function CarouselStudioTab() {
-  const { articles = [], media = [], siteSettings, updateSiteSettings } = useStore();
+  const { articles = [], media = [], siteSettings, updateSiteSettings, addMedia, addMediaBatch } = useStore();
 
   const [draft, setDraft] = useState<CarouselDraft>(() =>
     normalizeDraft(siteSettings?.socialCarousel as Partial<CarouselDraft> | undefined),
@@ -384,6 +423,7 @@ export function CarouselStudioTab() {
   const [activeCard, setActiveCard] = useState<CarouselCardKind>('cover');
   const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [downloadingKind, setDownloadingKind] = useState<CarouselCardKind | 'all' | 'mediatheque' | null>(null);
 
   const patch = (changes: Partial<CarouselDraft>) =>
     setDraft(prev => ({ ...prev, ...changes }));
@@ -493,20 +533,75 @@ export function CarouselStudioTab() {
     setDraft(prev => ({ ...prev, socials: [...prev.socials, { label: '', url: '', icon: 'globe' }] }));
   };
 
-  /** Downloads all three cards, one PNG per card. */
+  /** Downloads a single card as PNG directly to the device. */
+  const handleDownloadSingle = async (kind: CarouselCardKind) => {
+    setDownloadingKind(kind);
+    setStatus({ tone: 'ok', text: `Génération de la carte ${CARD_LABELS[kind]}…` });
+    try {
+      const images = await loadDraftImages(draft);
+      const dataUrl = renderCardToDataUrl(kind, draft, images);
+      const filename = `perspective-carrousel-${kind}.png`;
+      await savePngToDevice(dataUrl, filename);
+      setStatus({ tone: 'ok', text: `Carte ${CARD_LABELS[kind]} enregistrée sur votre appareil.` });
+    } catch (err) {
+      console.error('Erreur export carte:', err);
+      setStatus({ tone: 'error', text: `Export de la carte ${CARD_LABELS[kind]} impossible.` });
+    } finally {
+      setDownloadingKind(null);
+    }
+  };
+
+  /** Downloads all three cards, one PNG per card, directly to the device. */
   const handleDownloadAll = async () => {
-    setStatus({ tone: 'ok', text: 'Génération des PNG…' });
+    setDownloadingKind('all');
+    setStatus({ tone: 'ok', text: 'Génération des 3 cartes PNG…' });
     const kinds: CarouselCardKind[] = ['cover', 'body', 'closing'];
     try {
       const images = await loadDraftImages(draft);
       for (const kind of kinds) {
-        downloadPng(renderCardToDataUrl(kind, draft, images), `perspective-carrousel-${kind}.png`);
+        const dataUrl = renderCardToDataUrl(kind, draft, images);
+        await savePngToDevice(dataUrl, `perspective-carrousel-${kind}.png`);
         // Stagger slightly: some browsers drop rapid successive downloads.
-        await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 300));
       }
-      setStatus({ tone: 'ok', text: 'Les 3 cartes PNG ont été téléchargées.' });
+      setStatus({ tone: 'ok', text: 'Les 3 cartes PNG ont été enregistrées sur votre appareil.' });
+    } catch (err) {
+      console.error('Erreur export carrousel:', err);
+      setStatus({ tone: 'error', text: 'Export incomplet : vérifiez les images du carrousel.' });
+    } finally {
+      setDownloadingKind(null);
+    }
+  };
+
+  /** Saves rendered cards into Médiathèque. */
+  const handleSaveToMediatheque = async (kind?: CarouselCardKind) => {
+    setDownloadingKind('mediatheque');
+    setStatus({ tone: 'ok', text: 'Sauvegarde dans la Médiathèque…' });
+    try {
+      const images = await loadDraftImages(draft);
+      const targetKinds: CarouselCardKind[] = kind ? [kind] : ['cover', 'body', 'closing'];
+      const newItems: any[] = [];
+      const today = new Date().toISOString().split('T')[0];
+      for (const k of targetKinds) {
+        const dataUrl = renderCardToDataUrl(k, draft, images);
+        newItems.push({
+          id: `carousel-${Date.now()}-${k}-${Math.random().toString(36).substring(7)}`,
+          url: dataUrl,
+          type: 'image',
+          name: `Carrousel Social - ${CARD_LABELS[k]} (${draft.category || 'Éditorial'})`,
+          date: today,
+        });
+      }
+      if (addMediaBatch) {
+        await addMediaBatch(newItems);
+      } else if (addMedia) {
+        newItems.forEach(item => addMedia(item));
+      }
+      setStatus({ tone: 'ok', text: `${newItems.length} carte(s) enregistrée(s) dans la Médiathèque.` });
     } catch {
-      setStatus({ tone: 'error', text: 'Export impossible : une image n’a pas pu être chargée.' });
+      setStatus({ tone: 'error', text: 'Erreur lors de la sauvegarde dans la Médiathèque.' });
+    } finally {
+      setDownloadingKind(null);
     }
   };
 
@@ -517,23 +612,46 @@ export function CarouselStudioTab() {
           <div>
             <h3 className="text-white font-bold text-sm uppercase tracking-wider">Carrousel Social</h3>
             <p className="text-zinc-500 text-xs mt-1 max-w-2xl leading-relaxed">
-              Gabarit fixe en trois cartes (Couverture · Développement · Clôture). Choisissez un
-              article publié, ajustez le logo, les photos et les textes, puis téléchargez les PNG.
+              Gabarit fixe en trois cartes (Couverture · Développement · Clôture). Éditez les textes et visuels,
+              puis enregistrez les cartes une par une ou en pack complet sur votre appareil.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleDownloadSingle(activeCard)}
+              disabled={downloadingKind !== null}
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2.5 rounded-md transition-all cursor-pointer border border-zinc-700 hover:border-zinc-600"
+              title="Télécharger la carte actuellement sélectionnée sur votre appareil"
+            >
+              {downloadingKind === activeCard ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} className="text-[#E8490F]" />}
+              Sauvegarder {CARD_LABELS[activeCard]}
+            </button>
             <button
               type="button"
               onClick={handleDownloadAll}
-              className="flex items-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-all cursor-pointer"
+              disabled={downloadingKind !== null}
+              className="flex items-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-all cursor-pointer shadow-md"
+              title="Télécharger toutes les cartes PNG sur votre appareil"
             >
-              <Download size={13} /> Télécharger les 3 PNG
+              {downloadingKind === 'all' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              Télécharger les 3 PNG
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSaveToMediatheque()}
+              disabled={downloadingKind !== null}
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors cursor-pointer border border-zinc-700"
+              title="Ajouter les 3 cartes générées à la Médiathèque"
+            >
+              {downloadingKind === 'mediatheque' ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />}
+              + Médiathèque
             </button>
             <button
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-colors cursor-pointer border border-zinc-700"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Enregistrer
             </button>
@@ -579,19 +697,31 @@ export function CarouselStudioTab() {
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <ImageIcon size={13} /> Aperçu (1080 × 1080)
           </div>
-          <div className="flex gap-1.5">
-            {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => setActiveCard(kind)}
-                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer ${
-                  activeCard === kind ? 'bg-[#B8471F] text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                }`}
-              >
-                {CARD_LABELS[kind]}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex gap-1.5">
+              {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => setActiveCard(kind)}
+                  className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer ${
+                    activeCard === kind ? 'bg-[#B8471F] text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {CARD_LABELS[kind]}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => handleDownloadSingle(activeCard)}
+              disabled={downloadingKind !== null}
+              className="flex items-center gap-1.5 bg-[#E8490F]/20 hover:bg-[#E8490F]/30 text-[#E8490F] border border-[#E8490F]/40 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-md transition-all cursor-pointer"
+              title="Télécharger cette carte seule au format PNG haute résolution"
+            >
+              {downloadingKind === activeCard ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+              Télécharger cette carte (PNG)
+            </button>
           </div>
         </div>
 
@@ -630,23 +760,75 @@ export function CarouselStudioTab() {
           <FitToggle label="Closing photo fit" value={draft.closingImageFit} onChange={fit => patch({ closingImageFit: fit })} />
         </div>
 
-        {/* Read-only thumbnails of the other two cards. */}
-        <div className="flex flex-wrap gap-4 pt-2 border-t border-zinc-800">
-          {(['cover', 'body', 'closing'] as CarouselCardKind[])
-            .filter(kind => kind !== activeCard)
-            .map(kind => (
-              <button
+        {/* Serie des 3 cartes avec option de téléchargement carte par carte */}
+        <div className="pt-4 border-t border-zinc-800 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Download size={12} className="text-[#E8490F]" />
+              Enregistrement carte par carte (3 cartes)
+            </span>
+            <span className="text-[10px] text-zinc-500">
+              Cliquez pour éditer ou enregistrez chaque carte une par une sur votre appareil
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
+              <div
                 key={kind}
-                type="button"
-                onClick={() => setActiveCard(kind)}
-                className="text-left cursor-pointer group"
+                className={`bg-zinc-950/60 p-3 rounded-lg border transition-all flex flex-col justify-between ${
+                  activeCard === kind ? 'border-[#E8490F] ring-1 ring-[#E8490F]/30' : 'border-zinc-800 hover:border-zinc-700'
+                }`}
               >
-                <CarouselPreview kind={kind} draft={draft} width={168} className="rounded-md ring-1 ring-white/10 group-hover:ring-[#B8471F]" />
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mt-2 text-center group-hover:text-white">
-                  {CARD_LABELS[kind]}
-                </p>
-              </button>
+                <div
+                  onClick={() => setActiveCard(kind)}
+                  className="cursor-pointer group flex flex-col items-center"
+                >
+                  <CarouselPreview
+                    kind={kind}
+                    draft={draft}
+                    width={180}
+                    className="rounded-md ring-1 ring-white/10 group-hover:ring-[#B8471F] transition-all"
+                  />
+                  <div className="flex items-center justify-between w-full mt-2 px-1">
+                    <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider group-hover:text-white">
+                      {CARD_LABELS[kind]}
+                    </span>
+                    {activeCard === kind && (
+                      <span className="bg-[#E8490F]/20 text-[#E8490F] text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded">
+                        Actif
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex gap-1.5 mt-3 pt-2 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadSingle(kind)}
+                    disabled={downloadingKind !== null}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider py-1.5 px-2 rounded transition-colors cursor-pointer"
+                    title={`Télécharger ${CARD_LABELS[kind]} (PNG)`}
+                  >
+                    {downloadingKind === kind ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <Download size={11} />
+                    )}
+                    Télécharger PNG
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveToMediatheque(kind)}
+                    disabled={downloadingKind !== null}
+                    className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded text-[10px] transition-colors cursor-pointer"
+                    title="Ajouter cette carte à la Médiathèque"
+                  >
+                    <ImageIcon size={13} />
+                  </button>
+                </div>
+              </div>
             ))}
+          </div>
         </div>
       </div>
 
