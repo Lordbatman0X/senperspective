@@ -12,8 +12,16 @@ import type { Article } from '../../types';
 import { sanitizeTextSizes } from './layout';
 import { stripHtmlTags } from '../utils';
 
-/** The Perspective accent, as used by the approved design. */
-export const DEFAULT_ACCENT = '#B8471F';
+/**
+ * The Perspective accent, as used by the approved design.
+ *
+ * `#E8490F` is the ember of the reference cards' rule, cover wordmark and
+ * active pagination dot. The `#B8471F` that used to live here was a duller
+ * brick — never editor-chosen (there is no colour picker), just a hard-coded
+ * value that made every card read colder than the design; `normalizeDraft`
+ * migrates it so already-saved drafts pick up the right colour too.
+ */
+export const DEFAULT_ACCENT = '#E8490F';
 
 /** Fallback copy so a carousel is never published half-empty. */
 const PLACEHOLDER = {
@@ -378,6 +386,17 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
   const fitOf = (v: unknown): CarouselDraft['coverImageFit'] =>
     v === 'contain' || v === 'cover' ? v : undefined;
 
+  /**
+   * Accent: blank falls back to the default; the previous generation's brick
+   * `#B8471F` migrates to the reference ember. It was never editor-chosen, so
+   * a stored copy must not keep every already-saved card looking cold — while
+   * any genuinely custom colour a hand-edited doc carries is left alone.
+   */
+  const accentRaw = typeof input.accentColor === 'string' ? input.accentColor.trim() : '';
+  const accentColor = /^#b8471f$/i.test(accentRaw)
+    ? DEFAULT_ACCENT
+    : accentRaw || base.accentColor;
+
   return {
     ...base,
     ...input,
@@ -397,7 +416,7 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
     socials,
     date: input.date?.trim() || base.date,
     readingTime: input.readingTime?.trim() || base.readingTime,
-    accentColor: input.accentColor?.trim() || base.accentColor,
+    accentColor,
     // Assigned after the spread: the sanitized forms must win over whatever
     // raw values arrived in `input`.
     textSizes,

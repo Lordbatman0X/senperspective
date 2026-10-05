@@ -19,25 +19,23 @@ import { CarouselCardKind, CarouselDraft, CarouselLogoPlacement, CAROUSEL_SIZE }
 /** Font stacks. Shared so the overlay's CSS matches the canvas exactly. */
 export const SERIF = '"Playfair Display", Georgia, serif';
 export const SANS = 'Inter, system-ui, sans-serif';
-export const BG = '#0b0b0b';
-export const MUTED = '#cfcfcf';
 
 /**
- * True reference colours, sampled from the approved cards.
+ * The reference palette, sampled from the approved cards.
  *
- * `ink` is the near-black card field (warm, not pure black), `rust` the
- * burnt-orange wash of the closing card, `ember` the bright accent of the
- * rule, the logo and the active pagination dot.
+ * `BG` is the card field — a WARM near-black brown, not neutral black; the
+ * `#0b0b0b` that used to live here was the single biggest reason built cards
+ * read colder than the reference. `ember` is the bright orange of the accent
+ * rule, the cover wordmark and the active dot; `rust` the brick-red wash of
+ * the closing card; `bone`/`dim` the two text tiers (headline tier vs
+ * secondary paragraphs); `muted` the lede/footer grey.
  */
-export const REF = {
-  ink: '#100d0c',
-  inkWarm: '#17120f',
-  rust: '#a23c14',
-  rustDeep: '#7c2a0e',
-  ember: '#e8490f',
-  bone: '#f5ede4',
-  stone: '#d8cfc4',
-};
+export const BG = '#17120f';
+export const EMBER = '#e8490f';
+export const RUST = '#a23c14';
+export const BONE = '#f5ede4';
+export const DIM = '#b5a99d';
+export const MUTED = '#c6bcb0';
 
 /**
  * Fixed geometry, in card pixels. Mirrors the approved design 1:1.
@@ -58,9 +56,12 @@ export const G = {
    * Distance from the card's bottom edge up to the BOTTOM of the brief.
    *
    * The brief is bottom-anchored rather than stacked under the headline so it
-   * keeps the reference's position whatever the headline length.
+   * keeps the reference's position whatever the headline length. Re-measured
+   * from the reference card: its two-line brief ends ~168px above the bottom
+   * edge — the 96 that used to live here sat the brief a full 70px too low,
+   * almost on top of the footer rule.
    */
-  coverBottomPad: 96,
+  coverBottomPad: 168,
   coverTitleSize: 52,
   coverTitleLead: 58,
   ledeSize: 27,
@@ -90,6 +91,13 @@ export const G = {
   followGap: 52,
   iconSize: 88,
   footerSize: 21,
+  /** Footer hairline y and text-centre y, shared with the renderer. */
+  footerRuleY: CAROUSEL_SIZE - 86,
+  footerTextY: CAROUSEL_SIZE - 46,
+  /** Category pill geometry (cards 1 & 2), matching the reference's tag. */
+  pillY: 56,
+  pillH: 40,
+  pillSize: 18,
   logoSize: 84,
   endLogoSize: 128,
 };
@@ -301,24 +309,26 @@ export function fieldWidthScale(draft: CarouselDraft, id: string): number {
   return Math.min(1, Math.max(0.5, Math.round(n * 100) / 100));
 }
 
-/** Closing-card orange intensity 0-100 (default 65). */
-export function closingTintValue(draft: CarouselDraft): number {
-  const v = (draft as { closingTint?: unknown }).closingTint;
-  const n = typeof v === 'number' ? v : Number(v);
-  if (!Number.isFinite(n)) return 65;
-  return Math.min(100, Math.max(0, Math.round(n)));
-}
-
-/** Logo snap guides: anchors, centre lines, spacing readout (card px). */
-export function logoSnapGuides(at: Required<CarouselLogoPlacement>): { x: number; y: number; label: string }[] {
-  const guides: { x: number; y: number; label: string }[] = [];
-  const anchors = [G.margin, CAROUSEL_SIZE / 2, CAROUSEL_SIZE - G.margin];
-  for (const ax of anchors) {
-    if (Math.abs(at.cx - ax) <= 12) guides.push({ x: ax, y: at.top, label: `x ${Math.round(ax)}` });
+/**
+ * The logo's snap guides, as axis + position pairs (card px).
+ *
+ * Vertical anchors are the columns the reference aligns to: the 78/1002
+ * gutters and the card centre. Horizontal anchors are the rows: 46 (the
+ * approved default top), `pillY` (the category pill's top line — aligning an
+ * uploaded logo's row with this is exactly how you line the two up) and 928
+ * (the closing card's bottom wordmark). The preview draws whichever are
+ * within 14px while the logo is being handled. Guides never move the logo;
+ * they only make the alignment visible.
+ */
+export function logoSnapGuides(at: Required<CarouselLogoPlacement>): { axis: 'x' | 'y'; pos: number; label: string }[] {
+  const guides: { axis: 'x' | 'y'; pos: number; label: string }[] = [];
+  const columns = [G.margin, CAROUSEL_SIZE / 2, CAROUSEL_SIZE - G.margin];
+  for (const ax of columns) {
+    if (Math.abs(at.cx - ax) <= 14) guides.push({ axis: 'x', pos: ax, label: `x ${Math.round(ax)}` });
   }
-  const lines = [46, 928, CAROUSEL_SIZE / 2];
-  for (const ay of lines) {
-    if (Math.abs(at.top - ay) <= 12) guides.push({ x: at.cx, y: ay, label: `y ${Math.round(ay)}` });
+  const rows = [46, G.pillY, 928];
+  for (const ay of rows) {
+    if (Math.abs(at.top - ay) <= 14) guides.push({ axis: 'y', pos: ay, label: `y ${Math.round(ay)}` });
   }
   return guides;
 }
@@ -357,10 +367,12 @@ export function computeCardLayout(
       lineHeight: titleLead,
       font: `italic 700 ${titleSize}px ${SERIF}`,
       align: 'left',
-      color: '#ffffff',
+      color: BONE,
       fontSize: titleSize,
-      // Title band ends where the bottom-anchored lede zone begins.
-      maxHeight: Math.max(80, CAROUSEL_SIZE - G.coverBottomPad - 200 - (G.coverBodyTop + 47)),
+      // Two full lines at the approved lead, plus slack. The reference
+      // headline is set LARGE; the old 80px ceiling silently auto-shrank
+      // every two-line title to ~36px, which is nothing like the design.
+      maxHeight: Math.max(80, G.coverTitleLead * 2 + 20),
     });
     fields.push(title);
 
@@ -399,7 +411,10 @@ export function computeCardLayout(
       align: 'left',
       color: MUTED,
       fontSize: ledeSize,
-      maxHeight: Math.max(60, CAROUSEL_SIZE - G.coverBottomPad - ledeTop),
+      // The real floor is the footer hairline: a long headline may push the
+      // brief below its anchor, and it must then sit on top of the rule
+      // rather than being shrunk against the (higher) anchor.
+      maxHeight: Math.max(60, G.footerRuleY - ledeTop),
     }));
     return { fields, logo, socialRowY: 0 };
   }
@@ -416,7 +431,7 @@ export function computeCardLayout(
       lineHeight: headingLead,
       font: `italic 700 ${headingSize}px ${SERIF}`,
       align: 'left',
-      color: '#ffffff',
+      color: BONE,
       fontSize: headingSize,
       maxHeight: 220,
     });
@@ -441,7 +456,9 @@ export function computeCardLayout(
         lineHeight: pLead,
         font: `${pSize}px ${SANS}`,
         align: 'left',
-        color: '#d6d6d6',
+        // The reference's two text tiers: the key point in cream, the
+        // secondary paragraphs a dimmer warm grey — never one flat grey.
+        color: i === 0 ? BONE : DIM,
         fontSize: pSize,
         maxHeight: Math.max(60, CAROUSEL_SIZE - 130 - y),
       });

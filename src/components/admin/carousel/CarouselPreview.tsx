@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CarouselCardKind, CarouselDraft, CarouselLogoPlacement } from '../../../lib/carousel/types';
 import { CAROUSEL_SIZE } from '../../../lib/carousel/types';
 import { renderCard } from '../../../lib/carousel/render';
-import { computeCardLayout, type EditableField } from '../../../lib/carousel/layout';
+import { computeCardLayout, G, logoSnapGuides, type EditableField } from '../../../lib/carousel/layout';
 import { collectDraftImages, loadCardImages } from '../../../lib/carousel/images';
 import { AlertTriangle } from 'lucide-react';
 
@@ -36,8 +36,10 @@ function applyFieldValue(draft: CarouselDraft, id: string, value: string): Parti
   return { [id]: value } as Partial<CarouselDraft>;
 }
 
-const MIN_LOGO_SIZE = 24;
-const MAX_LOGO_SIZE = 150;
+// Bounds match `normalizeDraft`'s clamp (32–220), so the slider can never
+// offer a size the stored draft would silently reject on the next load.
+const MIN_LOGO_SIZE = 32;
+const MAX_LOGO_SIZE = 220;
 
 /**
  * One card, drawn on a canvas with a direct-manipulation overlay on top.
@@ -136,11 +138,21 @@ export function CarouselPreview({
 
   const SNAP = 14;
   const commitLogo = useCallback((next: Required<CarouselLogoPlacement>) => {
-    // Assisted movement: snap to the card centre, the 78px gutters and the top margin.
+    // Assisted horizontal movement: snap to the card centre and the 78/1002 gutters.
     if (Math.abs(next.cx - 540) < SNAP) next = { ...next, cx: 540 };
     else if (Math.abs(next.cx - 78) < SNAP) next = { ...next, cx: 78 };
     else if (Math.abs(next.cx - 1002) < SNAP) next = { ...next, cx: 1002 };
-    if (next.top < 46 + SNAP) next = { ...next, top: 46 };
+    // Vertical movement is FREE — the logo can be raised all the way to the
+    // card's top edge, which is what aligning an uploaded logo with the
+    // category pill requires. Only three alignment rows attract it, and only
+    // within 6px: the pill's top line (checked first, so the two rows never
+    // fight), the approved default top, and the closing card's wordmark row.
+    // The previous rule — "anything above y60 snaps back to 46" — made
+    // raising the logo past the default impossible however carefully it was
+    // dragged, which is exactly the complaint this replaces.
+    const rows = [G.pillY, 46, 928];
+    const near = rows.find(row => Math.abs(next.top - row) < 6);
+    if (near !== undefined) next = { ...next, top: near };
     onChange?.({ logos: { ...(draft.logos || {}), [kind]: next } });
   }, [draft.logos, kind, onChange]);
 
@@ -234,6 +246,24 @@ export function CarouselPreview({
               height: logoAt.size * 1.2,
             }}
           />
+
+          {/* Snap guides: the alignment rows/columns the logo is currently
+              within — including the category pill's top line, which is how an
+              uploaded logo gets level with the tag. Purely visual: they show
+              the alignment, they never move the logo. */}
+          {showLogoHandle && logoSnapGuides(logoAt).map(g => (
+            <div
+              key={`${g.axis}-${g.pos}`}
+              className="absolute pointer-events-none"
+              style={g.axis === 'y'
+                ? { left: 0, width: CAROUSEL_SIZE, top: g.pos - 1, borderTop: '1px dashed #E8490F' }
+                : { top: 0, height: CAROUSEL_SIZE, left: g.pos - 1, borderLeft: '1px dashed #E8490F' }}
+            >
+              <span className="absolute -top-4 left-1 text-[10px] font-bold uppercase tracking-wider text-[#E8490F] bg-black/70 px-1 rounded whitespace-nowrap">
+                {g.label}
+              </span>
+            </div>
+          ))}
 
           {/* The size slider, as in the artifact. */}
           {showLogoHandle && (
@@ -335,11 +365,11 @@ function EditableText({
         // what will be exported, and the caret still shows where you are typing.
         color: 'transparent',
         textAlign: field.align,
-        background: active ? 'rgba(232,93,66,0.14)' : 'transparent',
-        outline: active ? '2px solid #B8471F' : 'none',
+        background: active ? 'rgba(232,73,15,0.14)' : 'transparent',
+        outline: active ? '2px solid #E8490F' : 'none',
         borderRadius: 2,
         whiteSpace: 'pre-wrap',
-        caretColor: '#B8471F',
+        caretColor: '#E8490F',
       }}
     >
       {/* The text lives in the DOM while editing so the caret has something to

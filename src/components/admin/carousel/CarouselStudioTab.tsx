@@ -12,7 +12,7 @@ import { CarouselPreview } from './CarouselPreview';
 import { ArticlePicker } from '../ArticlePicker';
 import {
   AlertTriangle, Check, Download, Image as ImageIcon,
-  Loader2, RotateCcw, Save, Share2, Upload, X,
+  Loader2, Plus, RotateCcw, Save, Share2, Trash2, Type, Upload, X,
 } from 'lucide-react';
 
 /** Widest the big editing card may get, so it never overflows a laptop panel. */
@@ -372,6 +372,48 @@ export function CarouselStudioTab() {
   const uploadedCardCount = (['cover', 'body', 'closing'] as CarouselCardKind[])
     .filter(kind => !!draft.logoUrls?.[kind]).length;
 
+  /**
+   * The text blocks (and their size sliders) belonging to the selected card,
+   * so the Textes panel always edits what the big preview is showing.
+   */
+  const activeTextFields: { id: string; label: string }[] =
+    activeCard === 'cover'
+      ? [
+          { id: 'title', label: 'Titre' },
+          { id: 'lede', label: 'Chapô' },
+        ]
+      : activeCard === 'body'
+        ? [
+            { id: 'bodyHeading', label: 'Titre de section' },
+            ...draft.paragraphs.map((_, i) => ({ id: `paragraph-${i}`, label: `Paragraphe ${i + 1}` })),
+          ]
+        : [
+            { id: 'quote', label: 'Citation' },
+            { id: 'quoteAttribution', label: 'Attribution' },
+            { id: 'tagline', label: 'Accroche' },
+            { id: 'socialHeading', label: 'Rangée sociale' },
+          ];
+
+  /** Rewrites one cell of the social row (the labels shown under the icons). */
+  const setSocial = (index: number, field: 'label' | 'url', value: string) => {
+    setDraft(prev => ({
+      ...prev,
+      socials: prev.socials.map((s, i) => (i === index ? { ...s, [field]: value } : s)),
+    }));
+  };
+
+  /** Removes one social row; the last one falls back to the house defaults. */
+  const removeSocial = (index: number) => {
+    setDraft(prev => {
+      const socials = prev.socials.filter((_, i) => i !== index);
+      return { ...prev, socials: socials.length ? socials : emptyDraft().socials };
+    });
+  };
+
+  const addSocial = () => {
+    setDraft(prev => ({ ...prev, socials: [...prev.socials, { label: '', url: '', icon: 'globe' }] }));
+  };
+
   /** Downloads all three cards, one PNG per card. */
   const handleDownloadAll = async () => {
     setStatus({ tone: 'ok', text: 'Génération des PNG…' });
@@ -449,9 +491,10 @@ export function CarouselStudioTab() {
       </div>
       {/* ---------- Previews ----------
           The ARTIFACT is direct-manipulation: you click the text on the card to
-          rewrite it, drag the logo, and use the slider for its size. So the
-          card itself is the editor; the form below is the fallback for the
-          things a canvas cannot host (date, read time, category, socials). */}
+          rewrite it, drag the logo, and use the slider for its size. The
+          Textes panel below mirrors every text block for comfortable typing,
+          and the forms around it hold the things a canvas cannot host (date,
+          read time, category, photos). */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
@@ -528,10 +571,155 @@ export function CarouselStudioTab() {
         </div>
       </div>
 
+      {/* ---------- Text copy ----------
+          The canvas still accepts click-to-edit, but every text block is ALSO
+          editable here: rewriting a whole quote against a caret on a scaled
+          canvas is painful, and the sidebar is where editors expect to find
+          the copy. Both surfaces write to the same draft, so they cannot
+          drift apart. */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
+            <Type size={13} /> Textes — {CARD_LABELS[activeCard]}
+          </div>
+          <p className="text-[10px] text-zinc-500">
+            Aussi modifiables sur l'aperçu : cliquez directement sur un texte.
+          </p>
+        </div>
+
+        {activeCard === 'cover' && (
+          <div className="grid md:grid-cols-2 gap-4">
+            <Field
+              label="Titre (carte 1)"
+              value={draft.title}
+              onChange={v => patch({ title: v })}
+              multiline
+              rows={2}
+              maxLength={140}
+            />
+            <Field
+              label="Chapô (carte 1)"
+              value={draft.lede}
+              onChange={v => patch({ lede: v })}
+              multiline
+              rows={3}
+              maxLength={280}
+            />
+          </div>
+        )}
+
+        {activeCard === 'body' && (
+          <Field
+            label="Titre de section (carte 2)"
+            value={draft.bodyHeading}
+            onChange={v => patch({ bodyHeading: v })}
+            maxLength={60}
+          />
+        )}
+
+        {activeCard === 'closing' && (
+          <div className="grid md:grid-cols-2 gap-4">
+            <Field
+              label="Citation (carte 3)"
+              value={draft.quote}
+              onChange={v => patch({ quote: v })}
+              multiline
+              rows={3}
+              maxLength={300}
+              hint="Les guillemets « » sont ajoutés à l'affichage."
+            />
+            <div className="space-y-4">
+              <Field
+                label="Attribution"
+                value={draft.quoteAttribution}
+                onChange={v => patch({ quoteAttribution: v })}
+                maxLength={60}
+              />
+              <label className="block text-[10px] text-zinc-400 uppercase tracking-wider">
+                Voile rouge (carte 3) — {Math.round((draft.closingTint ?? 0.85) * 100)}%
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round((draft.closingTint ?? 0.85) * 100)}
+                  onChange={e => patch({ closingTint: Number(e.target.value) / 100 })}
+                  className="w-full accent-[#B8471F]"
+                />
+              </label>
+            </div>
+            <Field
+              label="Accroche en gras"
+              value={draft.tagline}
+              onChange={v => patch({ tagline: v })}
+              multiline
+              rows={2}
+              maxLength={220}
+            />
+            <Field
+              label="Titre de la rangée sociale"
+              value={draft.socialHeading}
+              onChange={v => patch({ socialHeading: v })}
+              maxLength={40}
+            />
+          </div>
+        )}
+
+        {/* Per-block type sizes for the selected card — the sliders that used
+            to be defined but never rendered anywhere. */}
+        <div className="grid md:grid-cols-2 gap-x-5 gap-y-4 pt-4 border-t border-zinc-800">
+          {activeTextFields.map(f => (
+            <SizeSlider key={f.id} label={f.label} fieldId={f.id} draft={draft} onChange={patch} />
+          ))}
+        </div>
+
+        {activeCard === 'closing' && (
+          <div className="space-y-3 pt-4 border-t border-zinc-800">
+            <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+              Réseaux sociaux — libellés sous les icônes
+            </p>
+            {draft.socials.map((social, i) => (
+              <div key={i} className="flex items-end gap-2">
+                <div className="flex-1 min-w-0">
+                  <Field
+                    label={`Libellé ${i + 1}`}
+                    value={social.label}
+                    onChange={v => setSocial(i, 'label', v)}
+                    maxLength={40}
+                  />
+                </div>
+                <div className="flex-[1.4] min-w-0">
+                  <Field
+                    label="URL"
+                    value={social.url}
+                    onChange={v => setSocial(i, 'url', v)}
+                    maxLength={300}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeSocial(i)}
+                  disabled={draft.socials.length <= 1}
+                  aria-label={`Retirer le réseau ${i + 1}`}
+                  className="p-2.5 text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addSocial}
+              className="flex items-center gap-1 text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+            >
+              <Plus size={12} /> Ajouter un réseau
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* ---------- Controls ----------
-          Only what the card itself cannot host. All headline/paragraph/quote
-          copy is edited in place on the canvas, per the artifact; repeating it
-          here would give the editor two places to change one value. */}
+          Only what the card itself cannot host: the logo, the photos and the
+          footer facts (date, read time, category). */}
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
@@ -598,17 +786,6 @@ export function CarouselStudioTab() {
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <Share2 size={13} /> Pied de page & paragraphes
           </div>
-          <label className="block text-[10px] text-zinc-400 uppercase tracking-wider">
-              Intensité du voile orange — {Math.round((draft.closingTint ?? 0.85) * 100)}%
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={Math.round((draft.closingTint ?? 0.85) * 100)}
-                onChange={e => patch({ closingTint: Number(e.target.value) / 100 })}
-                className="w-full accent-[#B8471F]"
-              />
-            </label>
             <Field label="Catégorie" value={draft.category} onChange={v => patch({ category: v })} maxLength={24} />
           <div className="space-y-3">
             <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">

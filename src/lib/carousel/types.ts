@@ -127,11 +127,13 @@ export interface CarouselDraft {
    */
   textWidths?: Record<string, number>;
   /**
-   * Closing-card orange intensity, 0–100 (default 65).
+   * Closing-card red wash intensity, 0–1 (default 0.85).
    *
-   * 0 keeps the card almost black-brown with a whisper of rust; 100 pushes
-   * the full burnt-orange wash from the reference. Stored so the editor's
-   * choice survives a reload and the PNG export matches the preview.
+   * The reference closing card is an almost full brick-red wash with the
+   * photo ghosting through underneath; the default lands exactly on that
+   * look. 0 leaves the photo untouched, 1 pushes the full opaque brand wash.
+   * Stored so the editor's choice survives a reload and the PNG export
+   * matches the preview.
    */
   closingTint?: number;
 
@@ -152,7 +154,7 @@ export interface CarouselDraft {
    * freshly built draft looking like the design without the editor touching it.
    */
   logos?: Partial<Record<CarouselCardKind, CarouselLogoPlacement>>;
-  /** Accent colour used for the rule, the active dot and the closing tint. */
+  /** Accent colour used for the rule, the cover wordmark and the active dot. */
   accentColor: string;
 }
 

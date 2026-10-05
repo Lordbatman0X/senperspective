@@ -1,5 +1,5 @@
 import { CarouselCardKind, CarouselDraft, CarouselLogoPlacement, CarouselSocialLink, CAROUSEL_SIZE } from './types';
-import { BG, G, MUTED, SANS, SERIF, computeCardLayout, wrapText, type EditableField } from './layout';
+import { BG, G, MUTED, RUST, SANS, SERIF, computeCardLayout, wrapText, type EditableField } from './layout';
 import { DEFAULT_ACCENT } from './draft';
 import { logoImageKey } from './images';
 
@@ -177,23 +177,31 @@ function drawLogo(
   ctx.restore();
 }
 
-/** The category pill, top-right. */
-function drawPill(ctx: CanvasRenderingContext2D, text: string, accent: string): void {
+/**
+ * The category pill, top-right.
+ *
+ * Matches the reference's tag: a dark translucent plate with a hairline
+ * border, 18px extra-bold caps at a slight letter-spacing, sitting on the
+ * same row the logo aligns to (G.pillY = 56).
+ */
+function drawPill(ctx: CanvasRenderingContext2D, text: string): void {
   ctx.save();
-  ctx.font = `800 14px ${SANS}`;
-  const w = ctx.measureText(text.toUpperCase()).width + 32;
-  const h = 34;
+  ctx.font = `800 ${G.pillSize}px ${SANS}`;
+  ctx.letterSpacing = '1.4px';
+  const label = text.toUpperCase();
+  const w = Math.ceil(ctx.measureText(label).width) + 34;
   const x = CAROUSEL_SIZE - G.margin - w;
-  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.roundRect(x, 60, w, h, 2);
+  ctx.roundRect(x, G.pillY, w, G.pillH, 3);
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text.toUpperCase(), x + 16, 60 + h / 2 + 1);
+  ctx.fillText(label, x + 17, G.pillY + G.pillH / 2 + 1);
+  ctx.letterSpacing = '0px';
   ctx.restore();
 }
 
@@ -205,31 +213,86 @@ function drawRule(ctx: CanvasRenderingContext2D, y: number, accent: string): voi
   ctx.restore();
 }
 
-/** The date · reading-time footer plus the three pagination dots. */
-function drawFooter(ctx: CanvasRenderingContext2D, draft: CarouselDraft, accent: string, activeDot: number): void {
-  const y = CAROUSEL_SIZE - 46;
+/** A 16px line-art calendar centred on (cx, cy), footer style. */
+function drawCalendarIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
   ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.strokeStyle = MUTED;
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.roundRect(cx - 7.5, cy - 6.5, 15, 14, 2.5);
+  ctx.stroke();
+  // Binding nubs + the header rule, as in the reference's footer glyph.
+  ctx.beginPath();
+  ctx.moveTo(cx - 4, cy - 9.5);
+  ctx.lineTo(cx - 4, cy - 5);
+  ctx.moveTo(cx + 4, cy - 9.5);
+  ctx.lineTo(cx + 4, cy - 5);
+  ctx.moveTo(cx - 7.5, cy - 2.5);
+  ctx.lineTo(cx + 7.5, cy - 2.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** A 16px line-art clock centred on (cx, cy), footer style. */
+function drawClockIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number): void {
+  ctx.save();
+  ctx.strokeStyle = MUTED;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 7.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 4);
+  ctx.lineTo(cx, cy);
+  ctx.lineTo(cx + 3.5, cy + 1.8);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The date · reading-time footer plus the three pagination dots.
+ *
+ * The reference pairs each value with a small line icon (calendar, clock) in
+ * warm grey, over a hairline, with the active dot in the accent — mirrored
+ * here so the footer reads like the approved cards instead of a flat grey
+ * string with a middle dot.
+ */
+function drawFooter(ctx: CanvasRenderingContext2D, draft: CarouselDraft, accent: string, activeDot: number): void {
+  const y = G.footerTextY;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(G.margin, y - 40);
-  ctx.lineTo(CAROUSEL_SIZE - G.margin, y - 40);
+  ctx.moveTo(G.margin, G.footerRuleY);
+  ctx.lineTo(CAROUSEL_SIZE - G.margin, G.footerRuleY);
   ctx.stroke();
 
-  ctx.fillStyle = '#e9e9e9';
-  ctx.font = `500 ${G.footerSize}px ${SANS}`;
+  ctx.fillStyle = MUTED;
   ctx.textBaseline = 'middle';
-  ctx.fillText(`${draft.date}   ·   ${draft.readingTime}`, G.margin, y);
 
-  // Dots, right-aligned; `activeDot` marks which card is being drawn.
-  const dotR = 4;
-  const gap = 10;
+  let x = G.margin;
+  drawCalendarIcon(ctx, x + 8, y);
+  x += 26;
+  ctx.font = `500 ${G.footerSize}px ${SANS}`;
+  ctx.fillText(draft.date, x, y);
+  x += ctx.measureText(draft.date).width + 16;
+  ctx.fillText('·', x, y);
+  x += ctx.measureText('·').width + 16;
+  drawClockIcon(ctx, x + 8, y);
+  x += 26;
+  ctx.fillText(draft.readingTime, x, y);
+
+  // Dots, right-aligned flush with the margin; `activeDot` marks this card.
+  const dotR = 5;
+  const gap = 12;
   const rightX = CAROUSEL_SIZE - G.margin;
   for (let i = 0; i < 3; i++) {
-    const cx = rightX - (2 - i) * (dotR * 2 + gap);
+    const cx = rightX - dotR - (2 - i) * (dotR * 2 + gap);
     ctx.beginPath();
     ctx.arc(cx, y, dotR, 0, Math.PI * 2);
-    ctx.fillStyle = i === activeDot ? accent : '#4a4a4a';
+    ctx.fillStyle = i === activeDot ? accent : 'rgba(255,255,255,0.25)';
     ctx.fill();
   }
   ctx.restore();
@@ -250,7 +313,7 @@ function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: 
 
   // Fill the photo box first so a `'contain'` fit letterboxes onto the card's
   // own dark field instead of the flat background showing through.
-  ctx.fillStyle = '#1c1c1c';
+  ctx.fillStyle = '#14100e';
   ctx.fillRect(0, 0, CAROUSEL_SIZE, G.photoHeight);
   if (photo) {
     drawImageFitted(ctx, photo, 0, 0, CAROUSEL_SIZE, G.photoHeight, draft.coverImageFit ?? 'cover');
@@ -261,20 +324,20 @@ function drawCover(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: 
   // gradient is anchored to the photo's real bottom edge, so it stays correct
   // if the photo height ever changes again.
   const scrim = ctx.createLinearGradient(0, G.photoHeight - 330, 0, G.photoHeight + 18);
-  scrim.addColorStop(0, 'rgba(11,11,11,0)');
-  scrim.addColorStop(0.62, 'rgba(11,11,11,0.72)');
+  scrim.addColorStop(0, 'rgba(23,18,15,0)');
+  scrim.addColorStop(0.62, 'rgba(20,15,12,0.74)');
   scrim.addColorStop(1, BG);
   ctx.fillStyle = scrim;
   ctx.fillRect(0, G.photoHeight - 330, CAROUSEL_SIZE, CAROUSEL_SIZE - G.photoHeight + 330);
 
   const topScrim = ctx.createLinearGradient(0, 0, 0, 260);
-  topScrim.addColorStop(0, 'rgba(11,11,11,0.75)');
-  topScrim.addColorStop(1, 'rgba(11,11,11,0)');
+  topScrim.addColorStop(0, 'rgba(20,15,12,0.75)');
+  topScrim.addColorStop(1, 'rgba(20,15,12,0)');
   ctx.fillStyle = topScrim;
   ctx.fillRect(0, 0, CAROUSEL_SIZE, 260);
 
   drawLogo(ctx, layout.logo, accent, images[logoImageKey('cover')]);
-  drawPill(ctx, draft.category, accent);
+  drawPill(ctx, draft.category);
 
   drawRule(ctx, G.coverBodyTop, accent);
 
@@ -296,7 +359,7 @@ function drawBody(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: R
   const layout = computeCardLayout('body', draft);
 
   drawLogo(ctx, layout.logo, '#fff', images[logoImageKey('body')]);
-  drawPill(ctx, draft.category, accent);
+  drawPill(ctx, draft.category);
 
   drawRule(ctx, G.ruleY, accent);
 
@@ -313,29 +376,46 @@ function drawBody(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: R
  * bottom, matching the approved design.
  */
 function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images: Record<string, CanvasImageSource>): void {
-  const accent = draft.accentColor || DEFAULT_ACCENT;
   const layout = computeCardLayout('closing', draft);
   const photo = images.closingImage;
 
-  ctx.fillStyle = '#2a2320';
+  ctx.fillStyle = '#1a1310';
   ctx.fillRect(0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE);
   if (photo) {
     drawImageFitted(ctx, photo, 0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE, draft.closingImageFit ?? 'cover');
   }
 
-  // Tint strength is editor-controlled (0 = photo untouched, 1 = full brand wash),
-  // defaulting to the reference's strong terracotta. Scaled from the three
-  // reference stops so lighter settings still keep the edge-dense shape.
-  const strength = typeof draft.closingTint === 'number' && Number.isFinite(draft.closingTint)
-    ? Math.min(1, Math.max(0, draft.closingTint))
+  // The reference closing card is NOT a faint orange veil over the photo —
+  // it is an almost full brick-red WASH with the picture only ghosting
+  // through underneath, plus a darker band at the very top so the quote sits
+  // on a readable field. Two layers reproduce that shape:
+  //
+  //  1. a RUST veil ramping from ~55% at the top (photo visible behind the
+  //     quote) to ~95% across the body — the saturated lower two-thirds;
+  //  2. a warm near-black scrim over the top ~32%, fading out, for the quote.
+  //
+  // `closingTint` (0..1, default 0.85) scales both layers, and the ×1.18
+  // factor makes that default land exactly on the reference's full-strength
+  // look; 0 restores the untouched photo, 1 is a flat opaque wash.
+  const stored = draft.closingTint;
+  const strength = typeof stored === 'number' && Number.isFinite(stored)
+    ? Math.min(1, Math.max(0, stored))
     : 0.85;
+  const k = Math.min(1, strength * 1.18);
   ctx.save();
-  const tint = ctx.createLinearGradient(0, 0, 0, CAROUSEL_SIZE);
-  tint.addColorStop(0, withAlpha(accent, 0.62 * strength + 0.08));
-  tint.addColorStop(0.4, withAlpha(accent, 0.36 * strength + 0.05));
-  tint.addColorStop(1, withAlpha(accent, 0.72 * strength + 0.08));
-  ctx.fillStyle = tint;
+  const veil = ctx.createLinearGradient(0, 0, 0, CAROUSEL_SIZE);
+  veil.addColorStop(0, withAlpha(RUST, 0.55 * k));
+  veil.addColorStop(0.3, withAlpha(RUST, 0.9 * k));
+  veil.addColorStop(0.65, withAlpha(RUST, 0.93 * k));
+  veil.addColorStop(1, withAlpha(RUST, 0.95 * k));
+  ctx.fillStyle = veil;
   ctx.fillRect(0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE);
+
+  const shade = ctx.createLinearGradient(0, 0, 0, CAROUSEL_SIZE * 0.32);
+  shade.addColorStop(0, `rgba(18,10,6,${0.55 * k})`);
+  shade.addColorStop(1, 'rgba(18,10,6,0)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, CAROUSEL_SIZE, CAROUSEL_SIZE * 0.32);
   ctx.restore();
 
   ctx.textAlign = 'left';

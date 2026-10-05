@@ -19,6 +19,7 @@
 import assert from 'node:assert/strict';
 import {
   buildDraftFromArticle,
+  DEFAULT_ACCENT,
   emptyDraft,
   extractParagraphs,
   firstSentence,
@@ -193,10 +194,13 @@ console.log('\n- cover brief is bottom-anchored -');
 // off the headline instead, so a short headline left the brief stranded high up
 // with dead space beneath it.
 assert.ok(G.coverBottomPad > 0 && G.coverBottomPad < CAROUSEL_SIZE / 3, 'the brief sits near the bottom');
-// ...and it must not be pulled up into the headline by that anchoring.
+// ...and it must not be pulled up into the headline by that anchoring. When
+// the headline IS two lines, the brief slides down below its anchor (the
+// reference does the same) — so the property that matters is that the pair
+// still clears the footer hairline instead of overlapping or sinking under it.
 assert.ok(
-  G.coverBodyTop + 47 + G.coverTitleLead * 2 < CAROUSEL_SIZE - G.coverBottomPad - G.ledeLead * 2,
-  'a two-line headline still leaves room for the brief in the bottom band',
+  G.coverBodyTop + 47 + G.coverTitleLead * 2 + 26 + G.ledeLead * 2 <= G.footerRuleY,
+  'a two-line headline and a two-line brief still fit above the footer hairline',
 );
 ok('the brief keeps its bottom position without colliding with the headline');
 
@@ -262,5 +266,17 @@ assert.equal(full.title, 'Titre');
 assert.equal(full.paragraphs.length, 1, 'a valid stored draft is not overwritten by defaults');
 assert.equal(full.socials.length, 1);
 ok('a valid stored draft is preserved as-is');
+
+console.log('\n- accent migration -');
+// The ember is the reference's rule/wordmark/dot colour. The old brick value
+// was hard-coded (there is no colour picker), so a draft saved with it must
+// migrate on load instead of keeping every card cold — while a genuinely
+// custom colour from a hand-edited doc must survive untouched.
+assert.equal(DEFAULT_ACCENT, '#E8490F', 'the default accent is the reference ember');
+assert.equal(normalizeDraft({ accentColor: '#B8471F' }).accentColor, DEFAULT_ACCENT);
+assert.equal(normalizeDraft({ accentColor: '#b8471f' }).accentColor, DEFAULT_ACCENT, 'case-insensitive');
+assert.equal(normalizeDraft({ accentColor: '#123456' }).accentColor, '#123456', 'custom accents are preserved');
+assert.equal(normalizeDraft({}).accentColor, DEFAULT_ACCENT, 'a missing accent falls back to the default');
+ok('legacy brick accent migrates to the ember, custom colours survive');
 
 console.log(`\n${pass} passed\n`);
