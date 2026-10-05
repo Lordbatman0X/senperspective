@@ -325,7 +325,16 @@ export function normalizeDraft(input: Partial<CarouselDraft> | null | undefined)
           // non-string or a whitespace-only URL.
           const { iconImage, ...rest } = s;
           const iconUrl = typeof iconImage === 'string' ? iconImage.trim() : '';
-          return iconUrl ? { ...rest, iconImage: iconUrl } : rest;
+          if (!iconUrl) return rest;
+          // The row's size override, clamped like every other stored number: a
+          // stray 0 would erase the icon and a huge one would blow it past its
+          // neighbours. A missing or unusable value means the full badge box.
+          const raw = (s as { iconScale?: unknown }).iconScale;
+          const n = typeof raw === 'number' ? raw : Number(raw);
+          const iconScale = Number.isFinite(n)
+            ? Math.min(1.4, Math.max(0.4, Math.round(n * 100) / 100))
+            : 1;
+          return { ...rest, iconImage: iconUrl, iconScale };
         })
     : [];
   const socials = filteredSocials.length ? filteredSocials : base.socials;

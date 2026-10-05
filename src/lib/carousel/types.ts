@@ -43,6 +43,15 @@ export interface CarouselSocialLink {
    * background-less. Absent/blank means "draw the reference glyph".
    */
   iconImage?: string;
+  /**
+   * Size of the uploaded artwork relative to the badge box, 0.4–1.4.
+   *
+   * Contain-fitting every upload into the same box makes a wide wordmark and a
+   * square glyph come out visibly different sizes, so a row of logos cannot read
+   * as one set. The editor scales each row to match its neighbours; absent (or
+   * clamped away by `normalizeDraft`) means the full badge box.
+   */
+  iconScale?: number;
 }
 
 /**

@@ -29,7 +29,7 @@ import {
 } from '../src/lib/carousel/draft';
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
 import { collectDraftImages, logoImageKey, socialIconKey } from '../src/lib/carousel/images';
-import { G } from '../src/lib/carousel/layout';
+import { G, closingSocialRowY, socialLabelBudget, socialStep } from '../src/lib/carousel/layout';
 import { logoImageRect } from '../src/lib/carousel/render';
 
 let pass = 0;
@@ -212,6 +212,46 @@ assert.equal(iconSanitized.socials[0].iconImage, 'https://x.test/ig.png', 'icon 
 assert.equal(iconSanitized.socials[1].iconImage, undefined, 'non-string icon values are dropped');
 assert.equal(iconSanitized.socials[2].iconImage, undefined, 'blank icon URLs are dropped');
 ok('social icon images are sanitised on load');
+
+// Contain-fitting gives uploads of different aspects visibly different sizes,
+// so each row carries a size override the editor can match with. Anything
+// unusable is clamped: 0 would erase the icon and 9 would blow it past its
+// neighbours.
+const scaled = normalizeDraft({
+  socials: [
+    { label: 'a', url: 'https://a.test', icon: 'globe', iconImage: 'https://x.test/a.png', iconScale: 0.55 },
+    { label: 'b', url: 'https://b.test', icon: 'globe', iconImage: 'https://x.test/b.png', iconScale: 9 },
+    { label: 'c', url: 'https://c.test', icon: 'globe', iconImage: 'https://x.test/c.png', iconScale: 'nope' },
+    { label: 'd', url: 'https://d.test', icon: 'globe', iconImage: 'https://x.test/d.png', iconScale: 0 },
+  ],
+});
+assert.equal(scaled.socials[0].iconScale, 0.55, 'a valid size is kept');
+assert.equal(scaled.socials[1].iconScale, 1.4, 'an oversized value is clamped');
+assert.equal(scaled.socials[2].iconScale, 1, 'a non-numeric value falls back to the full badge');
+assert.equal(scaled.socials[3].iconScale, 0.4, 'a zero is floored rather than erasing the icon');
+ok('uploaded icon size overrides are clamped');
+
+// The closing card's CTA and social row are anchored to the card's bottom, so
+// the same block lands in the same place whatever the citation says.
+assert.equal(
+  closingSocialRowY(928),
+  CAROUSEL_SIZE - 180 - 132,
+  'the row clears the closing wordmark',
+);
+assert.equal(
+  closingSocialRowY(700),
+  700 - 24 - 132,
+  'a wordmark dragged up pushes the block up instead of colliding with it',
+);
+ok('the closing CTA and social row are bottom-anchored, not citation-dependent');
+
+// Usernames share the fan's step: a sparse row keeps the reference size, a
+// dense one is fitted so neighbouring labels always keep a gutter between them.
+assert.equal(socialLabelBudget(3), 188, 'a sparse row keeps the reference label size');
+assert.equal(socialLabelBudget(6), Math.round(socialStep(6) - 12), 'a dense row reserves a gutter');
+assert.ok(socialLabelBudget(6) < socialStep(6), 'labels never reach their neighbour');
+assert.ok(socialLabelBudget(3) > socialStep(6), 'a sparse row is unaffected by the dense-row rule');
+ok('usernames are spaced to keep a gutter between neighbours');
 
 console.log('\n- geometry -');
 // Card 2's paragraphs must start on the body card's own baseline. They used to

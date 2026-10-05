@@ -1,5 +1,9 @@
 import { CarouselCardKind, CarouselDraft, CarouselLogoPlacement, CarouselSocialLink, CAROUSEL_SIZE } from './types';
-import { BG, G, MUTED, RUST, SANS, SERIF, computeCardLayout, wrapText, type EditableField } from './layout';
+import {
+  BG, G, MUTED, RUST, SANS, SERIF, SOCIAL_BADGE, SOCIAL_LABEL_MAX, SOCIAL_LABEL_MIN,
+  SOCIAL_ROW_CELL, SOCIAL_ROW_PAD, computeCardLayout, socialLabelBudget, socialStep,
+  wrapText, type EditableField,
+} from './layout';
 import { DEFAULT_ACCENT } from './draft';
 import { logoImageKey, socialIconKey } from './images';
 
@@ -449,10 +453,15 @@ function drawClosing(ctx: CanvasRenderingContext2D, draft: CarouselDraft, images
  * (Instagram) for two of them.
  *
  * A row carrying `iconImage` draws the editor's uploaded artwork instead:
- * contain-fitted into the same 88px badge box, with NO plate behind it, so a
- * transparent PNG stays transparent and the fan keeps its rhythm. Rows without
- * artwork fall back to the drawn glyph, so removing an upload restores the
- * reference look rather than leaving a hole.
+ * contain-fitted into the badge box (scaled by the row's `iconScale` so a wide
+ * wordmark and a square glyph can be matched to one visual size), with NO plate
+ * behind it, so a transparent PNG stays transparent and the fan keeps its
+ * rhythm. Rows without artwork fall back to the drawn glyph, so removing an
+ * upload restores the reference look rather than leaving a hole.
+ *
+ * Usernames are fitted to the fan's own step: each one shrinks (never squashes)
+ * until a gutter remains between it and its neighbour, so a dense row of handles
+ * reads as separate accounts instead of one smudged word.
  */
 function drawSocialRow(
   ctx: CanvasRenderingContext2D,
@@ -461,11 +470,12 @@ function drawSocialRow(
   images: Record<string, CanvasImageSource>,
 ): void {
   if (!socials.length) return;
-  const pad = 78;
-  const cell = 168;
-  const step = socials.length > 1 ? (CAROUSEL_SIZE - pad * 2 - cell) / (socials.length - 1) : 0;
+  const pad = SOCIAL_ROW_PAD;
+  const cell = SOCIAL_ROW_CELL;
+  const step = socialStep(socials.length);
   // 88px icons mirror the reference's large outlined badges; labels sit below.
-  const r = 44;
+  const r = SOCIAL_BADGE / 2;
+  const labelBudget = socialLabelBudget(socials.length);
 
   ctx.save();
   ctx.textAlign = 'center';
@@ -476,14 +486,23 @@ function drawSocialRow(
 
     const custom = images[socialIconKey(i)];
     if (custom) {
-      drawImageFitted(ctx, custom, cx - r, cy - r, r * 2, r * 2, 'contain');
+      // Clamped again here on purpose: `normalizeDraft` guards stored drafts,
+      // but the renderer must never draw from an unchecked number.
+      const k = Math.min(1.4, Math.max(0.4, social.iconScale ?? 1));
+      const box = r * 2 * k;
+      drawImageFitted(ctx, custom, cx - box / 2, cy - box / 2, box, box, 'contain');
     } else {
       drawSocialGlyph(ctx, social.icon, cx, cy);
     }
 
     ctx.fillStyle = '#fff';
-    ctx.font = `700 19px ${SANS}`;
-    ctx.fillText(social.label, cx, cy + r + 26, cell + 20);
+    let size = SOCIAL_LABEL_MAX;
+    ctx.font = `700 ${size}px ${SANS}`;
+    while (size > SOCIAL_LABEL_MIN && ctx.measureText(social.label).width > labelBudget) {
+      size -= 1;
+      ctx.font = `700 ${size}px ${SANS}`;
+    }
+    ctx.fillText(social.label, cx, cy + r + 26);
   });
   ctx.restore();
 }

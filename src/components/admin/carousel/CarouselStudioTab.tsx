@@ -464,6 +464,23 @@ export function CarouselStudioTab() {
     }));
   };
 
+  /**
+   * Sets one uploaded icon's size, relative to the badge box.
+   *
+   * Contain-fitting gives a wide wordmark and a square glyph very different
+   * visual sizes, so a row of logos cannot read as one set; this is what lets
+   * the editor match them. Clamped here as well as in `normalizeDraft`, so a
+   * dragged slider can never store a 0 (icon erased) or a 9 (icon blown past
+   * its neighbours).
+   */
+  const setSocialIconScale = (index: number, value: number) => {
+    const iconScale = Math.min(1.4, Math.max(0.4, Math.round(value * 100) / 100));
+    setDraft(prev => ({
+      ...prev,
+      socials: prev.socials.map((s, i) => (i === index ? { ...s, iconScale } : s)),
+    }));
+  };
+
   /** Removes one social row; the last one falls back to the house defaults. */
   const removeSocial = (index: number) => {
     setDraft(prev => {
@@ -743,7 +760,8 @@ export function CarouselStudioTab() {
               <p className="text-[11px] text-zinc-500">
                 Téléversez votre logo (PNG transparent conseillé) : il remplace
                 l'icône dessinée sur la carte de clôture. Sans logo, l'icône du
-                modèle s'affiche.
+                modèle s'affiche. Le curseur «&nbsp;Taille&nbsp;» sert à aligner
+                tous les logos sur une même taille.
               </p>
             </div>
             {draft.socials.map((social, i) => (
@@ -783,6 +801,19 @@ export function CarouselStudioTab() {
                   transparent
                   maxSize={512}
                 />
+                {social.iconImage && (
+                  <label className="block text-[10px] text-zinc-400 uppercase tracking-wider">
+                    Taille du logo {i + 1} — {Math.round((social.iconScale ?? 1) * 100)}%
+                    <input
+                      type="range"
+                      min={40}
+                      max={140}
+                      value={Math.round((social.iconScale ?? 1) * 100)}
+                      onChange={e => setSocialIconScale(i, Number(e.target.value) / 100)}
+                      className="w-full accent-[#B8471F]"
+                    />
+                  </label>
+                )}
               </div>
             ))}
             <button

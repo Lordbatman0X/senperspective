@@ -89,6 +89,16 @@ export const G = {
   taglineInset: 120,
   followSize: 28,
   followGap: 52,
+  /**
+   * Bottom-anchored closing block: distance from the card's bottom edge to the
+   * block's own bottom, and the block's height (88px badge row + its labels).
+   *
+   * Anchored rather than flowed so the CTA and the social row sit in the same
+   * place whether the citation is one line or five — the block used to travel
+   * with the quote and eventually collided with the closing wordmark.
+   */
+  endBottomPad: 180,
+  socialBlockH: 132,
   iconSize: 88,
   footerSize: 21,
   /** Footer hairline y and text-centre y, shared with the renderer. */
@@ -108,6 +118,53 @@ const DEFAULT_LOGO: Record<CarouselCardKind, Required<CarouselLogoPlacement>> = 
   body: { cx: G.margin + 130, top: 46, size: G.logoSize },
   closing: { cx: CAROUSEL_SIZE / 2, top: 928, size: G.endLogoSize },
 };
+
+/* ------------------------------------------------------------------ *
+ * Social row geometry (closing card)
+ *
+ * Shared by the layout (where the row sits) and the renderer (where each
+ * badge and username is drawn), so the two cannot drift.
+ * ------------------------------------------------------------------ */
+
+/** Fan geometry: first/last badge inset, and the cell they are centred in. */
+export const SOCIAL_ROW_PAD = 78;
+export const SOCIAL_ROW_CELL = 168;
+/** Badge diameter on the closing card. */
+export const SOCIAL_BADGE = 88;
+/** Username size, and the floor the auto-fit will not go below. */
+export const SOCIAL_LABEL_MAX = 19;
+export const SOCIAL_LABEL_MIN = 13;
+/** Breathing room kept between two neighbouring usernames. */
+export const SOCIAL_LABEL_GAP = 12;
+
+/** Horizontal step between two badges for a row of `count` links. */
+export function socialStep(count: number): number {
+  return count > 1 ? (CAROUSEL_SIZE - SOCIAL_ROW_PAD * 2 - SOCIAL_ROW_CELL) / (count - 1) : 0;
+}
+
+/**
+ * Widest a username may be drawn before it would touch its neighbour's.
+ *
+ * A sparse row keeps the reference size (the budget is the cell, which the
+ * labels already fit inside). A dense row inherits the fan's step minus a
+ * gutter, so six handles fit their usernames instead of running them together.
+ */
+export function socialLabelBudget(count: number): number {
+  const room = count > 1 ? socialStep(count) - SOCIAL_LABEL_GAP : SOCIAL_ROW_CELL + 20;
+  return Math.max(60, Math.round(Math.min(SOCIAL_ROW_CELL + 20, room)));
+}
+
+/**
+ * Top of the closing card's badge row: anchored to the card's bottom (clear of
+ * the centred wordmark), never to the citation.
+ *
+ * The logo's own top is honoured, so a wordmark the editor dragged up pushes
+ * the block up instead of letting the two overlap.
+ */
+export function closingSocialRowY(logoTop: number): number {
+  const blockBottom = Math.min(CAROUSEL_SIZE - G.endBottomPad, logoTop - 24);
+  return Math.round(blockBottom - G.socialBlockH);
+}
 
 /* ------------------------------------------------------------------ *
  * Per-block typography overrides
@@ -471,12 +528,64 @@ export function computeCardLayout(
     return { fields, logo, socialRowY: 0 };
   }
 
-  // Closing: quote, attribution, tagline and the social label all flow downward.
-  // Gaps mirror the reference's `.c-end` margins: quote top 88, by +30,
-  // tagline +56, follow +64, social row +46 below the follow line's own height.
+  // Closing: the citation flows from the top; the CTA (tagline), the social
+  // label and the badge row are ANCHORED to the card's bottom instead of
+  // flowing after it. Flowing them meant a one-line quote stranded the CTA
+  // mid-card while a long one shoved it into the closing wordmark, so the same
+  // design read differently at every citation length. Anchored, the block
+  // always lands in the same place and the citation simply auto-fits into the
+  // room above it.
+  //
+  // Typography follows the same rule as cards 1 and 2: only the citation itself
+  // is set in Playfair italic — the CTA and the social label are sans, like the
+  // brief and the paragraphs.
   const quoteWidth = CAROUSEL_SIZE - G.endPad * 2;
+
+  // Bottom-anchored block, solved bottom-up: badge row, then the follow line
+  // (the reference's `.row` margin of 46), then the tagline (64).
+  const socialRowY = closingSocialRowY(logo.top);
+
+  const followSize = fieldFontSize(draft, 'socialHeading');
+  const follow = field(ctx, {
+    id: 'socialHeading',
+    text: draft.socialHeading,
+    x: CAROUSEL_SIZE / 2,
+    y: 0,
+    width: gutter,
+    lineHeight: followSize,
+    font: `600 ${followSize}px ${SANS}`,
+    align: 'center',
+    color: '#ffffff',
+    fontSize: followSize,
+  });
+  // Wrapping depends on the width, never on y, so the height is final the
+  // moment the block is measured — position it from the anchor afterwards.
+  follow.y = socialRowY - 46 - follow.height;
+
+  const tagSize = fieldFontSize(draft, 'tagline');
+  const tagLead = Math.round(tagSize * G.taglineLead / G.taglineSize);
+  const tagline = field(ctx, {
+    id: 'tagline',
+    text: draft.tagline,
+    x: CAROUSEL_SIZE / 2,
+    y: 0,
+    width: Math.round((CAROUSEL_SIZE - G.taglineInset * 2) * fieldWidthScale(draft, 'tagline')),
+    lineHeight: tagLead,
+    font: `700 ${tagSize}px ${SANS}`,
+    align: 'center',
+    color: '#ffffff',
+    fontSize: tagSize,
+    maxHeight: 150,
+  });
+  tagline.y = follow.y - G.taglineGap - tagline.height;
+
+  // With the CTA anchored, the citation auto-fits into whatever room is left
+  // above it: a long quote shrinks instead of pushing the CTA off its anchor.
+  // The 120 floor keeps a readable quote even on a very full card; below that
+  // the auto-fit would have nothing left to give.
   const quoteSize = fieldFontSize(draft, 'quote');
   const quoteLead = Math.round(quoteSize * G.quoteLead / G.quoteSize);
+  const quoteRoom = Math.max(120, Math.min(330, tagline.y - G.byGap - G.endTop - 24));
   const quote = field(ctx, {
     id: 'quote',
     text: `« ${draft.quote} »`,
@@ -488,9 +597,8 @@ export function computeCardLayout(
     align: 'left',
     color: '#ffffff',
     fontSize: quoteSize,
-    maxHeight: 330,
+    maxHeight: quoteRoom,
   });
-  fields.push(quote);
 
   const bySize = fieldFontSize(draft, 'quoteAttribution');
   const by = field(ctx, {
@@ -505,41 +613,10 @@ export function computeCardLayout(
     color: 'rgba(255,255,255,0.92)',
     fontSize: bySize,
   });
-  fields.push(by);
 
-  const tagSize = fieldFontSize(draft, 'tagline');
-  const tagLead = Math.round(tagSize * G.taglineLead / G.taglineSize);
-  const tagline = field(ctx, {
-    id: 'tagline',
-    text: draft.tagline,
-    x: CAROUSEL_SIZE / 2,
-    y: by.y + by.height + 56,
-    width: Math.round((CAROUSEL_SIZE - G.taglineInset * 2) * fieldWidthScale(draft, 'tagline')),
-    lineHeight: tagLead,
-    font: `italic 700 ${tagSize}px ${SERIF}`,
-    align: 'center',
-    color: '#ffffff',
-    fontSize: tagSize,
-    maxHeight: 150,
-  });
-  fields.push(tagline);
+  // Reading order for the painter and the editor overlay; the geometry above
+  // simply had to be solved from the bottom up.
+  fields.push(quote, by, tagline, follow);
 
-  const followSize = fieldFontSize(draft, 'socialHeading');
-  const follow = field(ctx, {
-    id: 'socialHeading',
-    text: draft.socialHeading,
-    x: CAROUSEL_SIZE / 2,
-    y: tagline.y + tagline.height + G.taglineGap,
-    width: gutter,
-    lineHeight: followSize,
-    font: `italic ${followSize}px ${SERIF}`,
-    align: 'center',
-    color: '#ffffff',
-    fontSize: followSize,
-  });
-  fields.push(follow);
-
-  // The reference's `.row` sits 46px below the follow line's own height: it is
-  // a block margin in the flow, not a distance measured from the text's top.
-  return { fields, logo, socialRowY: follow.y + follow.height + 46 };
+  return { fields, logo, socialRowY };
 }
