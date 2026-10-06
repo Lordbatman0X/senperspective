@@ -25,88 +25,96 @@ const CARD_LABELS: Record<CarouselCardKind, string> = {
 };
 
 /**
- * Saves a PNG data URL to the user's device.
- * Handles both desktop (blob download) and mobile (Web Share API to Camera Roll/Files).
+ * Downloads PNGs straight to the device's Downloads folder.
  *
- * NOTE: call this only ONCE per user gesture with all files at once (see
- * `savePngsToDevice`). Calling it in a loop opens one share sheet per card on
- * phones — each new sheet replaces the previous one before the user can save,
- * so only the LAST card (closing) ever lands in Photos/Files.
+ * Pure download path on purpose: it NEVER opens the native share sheet, so
+ * "Télécharger" and "Partager" stay two separate outcomes. Blobs are revoked
+ * late and downloads are staggered — rapid-fire clicks get collapsed into one
+ * file by mobile browsers, and revoking too early aborts large PNGs.
+ *
+ * Returns true when every file was handed to the browser.
  */
-async function savePngToDevice(dataUrl: string, filename: string): Promise<boolean> {
-  return savePngsToDevice([{ dataUrl, filename }]);
-}
-
-/**
- * Saves several PNGs to the user's device in ONE step.
- *
- * All cards are rendered BEFORE this is called (the caller holds the data
- * URLs), and the whole batch goes through a single `navigator.share({files})`
- * on phones — one sheet with all 3 files, so the cover can no longer be
- * swallowed by the sheets that follow it. On desktop (or when sharing files
- * is unsupported) it falls back to one blob download per card.
- *
- * Returns true when the device accepted the batch.
- */
-async function savePngsToDevice(items: Array<{ dataUrl: string; filename: string }>): Promise<boolean> {
+async function downloadPngBlobs(items: Array<{ dataUrl: string; filename: string }>): Promise<boolean> {
   const toFile = async ({ dataUrl, filename }: { dataUrl: string; filename: string }): Promise<File> => {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
     return new File([blob], filename, { type: 'image/png' });
   };
 
+  const clickDownload = async (file: File | { name: string; dataUrl: string }) => {
+    const url = 'dataUrl' in file ? file.dataUrl : URL.createObjectURL(file);
+    const ownsUrl = !('dataUrl' in file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    // Let the download start before cleaning up: phones drop downloads whose
+    // URL dies in the same task.
+    await new Promise(r => setTimeout(r, 900));
+    if (link.parentNode) link.parentNode.removeChild(link);
+    if (ownsUrl) setTimeout(() => URL.revokeObjectURL(url), 15000);
+  };
+
   try {
     const files = await Promise.all(items.map(toFile));
-
-    // On mobile devices, ONE native share sheet with every file: saving
-    // directly to Photos / Gallery without a sheet-per-card race.
-    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files })) {
-      try {
-        await navigator.share({
-          files,
-          title: files.length > 1 ? 'Carrousel Perspective — 3 cartes PNG' : files[0].name,
-        });
-        return true;
-      } catch (shareErr: any) {
-        // Dismissed by the user: nothing was saved, but that is not a failure
-        // of the export itself — report success so the caller does not fall
-        // through to blob downloads the user never asked for.
-        if (shareErr?.name === 'AbortError') return true;
-      }
-    }
-
-    // Standard blob-URL downloads for desktop / web browsers. Staggered:
-    // rapid-fire clicks get collapsed into one file by mobile browsers, and
-    // revoking too early aborts large PNGs on mobile Chrome.
-    for (const file of files) {
-      const blobUrl = URL.createObjectURL(file);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = file.name;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      await new Promise(r => setTimeout(r, 900));
-      if (link.parentNode) link.parentNode.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-    }
+    for (const file of files) await clickDownload(file);
     return true;
   } catch {
-    // Fallback: direct anchor clicks, one per card.
+    // Fallback: direct anchor clicks off the data URLs, one per card.
     try {
       for (const { dataUrl, filename } of items) {
-        const link = document.createElement('a');
-        link.href = dataUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        await new Promise(r => setTimeout(r, 900));
+        await clickDownload({ name: filename, dataUrl });
       }
       return true;
     } catch {
       return false;
     }
+  }
+}
+
+/** Share-sheet result: shared, dismissed, or not supported on this device. */
+type ShareOutcome = 'shared' | 'dismissed' | 'unsupported';
+
+/**
+ * Shares PNGs through the native share sheet ONLY — never downloads.
+ *
+ * All files go through ONE `navigator.share({ files })` call, so the sheet
+ * holds every card at once (no sheet-per-card race where the first cards get
+ * replaced before the user saves them). Returns 'unsupported' when the device
+ * cannot share files, so the caller can say so instead of silently doing
+ * nothing or falling back to a download the user did not ask for.
+ */
+async function sharePngFiles(
+  items: Array<{ dataUrl: string; filename: string }>,
+  title: string,
+): Promise<ShareOutcome> {
+  try {
+    const files = await Promise.all(items.map(async ({ dataUrl, filename }) => {
+      const res = await fetch(dataUrl);
+      return new File([await res.blob()], filename, { type: 'image/png' });
+    }));
+    if (
+      typeof navigator === 'undefined'
+      || !('canShare' in navigator)
+      || !(navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean }).canShare?.({ files })
+    ) {
+      return 'unsupported';
+    }
+    try {
+      await (navigator as Navigator & { share: (d: { files: File[]; title?: string }) => Promise<void> }).share({
+        files,
+        title,
+      });
+      return 'shared';
+    } catch (shareErr: unknown) {
+      // Dismissed by the user: nothing was shared, but that is the user's
+      // choice — not a failure of the export.
+      return shareErr instanceof DOMException && shareErr.name === 'AbortError' ? 'dismissed' : 'unsupported';
+    }
+  } catch {
+    return 'unsupported';
   }
 }
 
@@ -462,6 +470,13 @@ export function CarouselStudioTab() {
   const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [downloadingKind, setDownloadingKind] = useState<CarouselCardKind | 'all' | 'mediatheque' | null>(null);
+  /**
+   * Which share action is running, if any — tracked separately from downloads
+   * so "Partager" and "Télécharger" disable independently and show their own
+   * spinner. Either busy state locks the other action's buttons below.
+   */
+  const [sharingKind, setSharingKind] = useState<CarouselCardKind | 'all' | null>(null);
+  const exportBusy = downloadingKind !== null || sharingKind !== null;
 
   const patch = (changes: Partial<CarouselDraft>) =>
     setDraft(prev => ({ ...prev, ...changes }));
@@ -571,16 +586,31 @@ export function CarouselStudioTab() {
     setDraft(prev => ({ ...prev, socials: [...prev.socials, { label: '', url: '', icon: 'globe' }] }));
   };
 
-  /** Downloads a single card as PNG directly to the device. */
+  /**
+   * Renders the requested cards to PNG data URLs, up front.
+   *
+   * Both the download and the share actions call this first, so the canvases
+   * are fully painted before either outcome starts — sharing never races the
+   * renderer, and every action works from the same pixels.
+   */
+  const renderPngItems = async (kinds: CarouselCardKind[]) => {
+    const images = await loadDraftImages(draft);
+    return kinds.map(kind => ({
+      dataUrl: renderCardToDataUrl(kind, draft, images),
+      filename: `perspective-carrousel-${kind}.png`,
+    }));
+  };
+
+  /** Downloads a single card as PNG to the Downloads folder — never shares. */
   const handleDownloadSingle = async (kind: CarouselCardKind) => {
     setDownloadingKind(kind);
     setStatus({ tone: 'ok', text: `Génération de la carte ${CARD_LABELS[kind]}…` });
     try {
-      const images = await loadDraftImages(draft);
-      const dataUrl = renderCardToDataUrl(kind, draft, images);
-      const filename = `perspective-carrousel-${kind}.png`;
-      await savePngToDevice(dataUrl, filename);
-      setStatus({ tone: 'ok', text: `Carte ${CARD_LABELS[kind]} enregistrée sur votre appareil.` });
+      const items = await renderPngItems([kind]);
+      const ok = await downloadPngBlobs(items);
+      setStatus(ok
+        ? { tone: 'ok', text: `Carte ${CARD_LABELS[kind]} téléchargée (dossier Téléchargements).` }
+        : { tone: 'error', text: `Téléchargement de la carte ${CARD_LABELS[kind]} impossible.` });
     } catch (err) {
       console.error('Erreur export carte:', err);
       setStatus({ tone: 'error', text: `Export de la carte ${CARD_LABELS[kind]} impossible.` });
@@ -589,30 +619,68 @@ export function CarouselStudioTab() {
     }
   };
 
-  /** Downloads all three cards, one PNG per card, directly to the device. */
+  /** Shares a single card through the native share sheet — never downloads. */
+  const handleShareSingle = async (kind: CarouselCardKind) => {
+    setSharingKind(kind);
+    setStatus({ tone: 'ok', text: `Préparation du partage — ${CARD_LABELS[kind]}…` });
+    try {
+      const items = await renderPngItems([kind]);
+      const outcome = await sharePngFiles(items, `Carrousel Perspective — ${CARD_LABELS[kind]}`);
+      if (outcome === 'shared') {
+        setStatus({ tone: 'ok', text: `Carte ${CARD_LABELS[kind]} partagée.` });
+      } else if (outcome === 'dismissed') {
+        setStatus({ tone: 'ok', text: 'Partage annulé.' });
+      } else {
+        setStatus({ tone: 'error', text: 'Partage indisponible sur cet appareil — utilisez « Télécharger ».' });
+      }
+    } catch (err) {
+      console.error('Erreur partage carte:', err);
+      setStatus({ tone: 'error', text: `Partage de la carte ${CARD_LABELS[kind]} impossible.` });
+    } finally {
+      setSharingKind(null);
+    }
+  };
+
+  /** Downloads all three cards to the Downloads folder — never shares. */
   const handleDownloadAll = async () => {
     setDownloadingKind('all');
     setStatus({ tone: 'ok', text: 'Génération des 3 cartes PNG…' });
     const kinds: CarouselCardKind[] = ['cover', 'body', 'closing'];
     try {
-      const images = await loadDraftImages(draft);
-      // Render ALL cards first, then save the batch in one step: on phones
-      // the batch goes through a single share sheet holding all 3 files.
-      // The old per-card loop opened 3 sheets in a row; each new sheet
-      // replaced the previous one, so the cover (first) never survived.
-      const items = kinds.map(kind => ({
-        dataUrl: renderCardToDataUrl(kind, draft, images),
-        filename: `perspective-carrousel-${kind}.png`,
-      }));
-      const ok = await savePngsToDevice(items);
+      const items = await renderPngItems(kinds);
+      const ok = await downloadPngBlobs(items);
       setStatus(ok
-        ? { tone: 'ok', text: 'Les 3 cartes PNG ont été enregistrées sur votre appareil (Couverture + Développement + Clôture).' }
+        ? { tone: 'ok', text: 'Les 3 cartes PNG ont été téléchargées (Couverture + Développement + Clôture).' }
         : { tone: 'error', text: 'Export incomplet : vérifiez les images du carrousel.' });
     } catch (err) {
       console.error('Erreur export carrousel:', err);
       setStatus({ tone: 'error', text: 'Export incomplet : vérifiez les images du carrousel.' });
     } finally {
       setDownloadingKind(null);
+    }
+  };
+
+  /** Shares all three cards through ONE share sheet — never downloads. */
+  const handleShareAll = async () => {
+    setSharingKind('all');
+    setStatus({ tone: 'ok', text: 'Préparation du partage des 3 cartes…' });
+    const kinds: CarouselCardKind[] = ['cover', 'body', 'closing'];
+    try {
+      // Rendered up front so the single sheet holds every card at once.
+      const items = await renderPngItems(kinds);
+      const outcome = await sharePngFiles(items, 'Carrousel Perspective — 3 cartes PNG');
+      if (outcome === 'shared') {
+        setStatus({ tone: 'ok', text: 'Les 3 cartes ont été partagées (Couverture + Développement + Clôture).' });
+      } else if (outcome === 'dismissed') {
+        setStatus({ tone: 'ok', text: 'Partage annulé.' });
+      } else {
+        setStatus({ tone: 'error', text: 'Partage indisponible sur cet appareil — utilisez « Télécharger les 3 PNG ».' });
+      }
+    } catch (err) {
+      console.error('Erreur partage carrousel:', err);
+      setStatus({ tone: 'error', text: 'Partage impossible : vérifiez les images du carrousel.' });
+    } finally {
+      setSharingKind(null);
     }
   };
 
@@ -656,34 +724,55 @@ export function CarouselStudioTab() {
             <h3 className="text-white font-bold text-sm uppercase tracking-wider">Carrousel Social</h3>
             <p className="text-zinc-500 text-xs mt-1 max-w-2xl leading-relaxed">
               Gabarit fixe en trois cartes (Couverture · Développement · Clôture). Éditez les textes et visuels,
-              puis enregistrez les cartes une par une ou en pack complet sur votre appareil.
+              puis <strong className="text-zinc-300">téléchargez</strong> les PNG (dossier Téléchargements) ou{' '}
+              <strong className="text-zinc-300">partagez</strong>-les (feuille de partage : Photos, WhatsApp…) — une par une ou les trois d'un coup.
             </p>
           </div>
           <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => handleDownloadSingle(activeCard)}
-              disabled={downloadingKind !== null}
+              disabled={exportBusy}
               className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2.5 min-h-[40px] rounded-md transition-all cursor-pointer border border-zinc-700 hover:border-zinc-600"
-              title="Télécharger la carte actuellement sélectionnée sur votre appareil"
+              title="Télécharger la carte actuellement sélectionnée (dossier Téléchargements)"
             >
               {downloadingKind === activeCard ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} className="text-[#E8490F]" />}
-              Sauvegarder {CARD_LABELS[activeCard]}
+              Télécharger {CARD_LABELS[activeCard]}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleShareSingle(activeCard)}
+              disabled={exportBusy}
+              className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2.5 min-h-[40px] rounded-md transition-all cursor-pointer border border-zinc-700 hover:border-zinc-600"
+              title="Partager la carte actuellement sélectionnée (feuille de partage)"
+            >
+              {sharingKind === activeCard ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} className="text-[#E8490F]" />}
+              Partager {CARD_LABELS[activeCard]}
             </button>
             <button
               type="button"
               onClick={handleDownloadAll}
-              disabled={downloadingKind !== null}
+              disabled={exportBusy}
               className="flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 min-h-[40px] rounded-md transition-all cursor-pointer shadow-md"
-              title="Télécharger toutes les cartes PNG sur votre appareil"
+              title="Télécharger les 3 cartes PNG (dossier Téléchargements)"
             >
               {downloadingKind === 'all' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
               Télécharger les 3 PNG
             </button>
             <button
               type="button"
+              onClick={handleShareAll}
+              disabled={exportBusy}
+              className="flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 min-h-[40px] rounded-md transition-all cursor-pointer shadow-md"
+              title="Partager les 3 cartes PNG (feuille de partage)"
+            >
+              {sharingKind === 'all' ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
+              Partager les 3 PNG
+            </button>
+            <button
+              type="button"
               onClick={() => handleSaveToMediatheque()}
-              disabled={downloadingKind !== null}
+              disabled={exportBusy}
               className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2.5 min-h-[40px] rounded-md transition-colors cursor-pointer border border-zinc-700"
               title="Ajouter les 3 cartes générées à la Médiathèque"
             >
@@ -758,12 +847,22 @@ export function CarouselStudioTab() {
             <button
               type="button"
               onClick={() => handleDownloadSingle(activeCard)}
-              disabled={downloadingKind !== null}
+              disabled={exportBusy}
               className="flex items-center justify-center gap-1.5 bg-[#E8490F]/20 hover:bg-[#E8490F]/30 text-[#E8490F] border border-[#E8490F]/40 text-[10px] font-bold uppercase tracking-wider px-3 py-2 min-h-[40px] rounded-md transition-all cursor-pointer"
-              title="Télécharger cette carte seule au format PNG haute résolution"
+              title="Télécharger cette carte seule (dossier Téléchargements)"
             >
               {downloadingKind === activeCard ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
               Télécharger cette carte (PNG)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleShareSingle(activeCard)}
+              disabled={exportBusy}
+              className="flex items-center justify-center gap-1.5 bg-[#E8490F]/20 hover:bg-[#E8490F]/30 text-[#E8490F] border border-[#E8490F]/40 text-[10px] font-bold uppercase tracking-wider px-3 py-2 min-h-[40px] rounded-md transition-all cursor-pointer"
+              title="Partager cette carte seule (feuille de partage)"
+            >
+              {sharingKind === activeCard ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />}
+              Partager cette carte
             </button>
           </div>
         </div>
@@ -848,22 +947,36 @@ export function CarouselStudioTab() {
                   <button
                     type="button"
                     onClick={() => handleDownloadSingle(kind)}
-                    disabled={downloadingKind !== null}
+                    disabled={exportBusy}
                     className="flex-1 flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 min-h-[40px] px-2 rounded transition-colors cursor-pointer"
-                    title={`Télécharger ${CARD_LABELS[kind]} (PNG)`}
+                    title={`Télécharger ${CARD_LABELS[kind]} (dossier Téléchargements)`}
                   >
                     {downloadingKind === kind ? (
                       <Loader2 size={11} className="animate-spin" />
                     ) : (
                       <Download size={11} />
                     )}
-                    Télécharger PNG
+                    Télécharger
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleShareSingle(kind)}
+                    disabled={exportBusy}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 min-h-[40px] px-2 rounded transition-colors cursor-pointer"
+                    title={`Partager ${CARD_LABELS[kind]} (feuille de partage)`}
+                  >
+                    {sharingKind === kind ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <Share2 size={11} />
+                    )}
+                    Partager
                   </button>
                   <button
                     type="button"
                     onClick={() => handleSaveToMediatheque(kind)}
-                    disabled={downloadingKind !== null}
-                    className="p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded text-[10px] transition-colors cursor-pointer"
+                    disabled={exportBusy}
+                    className="p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 hover:text-white rounded text-[10px] transition-colors cursor-pointer"
                     title="Ajouter cette carte à la Médiathèque"
                   >
                     <ImageIcon size={13} />
