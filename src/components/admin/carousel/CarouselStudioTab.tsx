@@ -27,45 +27,82 @@ const CARD_LABELS: Record<CarouselCardKind, string> = {
 /**
  * Saves a PNG data URL to the user's device.
  * Handles both desktop (blob download) and mobile (Web Share API to Camera Roll/Files).
+ *
+ * NOTE: call this only ONCE per user gesture with all files at once (see
+ * `savePngsToDevice`). Calling it in a loop opens one share sheet per card on
+ * phones — each new sheet replaces the previous one before the user can save,
+ * so only the LAST card (closing) ever lands in Photos/Files.
  */
 async function savePngToDevice(dataUrl: string, filename: string): Promise<boolean> {
-  try {
+  return savePngsToDevice([{ dataUrl, filename }]);
+}
+
+/**
+ * Saves several PNGs to the user's device in ONE step.
+ *
+ * All cards are rendered BEFORE this is called (the caller holds the data
+ * URLs), and the whole batch goes through a single `navigator.share({files})`
+ * on phones — one sheet with all 3 files, so the cover can no longer be
+ * swallowed by the sheets that follow it. On desktop (or when sharing files
+ * is unsupported) it falls back to one blob download per card.
+ *
+ * Returns true when the device accepted the batch.
+ */
+async function savePngsToDevice(items: Array<{ dataUrl: string; filename: string }>): Promise<boolean> {
+  const toFile = async ({ dataUrl, filename }: { dataUrl: string; filename: string }): Promise<File> => {
     const res = await fetch(dataUrl);
     const blob = await res.blob();
-    const file = new File([blob], filename, { type: 'image/png' });
+    return new File([blob], filename, { type: 'image/png' });
+  };
 
-    // On mobile devices, native Web Share allows saving directly to Photos / Gallery
-    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+  try {
+    const files = await Promise.all(items.map(toFile));
+
+    // On mobile devices, ONE native share sheet with every file: saving
+    // directly to Photos / Gallery without a sheet-per-card race.
+    if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files })) {
       try {
         await navigator.share({
-          files: [file],
-          title: filename,
+          files,
+          title: files.length > 1 ? 'Carrousel Perspective — 3 cartes PNG' : files[0].name,
         });
         return true;
       } catch (shareErr: any) {
-        if (shareErr.name === 'AbortError') return true;
+        // Dismissed by the user: nothing was saved, but that is not a failure
+        // of the export itself — report success so the caller does not fall
+        // through to blob downloads the user never asked for.
+        if (shareErr?.name === 'AbortError') return true;
       }
     }
 
-    // Standard Blob URL download for desktop / web browsers
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-    return true;
-  } catch {
-    // Fallback direct anchor click
-    try {
+    // Standard blob-URL downloads for desktop / web browsers. Staggered:
+    // rapid-fire clicks get collapsed into one file by mobile browsers, and
+    // revoking too early aborts large PNGs on mobile Chrome.
+    for (const file of files) {
+      const blobUrl = URL.createObjectURL(file);
       const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = filename;
+      link.href = blobUrl;
+      link.download = file.name;
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      await new Promise(r => setTimeout(r, 900));
+      if (link.parentNode) link.parentNode.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+    }
+    return true;
+  } catch {
+    // Fallback: direct anchor clicks, one per card.
+    try {
+      for (const { dataUrl, filename } of items) {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        await new Promise(r => setTimeout(r, 900));
+      }
       return true;
     } catch {
       return false;
@@ -559,13 +596,18 @@ export function CarouselStudioTab() {
     const kinds: CarouselCardKind[] = ['cover', 'body', 'closing'];
     try {
       const images = await loadDraftImages(draft);
-      for (const kind of kinds) {
-        const dataUrl = renderCardToDataUrl(kind, draft, images);
-        await savePngToDevice(dataUrl, `perspective-carrousel-${kind}.png`);
-        // Stagger slightly: some browsers drop rapid successive downloads.
-        await new Promise(r => setTimeout(r, 300));
-      }
-      setStatus({ tone: 'ok', text: 'Les 3 cartes PNG ont été enregistrées sur votre appareil.' });
+      // Render ALL cards first, then save the batch in one step: on phones
+      // the batch goes through a single share sheet holding all 3 files.
+      // The old per-card loop opened 3 sheets in a row; each new sheet
+      // replaced the previous one, so the cover (first) never survived.
+      const items = kinds.map(kind => ({
+        dataUrl: renderCardToDataUrl(kind, draft, images),
+        filename: `perspective-carrousel-${kind}.png`,
+      }));
+      const ok = await savePngsToDevice(items);
+      setStatus(ok
+        ? { tone: 'ok', text: 'Les 3 cartes PNG ont été enregistrées sur votre appareil (Couverture + Développement + Clôture).' }
+        : { tone: 'error', text: 'Export incomplet : vérifiez les images du carrousel.' });
     } catch (err) {
       console.error('Erreur export carrousel:', err);
       setStatus({ tone: 'error', text: 'Export incomplet : vérifiez les images du carrousel.' });
