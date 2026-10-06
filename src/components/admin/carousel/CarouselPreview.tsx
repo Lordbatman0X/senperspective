@@ -54,8 +54,38 @@ export function CarouselPreview({
   kind, draft, width = 320, className, editable = false, onChange,
 }: CarouselPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const [activeField, setActiveField] = useState<string | null>(null);
   const [showLogoHandle, setShowLogoHandle] = useState(false);
+  /**
+   * Display width actually used, clamped to the space the phone gives us.
+   *
+   * `width` is the DESIRED size (520 for the editor); on a 360px phone the
+   * fixed-size box would overflow the panel and force horizontal scrolling of
+   * the whole settings page. Measuring the parent and shrinking keeps the
+   * card fully visible, and the 1080-space drag math scales with it because
+   * it always divides by the rendered size.
+   */
+  const [fitWidth, setFitWidth] = useState(width);
+
+  useLayoutEffect(() => {
+    setFitWidth(width);
+  }, [width]);
+
+  useLayoutEffect(() => {
+    const el = boxRef.current?.parentElement;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const fit = () => {
+      const available = el.clientWidth;
+      if (available > 0) setFitWidth(Math.min(width, available));
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [width]);
+
+  const scale = fitWidth / CAROUSEL_SIZE;
 
   /**
    * Set when an image in the draft could not be loaded at all.
@@ -192,14 +222,17 @@ export function CarouselPreview({
   const onLogoPointerMove = (e: React.PointerEvent) => {
     const drag = dragState.current;
     if (!drag) return;
-    const scale = width / CAROUSEL_SIZE;
+    // Uses the FITTED scale (not the `width` prop): on a phone the card is
+    // shrunk to the panel, and dividing by the prop's scale would fling the
+    // logo twice as far as the finger moved.
+    const dragScale = fitWidth / CAROUSEL_SIZE;
     // Clamped to the card so the logo can never be dragged out of frame and
     // silently disappear from the exported PNG. With the handle on the logo's
     // real bounds (logoImageRect, top-aligned), `top = 0` is where the logo's
     // ink touches the card's edge — the highest export-safe position — and
     // the snap in commitLogo settles the last few pixels exactly onto y0.
-    const cx = drag.origin.cx + (e.clientX - drag.startX) / scale;
-    const top = drag.origin.top + (e.clientY - drag.startY) / scale;
+    const cx = drag.origin.cx + (e.clientX - drag.startX) / dragScale;
+    const top = drag.origin.top + (e.clientY - drag.startY) / dragScale;
     commitLogo({
       ...drag.origin,
       cx: Math.min(CAROUSEL_SIZE - 20, Math.max(20, cx)),
@@ -229,12 +262,12 @@ export function CarouselPreview({
   );
 
   return (
-    <div className={className} style={{ width, height: width, position: 'relative' }}>
+    <div ref={boxRef} className={className} style={{ width: fitWidth, height: fitWidth, maxWidth: '100%', position: 'relative' }}>
       <canvas
         ref={canvasRef}
         width={CAROUSEL_SIZE}
         height={CAROUSEL_SIZE}
-        style={{ width, height: width, display: 'block' }}
+        style={{ width: fitWidth, height: fitWidth, maxWidth: '100%', display: 'block' }}
       />
 
       {/* Editing overlay. Scaled down to the preview as one unit, so every child
@@ -245,7 +278,7 @@ export function CarouselPreview({
           style={{
             width: CAROUSEL_SIZE,
             height: CAROUSEL_SIZE,
-            transform: `scale(${width / CAROUSEL_SIZE})`,
+            transform: `scale(${scale})`,
             transformOrigin: 'top left',
           }}
         >

@@ -280,9 +280,9 @@ function ImagePicker({
   };
 
   return (
-    <div>
+    <div className="min-w-0">
       <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">{label}</label>
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-start gap-3 min-w-0">
         <div
           className="w-20 h-20 shrink-0 bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden flex items-center justify-center"
           style={transparent ? {
@@ -298,13 +298,13 @@ function ImagePicker({
             ? <img src={value} alt="" className={`w-full h-full ${transparent ? 'object-contain p-1' : 'object-cover'}`} />
             : <ImageIcon size={18} className="text-zinc-600" />}
         </div>
-        <div className="flex-1 space-y-2">
-          <div className="flex gap-2">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={busy}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-md transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 min-h-[40px] rounded-md transition-colors cursor-pointer"
             >
               {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
               Téléverser
@@ -312,7 +312,7 @@ function ImagePicker({
             <button
               type="button"
               onClick={() => setShowLibrary(v => !v)}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-md transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 min-h-[40px] rounded-md transition-colors cursor-pointer"
             >
               <ImageIcon size={13} /> Médiathèque
             </button>
@@ -321,7 +321,8 @@ function ImagePicker({
                 type="button"
                 onClick={() => onChange('')}
                 title="Retirer l'image"
-                className="p-2 border border-red-900/50 bg-red-950/40 hover:bg-red-900/60 text-red-400 rounded-md transition-colors cursor-pointer"
+                aria-label="Retirer l'image"
+                className="p-2 min-h-[40px] min-w-[40px] border border-red-900/50 bg-red-950/40 hover:bg-red-900/60 text-red-400 rounded-md transition-colors cursor-pointer"
               >
                 <X size={14} />
               </button>
@@ -332,7 +333,7 @@ function ImagePicker({
                 onClick={handleTrim}
                 disabled={busy}
                 title="Rogner les marges transparentes du logo"
-                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-md transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2 min-h-[40px] rounded-md transition-colors cursor-pointer"
               >
                 {busy ? <Loader2 size={13} className="animate-spin" /> : <Crop size={13} />} Rogner
               </button>
@@ -606,22 +607,22 @@ export function CarouselStudioTab() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
-          <div>
+    <div className="space-y-4 sm:space-y-6 min-w-0">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 min-w-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-start sm:justify-between gap-3 mb-1">
+          <div className="min-w-0">
             <h3 className="text-white font-bold text-sm uppercase tracking-wider">Carrousel Social</h3>
             <p className="text-zinc-500 text-xs mt-1 max-w-2xl leading-relaxed">
               Gabarit fixe en trois cartes (Couverture · Développement · Clôture). Éditez les textes et visuels,
               puis enregistrez les cartes une par une ou en pack complet sur votre appareil.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => handleDownloadSingle(activeCard)}
               disabled={downloadingKind !== null}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2.5 rounded-md transition-all cursor-pointer border border-zinc-700 hover:border-zinc-600"
+              className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-2.5 min-h-[40px] rounded-md transition-all cursor-pointer border border-zinc-700 hover:border-zinc-600"
               title="Télécharger la carte actuellement sélectionnée sur votre appareil"
             >
               {downloadingKind === activeCard ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} className="text-[#E8490F]" />}
@@ -631,7 +632,7 @@ export function CarouselStudioTab() {
               type="button"
               onClick={handleDownloadAll}
               disabled={downloadingKind !== null}
-              className="flex items-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-all cursor-pointer shadow-md"
+              className="flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 min-h-[40px] rounded-md transition-all cursor-pointer shadow-md"
               title="Télécharger toutes les cartes PNG sur votre appareil"
             >
               {downloadingKind === 'all' ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
@@ -641,7 +642,7 @@ export function CarouselStudioTab() {
               type="button"
               onClick={() => handleSaveToMediatheque()}
               disabled={downloadingKind !== null}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2.5 rounded-md transition-colors cursor-pointer border border-zinc-700"
+              className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-200 hover:text-white text-[10px] font-bold uppercase tracking-wider px-3 py-2.5 min-h-[40px] rounded-md transition-colors cursor-pointer border border-zinc-700"
               title="Ajouter les 3 cartes générées à la Médiathèque"
             >
               {downloadingKind === 'mediatheque' ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />}
@@ -651,7 +652,7 @@ export function CarouselStudioTab() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 rounded-md transition-colors cursor-pointer border border-zinc-700"
+              className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider px-4 py-2.5 min-h-[40px] rounded-md transition-colors cursor-pointer border border-zinc-700"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Enregistrer
             </button>
@@ -667,7 +668,7 @@ export function CarouselStudioTab() {
       </div>
 
       {/* ---------- Article source ---------- */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 space-y-4 min-w-0">
         <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
           <Share2 size={13} /> Source du contenu
         </div>
@@ -681,7 +682,7 @@ export function CarouselStudioTab() {
         <button
           type="button"
           onClick={handleResetTemplate}
-          className="flex items-center gap-1.5 text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 text-zinc-500 hover:text-white text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer min-h-[40px]"
         >
           <RotateCcw size={12} /> Repartir d’un gabarit vierge
         </button>
@@ -692,19 +693,19 @@ export function CarouselStudioTab() {
           Textes panel below mirrors every text block for comfortable typing,
           and the forms around it hold the things a canvas cannot host (date,
           read time, category, photos). */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 space-y-4 min-w-0">
+        <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between gap-2">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <ImageIcon size={13} /> Aperçu (1080 × 1080)
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
                 <button
                   key={kind}
                   type="button"
                   onClick={() => setActiveCard(kind)}
-                  className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer ${
+                  className={`px-2 sm:px-3 py-2 min-h-[40px] text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors cursor-pointer ${
                     activeCard === kind ? 'bg-[#B8471F] text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'
                   }`}
                 >
@@ -716,7 +717,7 @@ export function CarouselStudioTab() {
               type="button"
               onClick={() => handleDownloadSingle(activeCard)}
               disabled={downloadingKind !== null}
-              className="flex items-center gap-1.5 bg-[#E8490F]/20 hover:bg-[#E8490F]/30 text-[#E8490F] border border-[#E8490F]/40 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-md transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 bg-[#E8490F]/20 hover:bg-[#E8490F]/30 text-[#E8490F] border border-[#E8490F]/40 text-[10px] font-bold uppercase tracking-wider px-3 py-2 min-h-[40px] rounded-md transition-all cursor-pointer"
               title="Télécharger cette carte seule au format PNG haute résolution"
             >
               {downloadingKind === activeCard ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
@@ -731,19 +732,19 @@ export function CarouselStudioTab() {
         </p>
 
         {/* The card being edited, large enough to click into. */}
-        <div className="flex justify-center">
+        <div className="flex justify-center min-w-0">
           <CarouselPreview
             kind={activeCard}
             draft={draft}
             width={Math.min(520, CARD_EDIT_MAX_WIDTH)}
-            className="rounded-md shadow-2xl ring-1 ring-white/10"
+            className="rounded-md shadow-2xl ring-1 ring-white/10 max-w-full"
             editable
             onChange={patch}
           />
         </div>
 
         {/* The artifact's per-card image buttons. */}
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ImagePicker
             label="Photo — carte 1 · Couverture"
             value={draft.coverImage}
@@ -771,11 +772,11 @@ export function CarouselStudioTab() {
               Cliquez pour éditer ou enregistrez chaque carte une par une sur votre appareil
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-3 gap-3 sm:gap-4">
             {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
               <div
                 key={kind}
-                className={`bg-zinc-950/60 p-3 rounded-lg border transition-all flex flex-col justify-between ${
+                className={`bg-zinc-950/60 p-3 rounded-lg border transition-all flex flex-col justify-between min-w-0 ${
                   activeCard === kind ? 'border-[#E8490F] ring-1 ring-[#E8490F]/30' : 'border-zinc-800 hover:border-zinc-700'
                 }`}
               >
@@ -787,7 +788,7 @@ export function CarouselStudioTab() {
                     kind={kind}
                     draft={draft}
                     width={180}
-                    className="rounded-md ring-1 ring-white/10 group-hover:ring-[#B8471F] transition-all"
+                    className="rounded-md ring-1 ring-white/10 group-hover:ring-[#B8471F] transition-all max-w-full"
                   />
                   <div className="flex items-center justify-between w-full mt-2 px-1">
                     <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-wider group-hover:text-white">
@@ -806,7 +807,7 @@ export function CarouselStudioTab() {
                     type="button"
                     onClick={() => handleDownloadSingle(kind)}
                     disabled={downloadingKind !== null}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider py-1.5 px-2 rounded transition-colors cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#B8471F] hover:bg-[#c94931] disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-wider py-2.5 min-h-[40px] px-2 rounded transition-colors cursor-pointer"
                     title={`Télécharger ${CARD_LABELS[kind]} (PNG)`}
                   >
                     {downloadingKind === kind ? (
@@ -820,7 +821,7 @@ export function CarouselStudioTab() {
                     type="button"
                     onClick={() => handleSaveToMediatheque(kind)}
                     disabled={downloadingKind !== null}
-                    className="p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded text-[10px] transition-colors cursor-pointer"
+                    className="p-2.5 min-h-[40px] min-w-[40px] flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white rounded text-[10px] transition-colors cursor-pointer"
                     title="Ajouter cette carte à la Médiathèque"
                   >
                     <ImageIcon size={13} />
@@ -838,7 +839,7 @@ export function CarouselStudioTab() {
           canvas is painful, and the sidebar is where editors expect to find
           the copy. Both surfaces write to the same draft, so they cannot
           drift apart. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 space-y-5 min-w-0">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <Type size={13} /> Textes — {CARD_LABELS[activeCard]}
@@ -849,7 +850,7 @@ export function CarouselStudioTab() {
         </div>
 
         {activeCard === 'cover' && (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
             <Field
               label="Titre (carte 1)"
               value={draft.title}
@@ -879,7 +880,7 @@ export function CarouselStudioTab() {
         )}
 
         {activeCard === 'closing' && (
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
             <Field
               label="Citation (carte 3)"
               value={draft.quote}
@@ -927,7 +928,7 @@ export function CarouselStudioTab() {
 
         {/* Per-block type sizes for the selected card — the sliders that used
             to be defined but never rendered anywhere. */}
-        <div className="grid md:grid-cols-2 gap-x-5 gap-y-4 pt-4 border-t border-zinc-800">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4 pt-4 border-t border-zinc-800 min-w-0">
           {activeTextFields.map(f => (
             <SizeSlider key={f.id} label={f.label} fieldId={f.id} draft={draft} onChange={patch} />
           ))}
@@ -947,8 +948,8 @@ export function CarouselStudioTab() {
               </p>
             </div>
             {draft.socials.map((social, i) => (
-              <div key={i} className="border border-zinc-800 rounded-md p-3 space-y-3">
-                <div className="flex items-end gap-2">
+              <div key={i} className="border border-zinc-800 rounded-md p-3 space-y-3 min-w-0">
+                <div className="flex flex-col min-[480px]:flex-row min-[480px]:items-end gap-2">
                   <div className="flex-1 min-w-0">
                     <Field
                       label={`Libellé ${i + 1}`}
@@ -970,7 +971,7 @@ export function CarouselStudioTab() {
                     onClick={() => removeSocial(i)}
                     disabled={draft.socials.length <= 1}
                     aria-label={`Retirer le réseau ${i + 1}`}
-                    className="p-2.5 text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
+                    className="p-2.5 min-h-[40px] min-w-[40px] self-start min-[480px]:self-auto text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors cursor-pointer"
                   >
                     <Trash2 size={15} />
                   </button>
@@ -1012,8 +1013,8 @@ export function CarouselStudioTab() {
       {/* ---------- Controls ----------
           Only what the card itself cannot host: the logo, the photos and the
           footer facts (date, read time, category). */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 min-w-0">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 space-y-5 min-w-0">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <ImageIcon size={13} /> Logo
           </div>
@@ -1023,7 +1024,7 @@ export function CarouselStudioTab() {
             discovering a flattened logo only after downloading the PNG.
           */}
           {(['cover', 'body', 'closing'] as CarouselCardKind[]).map(kind => (
-            <div key={kind} className="flex items-start gap-3">
+            <div key={kind} className="flex flex-col min-[420px]:flex-row min-[420px]:items-start gap-3 min-w-0">
               <div
                 className="w-20 h-20 shrink-0 border border-zinc-800 rounded-md overflow-hidden flex items-center justify-center"
                 style={{
@@ -1042,7 +1043,7 @@ export function CarouselStudioTab() {
                       Logo<br />Perspective
                     </span>}
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <ImagePicker
                   label={`Logo ${CARD_LABELS[kind]}`}
                   value={draft.logoUrls?.[kind]}
@@ -1073,13 +1074,13 @@ export function CarouselStudioTab() {
             type="button"
             onClick={() => patch({ logos: undefined })}
             disabled={!draft.logos}
-            className="text-zinc-500 hover:text-white disabled:opacity-40 disabled:hover:text-zinc-500 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+            className="text-zinc-500 hover:text-white disabled:opacity-40 disabled:hover:text-zinc-500 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer min-h-[40px]"
           >
             Réinitialiser la position des logos
           </button>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 space-y-5">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 sm:p-5 space-y-5 min-w-0">
           <div className="flex items-center gap-2 text-zinc-400 text-[10px] font-bold uppercase tracking-wider">
             <Share2 size={13} /> Pied de page & paragraphes
           </div>
@@ -1113,7 +1114,7 @@ export function CarouselStudioTab() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
             <Field label="Date" value={draft.date} onChange={v => patch({ date: v })} maxLength={32} />
             <Field label="Durée de lecture" value={draft.readingTime} onChange={v => patch({ readingTime: v })} maxLength={16} />
           </div>
