@@ -1140,17 +1140,58 @@ export function CarouselStudioTab() {
                   maxSize={512}
                 />
                 {social.iconImage && (
-                  <label className="block text-[10px] text-zinc-400 uppercase tracking-wider">
-                    Taille du logo {i + 1} — {Math.round((social.iconScale ?? 1) * 100)}%
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                        Taille du logo {i + 1}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Réduire le logo ${i + 1}`}
+                          title="Réduire (−2 %)"
+                          onClick={() => setSocialIconScale(i, (social.iconScale ?? 1) - 0.02)}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold leading-none cursor-pointer"
+                        >
+                          −
+                        </button>
+                        <input
+                          type="number"
+                          aria-label={`Taille exacte du logo ${i + 1} (pourcent)`}
+                          title="Taille exacte (40–140 %)"
+                          min={40}
+                          max={140}
+                          step={1}
+                          value={Math.round((social.iconScale ?? 1) * 100)}
+                          onChange={e => {
+                            const next = Number(e.target.value);
+                            if (Number.isFinite(next)) setSocialIconScale(i, next / 100);
+                          }}
+                          className="w-14 bg-zinc-950 border border-zinc-800 rounded px-1.5 py-1 text-[11px] tabular-nums text-zinc-100 text-center focus:outline-none focus:border-[#B8471F]"
+                        />
+                        <span className="text-[10px] text-zinc-500">%</span>
+                        <button
+                          type="button"
+                          aria-label={`Agrandir le logo ${i + 1}`}
+                          title="Agrandir (+2 %)"
+                          onClick={() => setSocialIconScale(i, (social.iconScale ?? 1) + 0.02)}
+                          className="w-7 h-7 flex items-center justify-center rounded bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-bold leading-none cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </span>
+                    </div>
                     <input
                       type="range"
+                      aria-label={`Taille du logo ${i + 1}`}
                       min={40}
                       max={140}
+                      step={1}
                       value={Math.round((social.iconScale ?? 1) * 100)}
                       onChange={e => setSocialIconScale(i, Number(e.target.value) / 100)}
-                      className="w-full accent-[#B8471F]"
+                      className="w-full accent-[#B8471F] cursor-pointer"
                     />
-                  </label>
+                  </div>
                 )}
               </div>
             ))}

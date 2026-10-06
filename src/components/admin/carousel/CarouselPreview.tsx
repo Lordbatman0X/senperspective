@@ -329,10 +329,13 @@ export function CarouselPreview({
             </div>
           ))}
 
-          {/* The size slider, as in the artifact. */}
+          {/* The size slider, as in the artifact.
+              Stepped at 1px with −/+ nudge buttons and a numeric field: the
+              32–220 range in a 160px track means each touch pixel jumps more
+              than a unit, so dragging alone can never land an exact size. */}
           {showLogoHandle && (
             <div
-              className="absolute flex items-center gap-2 bg-black/70 text-white px-3 py-2 rounded-md"
+              className="absolute flex items-center gap-1.5 bg-black/70 text-white px-3 py-2 rounded-md"
               style={{
                 left: logoRect.left,
                 top: logoRect.top + logoRect.height + 12,
@@ -340,15 +343,49 @@ export function CarouselPreview({
               onPointerDown={e => e.stopPropagation()}
             >
               <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">Taille</span>
+              <button
+                type="button"
+                aria-label="Réduire le logo"
+                title="Réduire le logo (−2)"
+                onClick={() => commitLogo({ ...logoAt, size: Math.max(MIN_LOGO_SIZE, Math.round(logoAt.size) - 2) })}
+                className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 text-sm font-bold leading-none cursor-pointer"
+              >
+                −
+              </button>
               <input
                 type="range"
                 min={MIN_LOGO_SIZE}
                 max={MAX_LOGO_SIZE}
+                step={1}
                 value={Math.round(logoAt.size)}
                 onChange={e => commitLogo({ ...logoAt, size: Number(e.target.value) })}
-                className="w-40 accent-[#B8471F]"
+                className="w-40 accent-[#B8471F] cursor-pointer"
               />
-              <span className="text-[11px] tabular-nums w-8">{Math.round(logoAt.size)}</span>
+              <button
+                type="button"
+                aria-label="Agrandir le logo"
+                title="Agrandir le logo (+2)"
+                onClick={() => commitLogo({ ...logoAt, size: Math.min(MAX_LOGO_SIZE, Math.round(logoAt.size) + 2) })}
+                className="w-7 h-7 flex items-center justify-center rounded bg-white/10 hover:bg-white/20 text-sm font-bold leading-none cursor-pointer"
+              >
+                +
+              </button>
+              <input
+                type="number"
+                aria-label="Taille exacte du logo"
+                title="Taille exacte du logo"
+                min={MIN_LOGO_SIZE}
+                max={MAX_LOGO_SIZE}
+                step={1}
+                value={Math.round(logoAt.size)}
+                onChange={e => {
+                  const next = Number(e.target.value);
+                  if (Number.isFinite(next)) {
+                    commitLogo({ ...logoAt, size: Math.min(MAX_LOGO_SIZE, Math.max(MIN_LOGO_SIZE, Math.round(next))) });
+                  }
+                }}
+                className="w-14 bg-white/10 rounded px-1.5 py-1 text-[11px] tabular-nums text-center focus:outline-none focus:ring-1 focus:ring-[#B8471F]"
+              />
             </div>
           )}
         </div>
