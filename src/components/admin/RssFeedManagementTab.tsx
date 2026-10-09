@@ -1407,11 +1407,11 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-mono font-bold uppercase text-zinc-400 block">{isFr ? 'Rubrique standard' : 'Category'}</label>
                   <select
-                    value={newFeedCategory}
+                    value={matchSiteCategory(newFeedCategory, siteCategories)}
                     onChange={e => setNewFeedCategory(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-orange-500"
                   >
-                    {['Politique', 'Économie', 'Société', 'Sports', 'International', 'Dossiers', 'Culture'].map(cat => (
+                    {siteCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -1504,11 +1504,11 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                     {isFr ? 'Rubrique standard' : 'Default Category'}
                   </label>
                   <select
-                    value={editFeedCategory}
+                    value={matchSiteCategory(editFeedCategory, siteCategories)}
                     onChange={e => setEditFeedCategory(e.target.value)}
                     className="w-full bg-zinc-950 border border-zinc-800 text-white text-xs font-mono rounded-xl p-2.5 outline-none focus:border-orange-500"
                   >
-                    {['Politique', 'Économie', 'Société', 'Sports', 'International', 'Dossiers', 'Culture'].map(cat => (
+                    {siteCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -1788,11 +1788,11 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                                   {isFr ? 'Rubrique' : 'Category'}
                                 </label>
                                 <select
-                                  value={cfg.category}
+                                  value={matchSiteCategory(cfg.category, siteCategories)}
                                   onChange={(e) => updateCfg({ category: e.target.value })}
                                   className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs rounded-lg p-1.5 font-mono outline-none focus:border-orange-500"
                                 >
-                                  {['Politique', 'Économie', 'Société', 'Sports', 'International', 'Tech & Innovation', 'Culture', 'Dossiers'].map(cat => (
+                                  {siteCategories.map(cat => (
                                     <option key={cat} value={cat}>{cat}</option>
                                   ))}
                                 </select>
