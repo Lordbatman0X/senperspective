@@ -19,6 +19,7 @@
 import assert from 'node:assert/strict';
 import {
   buildDraftFromArticle,
+  buildBilingualDraftFromArticle,
   DEFAULT_ACCENT,
   emptyDraft,
   extractParagraphs,
@@ -288,6 +289,48 @@ const englishOnly = buildDraftFromArticle({
 });
 assert.ok(englishOnly.paragraphs[0].startsWith('An English only body'));
 ok('falls back to the English body when French is empty');
+
+console.log('\n- bilingual carousel (FR + EN) -');
+// The newsroom cycle attaches BOTH language versions of the carousel, so one
+// article must yield two complete, self-describing drafts — each resolving its
+// own language first, sharing the same brand assets, and stamped with its lang.
+const bilingualArticle = {
+  ...article,
+  carouselCopy: {
+    fr: { category: 'POLITIQUE', title: 'Diallo reste detenu', lede: 'These rejetee.', bodyHeading: 'Le Brief', paragraphs: ['Point FR 1.', 'Point FR 2.', 'Point FR 3.'], quote: 'Citation FR', quoteAttribution: 'La redaction' },
+    en: { category: 'POLITICS', title: 'Diallo remains detained', lede: 'The bail was rejected.', bodyHeading: 'The Brief', paragraphs: ['Point EN 1.', 'Point EN 2.', 'Point EN 3.'], quote: 'Quote EN', quoteAttribution: 'The newsroom' },
+  },
+};
+const bi = buildBilingualDraftFromArticle(bilingualArticle);
+assert.equal(bi.fr.lang, 'fr');
+assert.equal(bi.en.lang, 'en');
+assert.equal(bi.fr.title, 'Diallo reste detenu');
+assert.equal(bi.en.title, 'Diallo remains detained');
+assert.equal(bi.fr.category, 'POLITIQUE');
+assert.equal(bi.en.category, 'POLITICS');
+assert.equal(bi.fr.paragraphs[0], 'Point FR 1.');
+assert.equal(bi.en.paragraphs[0], 'Point EN 1.');
+assert.equal(bi.fr.quote, 'Citation FR');
+assert.equal(bi.en.quote, 'Quote EN');
+ok('one article yields complete FR and EN carousels, each in its own language');
+
+// The two versions are the same carousel: they must carry the same brand marks
+// (logos, closing photo) and the same article reference, since those belong to
+// the publication, not to a language.
+const biBranded = buildBilingualDraftFromArticle(bilingualArticle, undefined, {
+  logoUrls: { cover: 'https://example.com/logo.png' },
+  closingImage: 'https://example.com/closing.jpg',
+});
+assert.deepEqual(biBranded.fr.logoUrls, biBranded.en.logoUrls, 'both languages share the logo set');
+assert.equal(biBranded.fr.closingImage, biBranded.en.closingImage);
+assert.equal(biBranded.fr.articleId, biBranded.en.articleId);
+ok('both language carousels share brand assets and article reference');
+
+// A French-only model response must still fill every EN slot (fallback), so the
+// English carousel is never half-empty.
+const frOnly = buildBilingualDraftFromArticle({ ...article, carouselCopy: { fr: { category: 'POLITIQUE', title: 'Titre FR', lede: 'Resume FR.', bodyHeading: 'Le Brief', paragraphs: ['P1.', 'P2.', 'P3.'], quote: 'Q', quoteAttribution: 'La redaction' } } });
+assert.ok(frOnly.en.title.length > 0 && frOnly.en.lede.length > 0 && frOnly.en.paragraphs.length > 0, 'EN falls back rather than emptying');
+ok('a French-only AI response still produces a complete EN carousel via fallback');
 
 console.log('\n- logo placement -');
 const withLogo = normalizeDraft({ logos: { cover: { cx: 300, top: 90, size: 80 } } });

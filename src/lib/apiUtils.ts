@@ -21,6 +21,42 @@ function isStaticHost(): boolean {
 }
 
 /**
+ * Normalises a hand-entered backend base URL to a usable http(s) origin,
+ * or '' when it is not one.
+ *
+ * WHY: `getApiBaseUrl` used to return whatever was stored/env'd with only the
+ * trailing slashes trimmed, so a value typed without a scheme — the natural
+ * inputs `localhost:3000`, `//localhost:3000`, or a bare `https://` — was
+ * concatenated by `resolveApiUrl` into an invalid URL. `fetch` then threw
+ * "Failed to parse URL from //" on EVERY `/api/...` call (config, chat, RSS),
+ * which looked like a dead backend rather than a typo. `new URL('localhost:3000')`
+ * even *succeeds* with protocol `localhost:`, so a naive parse is not enough —
+ * the scheme must be explicitly http/https and a host must be present.
+ *
+ * Returning '' for anything invalid makes the value "unset": `resolveApiUrl`
+ * falls back to a clean relative path (same-origin) instead of building a URL
+ * that cannot be fetched, and the Admin save button's existing "Invalid URL"
+ * feedback becomes truthful.
+ */
+export function normalizeBackendBase(raw: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return '';
+  let u: URL;
+  try {
+    u = new URL(trimmed);
+  } catch {
+    return '';
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  if (!u.hostname) return '';
+  // Keep origin + any mount path (some proxies serve under /base), drop the
+  // trailing slash, query and hash so concatenation with a `/api/...` path is
+  // always clean.
+  const path = u.pathname === '/' ? '' : u.pathname.replace(/\/+$/, '');
+  return `${u.origin}${path}`;
+}
+
+/**
  * Returns the configured Backend API base URL, if any.
  * Allows custom domains (like senperspective.com on Firebase/Vercel) to point
  * to a dedicated Express backend (e.g. Railway, Render, Cloud Run).
@@ -29,15 +65,17 @@ export function getApiBaseUrl(): string {
   if (typeof window === 'undefined') return '';
   const stored = localStorage.getItem(BACKEND_URL_STORAGE_KEY) || localStorage.getItem('backend_api_url');
   if (stored && stored.trim()) {
-    return stored.trim().replace(/\/+$/, '');
+    const normalized = normalizeBackendBase(stored);
+    if (normalized) return normalized;
   }
   const envUrl = (import.meta as any).env?.VITE_BACKEND_URL || (import.meta as any).env?.VITE_API_BASE_URL;
   if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/+$/, '');
+    const normalized = normalizeBackendBase(envUrl);
+    if (normalized) return normalized;
   }
   // Static-hosting fallback so the deployed Firebase site reaches the API.
   if (isStaticHost()) {
-    const fallback = (DEFAULT_STATIC_BACKEND || '').trim().replace(/\/+$/, '');
+    const fallback = normalizeBackendBase(DEFAULT_STATIC_BACKEND);
     if (fallback) return fallback;
   }
   return '';

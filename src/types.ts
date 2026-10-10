@@ -94,6 +94,25 @@ export interface Article {
    * every time an editor opens the carousel tab.
    */
   carouselCopy?: import('./lib/carousel/types').CarouselAiCopy;
+  /**
+   * A complete 1080x1080 social carousel, pre-built when the article was
+   * written (wire generations always attach one). The Carousel Studio loads
+   * this draft as-is so the cards are ready to publish rather than blank.
+   */
+  carouselDraft?: import('./lib/carousel/types').CarouselDraft;
+  /**
+   * Both language versions of the social carousel, pre-built when the article
+   * was written by the newsroom cycle (wire generations always attach both).
+   * `fr` and `en` are complete 1080×1080 drafts built from the same article and
+   * the same brand assets, so the Carousel Studio can open the finished French
+   * cards OR the finished English cards without retyping. `carouselDraft` above
+   * stays as the French copy for backward compatibility with drafts saved
+   * before the bilingual pass.
+   */
+  carouselDrafts?: {
+    fr?: import('./lib/carousel/types').CarouselDraft;
+    en?: import('./lib/carousel/types').CarouselDraft;
+  };
   
   relatedArticleIds?: string[]; // IDs of related articles
   

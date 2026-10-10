@@ -12,7 +12,7 @@ import {
   FALLBACK_TAXONOMY, resolveTaxonomy, matchTaxonomyCategory, taxonomyLabels,
 } from '../../lib/siteTaxonomy';
 import { Article } from '../../types';
-import { safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
+import { safeFetchJson, safeJsonParse, isStaticApiRoute } from '../../lib/apiUtils';
 import { 
   clientProcessFeedAndGenerate, 
   clientRewriteArticle, 
@@ -647,6 +647,9 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
 
   // Fetch Scheduler Configuration
   const fetchScheduleConfig = async () => {
+    // The cycle runs fully in the browser now; the legacy /api scheduler only
+    // exists with a real backend. Skip the doomed call on a static/local origin.
+    if (isStaticApiRoute('/api/rss-automation/config')) return;
     try {
       const { ok, data } = await safeFetchJson('/api/rss-automation/config');
       if (ok && data?.success && data.config) {
@@ -1138,13 +1141,16 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
       saveFirestoreDoc('system_config', 'rss_schedule', payload);
       setAutoSchedule((prev: any) => ({ ...prev, ...payload }));
 
-      const { ok, data } = await safeFetchJson('/api/rss-automation/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (ok && data?.success && data.config) {
-        setAutoSchedule(data.config);
+      // Best-effort backend sync only when a real backend is reachable.
+      if (!isStaticApiRoute('/api/rss-automation/config')) {
+        const { ok, data } = await safeFetchJson('/api/rss-automation/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (ok && data?.success && data.config) {
+          setAutoSchedule(data.config);
+        }
       }
       showStatus(isFr ? 'Planning de rédaction automatique enregistré !' : 'Newsroom auto-schedule saved!');
     } catch (err: any) {
@@ -1158,14 +1164,20 @@ export function RssAutomationTab({ onEditArticle, onRefreshArticles }: RssAutoma
     setScheduleLoading(true);
     try {
       showStatus(isFr ? 'Lancement du cycle de rédaction...' : 'Triggering writing cycle...');
-      const { ok, data } = await safeFetchJson('/api/rss-automation/trigger-now', { method: 'POST' });
-      if (ok && data?.success) {
-        showStatus(isFr ? 'Cycle de rédaction automatisé lancé avec succès !' : 'Automated drafting cycle completed!');
-        fetchScheduleConfig();
-        if (onRefreshArticles) onRefreshArticles();
-      } else {
-        // Fallback: run pipeline across active feeds directly
+      // The legacy /api trigger only exists with a real backend; the cycle now
+      // runs in-browser, so fall straight through to the client pipeline.
+      if (isStaticApiRoute('/api/rss-automation/trigger-now')) {
         await handleRunFullPipeline();
+      } else {
+        const { ok, data } = await safeFetchJson('/api/rss-automation/trigger-now', { method: 'POST' });
+        if (ok && data?.success) {
+          showStatus(isFr ? 'Cycle de rédaction automatisé lancé avec succès !' : 'Automated drafting cycle completed!');
+          fetchScheduleConfig();
+          if (onRefreshArticles) onRefreshArticles();
+        } else {
+          // Fallback: run pipeline across active feeds directly
+          await handleRunFullPipeline();
+        }
       }
     } catch (err: any) {
       showStatus(err.message, 'error');

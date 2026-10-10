@@ -120,7 +120,12 @@ export function sanitizeAiCopy(input: unknown): { fr: Required<Omit<CarouselAiCo
   // Legacy flat shape (pre-bilingual): treat as the French block.
   const hasLangBlocks = src.fr && typeof src.fr === 'object' || src.en && typeof src.en === 'object';
   const frSrc = (hasLangBlocks ? (src.fr as Record<string, unknown>) : src) || {};
-  const enSrc = (hasLangBlocks ? (src.en as Record<string, unknown>) : {}) as Record<string, unknown>;
+  // `|| {}` on BOTH branches: a model that returns only the `fr` block (or only
+  // `en`) still sets `hasLangBlocks` true, so the other language is `undefined`
+  // here. Without the guard `one(undefined)` throws on `block[key]` — which
+  // crashed the whole newsroom cycle on a French-only AI response instead of
+  // simply falling back to empty (and letting the builder fill the gap).
+  const enSrc = (hasLangBlocks ? (src.en as Record<string, unknown>) : {}) || {};
   const one = (block: Record<string, unknown>): Required<Omit<CarouselAiCopyLang, 'paragraphs'>> & { paragraphs: string[] } => {
     const text = (key: string): string => {
       const value = block[key];
@@ -249,6 +254,9 @@ export function buildDraftFromArticle(
   return {
     articleId: article.id,
     articleSlug: article.slug,
+    // Self-describing language, so a stored draft knows which version it is
+    // without the studio re-deriving it from the article every time.
+    lang,
     category: ai.category || article.category || PLACEHOLDER.category,
     title: ai.title || title || PLACEHOLDER.title,
     lede: lede || PLACEHOLDER.lede,
@@ -270,6 +278,31 @@ export function buildDraftFromArticle(
     closingImage: keep.closingImage,
     closingTint: 0.85,
     accentColor: DEFAULT_ACCENT,
+  };
+}
+
+/**
+ * Both language versions of one article's carousel, built in a single pass.
+ *
+ * The whole point of the newsroom workflow is that a story ships ready to post
+ * in FR *and* EN. `buildDraftFromArticle` already resolves every text field in
+ * one language and falls back to the other, so calling it twice — once per
+ * language — yields two complete, self-describing drafts from the same article
+ * and the same brand assets. Storing both means the Carousel Studio opens the
+ * finished French cards OR the finished English cards without the editor
+ * retyping anything.
+ *
+ * `keep` (logos, closing photo) is shared: those belong to the publication, not
+ * to a language, so both versions carry the same brand marks.
+ */
+export function buildBilingualDraftFromArticle(
+  article: Article,
+  socials: CarouselSocialLink[] = DEFAULT_CAROUSEL_SOCIALS,
+  keep: { logoUrls?: CarouselDraft['logoUrls']; closingImage?: string } = {},
+): { fr: CarouselDraft; en: CarouselDraft } {
+  return {
+    fr: buildDraftFromArticle(article, socials, keep, 'fr'),
+    en: buildDraftFromArticle(article, socials, keep, 'en'),
   };
 }
 

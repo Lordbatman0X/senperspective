@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { startDiagnostics } from './lib/diagnostics';
+import { normalizeBackendBase } from './lib/apiUtils';
 import './index.css';
 
 // Arm DevTools-free diagnostics first, so even a failure during the rest of
@@ -12,7 +13,13 @@ startDiagnostics();
 // Global API routing: when VITE_API_BASE_URL is set (production on Firebase
 // Hosting + Render backend), all relative /api/... fetches are redirected to
 // the central server. Locally (dev) nothing changes — same-origin /api works.
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+//
+// The value is run through `normalizeBackendBase` so a mis-typed env var
+// (`https://`, `//host`, `host:port`) is treated as UNSET instead of being
+// concatenated into an invalid URL. Previously a bare value produced
+// `${API_BASE}/api/...` = `//api/...`, and every fetch threw
+// "Failed to parse URL from //" — which looked like a dead backend.
+const API_BASE = normalizeBackendBase((import.meta.env.VITE_API_BASE_URL || '').trim());
 
 if (API_BASE) {
   const originalFetch = globalThis.fetch.bind(globalThis);

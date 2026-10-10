@@ -8,6 +8,8 @@ import {
   supportsDirectBrowserCall,
   type AiProviderId,
 } from './aiProviders';
+import { uniqueArticleSlug } from './slugify';
+import { buildBilingualDraftFromArticle } from './carousel/draft';
 
 /**
  * The model the admin chose for a provider in Admin -> APIs & IA.
@@ -678,13 +680,15 @@ ${prompt || 'Réécriture intégrale avec dossier analytique, Perspective Brief,
 CATÉGORIE CIBLE : ${category}
 FORMAT / TYPE D'ARTICLE : ${type}
 
-RÈGLES POUR LE BLOC "carouselCopy { fr: {category,title,lede,bodyHeading,paragraphs[3],quote,quoteAttribution}, en: {same fields in English} }" (réseaux sociaux) :
-- Rédige ces textes pour les cartes du carrousel social 1080x1080 de Perspective.
-- Français uniquement, sans guillemets autour de la citation, sans emoji, sans hashtag.
+RÈGLES POUR LE BLOC "carouselCopy" (textes des cartes réseaux sociaux) :
+- Il contient deux blocs de langue complets : "fr" (français) et "en" (anglais),
+  chacun avec : category, title, lede, bodyHeading, paragraphs[3], quote, quoteAttribution.
+- Ce sont les textes des cartes du carrousel social 1080x1080 de Perspective.
+- Pas de guillemets autour de la citation, sans emoji, sans hashtag.
 - Respecte strictement les longueurs : un texte trop long déborde du gabarit.
 - "paragraphs" contient exactement 3 éléments, les points clés de l'article.
 - La citation doit être soit attribuable à une source réelle, soit présentée comme
-  une synthèse de la rédaction ("La rédaction"), jamais comme une fausse citation.
+  une synthèse de la rédaction ("La redaction" / "The newsroom"), jamais comme une fausse citation.
 
 DONNÉES SOURCE DE L'ARTICLE :
 ${articleContext}
@@ -714,18 +718,33 @@ RÉPONDS UNIQUEMENT PAR UN OBJET JSON STRICT respectant exactement ce schéma :
     "international": { "fr": "Dimensions régionales et diplomatiques", "en": "Diplomatic & international angles" }
   },
   "tags": ["Tag1", "Tag2", "Tag3"],
-  "carouselCopy { fr: {category,title,lede,bodyHeading,paragraphs[3],quote,quoteAttribution}, en: {same fields in English} }": {
-    "category": "POLITIQUE",
-    "title": "Titre choc pour la carte de couverture, 6 mots maximum, percutant",
-    "lede": "Une seule phrase de resume qui decrit l'enjeu, 140 caracteres maximum",
-    "bodyHeading": "Le Brief",
-    "paragraphs": [
-      "Point cle 1 : 2 phrases factuelles, 240 caracteres maximum",
-      "Point cle 2 : 2 phrases factuelles, 240 caracteres maximum",
-      "Point cle 3 : 2 phrases factuelles, 240 caracteres maximum"
-    ],
-    "quote": "Une citation forte, credible et attribuable, ou une synthese de la redaction",
-    "quoteAttribution": "La redaction"
+  "carouselCopy": {
+    "fr": {
+      "category": "POLITIQUE",
+      "title": "Titre choc pour la carte de couverture, 6 mots maximum, percutant",
+      "lede": "Une seule phrase de resume qui decrit l'enjeu, 140 caracteres maximum",
+      "bodyHeading": "Le Brief",
+      "paragraphs": [
+        "Point cle 1 : 2 phrases factuelles, 240 caracteres maximum",
+        "Point cle 2 : 2 phrases factuelles, 240 caracteres maximum",
+        "Point cle 3 : 2 phrases factuelles, 240 caracteres maximum"
+      ],
+      "quote": "Une citation forte, credible et attribuable, ou une synthese de la redaction",
+      "quoteAttribution": "La redaction"
+    },
+    "en": {
+      "category": "POLITICS",
+      "title": "Punchy cover-card headline, 6 words max",
+      "lede": "One sentence describing the stake, 140 characters max",
+      "bodyHeading": "The Brief",
+      "paragraphs": [
+        "Key point 1: 2 factual sentences, 240 characters max",
+        "Key point 2: 2 factual sentences, 240 characters max",
+        "Key point 3: 2 factual sentences, 240 characters max"
+      ],
+      "quote": "A strong, credible, attributable quote, or a newsroom synthesis",
+      "quoteAttribution": "The newsroom"
+    }
   }
 }`;
 
@@ -1380,6 +1399,12 @@ export async function clientProcessFeedAndGenerate(options: {
   type?: string;
   preferredEngine?: string;
   customPrompt?: string;
+  /** Slugs already in use, so generated URLs stay unique across runs. */
+  existingSlugs?: string[];
+  /** Source URLs already drafted — matching wire items are skipped. */
+  existingSourceUrls?: string[];
+  /** Normalised titles already drafted — matching wire items are skipped. */
+  existingTitles?: string[];
 }): Promise<{
   success: boolean;
   articles: any[];
@@ -1394,8 +1419,22 @@ export async function clientProcessFeedAndGenerate(options: {
     maxItems = 1, 
     type = 'News', 
     preferredEngine = 'auto',
-    customPrompt 
+    customPrompt,
+    existingSlugs = [],
+    existingSourceUrls = [],
+    existingTitles = [],
   } = options;
+
+  const norm = (t: any) =>
+    String(t || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  const usedUrls = new Set(existingSourceUrls.filter(Boolean).map(String));
+  const usedTitles = new Set(existingTitles.filter(Boolean));
+  const usedSlugs = new Set(existingSlugs.filter(Boolean).map(String));
 
   try {
     if (!hasLoadedFromFirestore) {
@@ -1407,7 +1446,17 @@ export async function clientProcessFeedAndGenerate(options: {
       throw new Error(`Aucun article disponible dans le flux "${feedName || feedUrl}".`);
     }
 
-    const itemsToProcess = feedResult.items.slice(0, maxItems);
+    // Skip wire items already drafted on an earlier run — the single biggest
+    // source of duplicate drafts when the cycle runs several times a day.
+    const freshItems = feedResult.items.filter((it: any) => {
+      const link = String(it.link || '').trim();
+      const title = norm(it.title);
+      if (link && usedUrls.has(link)) return false;
+      if (title && usedTitles.has(title)) return false;
+      return true;
+    });
+
+    const itemsToProcess = freshItems.slice(0, maxItems);
     const createdArticles: any[] = [];
     let lastEngineUsed = '';
 
@@ -1425,20 +1474,54 @@ export async function clientProcessFeedAndGenerate(options: {
         const newArt = {
           ...rewriteRes.article,
           id: 'art-wire-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-          slug: 'wire-' + (item.title || 'article').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) + '-' + Date.now(),
           publishedAt: new Date().toISOString(),
           isPublished: false,
           sourceFeed: feedUrl,
           sourceName: feedName || feedResult.source,
           sourceUrl: item.link || feedUrl,
-          author: 'Perspective Newsroom'
-        };
+          author: 'Perspective Newsroom',
+          aiGenerated: true,
+          aiModelUsed: rewriteRes.engineUsed
+        } as any;
+        // Clean, keyword-bearing, collision-checked slug (the old inline
+        // expression deleted accents and stamped a 14-digit timestamp).
+        newArt.slug = uniqueArticleSlug(
+          newArt.title?.fr || newArt.title?.en || item.title || 'article',
+          [...usedSlugs]
+        );
+        // Wire photo first, then the AI's image, then the themed fallback.
+        const assignedImg =
+          item.imageUrl ||
+          (item as any).image ||
+          item.enclosure?.url ||
+          rewriteRes.article?.featuredImage ||
+          getEditorialFallbackImage(category, newArt.title?.fr || item.title || '');
+        if (assignedImg) {
+          newArt.featuredImage = assignedImg;
+          newArt.imageUrl = assignedImg;
+        }
+        // READY bilingual social carousel: complete 1080x1080 card sets in
+        // BOTH languages, pre-built from the AI-written carouselCopy (fr + en),
+        // so the Carousel Studio opens the finished French OR English cards.
+        // `carouselDraft` stays the French copy for backward compatibility.
+        try {
+          const drafts = buildBilingualDraftFromArticle(newArt);
+          newArt.carouselDrafts = drafts;
+          newArt.carouselDraft = drafts.fr;
+        } catch { /* the studio can rebuild drafts from the article later */ }
         createdArticles.push(newArt);
+        usedSlugs.add(newArt.slug);
+        if (newArt.sourceUrl) usedUrls.add(String(newArt.sourceUrl));
+        usedTitles.add(norm(newArt.title?.fr || newArt.title?.en));
       }
     }
 
     if (createdArticles.length === 0) {
-      throw new Error('Échec de la rédaction des articles par le moteur IA client.');
+      throw new Error(
+        freshItems.length === 0
+          ? 'Toutes les dépêches de ce flux sont déjà rédigées.'
+          : 'Échec de la rédaction des articles par le moteur IA client.'
+      );
     }
 
     return {

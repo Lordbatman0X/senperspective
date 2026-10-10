@@ -467,6 +467,13 @@ export function CarouselStudioTab() {
     normalizeDraft(siteSettings?.socialCarousel as Partial<CarouselDraft> | undefined),
   );
   const [activeCard, setActiveCard] = useState<CarouselCardKind>('cover');
+  /**
+   * Which language of the article's carousel is on screen. Wire generations
+   * attach BOTH finished versions (`carouselDrafts.fr` / `.en`), so the editor
+   * switches between the ready French and English cards instead of retyping —
+   * the two share the same brand assets (logos, closing photo).
+   */
+  const [cardLang, setCardLang] = useState<'fr' | 'en'>('fr');
   const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [downloadingKind, setDownloadingKind] = useState<CarouselCardKind | 'all' | 'mediatheque' | null>(null);
@@ -483,16 +490,87 @@ export function CarouselStudioTab() {
 
   const articlesForPicker = useMemo(() => pickerArticles(articles), [articles]);
 
+  /**
+   * Builds the on-screen draft for one article in one language.
+   *
+   * Wire generations attach READY carousels in BOTH languages
+   * (`carouselDrafts.fr` / `.en`), each built in the same pass as the article.
+   * We load the requested language's finished cards as-is so the editor starts
+   * from done text; when a version is missing (older article, or a language the
+   * model skipped) we rebuild it from the article, which resolves that language
+   * first and falls back to the other. Brand assets (logos, closing photo)
+   * belong to the publication, not the article, so they are always carried over.
+   */
+  const draftForArticleLang = (
+    article: Article,
+    lang: 'fr' | 'en',
+    brandAssets: { logoUrls?: CarouselDraft['logoUrls']; closingImage?: string; socials: CarouselDraft['socials'] },
+  ): { next: CarouselDraft; prebuilt: boolean } => {
+    const drafts = (article as any).carouselDrafts as { fr?: Partial<CarouselDraft>; en?: Partial<CarouselDraft> } | undefined;
+    const prebuilt = (drafts?.[lang] ?? (lang === 'fr' ? (article as any).carouselDraft : undefined)) as Partial<CarouselDraft> | undefined;
+    const next = prebuilt
+      ? normalizeDraft({
+          ...prebuilt,
+          lang,
+          articleId: article.id,
+          articleSlug: article.slug,
+          logoUrls: brandAssets.logoUrls ?? prebuilt.logoUrls,
+          closingImage: brandAssets.closingImage ?? prebuilt.closingImage,
+          socials: prebuilt.socials?.length ? prebuilt.socials : brandAssets.socials,
+        })
+      : buildDraftFromArticle(article, brandAssets.socials, {
+          logoUrls: brandAssets.logoUrls,
+          closingImage: brandAssets.closingImage,
+        }, lang);
+    return { next, prebuilt: !!prebuilt };
+  };
+
   /** Rebuilds the draft from the picked article, keeping the logo & closing photo. */
   const handlePickArticle = (picked: { id?: string } | null) => {
     if (!picked?.id) return;
     const article = articles.find(a => a.id === picked.id);
     if (!article) return;
-    setDraft(buildDraftFromArticle(article, draft.socials, {
+    const { next, prebuilt } = draftForArticleLang(article, cardLang, {
       logoUrls: draft.logoUrls,
       closingImage: draft.closingImage,
-    }));
-    setStatus({ tone: 'ok', text: 'Carte remplie depuis l’article (logos et photo de clôture conservés).' });
+      socials: draft.socials,
+    });
+    setDraft(next);
+    setStatus({
+      tone: 'ok',
+      text: prebuilt
+        ? `Cartes ${cardLang === 'fr' ? 'françaises' : 'anglaises'} pré-générées chargées depuis l’article (logos et photo de clôture conservés).`
+        : `Carte ${cardLang === 'fr' ? 'française' : 'anglaise'} remplie depuis l’article (logos et photo de clôture conservés).`,
+    });
+  };
+
+  /**
+   * Switches the on-screen carousel between the article's French and English
+   * versions. Both were pre-built by the newsroom cycle, so this swaps finished
+   * text (and its language) without the editor retyping anything. Brand assets
+   * are preserved; only the copy language changes.
+   */
+  const handleSwitchLang = (lang: 'fr' | 'en') => {
+    if (lang === cardLang) return;
+    setCardLang(lang);
+    const article = articles.find(a => a.id === draft.articleId);
+    if (!article) {
+      // No linked article: keep the current text but relabel its language.
+      setDraft(prev => ({ ...prev, lang }));
+      return;
+    }
+    const { next, prebuilt } = draftForArticleLang(article, lang, {
+      logoUrls: draft.logoUrls,
+      closingImage: draft.closingImage,
+      socials: draft.socials,
+    });
+    setDraft(next);
+    setStatus({
+      tone: 'ok',
+      text: prebuilt
+        ? `Cartes ${lang === 'fr' ? 'françaises' : 'anglaises'} chargées.`
+        : `Cartes ${lang === 'fr' ? 'françaises' : 'anglaises'} régénérées depuis l’article.`,
+    });
   };
 
   const handleSave = async () => {
@@ -810,6 +888,32 @@ export function CarouselStudioTab() {
           onSelect={handlePickArticle}
           label="Article à promouvoir"
         />
+        {/*
+          FR / EN switch. Wire generations pre-build BOTH language versions of
+          the carousel, so this swaps the finished French and English cards for
+          the linked article without retyping. Disabled until an article is
+          linked — there is no per-language copy to switch to otherwise.
+        */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Langue des cartes</span>
+          <div className="flex gap-1 bg-zinc-950 border border-zinc-800 rounded-md p-0.5" role="group" aria-label="Langue des cartes">
+            {(['fr', 'en'] as const).map(l => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => handleSwitchLang(l)}
+                disabled={!draft.articleId}
+                aria-pressed={cardLang === l}
+                className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                  cardLang === l ? 'bg-[#B8471F] text-white' : 'text-zinc-400 hover:text-white'
+                } ${!draft.articleId ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                title={l === 'fr' ? 'Cartes en français' : 'English cards'}
+              >
+                {l === 'fr' ? 'Français' : 'English'}
+              </button>
+            ))}
+          </div>
+        </div>
         <button
           type="button"
           onClick={handleResetTemplate}

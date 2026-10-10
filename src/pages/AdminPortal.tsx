@@ -12,6 +12,7 @@ import { useSEO } from '../hooks/useSEO';
 import { getSafeText, formatCategory } from '../lib/utils';
 import { verifyPassword, stableUserId, verifyBootstrapAdminPassword, BOOTSTRAP_ADMIN_EMAILS, resolveLoginIdentifier } from '../lib/authCrypto';
 import { resolveApiUrl, safeJsonParse } from '../lib/apiUtils';
+import { useNewsroomScheduler } from '../hooks/useNewsroomScheduler';
 
 // Modular Tab components
 import { DashboardOverview } from '../components/admin/DashboardOverview';
@@ -377,6 +378,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
     friends = [], addFriend, deleteFriend,
     abdelPrompts, updateAbdelPrompts
   } = useStore();
+
+  // The newsroom auto-writer: at each designated time (or interval fallback)
+  // it drafts 5 articles per Senegalese press agency and 2 per other feed,
+  // each with its social carousel ready. Runs for as long as the admin
+  // console is open, whichever tab is active.
+  useNewsroomScheduler();
 
   const users = friends;
 

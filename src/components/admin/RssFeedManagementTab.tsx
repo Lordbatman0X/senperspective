@@ -7,7 +7,7 @@ import {
   Key, AlertTriangle, EyeOff
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { resolveApiUrl, safeFetchJson, safeJsonParse } from '../../lib/apiUtils';
+import { resolveApiUrl, safeFetchJson, safeJsonParse, isStaticApiRoute } from '../../lib/apiUtils';
 import { 
   clientFetchRssFeed, 
   clientRewriteArticle, 
@@ -21,6 +21,15 @@ import {
 import { ALL_RELIABLE_RSS_FEEDS, ensureValidUrl, normalizeRssFeedUrl } from './RssAutomationTab';
 import { uniqueArticleSlug } from '../../lib/slugify';
 import { resolveRssCategories, matchSiteCategory } from './RssAutomationTab';
+import {
+  loadScheduleConfig,
+  saveScheduleConfig,
+  runNewsroomCycle,
+  parseTimesInput,
+  nextRunFromTimes,
+  DEFAULT_QUOTA_SENEGAL,
+  DEFAULT_QUOTA_OTHER,
+} from '../../lib/newsroomCycle';
 
 ;
 
@@ -61,30 +70,44 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
     return saved ? safeJsonParse(saved, {}) : {};
   });
 
-  // Scheduler State
+  // Scheduler State — initialised from the SAME local config the in-browser
+  // cycle runner reads, so the UI shows the truth even when the backend API
+  // is unreachable (the deployed site is static: /api/* returns index.html).
   const [autoSchedule, setAutoSchedule] = useState<{
     enabled: boolean;
     intervalMinutes: number;
     targetPack: string;
     maxArticlesPerCycle: number;
     autoPublish: boolean;
+    /** Designated daily run times, "HH:MM" Africa/Dakar. */
+    times?: string[];
+    /** Per-cycle quota for Senegalese agencies (default 5). */
+    quotaSenegal?: number;
+    /** Per-cycle quota for every other feed (default 2). */
+    quotaOther?: number;
     lastRunAt: string | null;
     nextRunAt: string | null;
     status: 'idle' | 'running' | 'error';
     totalDraftsCreated: number;
     logs: Array<{ id: string; timestamp: string; type: 'info' | 'success' | 'warning' | 'error'; message: string }>;
-  }>({
+  }>(() => ({
     enabled: false,
     intervalMinutes: 60,
     targetPack: 'all',
     maxArticlesPerCycle: 2,
     autoPublish: false,
+    times: [],
+    quotaSenegal: DEFAULT_QUOTA_SENEGAL,
+    quotaOther: DEFAULT_QUOTA_OTHER,
     lastRunAt: null,
     nextRunAt: null,
     status: 'idle',
     totalDraftsCreated: 0,
-    logs: []
-  });
+    logs: [],
+    ...loadScheduleConfig(),
+  }));
+  /** Editable text for the designated times, e.g. "07:00, 13:00, 19:00". */
+  const [timesInput, setTimesInput] = useState(() => (autoSchedule.times || []).join(', '));
 
   // Active sub-tab inside Feed Management
   const [activeSubTab, setActiveSubTab] = useState<'monitor' | 'scheduler' | 'webhook'>('monitor');
@@ -156,12 +179,26 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const webhookEndpoint = `${origin}/api/webhooks/incoming-rss`;
 
-  // Fetch Schedule Config from Server
+  // Fetch Schedule Config — local first (the cycle runner's source of truth),
+  // then best-effort backend sync. The backend does not exist on the static
+  // deployment, so a failed server call must never blank the saved config.
   const fetchScheduleConfig = async () => {
     try {
+      const local = loadScheduleConfig();
+      setAutoSchedule(prev => ({ ...prev, ...local }));
+      setTimesInput((local.times || []).join(', '));
+    } catch { /* keep current state */ }
+    try {
+      // The cycle now runs fully in the browser, so the legacy /api scheduler
+      // endpoint only exists when a real backend is configured. Skipping the
+      // call on a static/local origin avoids a doomed request that would
+      // otherwise surface as a fetch URL-parse error.
+      if (isStaticApiRoute('/api/rss-automation/config')) return;
       const { ok, data } = await safeFetchJson('/api/rss-automation/config');
       if (ok && data?.success && data.config) {
-        setAutoSchedule(data.config);
+        // Merge, never replace: the server copy predates the local times and
+        // quota fields and must not wipe them.
+        setAutoSchedule(prev => ({ ...prev, ...data.config }));
       }
     } catch (e) {
       console.warn("Could not retrieve scheduler configuration:", e);
@@ -686,21 +723,95 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
     e.preventDefault();
     setScheduleLoading(true);
     try {
-      const { ok, data, error } = await safeFetchJson('/api/rss-automation/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(autoSchedule)
-      });
-      if (ok && data?.success) {
-        setAutoSchedule(data.config);
-        showStatus(isFr ? 'Planificateur automatique configuré avec succès !' : 'Auto-scheduler config persisted successfully!');
-      } else {
-        throw new Error(error || data?.error || 'Save failed');
-      }
+      const times = parseTimesInput(timesInput);
+      const payload = {
+        ...autoSchedule,
+        times,
+        quotaSenegal: Number(autoSchedule.quotaSenegal) > 0 ? Number(autoSchedule.quotaSenegal) : DEFAULT_QUOTA_SENEGAL,
+        quotaOther: Number(autoSchedule.quotaOther) > 0 ? Number(autoSchedule.quotaOther) : DEFAULT_QUOTA_OTHER,
+        nextRunAt: times.length ? nextRunFromTimes(times) : autoSchedule.nextRunAt,
+      };
+
+      // 1. Save locally first — this is exactly what the in-browser cycle
+      //    runner reads, and it works even with no backend API reachable.
+      //    (The old flow POSTed to /api and threw "Save failed" on the
+      //    static deployment, so the schedule never persisted at all.)
+      const saved = saveScheduleConfig(payload as any);
+      setAutoSchedule(prev => ({ ...prev, ...saved }));
+      setTimesInput((saved.times || []).join(', '));
+
+      // 2. Best-effort backend sync, so a future server cron stays in step.
+      //    Skipped when there is no backend to reach (static/local origin).
+      try {
+        if (!isStaticApiRoute('/api/rss-automation/config')) {
+          const { ok, data } = await safeFetchJson('/api/rss-automation/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(saved)
+          });
+          if (ok && data?.success && data.config) {
+            setAutoSchedule(prev => ({ ...prev, ...data.config }));
+          }
+        }
+      } catch { /* backend optional on static hosting */ }
+
+      showStatus(
+        isFr
+          ? `Planificateur enregistré ! ${times.length ? `Prochain cycle : ${times.join(', ')} (Dakar)` : `Cadence : toutes les ${payload.intervalMinutes} min`}.`
+          : `Scheduler saved! ${times.length ? `Next cycles: ${times.join(', ')} (Dakar)` : `Cadence: every ${payload.intervalMinutes} min`}.`
+      );
     } catch (err: any) {
       showStatus(err.message, 'error');
     } finally {
       setScheduleLoading(false);
+    }
+  };
+
+  // Runs one full writing cycle right now, with the exact rules the scheduler
+  // uses: 5 articles per Senegalese press agency, 2 per other feed, each with
+  // its social carousel ready.
+  const handleRunCycleNow = async () => {
+    if (runningAllPipeline) return;
+    setRunningAllPipeline(true);
+    try {
+      showStatus(
+        isFr
+          ? `Cycle de rédaction lancé — ${autoSchedule.quotaSenegal || DEFAULT_QUOTA_SENEGAL} articles par agence sénégalaise, ${autoSchedule.quotaOther || DEFAULT_QUOTA_OTHER} par autre source…`
+          : `Writing cycle started — ${autoSchedule.quotaSenegal || DEFAULT_QUOTA_SENEGAL} stories per Senegalese agency, ${autoSchedule.quotaOther || DEFAULT_QUOTA_OTHER} per other feed…`
+      );
+      const result = await runNewsroomCycle({
+        config: autoSchedule as any,
+        feeds: rssFeeds,
+        existingArticles: articles,
+        siteCategories: (siteSettings as any)?.categories,
+        isFr,
+        onProgress: (m) => console.info('[Newsroom]', m),
+        addArticle,
+      });
+      const ranAt = new Date().toISOString();
+      const nextCfg = {
+        ...autoSchedule,
+        lastRunAt: ranAt,
+        nextRunAt: (autoSchedule.times || []).length ? nextRunFromTimes(autoSchedule.times || []) : autoSchedule.nextRunAt,
+        totalDraftsCreated: (Number(autoSchedule.totalDraftsCreated) || 0) + result.created,
+        status: (result.success ? 'idle' : 'error') as 'idle' | 'error',
+        logs: [...result.logs, ...(autoSchedule.logs || [])].slice(0, 30),
+      };
+      saveScheduleConfig(nextCfg as any);
+      setAutoSchedule(nextCfg);
+      showStatus(
+        result.success
+          ? (isFr
+              ? `Cycle terminé : ${result.created} brouillon(s) rédigé(s), carrousels sociaux inclus.`
+              : `Cycle complete: ${result.created} draft(s) written, social carousels included.`)
+          : (result.error || (isFr ? 'Cycle terminé sans nouvel article (flux déjà traités ?).' : 'Cycle finished without new articles.')),
+        result.success ? 'success' : 'error'
+      );
+      if (onRefreshArticles) onRefreshArticles();
+    } catch (err: any) {
+      showStatus(err.message || 'Cycle failed', 'error');
+    } finally {
+      setRunningAllPipeline(false);
     }
   };
 
@@ -1191,29 +1302,79 @@ export function RssFeedManagementTab({ onRefreshArticles, onEditArticle }: RssFe
                 </p>
               </div>
 
-              {/* Limit items */}
+              {/* Per-cycle quotas: 5 for Senegalese agencies, 2 for the rest */}
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-3">
                 <label className="text-xs font-mono font-bold uppercase text-orange-400 block">
-                  {isFr ? 'Limite d\'Articles rédigés par Cycle' : 'Max Drafts created per Feed'}
+                  {isFr ? 'Quotas par Cycle (par source)' : 'Per-Cycle Quotas (per feed)'}
                 </label>
-                <select
-                  value={autoSchedule.maxArticlesPerCycle}
-                  onChange={e => setAutoSchedule(prev => ({ ...prev, maxArticlesPerCycle: parseInt(e.target.value) }))}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-lg p-2 outline-none focus:border-orange-500"
-                >
-                  <option value={1}>1 {isFr ? 'article par flux' : 'article per feed'}</option>
-                  <option value={2}>2 {isFr ? 'articles par flux' : 'articles per feed'}</option>
-                  <option value={3}>3 {isFr ? 'articles par flux' : 'articles per feed'}</option>
-                  <option value={5}>5 {isFr ? 'articles par flux' : 'articles per feed'}</option>
-                </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[10px] text-zinc-400 font-mono block mb-1">🇸🇳 {isFr ? 'Agences sénégalaises' : 'Senegalese agencies'}</span>
+                    <select
+                      value={autoSchedule.quotaSenegal ?? DEFAULT_QUOTA_SENEGAL}
+                      onChange={e => setAutoSchedule(prev => ({ ...prev, quotaSenegal: parseInt(e.target.value) }))}
+                      className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-lg p-2 outline-none focus:border-orange-500"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                        <option key={n} value={n}>{n} {isFr ? 'articles' : 'stories'}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-zinc-400 font-mono block mb-1">🌍 {isFr ? 'Autres sources' : 'Other feeds'}</span>
+                    <select
+                      value={autoSchedule.quotaOther ?? DEFAULT_QUOTA_OTHER}
+                      onChange={e => setAutoSchedule(prev => ({ ...prev, quotaOther: parseInt(e.target.value) }))}
+                      className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-lg p-2 outline-none focus:border-orange-500"
+                    >
+                      {[1, 2, 3, 4, 5].map(n => (
+                        <option key={n} value={n}>{n} {isFr ? 'articles' : 'stories'}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <p className="text-[10px] text-zinc-500 font-mono">
-                  {isFr ? 'Régule la quantité de brouillons créés à chaque passage pour préserver vos jetons API.' : 'Protects your LLM tokens by bounding drafting cycles.'}
+                  {isFr 
+                    ? 'Règle de la rédaction : à chaque cycle, chaque agence de presse sénégalaise est traitée en priorité (5 articles), les autres sources restent en couverture légère (2 articles).'
+                    : 'Newsroom rule: each cycle drafts 5 stories per Senegalese press agency and 2 per other feed.'}
                 </p>
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-2 border-t border-zinc-800/60">
+            {/* Designated daily run times (Africa/Dakar) */}
+            <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 space-y-3">
+              <label className="text-xs font-mono font-bold uppercase text-orange-400 block">
+                {isFr ? 'Heures de Rédaction Fixes (Africa/Dakar)' : 'Designated Writing Times (Africa/Dakar)'}
+              </label>
+              <input
+                type="text"
+                value={timesInput}
+                onChange={e => setTimesInput(e.target.value)}
+                placeholder={isFr ? 'ex : 07:00, 13:00, 19:00' : 'e.g. 07:00, 13:00, 19:00'}
+                className="w-full bg-zinc-900 border border-zinc-700 text-white text-xs font-mono rounded-lg p-2 outline-none focus:border-orange-500"
+              />
+              <p className="text-[10px] text-zinc-500 font-mono">
+                {isFr 
+                  ? 'À chaque heure indiquée, un cycle complet se lance automatiquement tant que le portail admin est ouvert (5 articles par agence sénégalaise, 2 par autre source, carrousels inclus). Laissez vide pour utiliser la fréquence ci-dessus.'
+                  : 'At each listed time a full cycle fires automatically while the admin console is open (5 stories per Senegalese agency, 2 per other feed, carousels included). Leave empty to use the frequency above.'}
+              </p>
+            </div>
+
+            {/* Save + Run-now Buttons */}
+            <div className="flex justify-end gap-3 pt-2 border-t border-zinc-800/60">
+              <button
+                type="button"
+                onClick={handleRunCycleNow}
+                disabled={runningAllPipeline}
+                className="px-6 py-3 bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs font-bold uppercase tracking-wider rounded-xl transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <Play size={15} className={runningAllPipeline ? 'animate-spin' : ''} />
+                <span>
+                  {runningAllPipeline
+                    ? (isFr ? 'Cycle en cours...' : 'Cycle running...')
+                    : (isFr ? 'Lancer un cycle maintenant' : 'Run a cycle now')}
+                </span>
+              </button>
               <button
                 type="submit"
                 disabled={scheduleLoading}
