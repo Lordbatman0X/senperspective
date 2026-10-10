@@ -30,7 +30,7 @@ import {
 } from '../src/lib/carousel/draft';
 import { CAROUSEL_SIZE, MAX_CAROUSEL_PARAGRAPHS } from '../src/lib/carousel/types';
 import { collectDraftImages, logoImageKey, socialIconKey } from '../src/lib/carousel/images';
-import { G, closingSocialRowY, socialLabelBudget, socialStep } from '../src/lib/carousel/layout';
+import { G, closingSocialRowY, socialLabelBudget, socialStep, cardAlignmentColumns, cardAlignmentRows, nearestSnap, fieldGuideLabel, logoSnapGuides } from '../src/lib/carousel/layout';
 import { logoImageRect } from '../src/lib/carousel/render';
 
 let pass = 0;
@@ -417,5 +417,45 @@ assert.equal(normalizeDraft({ accentColor: '#b8471f' }).accentColor, DEFAULT_ACC
 assert.equal(normalizeDraft({ accentColor: '#123456' }).accentColor, '#123456', 'custom accents are preserved');
 assert.equal(normalizeDraft({}).accentColor, DEFAULT_ACCENT, 'a missing accent falls back to the default');
 ok('legacy brick accent migrates to the ember, custom colours survive');
+
+console.log('\n- alignment guides & snapping -');
+// The logo can level with the card frame, the category tag, AND every text
+// block's edges — so an uploaded logo lines up with the title / chapô / a key
+// point, not just the margins.
+assert.equal(fieldGuideLabel('title'), 'Titre');
+assert.equal(fieldGuideLabel('lede'), 'Chapô');
+assert.equal(fieldGuideLabel('paragraph-0'), 'Point 1');
+assert.equal(fieldGuideLabel('paragraph-2'), 'Point 3');
+ok('field ids get human alignment labels');
+
+const fakeFields = [
+  { id: 'title', x: 100, y: 200, width: 400, height: 120 },
+  { id: 'lede', x: 100, y: 400, width: 300, height: 60 },
+];
+const cols = cardAlignmentColumns(fakeFields).map(c => c.pos);
+// Fixed anchors: both gutters (58 / 1022), the centre (540) and the tag edge.
+assert.ok(cols.includes(58) && cols.includes(540) && cols.includes(1022), 'fixed column anchors present');
+// Field edges: title left (100), centre (300), right (500); lede left (100), centre (250), right (400).
+assert.ok(cols.includes(100) && cols.includes(300) && cols.includes(500), 'title edges are columns');
+assert.ok(cols.includes(250) && cols.includes(400), 'lede edges are columns');
+const rows = cardAlignmentRows(fakeFields).map(r => r.pos);
+assert.ok(rows.includes(0) && rows.includes(46) && rows.includes(56) && rows.includes(928), 'fixed row anchors present');
+assert.ok(rows.includes(200) && rows.includes(260) && rows.includes(320), 'title top/centre/bottom are rows');
+assert.ok(rows.includes(400) && rows.includes(430) && rows.includes(460), 'lede top/centre/bottom are rows');
+ok('columns and rows include the frame, the tag and every text block edge');
+
+// nearestSnap: returns the closest target within tolerance, else null (free).
+assert.equal(nearestSnap(305, [100, 300, 500], 14), 300, 'snaps to the nearest line');
+assert.equal(nearestSnap(460, [100, 300, 500], 14), null, 'no line within tolerance stays free');
+assert.equal(nearestSnap(295, [300, 290], 14), 290, 'picks the NEAREST of two close lines');
+assert.equal(nearestSnap(50, [], 14), null, 'no targets → free');
+
+// logoSnapGuides: only reports guides the logo is actually on, and names them.
+const onTitleLeft = logoSnapGuides({ cx: 100, top: 200, size: 80 }, fakeFields);
+assert.ok(onTitleLeft.some(g => g.axis === 'x' && g.label.includes('Titre')), 'a logo on the title left edge shows a Titre guide');
+assert.ok(onTitleLeft.some(g => g.axis === 'y' && g.label.includes('Titre')), 'a logo on the title top edge shows a Titre row');
+const free = logoSnapGuides({ cx: 333, top: 501, size: 80 }, fakeFields);
+assert.equal(free.length, 0, 'a logo on no line shows no guides');
+ok('logoSnapGuides reports only the lines the logo is on, named by item');
 
 console.log(`\n${pass} passed\n`);

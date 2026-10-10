@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CarouselCardKind, CarouselDraft, CarouselLogoPlacement } from '../../../lib/carousel/types';
 import { CAROUSEL_SIZE } from '../../../lib/carousel/types';
 import { logoImageRect, renderCard } from '../../../lib/carousel/render';
-import { computeCardLayout, G, logoSnapGuides, type EditableField } from '../../../lib/carousel/layout';
+import { computeCardLayout, logoSnapGuides, cardAlignmentColumns, cardAlignmentRows, nearestSnap, type EditableField } from '../../../lib/carousel/layout';
 import { collectDraftImages, loadCardImages, logoImageKey } from '../../../lib/carousel/images';
 import { AlertTriangle } from 'lucide-react';
 
@@ -180,26 +180,35 @@ export function CarouselPreview({
   }, [draft, onChange]);
 
   const SNAP = 14;
-  const commitLogo = useCallback((next: Required<CarouselLogoPlacement>) => {
-    // Assisted horizontal movement: snap to the card centre and the 78/1002 gutters.
-    if (Math.abs(next.cx - 540) < SNAP) next = { ...next, cx: 540 };
-    else if (Math.abs(next.cx - 78) < SNAP) next = { ...next, cx: 78 };
-    else if (Math.abs(next.cx - 1002) < SNAP) next = { ...next, cx: 1002 };
+  /**
+   * The alignment lines the logo currently sits on, for the live readout.
+   *
+   * Recomputed from the layout fields so it names the actual item (Titre, Tag,
+   * Chapô, Point 1…) the logo is level with, not just a raw coordinate.
+   */
+  const activeGuides = logoSnapGuides(layout.logo, layout.fields);
+
+  const commitLogo = useCallback((nextIn: Required<CarouselLogoPlacement>) => {
+    let next = nextIn;
+    // Assisted horizontal movement: snap to the card centre, the two gutters,
+    // the tag's right edge, AND every text block's left/centre/right — so an
+    // uploaded logo can be lined up with the title, the chapô or a key point,
+    // not just the card frame. `nearestSnap` picks the closest line within
+    // SNAP px, so several nearby blocks never fight over the logo.
+    const cols = cardAlignmentColumns(layout.fields).map(c => c.pos);
+    const snapX = nearestSnap(next.cx, cols, SNAP);
+    if (snapX !== null) next = { ...next, cx: snapX };
     // Vertical movement is FREE — the logo can be raised all the way to the
     // card's top edge, which is what aligning an uploaded logo with the
-    // category pill requires. Only the alignment rows attract it, and only
-    // within 6px: the pill's top line (checked first, so the two rows never
-    // fight), the approved default top, the closing card's wordmark row, and
-    // y0 — the top edge itself, so the last few pixels of an upward drag land
-    // exactly on the edge instead of stopping just short of it.
-    // The previous rule — "anything above y60 snaps back to 46" — made
-    // raising the logo past the default impossible however carefully it was
-    // dragged, which is exactly the complaint this replaces.
-    const rows = [G.pillY, 46, 928, 0];
-    const near = rows.find(row => Math.abs(next.top - row) < 6);
-    if (near !== undefined) next = { ...next, top: near };
+    // category pill requires. The rows attract it within SNAP px: the tag's top
+    // line, the approved default top, the closing card's wordmark row, y0 (the
+    // top edge, so an upward drag lands exactly on it), and every text block's
+    // top/centre/bottom. `nearestSnap` resolves ties to the nearest line.
+    const rows = cardAlignmentRows(layout.fields).map(r => r.pos);
+    const snapY = nearestSnap(next.top, rows, SNAP);
+    if (snapY !== null) next = { ...next, top: snapY };
     onChange?.({ logos: { ...(draft.logos || {}), [kind]: next } });
-  }, [draft.logos, kind, onChange]);
+  }, [draft.logos, kind, onChange, layout.fields]);
 
   /**
    * Drags the logo. Pointer deltas are converted from screen pixels back into
@@ -242,6 +251,47 @@ export function CarouselPreview({
 
   const onLogoPointerUp = (e: React.PointerEvent) => {
     dragState.current = null;
+    (e.target as Element).releasePointerCapture(e.pointerId);
+  };
+
+  /**
+   * Resizes the logo by dragging its bottom-right corner.
+   *
+   * The size is driven by the pointer's distance from the logo's fixed anchor
+   * (its horizontal centre `cx` and its top edge `top`), mapped through the
+   * placement box's 4.6:1 proportion — the same ratio the renderer uses — so
+   * dragging the corner scales the box exactly as the slider does, with no
+   * feedback loop (the anchor never moves while resizing). This is the
+   * grab-the-box control that sits ALONGSIDE the slider/nudge/number inputs,
+   * which are all left in place.
+   */
+  const resizeState = useRef<{ startX: number; startY: number; origin: Required<CarouselLogoPlacement> } | null>(null);
+
+  const onResizePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    resizeState.current = { startX: e.clientX, startY: e.clientY, origin: { ...layout.logo } };
+    setShowLogoHandle(true);
+  };
+
+  const onResizePointerMove = (e: React.PointerEvent) => {
+    const r = resizeState.current;
+    if (!r) return;
+    const dragScale = fitWidth / CAROUSEL_SIZE;
+    // Pointer position in card pixels, relative to the logo's anchor. The box
+    // is `size*4.6` wide and centred on cx, so the half-width from the anchor
+    // is `size*2.3`; size is therefore halfWidth/2.3. Clamped to the slider's
+    // own 32–220 range so a wild drag can never store a value the draft would
+    // reject on the next load.
+    const pointerX = r.origin.cx + (e.clientX - r.startX) / dragScale;
+    const halfWidth = Math.abs(pointerX - r.origin.cx);
+    const size = Math.min(MAX_LOGO_SIZE, Math.max(MIN_LOGO_SIZE, Math.round(halfWidth / 2.3)));
+    commitLogo({ ...r.origin, size });
+  };
+
+  const onResizePointerUp = (e: React.PointerEvent) => {
+    resizeState.current = null;
     (e.target as Element).releasePointerCapture(e.pointerId);
   };
 
@@ -311,11 +361,42 @@ export function CarouselPreview({
             }}
           />
 
+          {/* Resize handle: grab the bottom-right corner of the box to scale the
+              logo, complementing the slider / nudge / number controls below
+              (all of which stay). Its own pointer handlers stop propagation so a
+              resize never also starts a move. */}
+          {showLogoHandle && (
+            <div
+              role="button"
+              aria-label="Redimensionner le logo"
+              title="Glissez pour redimensionner le logo"
+              onPointerDown={onResizePointerDown}
+              onPointerMove={onResizePointerMove}
+              onPointerUp={onResizePointerUp}
+              onPointerCancel={onResizePointerUp}
+              className="absolute cursor-nwse-resize touch-none flex items-center justify-center"
+              style={{
+                // A corner that stays a comfortable tap target at any preview
+                // scale: 26px on screen → 26/scale in card pixels.
+                left: logoRect.left + logoRect.width - 13 / scale,
+                top: logoRect.top + logoRect.height - 13 / scale,
+                width: 26 / scale,
+                height: 26 / scale,
+              }}
+            >
+              <span
+                className="block bg-[#B8471F] border-2 border-white/80 rounded-sm shadow"
+                style={{ width: 13 / scale, height: 13 / scale }}
+              />
+            </div>
+          )}
+
           {/* Snap guides: the alignment rows/columns the logo is currently
-              within — including the category pill's top line, which is how an
-              uploaded logo gets level with the tag. Purely visual: they show
-              the alignment, they never move the logo. */}
-          {showLogoHandle && logoSnapGuides(logoAt).map(g => (
+              within — the card frame, the category tag, and every text block's
+              edges (title, chapô, key points…), which is how an uploaded logo
+              gets level with the copy. Purely visual: they show the alignment,
+              they never move the logo. */}
+          {showLogoHandle && logoSnapGuides(logoAt, layout.fields).map(g => (
             <div
               key={`${g.axis}-${g.pos}`}
               className="absolute pointer-events-none"
@@ -342,6 +423,21 @@ export function CarouselPreview({
               }}
               onPointerDown={e => e.stopPropagation()}
             >
+              {/* Live measurement + alignment readout: exact x / y / taille in
+                  card pixels, and the named items the logo is currently level
+                  with (from the guides above). Updates as you drag or resize,
+                  so alignment is something you can read, not just eyeball. */}
+              <span
+                className="text-[10px] font-mono tabular-nums text-zinc-300 whitespace-nowrap pr-1 border-r border-white/15"
+                title="Position et taille exactes (pixels de la carte)"
+              >
+                x {Math.round(logoAt.cx)} · y {Math.round(logoAt.top)} · {Math.round(logoAt.size)}px
+                {activeGuides.length > 0 && (
+                  <span className="ml-1.5 text-[#E8490F] font-bold">
+                    ⟂ {activeGuides.map(g => g.label).join(' · ')}
+                  </span>
+                )}
+              </span>
               <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">Taille</span>
               <button
                 type="button"
@@ -426,6 +522,18 @@ function EditableText({
   onBlur: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  /**
+   * The DOM text we last wrote, so a re-render that carries the SAME value the
+   * user just typed is recognised as "already in the DOM" and left alone.
+   *
+   * Without this, typing ran BACKWARDS: every keystroke fires `onInput` →
+   * `onChange` → a new `value` prop → the layout effect below saw
+   * `innerText !== displayValue` and reassigned `innerText`, which drops the
+   * caret to offset 0. The next character then inserted at the FRONT, so
+   * "abc" came out "cba". The DOM is the source of truth while editing; we only
+   * ever rewrite it on activation or on a genuinely EXTERNAL change.
+   */
+  const lastWritten = useRef<string>('');
 
   // The canvas draws the quote wrapped in guillemets. Those are decoration, not
   // part of the editable value, so they are stripped here and re-added by the
@@ -435,9 +543,27 @@ function EditableText({
     : value;
 
   useLayoutEffect(() => {
-    if (active && ref.current && ref.current.innerText !== displayValue) {
-      ref.current.innerText = displayValue;
-      ref.current.focus();
+    const el = ref.current;
+    if (!el) return;
+    if (!active) {
+      // Leaving edit: drop the DOM text so nothing stale lingers, and reset the
+      // marker so the next activation re-seeds cleanly.
+      if (el.innerText !== '') el.innerText = '';
+      lastWritten.current = '';
+      return;
+    }
+    // Activation, or an external value change (e.g. a language switch rewrote
+    // the copy): seed the DOM and focus, preserving the caret when we can.
+    if (el.innerText !== displayValue) {
+      const caret = saveCaretOffset(el);
+      el.innerText = displayValue;
+      lastWritten.current = displayValue;
+      el.focus();
+      // On first activation there is no meaningful caret to keep — park it at
+      // the end so a click-to-edit starts appending, which is what people
+      // expect. On an external change while already focused, restore where the
+      // user was.
+      restoreCaretOffset(el, caret ?? displayValue.length);
     }
   }, [active, displayValue]);
 
@@ -447,7 +573,11 @@ function EditableText({
       contentEditable={active}
       suppressContentEditableWarning
       onClick={e => { e.stopPropagation(); if (!active) onActivate(); }}
-      onInput={() => onChange(ref.current?.innerText ?? '')}
+      onInput={() => {
+        const next = ref.current?.innerText ?? '';
+        lastWritten.current = next;
+        onChange(next);
+      }}
       onBlur={onBlur}
       onPointerDown={e => e.stopPropagation()}
       title={active ? undefined : 'Cliquez pour réécrire'}
@@ -473,10 +603,48 @@ function EditableText({
         caretColor: '#E8490F',
       }}
     >
-      {/* The text lives in the DOM while editing so the caret has something to
-          sit in, but stays invisible — the canvas paints the visible copy and
-          repaints on every keystroke via `onInput`. */}
-      {active ? displayValue : ''}
+      {/* Intentionally NO React-managed children: while editing, the DOM text is
+          the source of truth and is seeded by the effect above. Rendering the
+          string as a child made React reconcile it back on every keystroke,
+          which (with the innerText reset) is what moved the caret to the front.
+          The canvas paints the visible copy and repaints on every `onInput`. */}
     </div>
   );
+}
+
+/**
+ * The caret's character offset within `el`, or null when it is not focused.
+ *
+ * Used to restore the caret after an external value change, so re-seeding the
+ * DOM does not yank the user back to the start of the line.
+ */
+function saveCaretOffset(el: HTMLElement): number | null {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer)) return null;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return pre.toString().length;
+}
+
+/** Places the caret at `offset` characters into `el` (clamped to its length). */
+function restoreCaretOffset(el: HTMLElement, offset: number): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const textNode = el.firstChild;
+  const max = el.innerText.length;
+  const at = Math.max(0, Math.min(offset, max));
+  const range = document.createRange();
+  if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+    const len = (textNode.textContent || '').length;
+    range.setStart(textNode, Math.min(at, len));
+  } else {
+    range.selectNodeContents(el);
+    range.collapse(false);
+  }
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
 }

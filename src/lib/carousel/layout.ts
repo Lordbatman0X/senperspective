@@ -378,17 +378,112 @@ export function fieldWidthScale(draft: CarouselDraft, id: string): number {
  * within 14px while the logo is being handled. Guides never move the logo;
  * they only make the alignment visible.
  */
-export function logoSnapGuides(at: Required<CarouselLogoPlacement>): { axis: 'x' | 'y'; pos: number; label: string }[] {
-  const guides: { axis: 'x' | 'y'; pos: number; label: string }[] = [];
-  const columns = [G.margin, CAROUSEL_SIZE / 2, CAROUSEL_SIZE - G.margin];
-  for (const ax of columns) {
-    if (Math.abs(at.cx - ax) <= 14) guides.push({ axis: 'x', pos: ax, label: `x ${Math.round(ax)}` });
+/**
+ * A short human label for a layout field, used on the alignment guides.
+ *
+ * `paragraph-N` becomes "Point N+1" so the guide reads as the key point it is
+ * levelling with, not an internal id.
+ */
+export function fieldGuideLabel(id: string): string {
+  if (id.startsWith('paragraph-')) {
+    const n = Number(id.slice('paragraph-'.length));
+    return `Point ${Number.isFinite(n) ? n + 1 : ''}`.trim();
   }
-  // y0 is the card's top edge: the highest an uploaded logo can sit, and the
-  // row the editor needs to see to know the logo has gone as far up as it can.
-  const rows = [0, 46, G.pillY, 928];
-  for (const ay of rows) {
-    if (Math.abs(at.top - ay) <= 14) guides.push({ axis: 'y', pos: ay, label: `y ${Math.round(ay)}` });
+  const map: Record<string, string> = {
+    title: 'Titre',
+    lede: 'Chapô',
+    bodyHeading: 'Section',
+    tagline: 'Accroche',
+    socialHeading: 'Rangée',
+    quote: 'Citation',
+    quoteAttribution: 'Attribution',
+  };
+  return map[id] || id;
+}
+
+/**
+ * Vertical guide candidates (an x position) the logo can level with.
+ *
+ * The fixed card anchors come first — the two gutters, the centre, and the
+ * category tag's right edge (always `CAROUSEL_SIZE - G.margin`). Then every
+ * text block contributes its left edge, horizontal centre and right edge, so an
+ * uploaded logo can be lined up with the title, the chapô, a key point, etc.
+ * — not just the card frame.
+ */
+export function cardAlignmentColumns(fields: EditableField[]): { pos: number; label: string }[] {
+  const cols: { pos: number; label: string }[] = [
+    { pos: G.margin, label: 'Marge' },
+    { pos: CAROUSEL_SIZE / 2, label: 'Centre' },
+    { pos: CAROUSEL_SIZE - G.margin, label: 'Marge' },
+    { pos: CAROUSEL_SIZE - G.margin, label: 'Tag' },
+  ];
+  for (const f of fields) {
+    const label = fieldGuideLabel(f.id);
+    cols.push({ pos: f.x, label: `${label} ↤` });
+    cols.push({ pos: Math.round(f.x + f.width / 2), label: `${label} ◆` });
+    cols.push({ pos: f.x + f.width, label: `${label} ↦` });
+  }
+  return cols;
+}
+
+/**
+ * Horizontal guide candidates (a y position) the logo can level with.
+ *
+ * The fixed rows are the card's top edge (y0, the highest an uploaded logo can
+ * sit), the approved default top (46), the category tag's row (pillY) and the
+ * closing card's wordmark row (928). Then every text block contributes its top
+ * edge, vertical centre and bottom edge.
+ */
+export function cardAlignmentRows(fields: EditableField[]): { pos: number; label: string }[] {
+  const rows: { pos: number; label: string }[] = [
+    { pos: 0, label: 'Bord haut' },
+    { pos: 46, label: 'Défaut' },
+    { pos: G.pillY, label: 'Tag' },
+    { pos: 928, label: 'Bas' },
+  ];
+  for (const f of fields) {
+    const label = fieldGuideLabel(f.id);
+    rows.push({ pos: f.y, label: `${label} ↑` });
+    rows.push({ pos: Math.round(f.y + f.height / 2), label: `${label} ─` });
+    rows.push({ pos: f.y + f.height, label: `${label} ↓` });
+  }
+  return rows;
+}
+
+/**
+ * The value in `targets` nearest to `value`, when it is within `tol`.
+ *
+ * Returns null when nothing is close enough, so free placement is preserved
+ * everywhere except right next to a real alignment line. Picking the NEAREST
+ * (rather than the first match) is what keeps a card with several text blocks
+ * from snapping to a far edge when a closer one is available.
+ */
+export function nearestSnap(value: number, targets: number[], tol: number): number | null {
+  let best: number | null = null;
+  let bestDist = tol;
+  for (const t of targets) {
+    const d = Math.abs(value - t);
+    if (d <= bestDist) { bestDist = d; best = t; }
+  }
+  return best;
+}
+
+/**
+ * The alignment guides the logo is currently sitting on.
+ *
+ * Purely visual — they show the alignment, they never move the logo. Pass the
+ * card's `fields` to also level against the title, tag, chapô, key points, etc.
+ */
+export function logoSnapGuides(
+  at: Required<CarouselLogoPlacement>,
+  fields: EditableField[] = [],
+): { axis: 'x' | 'y'; pos: number; label: string }[] {
+  const guides: { axis: 'x' | 'y'; pos: number; label: string }[] = [];
+  for (const c of cardAlignmentColumns(fields)) {
+    if (Math.abs(at.cx - c.pos) <= 14) guides.push({ axis: 'x', pos: c.pos, label: c.label });
+  }
+  for (const r of cardAlignmentRows(fields)) {
+    if (Math.abs(at.top - r.pos) <= 14) guides.push({ axis: 'y', pos: r.pos, label: r.label });
   }
   return guides;
 }
