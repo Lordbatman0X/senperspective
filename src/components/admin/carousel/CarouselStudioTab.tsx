@@ -527,7 +527,18 @@ export function CarouselStudioTab() {
 
   /** Rebuilds the draft from the picked article, keeping the logo & closing photo. */
   const handlePickArticle = (picked: { id?: string } | null) => {
-    if (!picked?.id) return;
+    // The picker's ✕ passes null to UNLINK the article. Without this branch the
+    // `!picked?.id` guard below swallowed it and the selection never went away.
+    // Detaching keeps the card text exactly as-is (it was generated from the
+    // article, so wiping it on unlink would destroy work for no reason) — only
+    // the link is removed, which re-enables the manual/template flow.
+    if (!picked) {
+      if (!draft.articleId) return;
+      setDraft(prev => ({ ...prev, articleId: undefined }));
+      setStatus({ tone: 'ok', text: 'Article détaché — le texte des cartes est conservé.' });
+      return;
+    }
+    if (!picked.id) return;
     const article = articles.find(a => a.id === picked.id);
     if (!article) return;
     const { next, prebuilt } = draftForArticleLang(article, cardLang, {

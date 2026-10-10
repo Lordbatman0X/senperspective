@@ -410,6 +410,40 @@ export function CarouselPreview({
             </div>
           ))}
 
+          {/* Vertical measurement: a dimension line from the card's top edge
+              (y = 0) down to the logo's top edge, with tick marks at both ends
+              and the exact distance in card pixels. This is the "how far from
+              the top is my logo" number made visual — the text readout below
+              repeats it, but on the card you can SEE the gap you are judging.
+              Drawn to the side of the box (left if there is room, else right)
+              so it never covers the logo itself. */}
+          {showLogoHandle && logoRect.top >= 8 && (
+            (() => {
+              const rulerLeft = logoRect.left >= 56
+                ? logoRect.left - 28
+                : logoRect.left + logoRect.width + 28;
+              return (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{ left: rulerLeft, top: 0, width: 1, height: logoRect.top }}
+                >
+                  {/* The measured line */}
+                  <div className="absolute inset-y-0 w-px" style={{ background: '#E8490F' }} />
+                  {/* Ticks at the card edge and at the logo edge */}
+                  <div className="absolute -left-1.5 top-0 h-px w-4" style={{ background: '#E8490F' }} />
+                  <div className="absolute -left-1.5 bottom-0 h-px w-4" style={{ background: '#E8490F' }} />
+                  {/* Distance label at the midpoint */}
+                  <span
+                    className="absolute -translate-y-1/2 left-2 text-[12px] font-bold font-mono tabular-nums text-[#E8490F] bg-black/75 px-1.5 py-0.5 rounded whitespace-nowrap"
+                    style={{ top: '50%' }}
+                  >
+                    ↑ {Math.round(logoRect.top)} px
+                  </span>
+                </div>
+              );
+            })()
+          )}
+
           {/* The size slider, as in the artifact.
               Stepped at 1px with −/+ nudge buttons and a numeric field: the
               32–220 range in a 160px track means each touch pixel jumps more
