@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useStore } from "../store";
 import { compressImageFile } from "../lib/imageUtils";
 import { safeJsonParse } from "../lib/apiUtils";
+import { deleteUserProfile } from "../firebase/auth";
 import { 
   Search, 
   X, 
@@ -1108,6 +1109,7 @@ export const ConnectionsAndProfile: React.FC<ConnectionsAndProfileProps> = ({
                             } catch (e) {
                               console.error(e);
                             }
+                            await deleteUserProfile(clean);
                             deleteUser(clean);
                             // FIX: never fabricate a "Visiteur" profile here —
                             // it is truthy and blocks the login/register UI.
