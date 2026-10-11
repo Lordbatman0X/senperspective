@@ -860,8 +860,12 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
         </div>
       )}
 
-      {/* Mobile Top Navigation bar */}
-      <header className="md:hidden shrink-0 bg-zinc-900/90 backdrop-blur-md text-zinc-100 p-3 flex justify-between items-center border-b border-zinc-800 z-40">
+      {/* Mobile Top Navigation bar.
+          Solid bg on purpose: backdrop-blur on a fixed page layer makes mobile
+          Chrome's compositor corrupt the rasterized tiles scrolling beneath it —
+          visible as a band of pixel noise across the content. Same opaque look,
+          no GPU artifact. */}
+      <header className="md:hidden shrink-0 bg-zinc-900 text-zinc-100 p-3 flex justify-between items-center border-b border-zinc-800 z-40">
         <div className="flex flex-col leading-none">
           <span className="font-extrabold text-base tracking-tight text-orange-500">{currentSettings.siteName}</span>
           <span className="text-[8px] font-black uppercase tracking-wider text-zinc-400">
@@ -900,11 +904,16 @@ function AdminRouter({ onLogout }: { onLogout: () => void }) {
           type="button"
           aria-label={language === 'fr' ? 'Fermer le menu' : 'Close menu'}
           onClick={() => setMobileMenuOpen(false)}
-          className="md:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm cursor-default"
+          /* No backdrop-blur: a full-screen backdrop snapshot is exactly the
+             case documented in index.css (.overlay-scrim) that smears/tears
+             the page on mobile GPUs. The dim tint alone separates the drawer. */
+          className="md:hidden fixed inset-0 z-40 bg-black/70 cursor-default"
         />
       )}
 
-      <aside className={`w-[84vw] max-w-[320px] md:w-64 md:max-w-none shrink-0 bg-zinc-900/95 backdrop-blur-md flex flex-col h-full overflow-hidden border-r border-zinc-800 z-50 md:z-40 ${
+      {/* Solid bg: the drawer is 95% opaque anyway, and the blur costs a
+          composited backdrop snapshot that corrupts page tiles on Android. */}
+      <aside className={`w-[84vw] max-w-[320px] md:w-64 md:max-w-none shrink-0 bg-zinc-900 flex flex-col h-full overflow-hidden border-r border-zinc-800 z-50 md:z-40 ${
         mobileMenuOpen ? 'fixed inset-y-0 left-0 shadow-2xl' : 'hidden md:flex'
       }`}>
         <div className="p-6 border-b border-zinc-800 hidden md:block">
