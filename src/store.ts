@@ -694,6 +694,8 @@ interface AppState {
   articles: Article[];
   setArticles: (articles: Article[]) => void;
   loadArticles: () => Promise<Article[]>;
+  /** Lightweight freshness reconciliation (keys-only) that runs in the background so newly published articles appear without a full reload. */
+  refreshArticlesInBackground: () => Promise<void>;
   syncFromSupabase: () => Promise<void>;
   addArticle: (article: Article) => Promise<{ success: boolean; error?: string }>;
   updateArticle: (article: Article) => Promise<{ success: boolean; error?: string }>;
@@ -1137,7 +1139,7 @@ export const useStore = create<AppState>()(
       articles: seedArticles,
       isLoadingArticles: false,
       setArticles: (articles) => set({ articles }),
-      loadArticles: async () => {
+      loadArticles: async (opts?: { forceFresh?: boolean }) => {
         const preExisting = Array.isArray(get().articles) ? [...get().articles] : [];
         const localBackup = loadArticlesFromLocalBackup();
         if (preExisting.length === 0 && localBackup.length > 0) { set({ articles: localBackup }); }
@@ -1189,7 +1191,24 @@ export const useStore = create<AppState>()(
         };
 
         try {
-          const remote = await fetchAllArticles();
+          // forceFresh bypasses the 45-min local index so a hard refresh
+          // re-reads the cloud instead of re-serving what this device had.
+          // onBackgroundFresh merges the cloud result into THIS visit: without
+          // it a cached start would only refresh the index for the NEXT visit,
+          // so an article published on device A stayed invisible on device B
+          // even after a hard refresh.
+          const mergeBackgroundFresh = (fresh: Article[]) => {
+            try {
+              const cur = Array.isArray(get().articles) ? [...get().articles] : [];
+              const curIds = new Set(cur.map(a => String((a as any)?.id || '')));
+              const additions = fresh.filter(a => !curIds.has(String((a as any)?.id || '')));
+              if (additions.length === 0) return;
+              // Cloud order wins for fresh rows; existing local order preserved.
+              const merged = dedupeArticles([...additions, ...cur]);
+              set({ articles: merged });
+            } catch { /* best effort */ }
+          };
+          const remote = await fetchAllArticles(opts?.forceFresh ? { forceFresh: true } : { onBackgroundFresh: mergeBackgroundFresh });
           if (remote && remote.length > 0) {
             let remoteList = remote;
             if (recovered.length > 0) {
@@ -1224,6 +1243,31 @@ export const useStore = create<AppState>()(
           set({ articles: fallback, isLoadingArticles: false });
           return fallback;
         }
+      },
+      refreshArticlesInBackground: async () => {
+        // Periodic / on-focus freshness reconciliation.
+        //
+        // The only other live path is the realtime `subscribeToArticles`
+        // listener on the whole `articles` node — but that node is multi-MB, so
+        // on a slow phone the socket is slow to connect or drops silently and
+        // newly published articles stay invisible. The keys-only check inside
+        // `fetchAllArticles` (shallow=true → a few KB) is cheap and reliable,
+        // so re-running it in the background surfaces new uploads quickly no
+        // matter which page the reader is on.
+        try {
+          const mergeFresh = (fresh: Article[]) => {
+            try {
+              const cur = Array.isArray(get().articles) ? [...get().articles] : [];
+              const curIds = new Set(cur.map(a => String((a as any)?.id || '')));
+              const additions = fresh.filter(a => !curIds.has(String((a as any)?.id || '')));
+              if (additions.length === 0) return;
+              // New rows first, existing order preserved — same rule as loadArticles.
+              const merged = dedupeArticles([...additions, ...cur]);
+              set({ articles: merged });
+            } catch { /* best effort */ }
+          };
+          await fetchAllArticles({ onBackgroundFresh: mergeFresh });
+        } catch { /* best effort — never break the UI on a background sync */ }
       },
       syncFromSupabase: async () => {
         await get().loadArticles();

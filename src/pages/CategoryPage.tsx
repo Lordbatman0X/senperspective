@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Hourglass } from 'lucide-react';
+import { Hourglass, Filter } from 'lucide-react';
 import { useStore } from '../store';
 import { formatRelativeDate } from '../lib/utils';
 import { getSafeImageUrl } from '../lib/imageUtils';
@@ -13,6 +13,10 @@ export function CategoryPage() {
   const { articles, language, siteSettings } = useStore();
   const normalizedId = (categoryId || "").toLowerCase().trim();
   const accentColor = siteSettings?.accentColor || '#E85D42';
+
+  // Sorting filter for the article grid. Defaults to newest → oldest, matching
+  // the homepage feed so a freshly published article always leads the category.
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'title-asc'>('date-desc');
   
   // NOTE: scrolling on navigation is handled app-wide by `useRouteScroll`
   // (see lib/navigation.ts). The previous local `window.scrollTo(0, 0)` here
@@ -41,7 +45,7 @@ export function CategoryPage() {
   const isSenegal = normalizedId === 'senegal' || normalizedId === 'sénégal';
   const isMonde = normalizedId === 'monde' || normalizedId === 'international';
 
-  const categoryArticles = (articles ?? []).filter(
+  const filteredArticles = (articles ?? []).filter(
     a => {
       if (!a.isPublished) return false;
       const catLower = (a.category || '').toLowerCase();
@@ -104,6 +108,21 @@ export function CategoryPage() {
       return catLower === normalizedId;
     }
   );
+
+  // Apply the selected sort. Default is newest → oldest so newly uploaded
+  // articles surface at the top of the category page.
+  const categoryArticles = [...(filteredArticles ?? [])].sort((a, b) => {
+    if (sortBy === 'date-asc') {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    }
+    if (sortBy === 'title-asc') {
+      const titleA = (a.title?.[language] || a.title?.fr || a.title?.en || '').toLowerCase();
+      const titleB = (b.title?.[language] || b.title?.fr || b.title?.en || '').toLowerCase();
+      return titleA.localeCompare(titleB);
+    }
+    // date-desc (default): newest first.
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
+  });
 
   let catName = '';
   let subTitle = '';
@@ -179,17 +198,34 @@ export function CategoryPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
       <header className="mb-12 border-b-4 border-brand-dark dark:border-zinc-800 pb-6">
-        <h1 className="text-4xl md:text-5xl font-black uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] flex items-center gap-3">
-          {catName}
-          {isDecryptages && (
-            <span 
-              className="text-xs text-white px-3 py-1 uppercase tracking-widest font-mono rounded-full font-bold"
-              style={{ backgroundColor: accentColor }}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-widest text-[#172033] dark:text-[#f2f4f5] flex items-center gap-3">
+            {catName}
+            {isDecryptages && (
+              <span 
+                className="text-xs text-white px-3 py-1 uppercase tracking-widest font-mono rounded-full font-bold"
+                style={{ backgroundColor: accentColor }}
+              >
+                Exclusive
+              </span>
+            )}
+          </h1>
+
+          {/* Sorting filter — default newest → oldest (matches homepage feed). */}
+          <div className="flex items-center gap-1.5 bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 px-2.5 py-1 border border-zinc-300 dark:border-zinc-800 transition-all select-none">
+            <Filter size={11} className="text-[#E85D42]" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              aria-label={language === 'fr' ? 'Trier les articles' : 'Sort articles'}
+              className="bg-transparent text-[9px] uppercase font-black tracking-wider text-brand-dark dark:text-zinc-200 outline-none cursor-pointer font-sans"
             >
-              Exclusive
-            </span>
-          )}
-        </h1>
+              <option value="date-desc" className="bg-zinc-900 text-white">{language === 'fr' ? 'RÉCENT / DATE' : 'NEWEST / DATE'}</option>
+              <option value="date-asc" className="bg-zinc-900 text-white">{language === 'fr' ? 'ANCIEN / DATE' : 'OLDEST / DATE'}</option>
+              <option value="title-asc" className="bg-zinc-900 text-white">{language === 'fr' ? 'TITRE (A-Z)' : 'TITLE (A-Z)'}</option>
+            </select>
+          </div>
+        </div>
         <p className="mt-4 text-brand-muted dark:text-zinc-400 font-semibold text-base md:text-lg max-w-3xl">
           {subTitle}
         </p>

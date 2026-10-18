@@ -255,6 +255,45 @@ function App() {
     };
   }, [loadArticles, loadSiteSettings, loadComments, loadAds]);
 
+  // FAST freshness for newly published articles.
+  //
+  // The realtime listener above reads the entire (multi-MB) `articles` node, so
+  // on a slow phone it is slow to connect and can drop silently; the fallback
+  // 3-minute poll re-runs the FULL `loadArticles()` (a legacy localStorage
+  // sweep + index read) which is too heavy to run often. Together that is why a
+  // freshly uploaded article could take minutes — or forever, if the socket
+  // died — to appear. This effect uses the keys-only reconciliation (a few KB
+  // via `shallow=true`) so new uploads surface within seconds, on every page,
+  // without waiting for the heavy paths. It only ADDS unseen articles, so it is
+  // safe to run frequently and never clobbers local edits.
+  const refreshArticlesInBackground = useStore((s) => s.refreshArticlesInBackground);
+  useEffect(() => {
+    let lastRun = 0;
+    const run = () => {
+      // Skip while the tab is hidden to avoid background battery/network use.
+      if (document.visibilityState !== 'visible') return;
+      lastRun = Date.now();
+      void refreshArticlesInBackground();
+    };
+    // Lead with one shortly-after-load pass to catch anything published between
+    // the initial fetch and the socket settling, then keep a regular heartbeat.
+    const initialTimer = window.setTimeout(run, 8 * 1000);
+    const pollTimer = window.setInterval(run, 45 * 1000);
+    // Refresh immediately when the reader returns to the tab (mobile unlock,
+    // tab switch) — the most common moment they expect to see new content.
+    const onVisibleOrFocus = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastRun > 20 * 1000) run();
+    };
+    document.addEventListener('visibilitychange', onVisibleOrFocus);
+    window.addEventListener('focus', onVisibleOrFocus);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(pollTimer);
+      document.removeEventListener('visibilitychange', onVisibleOrFocus);
+      window.removeEventListener('focus', onVisibleOrFocus);
+    };
+  }, [refreshArticlesInBackground]);
+
   // FIX (social notifications invisible to recipients): while a reader is
   // signed in, keep their social graph (RTDB `friends`) and their cloud
   // notifications in sync so friend/follower comments & publications show

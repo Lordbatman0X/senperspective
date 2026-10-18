@@ -501,11 +501,14 @@ export async function fetchArticleById(articleId: string): Promise<Article | nul
  * The RTDB path stays as a fallback, so an older deploy without this file still
  * works (just slowly).
  */
-async function fetchStaticArticleIndex(): Promise<Article[] | null> {
+async function fetchStaticArticleIndex(noStore = false): Promise<Article[] | null> {
   if (typeof window === 'undefined') return null;
   try {
     const res = await withFirestoreTimeout(
-      fetch('/article-index.json', { cache: 'default' }),
+      // no-store for freshness checks: the CDN file only changes on deploy,
+      // and `cache: default` let the browser serve a stale copy long after
+      // new articles were published.
+      fetch('/article-index.json', { cache: noStore ? 'no-store' : 'default' }),
       12000
     );
     if (!res.ok) return null;
@@ -518,19 +521,91 @@ async function fetchStaticArticleIndex(): Promise<Article[] | null> {
   }
 }
 
-export async function fetchAllArticles(): Promise<Article[]> {
-  // Fastest path: a fresh cached index renders every list immediately, including
-  // the older articles, without touching the Realtime Database at all.
-  const cached = readArticleIndex();
+/**
+ * Lightweight freshness check: fetches ONLY the article keys (~a few KB via
+ * `shallow=true`) instead of the full 8.8 MB catalog, then fetches the full
+ * record for ids this device has never seen. A newly published article from
+ * another device is typically 1-2 records (a few KB), so cross-device sync
+ * works even on a slow phone connection where the full download times out.
+ * Returns the merged full list (cached + new), or null when nothing is new.
+ */
+async function fetchNewArticlesLight(cachedItems: any[]): Promise<Article[] | null> {
+  try {
+    if (!firebaseConfig?.databaseURL) return null;
+    const cachedIds = new Set((cachedItems || []).map((a: any) => String(a?.id || '')));
+    const keyRes = await withFirestoreTimeout(
+      fetch(`${firebaseConfig.databaseURL}/articles.json?shallow=true`, { cache: 'no-store' }),
+      10000
+    );
+    if (!keyRes.ok) return null;
+    const keyData = await keyRes.json();
+    if (!keyData || typeof keyData !== 'object') return null;
+    const missing = Object.keys(keyData).filter((id) => id && !cachedIds.has(String(id)));
+    // Cap: if dozens are missing, the full fetch is more efficient anyway —
+    // let the caller fall back to it.
+    if (missing.length === 0 || missing.length > 30) return missing.length === 0 ? cachedItems as Article[] : null;
+    const fetched: Article[] = [];
+    for (const id of missing.slice(0, 30)) {
+      try {
+        const r = await withFirestoreTimeout(
+          fetch(`${firebaseConfig.databaseURL}/articles/${encodeURIComponent(safeKey(id))}.json`, { cache: 'no-store' }),
+          10000
+        );
+        if (!r.ok) continue;
+        const rec = await r.json();
+        if (rec && rec.id) fetched.push(rec as Article);
+      } catch { /* one missing record must not block the rest */ }
+    }
+    if (!fetched.length) return null;
+    const merged = sortByDateDesc([...fetched, ...(cachedItems as Article[])]);
+    void writeArticleIndex(merged);
+    return merged;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchAllArticles(opts?: { forceFresh?: boolean; onBackgroundFresh?: (fresh: Article[]) => void }): Promise<Article[]> {
+  // forceFresh (used by hard refresh) skips the 45-min local index so the
+  // device re-reads the cloud instead of re-serving what it already had.
+  const cached = opts?.forceFresh ? null : readArticleIndex();
   if (cached) {
     // Refresh in the background so the next visit is fresh, but never block on it.
+    // Lightweight keys-first check: the full 8.8 MB download times out on slow
+    // phones, so a heavy background refresh never completed and new articles
+    // from another device stayed invisible. Keys are a few KB and succeed.
     void (async () => {
       try {
-        const fresh = (await fetchStaticArticleIndex()) || (await fetchAllArticlesFromCloud());
-        if (fresh.length) writeArticleIndex(fresh);
+        const light = await fetchNewArticlesLight(cached.items);
+        if (light && light.length > cached.items.length) {
+          opts?.onBackgroundFresh?.(light);
+          return;
+        }
+        if (light) return; // up to date — no heavy fetch needed
+        const fresh = (await fetchAllArticlesFromCloud()) || (await fetchStaticArticleIndex());
+        if (fresh.length) {
+          writeArticleIndex(fresh);
+          opts?.onBackgroundFresh?.(fresh);
+        }
       } catch { /* best effort */ }
     })();
     return cached.items as Article[];
+  }
+
+  // First visit on this device, or a hard refresh (forceFresh). Go straight to
+  // the live database: the static CDN file only changes on deploy, so a newly
+  // published article is invisible until the next build if static wins.
+  // Static stays as the fallback for slow connections, not the primary.
+  if (opts?.forceFresh) {
+    const remote = await fetchAllArticlesFromCloud();
+    if (remote.length) void writeArticleIndex(remote);
+    if (remote.length) return remote;
+    const stat = await fetchStaticArticleIndex();
+    if (stat && stat.length) {
+      void writeArticleIndex(stat);
+      return stat;
+    }
+    return remote;
   }
 
   // First visit on this device. Try the small static file before the 10.4 MB
@@ -540,6 +615,17 @@ export async function fetchAllArticles(): Promise<Article[]> {
     // No thumbnail work is needed: this index carries no inline images, so the
     // writer takes its synchronous path and cannot stall the first paint.
     void writeArticleIndex(stat);
+    // Reconcile with the live database in the background so articles published
+    // after the last deploy still appear on this visit, not the next one.
+    void (async () => {
+      try {
+        const live = await fetchAllArticlesFromCloud();
+        if (live.length) {
+          void writeArticleIndex(live);
+          opts?.onBackgroundFresh?.(live);
+        }
+      } catch { /* best effort */ }
+    })();
     return stat;
   }
 
