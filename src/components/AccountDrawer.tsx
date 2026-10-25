@@ -13,7 +13,7 @@ import {
   fetchFirestoreCollection,
   saveFirestoreDoc,
   deleteFirestoreDoc,
-} from '../firebase/db';
+} from '../firebase/db/firestore';
 import {
   loadSocialState,
   subscribeToSocialState,

@@ -346,8 +346,22 @@ async function loadLeague(league: ArenaLeague): Promise<Match[]> {
 
 const STATUS_RANK: Record<string, number> = { live: 0, upcoming: 1, finished: 2 };
 
+function withinRelevanceWindow(m: Match): boolean {
+  // The sidebar complaint ("irrelevant, not up to date") came from rows with
+  // no date bound: a postponed fixture from last season or a fixture 6 months
+  // out sorted next to tonight's game. Live always shows; finished must be
+  // from the last 7 days; upcoming must kick off within the next 21 days.
+  if (String(m.status) === "live") return true;
+  if (!m.date) return true;
+  const t = Date.parse(m.date);
+  if (Number.isNaN(t)) return true;
+  const now = Date.now();
+  if (String(m.status) === "finished") return now - t <= 7 * 24 * 3600_000;
+  return t - now <= 21 * 24 * 3600_000 && t - now >= -3.5 * 3600_000;
+}
+
 function sortForBoard(matches: Match[]): Match[] {
-  return [...matches].sort((a, b) => {
+  return [...matches].filter(withinRelevanceWindow).sort((a, b) => {
     const ra = STATUS_RANK[String(a.status)] ?? 3;
     const rb = STATUS_RANK[String(b.status)] ?? 3;
     if (ra !== rb) return ra - rb;

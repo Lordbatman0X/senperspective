@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { SubscriberItem, useStore } from '../../store';
 import { Users, Trash2, Search, Send, Check, Sparkles, Megaphone, Mail, ShieldCheck, RefreshCw, UserCheck, Plus, Image as ImageIcon, Upload, X, Eye } from 'lucide-react';
-import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db';
+import { saveFirestoreDoc, fetchFirestoreCollection } from '../../firebase/db/firestore';
 import { safeJsonParse } from '../../lib/apiUtils';
 import { buildNewsletterHtml } from '../../lib/newsletterTemplate';
 import type { InlineImage } from '../../lib/newsletterTemplate';

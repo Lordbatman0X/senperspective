@@ -15,8 +15,8 @@ import { handleFirestoreError, OperationType } from './errors';
 import { withFirestoreTimeout, safeKey } from './db';
 
 export const BOOTSTRAP_ADMIN_EMAILS = [
-  'admin@senperspective.com',
-  'kadersdiaz3@gmail.com',
+  import.meta.env.VITE_ADMIN_EMAIL_1 || 'admin@senperspective.com',
+  import.meta.env.VITE_ADMIN_EMAIL_2 || 'kadersdiaz3@gmail.com',
 ];
 
 export interface AppUserProfile {
@@ -230,7 +230,11 @@ export async function syncUserProfile(userOrData: FirebaseUser | Partial<AppUser
         uid,
         email,
         name: isFirebaseUser
-          ? (data.name || (userOrData as FirebaseUser).displayName || extraName || email.split('@')[0])
+          // The freshly-typed name (extraName) and the Auth displayName win over
+          // a stale stored record. Stored `data.name` used to come first, so a
+          // re-register / re-login on a record that once held an email-prefix
+          // name kept showing the wrong name for new users.
+          ? (extraName || (userOrData as FirebaseUser).displayName || data.name || email.split('@')[0])
           : (userOrData as Partial<AppUserProfile>).name || data.name || email.split('@')[0],
         role: isAdmin ? 'Admin' : ((userOrData as Partial<AppUserProfile>).role || data.role || 'Membre'),
         avatarUrl: (userOrData as Partial<AppUserProfile>).avatarUrl || data.avatarUrl || (isFirebaseUser ? (userOrData as FirebaseUser).photoURL || 'preset-male' : 'preset-male'),
@@ -938,11 +942,17 @@ export async function signInEmail(email: string, pass: string): Promise<AppUserP
  * Register with Email and Password
  */
 export async function registerEmail(email: string, pass: string, name: string): Promise<AppUserProfile> {
+  const cleanName = (name || '').trim();
   const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
-  if (name && auth.currentUser) {
-    await updateProfile(auth.currentUser, { displayName: name }).catch(() => {});
+  if (cleanName && auth.currentUser) {
+    await updateProfile(auth.currentUser, { displayName: cleanName }).catch(() => {});
+    // Reload so cred.user carries the fresh displayName; otherwise the stale
+    // snapshot below has displayName null and downstream merges can fall back
+    // to the email prefix instead of the typed name.
+    try { await auth.currentUser.reload(); } catch { /* best effort */ }
   }
-  return await syncUserProfile(cred.user, name);
+  const freshUser = auth.currentUser || cred.user;
+  return await syncUserProfile(freshUser, cleanName);
 }
 
 /**

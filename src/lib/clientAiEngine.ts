@@ -1,7 +1,7 @@
 import { resolveApiUrl, safeFetchJson, safeJsonParse, getApiBaseUrl } from './apiUtils';
 import { ref, get, update } from 'firebase/database';
 import { rtdb } from '../firebase/config';
-import { withFirestoreTimeout } from '../firebase/db';
+import { withFirestoreTimeout } from '../firebase/db/helpers';
 import {
   AI_PROVIDERS,
   AI_PROVIDER_IDS,

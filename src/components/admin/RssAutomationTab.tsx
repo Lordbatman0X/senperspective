@@ -19,7 +19,7 @@ import {
   clientFetchRssFeed, 
   loadClientApiKeysFromFirestore 
 } from '../../lib/clientAiEngine';
-import { deleteArticleFromFirestore, saveFirestoreDoc } from '../../firebase/db';
+import { deleteArticleFromFirestore, saveFirestoreDoc } from '../../firebase/db/firestore';
 
 interface RssAutomationTabProps {
   onEditArticle?: (article: Article) => void;

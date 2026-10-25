@@ -27,7 +27,7 @@ import {
   saveFirestoreDoc,
   deleteFirestoreDoc,
   fetchFirestoreCollection,
-} from '../firebase/db';
+} from '../firebase/db/firestore';
 import { 
   renderNeutralAvatar 
 } from "../components/AccountDrawer";

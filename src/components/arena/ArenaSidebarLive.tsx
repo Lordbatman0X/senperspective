@@ -43,7 +43,17 @@ export function ArenaSidebarLive({
   // 3 min otherwise — and pauses while the tab is hidden.
   const { matches, loading, updatedAt, refresh } = useArenaScores(editorialMatches, sidebarLeagues());
 
-  const rows = matches.slice(0, limit);
+  // Football-first ordering: editorial rows always outrank provider rows, so a
+  // basketball editorial (or an off-season row) could sit above tonight's
+  // football. The column is a football summary — rank football first, then
+  // keep the limit.
+  const rows = [...matches]
+    .sort((a, b) => {
+      const fa = String(a.sport || '').toLowerCase() === 'football' ? 0 : 1;
+      const fb = String(b.sport || '').toLowerCase() === 'football' ? 0 : 1;
+      return fa - fb;
+    })
+    .slice(0, limit);
   const liveCount = matches.filter((m) => String(m.status) === "live").length;
   const footballCount = rows.filter((m) => String(m.sport || "").toLowerCase() === "football").length;
 

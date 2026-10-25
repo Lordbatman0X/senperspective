@@ -10,7 +10,7 @@ import {
   fetchFirestoreCollection, 
   deleteFirestoreDoc, 
   saveArticleToFirestore 
-} from '../../firebase/db';
+} from '../../firebase/db/firestore';
 
 interface CollectionStats {
   name: string;

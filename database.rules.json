@@ -55,63 +55,102 @@
 
     "comments": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null",
+      "$commentId": {
+        ".validate": "newData.hasChildren(['authorEmail', 'content', 'createdAt']) &&"
+      }
     },
     "discussions": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$discussionId": {
+        ".validate": "newData.hasChildren(['authorEmail', 'title', 'createdAt']) &&"
+      }
     },
     "discussions_replies": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$replyId": {
+        ".validate": "newData.hasChildren(['discussionId', 'authorEmail', 'content', 'createdAt']) &&"
+      }
     },
 
     "relations": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$relationId": {
+        ".validate": "newData.hasChildren(['userId', 'relatedId', 'type']) &&"
+      }
     },
     "friends": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$friendId": {
+        ".validate": "newData.hasChildren(['userId', 'friendId', 'since']) &&"
+      }
     },
     "followers": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$followerId": {
+        ".validate": "newData.hasChildren(['userId', 'followerId', 'since']) &&"
+      }
     },
     "friend_requests": {
       ".read": true,
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$requestId": {
+        ".validate": "newData.hasChildren(['fromEmail', 'toEmail', 'message', 'createdAt']) &&"
+      }
     },
     "blocks": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": true,
+      ".write": "auth != null",
+      "$blockId": {
+        ".validate": "newData.hasChildren(['userId', 'blockedUserId', 'createdAt']) &&"
+      }
     },
 
     "messages": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$messageId": {
+        ".validate": "newData.hasChildren(['sender', 'receiver', 'content', 'createdAt']) &&"
+      }
     },
     "notifications": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$notificationId": {
+        ".validate": "newData.hasChildren(['userId', 'type', 'read']) &&"
+      }
     },
     "notification_responses": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$responseId": {
+        ".validate": "newData.hasChildren(['notificationId', 'userId', 'response']) &&"
+      }
     },
 
     "reports": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+      "$reportId": {
+        ".validate": "newData.hasChildren(['reporterEmail', 'reportedEmail', 'reason', 'createdAt']) &&"
+      }
     },
 
     "client_diagnostics": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     },
     "subscribers": {
       ".read": "auth != null",
-      ".write": true
+      ".write": "auth != null",
+      "$email": {
+        ".validate": "newData.hasChildren(['email', 'subscribedAt']) &&"
+      }
     },
 
     "analytics_events": {

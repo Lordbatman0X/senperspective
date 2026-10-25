@@ -16,11 +16,10 @@ import { AuthProvider } from './contexts/AuthContext';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
 import { repairSocialData } from './firebase/social';
-import { subscribeToArticles } from './firebase/db';
-import { subscribeToAllComments } from './firebase/db';
-import { subscribeToAds } from './firebase/db';
-import { subscribeToNotifications } from './firebase/db';
-import { subscribeToSiteSettings } from './firebase/db';
+import { subscribeToArticles } from './firebase/db/articles';
+import { subscribeToAllComments } from './firebase/db/comments';
+import { subscribeToAds } from './firebase/db/ads';
+import { subscribeToSiteSettings } from './firebase/db/users';
 import { useRouteScroll } from './lib/navigation';
 
 // Injected by Vite at build time — changes on every deploy. A device that

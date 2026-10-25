@@ -7,7 +7,7 @@ import { uniqueArticleSlug } from './slugify';
 import { buildBilingualDraftFromArticle } from './carousel/draft';
 import { matchTaxonomyCategory } from './siteTaxonomy';
 import { safeJsonParse } from './apiUtils';
-import { saveFirestoreDoc } from '../firebase/db';
+import { saveFirestoreDoc } from '../firebase/db/firestore';
 
 /**
  * The newsroom writing cycle: how many stories get drafted from each wire, and

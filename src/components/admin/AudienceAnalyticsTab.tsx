@@ -4,7 +4,7 @@ import {
   Globe, Smartphone, Mail, Sparkles, RefreshCw, Zap, DollarSign, Filter, Target, ArrowUpRight, Activity
 } from 'lucide-react';
 import { useStore } from '../../store';
-import { fetchFirestoreCollection } from '../../firebase/db';
+import { fetchFirestoreCollection } from '../../firebase/db/firestore';
 
 export function AudienceAnalyticsTab() {
   const { language, articles, subscribers, friends, interactions, comments, ads } = useStore();

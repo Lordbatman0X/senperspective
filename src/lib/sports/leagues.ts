@@ -255,7 +255,10 @@ export function apiLeagues(): ArenaLeague[] {
  */
 export function sidebarLeagues(): ArenaLeague[] {
   const FOOTBALL_FIRST = ["premier-league", "ligue1", "bundesliga"];
-  const api = apiLeagues();
+  // Sidebar is a football summary: other sports (NBA/WNBA/UFC) filled it with
+  // off-season rows readers flagged as irrelevant. They stay on the full
+  // board; the narrow column keeps football only.
+  const api = apiLeagues().filter((l) => l.sport === "football");
   const ranked = new Map(FOOTBALL_FIRST.map((id, i) => [id, i]));
 
   return [...api].sort((a, b) => {

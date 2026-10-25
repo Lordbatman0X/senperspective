@@ -13,7 +13,7 @@ import { visibleAds } from '../lib/adCampaign';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSEO } from '../hooks/useSEO';
 import { NewsletterInline } from '../components/NewsletterSignup';
-import { fetchArticleById } from '../firebase/db';
+import { fetchArticleById } from '../firebase/db/articles';
 
 function MiniCarouselCard({ article }: { article: Article }) {
   const language = useStore((s) => s.language);

@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { FALLBACK_TAXONOMY } from './lib/siteTaxonomy';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -5,28 +6,34 @@ import { Article, Language, Match } from './types';
 import { sampleArticles } from './data';
 import { seedArticles, seedComments, seedMessages, seedMedia, seedSubscribers, seedMatches, seedSiteSettings } from './data/seedData';
 import {
-  fetchAllArticles, 
-  saveArticle, 
-  deleteArticle as firestoreDeleteArticle, 
-  subscribeToArticles, 
+  fetchAllArticles,
+  saveArticle,
+  deleteArticle as firestoreDeleteArticle,
+  subscribeToArticles,
+} from './firebase/db/articles';
+import {
   addSubscriberEmail,
   removeSubscriberEmail,
   updateSiteSettings as firestoreUpdateSiteSettings,
   fetchSiteSettings,
-  addComment as firestoreAddComment,
-  deleteComment as firestoreDeleteComment,
+} from './firebase/db/users';
+import {
+  fetchAllComments,
+  subscribeToAllComments,
+  saveCommentToFirestore,
+} from './firebase/db/comments';
+import {
   saveFirestoreDoc,
   mergeFirestoreDoc,
   deleteFirestoreDoc,
   fetchFirestoreCollection,
-  fetchAllComments,
-  subscribeToAllComments,
-  saveCommentToFirestore,
+} from './firebase/db/firestore';
+import {
   fetchAllAds,
   subscribeToAds,
   saveAdToRTDB,
-  deleteAdFromRTDB
-} from './firebase/db';
+  deleteAdFromRTDB,
+} from './firebase/db/ads';
 import { hashPassword } from './lib/authCrypto';
 import { sanitizeFirestorePayload } from './lib/imageUtils';
 import { trackConversion } from './lib/telemetry';

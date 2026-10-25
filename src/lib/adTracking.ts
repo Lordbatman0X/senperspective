@@ -18,7 +18,7 @@
  * no user agent, no cross-site identifier, nothing personal.
  */
 import { useEffect, useRef } from 'react';
-import { incrementAdMetric } from '../firebase/db';
+import { incrementAdMetric } from '../firebase/db/ads';
 
 const IMPRESSION_KEY = 'sp_ad_impressions_seen';
 

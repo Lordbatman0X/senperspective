@@ -3,7 +3,7 @@
  * Sends consented reader metrics, pageviews, and commercial conversion events to Firebase Firestore
  */
 
-import { saveFirestoreDoc, deleteFirestoreDoc } from '../firebase/db';
+import { saveFirestoreDoc, deleteFirestoreDoc } from '../firebase/db/firestore';
 
 const STORAGE_SESSION_KEY = 'perspective_analytics_session_id';
 const STORAGE_CONSENT_KEY = 'perspective_cookie_consent';
