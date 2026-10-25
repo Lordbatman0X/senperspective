@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyB2j5xIJDbvR5IedkiuUZzZE9vnVRoEDqw",
   authDomain: "ai-studio-applet-webapp-29e84.firebaseapp.com",
   databaseURL: "https://ai-studio-applet-webapp-29e84-default-rtdb.firebaseio.com",
   projectId: "ai-studio-applet-webapp-29e84",
