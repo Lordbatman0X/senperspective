@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useStore, loadSeenDmIds, rememberSeenDmIds } from '../store';
-import { subscribeToMessages } from '../firebase/db';
+import { subscribeToMessages } from '../firebase/db/messages';
 import {
   AppUserProfile,
   syncUserProfile,

@@ -20,6 +20,7 @@ import { subscribeToArticles } from './firebase/db/articles';
 import { subscribeToAllComments } from './firebase/db/comments';
 import { subscribeToAds } from './firebase/db/ads';
 import { subscribeToSiteSettings } from './firebase/db/users';
+import { subscribeToNotifications } from './firebase/db/notifications';
 import { useRouteScroll } from './lib/navigation';
 
 // Injected by Vite at build time — changes on every deploy. A device that

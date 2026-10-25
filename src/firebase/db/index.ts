@@ -14,12 +14,14 @@ export {
   addSubscriberEmail,
   removeSubscriberEmail,
   updateSiteSettings,
+  subscribeToSiteSettings,
 } from './users';
 
 export {
   fetchAllComments,
   addComment as saveCommentToFirestore,
   deleteComment as firestoreDeleteComment,
+  subscribeToAllComments,
 } from './comments';
 
 export {
@@ -27,7 +29,16 @@ export {
   subscribeToAds,
   saveAdToRTDB,
   deleteAdFromRTDB,
+  incrementAdMetric,
 } from './ads';
+
+export {
+  subscribeToNotifications,
+} from './notifications';
+
+export {
+  subscribeToMessages,
+} from './messages';
 
 export {
   saveFirestoreDoc,
