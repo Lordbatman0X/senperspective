@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Trophy, ArrowRight, Radio, ChevronRight, RefreshCw } from "lucide-react";
 import { useStore } from "../store";
 import { useArenaScores } from "../lib/sports/useArenaScores";
-import { sidebarLeagues } from "../lib/sports/leagues";
+import { apiLeagues } from "../lib/sports/leagues";
 import { withoutDemoMatches } from "../lib/sports/demoMatches";
 import { matchAnchor } from "../lib/navigation";
 
@@ -34,9 +34,10 @@ export function SportsQuadrant() {
 
   // Admin-created fixtures still outrank provider rows; demo seeds never do.
   const editorial = withoutDemoMatches(matches);
-  // Football first, same ordering as the sidebar, so the two surfaces can never
-  // show a different lead fixture.
-  const { matches: board, loading, refresh, updatedAt } = useArenaScores(editorial, sidebarLeagues());
+  // Broader sport mix: apiLeagues() covers football, basketball, MMA and
+  // wrestling, so the quadrant shows live action across sports instead of
+  // over-indexing on football. Editorial rows still outrank provider rows.
+  const { matches: board, loading, refresh, updatedAt } = useArenaScores(editorial, apiLeagues());
 
   const liveCount = board.filter((m) => String(m.status) === "live").length;
   const rows = board.slice(0, 10);

@@ -1146,7 +1146,7 @@ export const useStore = create<AppState>()(
       articles: seedArticles,
       isLoadingArticles: false,
       setArticles: (articles) => set({ articles }),
-      loadArticles: async (opts?: { forceFresh?: boolean }) => {
+      loadArticles: async (opts?: { forceFresh?: boolean; limit?: number }) => {
         const preExisting = Array.isArray(get().articles) ? [...get().articles] : [];
         const localBackup = loadArticlesFromLocalBackup();
         if (preExisting.length === 0 && localBackup.length > 0) { set({ articles: localBackup }); }
@@ -1215,7 +1215,12 @@ export const useStore = create<AppState>()(
               set({ articles: merged });
             } catch { /* best effort */ }
           };
-          const remote = await fetchAllArticles(opts?.forceFresh ? { forceFresh: true } : { onBackgroundFresh: mergeBackgroundFresh });
+          const initialLimit = opts?.limit ?? 25;
+          const remote = await fetchAllArticles({
+            forceFresh: opts?.forceFresh,
+            limit: initialLimit,
+            onBackgroundFresh: mergeBackgroundFresh,
+          });
           if (remote && remote.length > 0) {
             let remoteList = remote;
             if (recovered.length > 0) {
@@ -1236,6 +1241,24 @@ export const useStore = create<AppState>()(
             // instead of being appended at the end behind stale cache.
             const merged = dedupeArticles([...remoteList, ...preExisting, ...localBackup]);
             set({ articles: merged, isLoadingArticles: false });
+
+            // Phase 2: Background load of the remaining articles (no limit).
+            // Non-blocking — the user already sees the first 25 articles.
+            if (!opts?.forceFresh) {
+              fetchAllArticles({ forceFresh: false })
+                .then((rest) => {
+                  if (rest && rest.length > 0) {
+                    const cur = Array.isArray(get().articles) ? [...get().articles] : [];
+                    const curIds = new Set(cur.map(a => String((a as any)?.id || '')));
+                    const additions = rest.filter(a => !curIds.has(String((a as any)?.id || '')));
+                    if (additions.length > 0) {
+                      set({ articles: dedupeArticles([...additions, ...cur]) });
+                    }
+                  }
+                })
+                .catch(() => { /* non-fatal: initial load already displayed */ });
+            }
+
             return remoteList;
           }
           // Firestore empty → show rescued + seed content immediately

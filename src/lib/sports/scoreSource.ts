@@ -383,11 +383,27 @@ export interface ArenaScoresResult {
 }
 
 /**
+ * In-flight request dedup: multiple components (SportsQuadrant, ArenaSidebarLive)
+ * calling loadArenaScores with the same leagues share a single network fetch.
+ * Keyed by the joined league ids + force flag.
+ */
+const IN_FLIGHT = new Map<string, Promise<ArenaScoresResult>>();
+
+function inflightKey(leagues: ArenaLeague[], opts?: { force?: boolean; ttlMs?: number }): string {
+  return `${leagues.map((l) => l.id).join(",")}|${opts?.force ? "1" : "0"}|${opts?.ttlMs ?? 0}`;
+}
+
+/**
  * Loads scores for the given leagues.
  *
  * Cached rows short-circuit the network. A provider outage therefore degrades
  * to "stale but rendered" rather than an empty board, which is the behaviour we
  * want for a live scores surface: never blank it out.
+ *
+ * Leagues are fetched in parallel (Promise.allSettled) so the total wall-clock
+ * time is the slowest single league, not the sum of all of them. Dedup is
+ * handled at the module level via IN_FLIGHT so concurrent callers sharing
+ * league sets never double-fetch.
  */
 export async function loadArenaScores(
   leagues: ArenaLeague[],
@@ -395,60 +411,89 @@ export async function loadArenaScores(
 ): Promise<ArenaScoresResult> {
   if (!leagues.length) return { matches: [], ok: true, fromCache: false };
 
-  const ttl = opts?.ttlMs ?? TTL_IDLE_MS;
-  const out: Match[] = [];
-  let anyOk = false;
-  let fromCache = false;
-  let anyNetworkAttempt = false;
+  const key = inflightKey(leagues, opts);
+  const existing = IN_FLIGHT.get(key);
+  if (existing) return existing;
 
-  for (const league of leagues) {
-    const scope = scopeFor(league);
+  const promise = (async () => {
+    try {
+      const ttl = opts?.ttlMs ?? TTL_IDLE_MS;
+      const out: Match[] = [];
+      let anyOk = false;
+      let fromCache = false;
+      let anyNetworkAttempt = false;
 
-    if (!opts?.force) {
-      const cached = getCached<Match[]>(scope, ttl);
-      if (cached) {
-        out.push(...cached);
-        anyOk = true;
-        fromCache = true;
-        continue;
-      }
-    }
-
-    anyNetworkAttempt = true;
-    // eslint-disable-next-line no-await-in-loop -- sequential on purpose: it
-    // keeps us under the shared key's rate limit and lets the breaker trip
-    // before the remaining leagues are attempted.
-    const rows = await loadLeague(league);
-    if (rows.length) {
-      setCached(scope, rows);
-      out.push(...rows);
-      anyOk = true;
-    }
-  }
-
-  // Last resort: render stale rows rather than nothing.
-  if (!anyOk && anyNetworkAttempt) {
-    for (const league of leagues) {
-      try {
-        const { getStale } = await import("./cache");
-        const stale = getStale<Match[]>(scopeFor(league));
-        if (stale?.value?.length) {
-          out.push(...stale.value);
-          anyOk = true;
-          fromCache = true;
+      // Fast path: serve anything already cached, synchronously, before any
+      // network is touched. This keeps the board from ever going blank.
+      for (const league of leagues) {
+        const scope = scopeFor(league);
+        if (!opts?.force) {
+          const cached = getCached<Match[]>(scope, ttl);
+          if (cached) {
+            out.push(...cached);
+            anyOk = true;
+            fromCache = true;
+          }
         }
-      } catch {
-        /* ignore */
       }
-    }
-  }
 
-  return {
-    matches: sortForBoard(out),
-    ok: anyOk,
-    fromCache,
-    error: anyOk ? undefined : "live_score_unavailable",
-  };
+      // Leagues without a fresh cache entry are fetched in parallel.
+      const toFetch = leagues.filter((l) => {
+        if (opts?.force) return true;
+        const scope = scopeFor(l);
+        return !getCached<Match[]>(scope, ttl);
+      });
+
+      if (toFetch.length) {
+        anyNetworkAttempt = true;
+        const results = await Promise.allSettled(
+          toFetch.map((league) => loadLeague(league))
+        );
+        results.forEach((result, i) => {
+          if (result.status === "fulfilled") {
+            const rows = result.value;
+            if (rows.length) {
+              const scope = scopeFor(toFetch[i]);
+              setCached(scope, rows);
+              out.push(...rows);
+              anyOk = true;
+            }
+          }
+          // Rejected leagues are silently skipped — the breaker already
+          // recorded the failure and the board keeps its last known state.
+        });
+      }
+
+      // Last resort: render stale rows rather than nothing.
+      if (!anyOk && anyNetworkAttempt) {
+        for (const league of leagues) {
+          try {
+            const { getStale } = await import("./cache");
+            const stale = getStale<Match[]>(scopeFor(league));
+            if (stale?.value?.length) {
+              out.push(...stale.value);
+              anyOk = true;
+              fromCache = true;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      return {
+        matches: sortForBoard(out),
+        ok: anyOk,
+        fromCache,
+        error: anyOk ? undefined : "live_score_unavailable",
+      };
+    } finally {
+      IN_FLIGHT.delete(key);
+    }
+  })();
+
+  IN_FLIGHT.set(key, promise);
+  return promise;
 }
 
 /** Poll cadence for the current board contents. */

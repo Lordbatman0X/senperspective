@@ -1,17 +1,22 @@
-import React, { useEffect, useRef } from 'react';
+import React, { Suspense, useEffect, useRef, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { HomePage } from './pages/HomePage';
-import { CategoryPage } from './pages/CategoryPage';
-import { ArticlePage } from './pages/ArticlePage';
-import { SavedPage } from './pages/SavedPage';
-import { SearchPage } from './pages/SearchPage';
-import { AdminPortal } from './pages/AdminPortal';
-import { AboutPage, ContactPage } from './pages/StaticPages';
-import { ProfilePage } from './pages/ProfilePage';
 import { LArenePage } from './pages/LArenePage';
-import { DiscussionPage } from './pages/DiscussionPage';
 import { AuthPage } from './pages/AuthPage';
 import { Layout } from './components/Layout';
+
+// Route-based code splitting: heavy pages are lazy-loaded so the initial
+// bundle stays lean and the homepage paints fast on every device. The chunk
+// is fetched only when the user first navigates to that route.
+const CategoryPage = lazy(() => import('./pages/CategoryPage').then((mod) => ({ default: mod.CategoryPage })));
+const ArticlePage = lazy(() => import('./pages/ArticlePage').then((mod) => ({ default: mod.ArticlePage })));
+const SavedPage = lazy(() => import('./pages/SavedPage').then((mod) => ({ default: mod.SavedPage })));
+const SearchPage = lazy(() => import('./pages/SearchPage').then((mod) => ({ default: mod.SearchPage })));
+const AdminPortal = lazy(() => import('./pages/AdminPortal').then((mod) => ({ default: mod.AdminPortal })));
+const AboutPage = lazy(() => import('./pages/StaticPages').then((mod) => ({ default: mod.AboutPage })));
+const ContactPage = lazy(() => import('./pages/StaticPages').then((mod) => ({ default: mod.ContactPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then((mod) => ({ default: mod.ProfilePage })));
+const DiscussionPage = lazy(() => import('./pages/DiscussionPage').then((mod) => ({ default: mod.DiscussionPage })));
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationToastHost } from './components/NotificationToastHost';
 import { useStore } from './store';
@@ -55,24 +60,24 @@ function RouteScrollManager() {
 function App() {
   ensureFreshBundle();
   const loadArticles = useStore(state => state.loadArticles);
+  const refreshArticlesInBackground = useStore(state => state.refreshArticlesInBackground);
   const loadSiteSettings = useStore(state => state.loadSiteSettings);
   const loadComments = useStore(state => state.loadComments);
   const loadAds = useStore(state => state.loadAds);
   const isLoadingArticles = useStore(state => state.isLoadingArticles);
 
   useEffect(() => {
-    // Load fresh articles in background on app startup (also recovers legacy
-    // localStorage articles and hydrates the cache before the cloud answers).
+    // Phase 1: Load articles first so the reader sees content immediately.
     loadArticles();
-    // FIX: hydrate shared site settings (BC logo, colors, etc.) from Firebase
-    // so all devices (desktop AND mobile) see the same configuration.
-    loadSiteSettings();
-    // FIX (disappearing comments): load persisted comments from the Realtime
-    // Database on startup so they survive reloads and are shared across devices.
-    loadComments();
-    // FIX (ads disappearing on reload): load persisted ads from RTDB so admin
-    // changes survive reloads and sync across all devices.
-    loadAds();
+
+    // Phase 2: Stagger the remaining loads so they don't compete with the
+    // initial article fetch on slow connections. A short delay lets the
+    // articles RTDB connection establish before other reads begin.
+    setTimeout(() => {
+      loadSiteSettings();
+      loadComments();
+      loadAds();
+    }, 0);
 
     // One-time repair of contradictory social data left by older builds.
     //
@@ -230,7 +235,7 @@ function App() {
     const onVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - lastFetch > 60 * 1000) {
         lastFetch = Date.now();
-        loadArticles();
+        refreshArticlesInBackground();
         loadSiteSettings();
       }
     };
@@ -241,7 +246,7 @@ function App() {
     // content even if the push channel dies.
     const pollTimer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
-        loadArticles();
+        refreshArticlesInBackground();
         loadSiteSettings();
       }
     }, 3 * 60 * 1000);
@@ -266,7 +271,6 @@ function App() {
   // via `shallow=true`) so new uploads surface within seconds, on every page,
   // without waiting for the heavy paths. It only ADDS unseen articles, so it is
   // safe to run frequently and never clobbers local edits.
-  const refreshArticlesInBackground = useStore((s) => s.refreshArticlesInBackground);
   useEffect(() => {
     let lastRun = 0;
     const run = () => {
@@ -360,30 +364,32 @@ function App() {
         {/* No full-screen overlay - articles always show from cache while fresh content loads in background */}
         <NotificationToastHost />
         <Layout>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/category/:categoryId" element={<CategoryPage />} />
-            <Route path="/article/:id" element={<ArticlePage />} />
-            <Route path="/saved" element={<SavedPage />} />
-            <Route path="/search" element={<SearchPage />} />
-            <Route path="/larene" element={<LArenePage />} />
+          <Suspense fallback={null}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/category/:categoryId" element={<CategoryPage />} />
+              <Route path="/article/:id" element={<ArticlePage />} />
+              <Route path="/saved" element={<SavedPage />} />
+              <Route path="/search" element={<SearchPage />} />
+              <Route path="/larene" element={<LArenePage />} />
   <Route path="/arena/:leagueId" element={<LArenePage />} />
-            <Route path="/sports" element={<LArenePage />} />
-            <Route path="/sport" element={<LArenePage />} />
-            <Route path="/arene" element={<LArenePage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/contact" element={<ContactPage />} />
-            <Route path="/profile/:email" element={<ProfilePage />} />
-            <Route path="/discussion" element={<DiscussionPage />} />
-            <Route path="/authpage" element={<AuthPage />} />
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/login" element={<AuthPage />} />
-            <Route path="/register" element={<AuthPage />} />
-            <Route path="/newsletter" element={<AuthPage />} />
-            <Route path="/admin" element={<AdminPortal />} />
-            <Route path="/admin/*" element={<AdminPortal />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              <Route path="/sports" element={<LArenePage />} />
+              <Route path="/sport" element={<LArenePage />} />
+              <Route path="/arene" element={<LArenePage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/contact" element={<ContactPage />} />
+              <Route path="/profile/:email" element={<ProfilePage />} />
+              <Route path="/discussion" element={<DiscussionPage />} />
+              <Route path="/authpage" element={<AuthPage />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/login" element={<AuthPage />} />
+              <Route path="/register" element={<AuthPage />} />
+              <Route path="/newsletter" element={<AuthPage />} />
+              <Route path="/admin" element={<AdminPortal />} />
+              <Route path="/admin/*" element={<AdminPortal />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </Layout>
         </AuthProvider>
       </div>

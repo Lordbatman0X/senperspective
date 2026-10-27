@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Radio, Trophy, RefreshCw } from "lucide-react";
 import type { Match } from "../../types";
 import { useArenaScores } from "../../lib/sports/useArenaScores";
-import { sidebarLeagues } from "../../lib/sports/leagues";
+import { apiLeagues } from "../../lib/sports/leagues";
 import { ArenaMatchTile } from "./ArenaMatchTile";
 import { matchAnchor } from "../../lib/navigation";
 
@@ -41,7 +41,10 @@ export function ArenaSidebarLive({
   // dominates the Senegalese audience, not with whatever the provider happened
   // to return first. Polls adaptively — every 30s while a match is live, every
   // 3 min otherwise — and pauses while the tab is hidden.
-  const { matches, loading, updatedAt, refresh } = useArenaScores(editorialMatches, sidebarLeagues());
+  // apiLeagues() (all sports) matches SportsQuadrant on the homepage, so both
+  // components share one IN_FLIGHT request instead of making separate calls.
+  // The sidebar still ranks football first for display below.
+  const { matches, loading, updatedAt, refresh } = useArenaScores(editorialMatches, apiLeagues());
 
   // Football-first ordering: editorial rows always outrank provider rows, so a
   // basketball editorial (or an off-season row) could sit above tonight's

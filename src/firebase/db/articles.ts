@@ -1,4 +1,4 @@
-import { ref, get, set, push, remove, onValue } from 'firebase/database';
+import { ref, get, set, push, remove, onValue, query, limitToFirst } from 'firebase/database';
 import type { Unsubscribe } from 'firebase/database';
 import { rtdb } from '../config';
 import { handleFirestoreError, OperationType } from '../errors';
@@ -61,16 +61,48 @@ function toList(val: any): any[] {
   return Object.entries(val).map(([id, data]) => ({ id, ...data }));
 }
 
-export async function fetchAllArticles(): Promise<Article[]> {
+export interface FetchAllArticlesOptions {
+  /** If true, bypasses any local index and always re-reads from the cloud. */
+  forceFresh?: boolean;
+  /** If provided, called with the fresh cloud results so the caller can merge them without blocking the UI. */
+  onBackgroundFresh?: (fresh: Article[]) => void;
+  /** Max number of articles to return (applied after sorting by date desc). */
+  limit?: number;
+}
+
+export async function fetchAllArticles(
+  opts: FetchAllArticlesOptions = {}
+): Promise<Article[]> {
+  const { forceFresh, onBackgroundFresh, limit } = opts;
   try {
-    const snapshot = await withFirestoreTimeout(get(ref(rtdb, 'articles')), 15000);
-    if (snapshot.exists()) {
-      return toList(snapshot.val()).map((item: any) => ({
-        ...item,
-        id: item.id || item.key,
-      })) as Article[];
+    const articlesRef = ref(rtdb, 'articles');
+    const q = limit && limit > 0
+      ? query(articlesRef, limitToFirst(limit))
+      : articlesRef;
+    const snapshot = await withFirestoreTimeout(get(q), 8000);
+
+    if (!snapshot.exists()) {
+      return [];
     }
-    return [];
+
+    const articles = toList(snapshot.val()).map((item: any) => ({
+      ...item,
+      id: item.id || item.key,
+    }));
+
+    // Sort newest first by date (fallback to updatedAt / createdAt)
+    articles.sort((a, b) => {
+      const da = new Date((a as any).date || (a as any).updatedAt || 0).getTime();
+      const db = new Date((b as any).date || (b as any).updatedAt || 0).getTime();
+      return db - da;
+    });
+
+    // Notify the background-refresh callback so callers can merge non-blocking
+    if (onBackgroundFresh && articles.length > 0) {
+      try { onBackgroundFresh(articles as Article[]); } catch { /* best effort */ }
+    }
+
+    return articles as Article[];
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'articles');
     return [];
@@ -112,7 +144,7 @@ function cleanForRtdb<T>(data: T): T {
 
 export async function fetchArticleById(id: string): Promise<any> {
   try {
-    const snapshot = await withFirestoreTimeout(get(ref(rtdb, `articles/${id}`)), 15000);
+    const snapshot = await withFirestoreTimeout(get(ref(rtdb, `articles/${id}`)), 8000);
     if (snapshot.exists()) {
       return {
         ...snapshot.val(),

@@ -51,6 +51,37 @@ export function useArenaScores(
   // Manual refresh must bypass the TTL cache: otherwise the refresh button
   // re-serves the same cached rows and the board looks frozen.
   const forceRef = useRef(false);
+  // Track whether the initial load has kicked off, so we don't re-fetch on
+  // every nonce bump from refresh().
+  const initialRun = useRef(false);
+
+  // --- synchronous seed from cache so the board is never blank on first paint ---
+  useEffect(() => {
+    const ttlMs = Math.max(30_000, cadenceRef.current - 15_000);
+    const seeded: Match[] = [];
+    let anyStale = false;
+    for (const league of leagues) {
+      const stale = getStale<Match[]>("league:" + league.id);
+      if (stale?.value?.length) {
+        seeded.push(...stale.value);
+        anyStale = true;
+      }
+    }
+    if (seeded.length) {
+      setProviderMatches(seeded);
+      setFromCache(true);
+      setLoading(false);
+      setUpdatedAt((prev) => (prev ?? Math.max(...seeded.map(() => 0), 0)) || null);
+      // Use the newest stale timestamp as updatedAt
+      const newest = Math.max(
+        ...leagues.map((l) => {
+          const s = getStale<Match[]>("league:" + l.id);
+          return s ? s.at : 0;
+        })
+      );
+      if (newest > 0) setUpdatedAt(newest);
+    }
+  }, [leaguesKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = useCallback(
     async (force: boolean) => {
@@ -108,7 +139,10 @@ export function useArenaScores(
       }, delay);
     };
 
-    void run(false).then(() => schedule(cadenceRef.current));
+    if (!initialRun.current) {
+      initialRun.current = true;
+      void run(false).then(() => schedule(cadenceRef.current));
+    }
 
     return () => {
       cancelled = true;
