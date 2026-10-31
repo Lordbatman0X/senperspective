@@ -131,11 +131,20 @@
         ]
       },
       {
+        "source": "/article-index-featured.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=86400, s-maxage=86400, immutable"
+          }
+        ]
+      },
+      {
         "source": "/article-index.json",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "public, max-age=60, s-maxage=300"
+            "value": "public, max-age=86400, s-maxage=86400, immutable"
           }
         ]
       },

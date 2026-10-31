@@ -1001,8 +1001,8 @@ async function main() {
    * the editor's own image instead of falling back to the generic stock photo.
    */
   const INDEX_FIELDS = [
-    'id', 'slug', 'title', 'date', 'publishedAt', 'category', 'type',
-    'isFeatured', 'isPublished', 'readingTime', 'commentsEnabled', 'sourceName',
+    'id', 'slug', 'title', 'date', 'category',
+    'isFeatured', 'isPublished',
   ];
   const isInline = (v) => typeof v === 'string' && v.startsWith('data:');
   const clamp = (v, max) => {
@@ -1024,9 +1024,9 @@ async function main() {
     articles.map(async (a) => {
       const e = { _indexOnly: true };
       for (const f of INDEX_FIELDS) if (a[f] !== undefined) e[f] = a[f];
-      e.excerpt = clip(a.excerpt, 320);
-      e.author = clip(a.author, 80);
-      e.tags = Array.isArray(a.tags) ? a.tags.slice(0, 8) : a.tags;
+      e.excerpt = clip(a.excerpt, 120);
+      e.author = clip(a.author || '', 60);
+      e.tags = Array.isArray(a.tags) ? a.tags.slice(0, 5) : a.tags;
 
       // Card images. Uploaded pictures are stored inline as base64, which is far
       // too large to ship in this file, so decode them here and embed a real
@@ -1069,6 +1069,36 @@ async function main() {
   console.log(
     `[prerender] wrote article-index.json (${indexItems.length} items, ` +
     `${(indexBytes / 1024).toFixed(0)} KB, ${withImage} with images, ${pending} pending)`
+  );
+
+  // ---------------------------------------------------------------------------
+  // FEATURED INDEX — small (~200 KB) file with featured + recent articles,
+  // served first so first-time visitors see content immediately instead of
+  // waiting for the full 3+ MB catalog. The full index loads in the background.
+  // ---------------------------------------------------------------------------
+  const FEATURED_LIMIT = 30;
+  const featuredItems = indexItems
+    .filter((i) => i.isFeatured)
+    .slice(0, FEATURED_LIMIT);
+  if (featuredItems.length < FEATURED_LIMIT) {
+    const featuredIds = new Set(featuredItems.map((i) => i.id));
+    const recent = indexItems
+      .filter((i) => !featuredIds.has(i.id))
+      .slice(0, FEATURED_LIMIT - featuredItems.length);
+    featuredItems.push(...recent);
+  }
+  const featuredIndexJson = JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    items: featuredItems,
+  });
+  await writeFile(
+    path.join(DIST, 'article-index-featured.json'),
+    featuredIndexJson,
+    'utf8'
+  );
+  const featuredBytes = Buffer.byteLength(featuredIndexJson, 'utf8');
+  console.log(
+    `[prerender] wrote article-index-featured.json (${featuredItems.length} items, ${(featuredBytes / 1024).toFixed(0)} KB)`
   );
 
   // INTERNAL LINK INTEGRITY GATE

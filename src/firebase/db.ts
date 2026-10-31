@@ -297,7 +297,7 @@ export function subscribeToArticles(
  * never rewritten by any of this.
  */
 const ARTICLE_INDEX_KEY = 'sp_article_index_v1';
-const ARTICLE_INDEX_TTL_MS = 45 * 60 * 1000;
+const ARTICLE_INDEX_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Fields a list view needs. Everything else (body, timeline, keyActors, ...)
  *  is fetched per-article, because it is most of the payload. */
@@ -387,20 +387,15 @@ function toIndexEntry(a: any, thumb?: string) {
     slug: a.slug,
     title: a.title,
     // The excerpt is a list teaser, not the article, and long ones add up fast.
-    excerpt: trimBilingual(a.excerpt, 320),
+    excerpt: trimBilingual(a.excerpt, 120),
     date: a.date,
-    publishedAt: a.publishedAt,
     category: a.category,
-    type: a.type,
     imageUrl: slimImage(a.imageUrl),
     featuredImage: slimImage(a.featuredImage),
     isFeatured: a.isFeatured,
     isPublished: a.isPublished,
-    readingTime: a.readingTime,
-    tags: Array.isArray(a.tags) ? a.tags.slice(0, 8) : a.tags,
-    author: trimBilingual(a.author, 80),
-    commentsEnabled: a.commentsEnabled,
-    sourceName: a.sourceName,
+    tags: Array.isArray(a.tags) ? a.tags.slice(0, 5) : a.tags,
+    author: trimBilingual(a.author, 60),
     // Marks a record that came from the index and still needs its body.
     _indexOnly: true,
   };
@@ -522,8 +517,28 @@ async function fetchStaticArticleIndex(noStore = false): Promise<Article[] | nul
 }
 
 /**
+ * Fetch the small featured index (~200 KB) so first-time visitors see
+ * content immediately instead of waiting for the full 3+ MB catalog.
+ */
+async function fetchStaticFeaturedIndex(): Promise<Article[] | null> {
+  if (typeof window === 'undefined') return null;
+  try {
+    const res = await withFirestoreTimeout(
+      fetch('/article-index-featured.json', { cache: 'default' }),
+      12000
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    const items = Array.isArray(json?.items) ? json.items : null;
+    if (!items || items.length === 0) return null;
+    return items as Article[];
+  } catch {
+    return null;
+  }
+}
+/**
  * Lightweight freshness check: fetches ONLY the article keys (~a few KB via
- * `shallow=true`) instead of the full 8.8 MB catalog, then fetches the full
+ * shallow=true) instead of the full 8.8 MB catalog, then fetches the full
  * record for ids this device has never seen. A newly published article from
  * another device is typically 1-2 records (a few KB), so cross-device sync
  * works even on a slow phone connection where the full download times out.
@@ -608,15 +623,36 @@ export async function fetchAllArticles(opts?: { forceFresh?: boolean; onBackgrou
     return remote;
   }
 
-  // First visit on this device. Try the small static file before the 10.4 MB
-  // database read, which is what made phones hang and then fail.
+  // First visit on this device. Try the small featured static index first
+  // (~200 KB) so content appears immediately, then load the full catalog
+  // (3+ MB) in the background without blocking the first paint.
+  const featured = await fetchStaticFeaturedIndex();
+  if (featured && featured.length) {
+    void writeArticleIndex(featured);
+    // Load the full catalog in the background so subsequent visits and
+    // category pages have everything available.
+    void (async () => {
+      try {
+        const full = await fetchStaticArticleIndex();
+        if (full && full.length) {
+          void writeArticleIndex(full);
+          opts?.onBackgroundFresh?.(full);
+        } else {
+          const live = await fetchAllArticlesFromCloud();
+          if (live.length) {
+            void writeArticleIndex(live);
+            opts?.onBackgroundFresh?.(live);
+          }
+        }
+      } catch { /* best effort */ }
+    })();
+    return featured;
+  }
+
+  // Fallback: try the full static file (slow on first visit, but works)
   const stat = await fetchStaticArticleIndex();
   if (stat && stat.length) {
-    // No thumbnail work is needed: this index carries no inline images, so the
-    // writer takes its synchronous path and cannot stall the first paint.
     void writeArticleIndex(stat);
-    // Reconcile with the live database in the background so articles published
-    // after the last deploy still appear on this visit, not the next one.
     void (async () => {
       try {
         const live = await fetchAllArticlesFromCloud();
